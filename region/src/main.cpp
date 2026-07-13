@@ -353,6 +353,29 @@ int main() {
                         if (update && avatar != avatars.end() && update->agent_id == identity->agent_id &&
                             update->session_id == identity->session_id)
                             avatar->second.controller.apply(*update);
+                        const auto chat = homeworldz::viewer::decode_chat_from_viewer(packet->payload);
+                        if (chat && avatar != avatars.end() && chat->agent_id == identity->agent_id &&
+                            chat->session_id == identity->session_id && chat->channel == 0 &&
+                            !chat->message.empty() && chat->message.size() <= 1023) {
+                            const auto& origin = avatar->second.controller.state().position;
+                            const double radius = chat->type == 0 ? 10.0 : (chat->type == 2 ? 100.0 : 20.0);
+                            homeworldz::viewer::ChatFromSimulator outgoing;
+                            outgoing.from_name = homeworldz::viewer::format_uuid(identity->agent_id);
+                            outgoing.source_id = identity->agent_id;
+                            outgoing.owner_id = identity->agent_id;
+                            outgoing.chat_type = chat->type;
+                            outgoing.position = {static_cast<float>(origin.x), static_cast<float>(origin.y),
+                                                 static_cast<float>(origin.z)};
+                            outgoing.message = chat->message;
+                            const auto payload = homeworldz::viewer::encode_chat_from_simulator(outgoing);
+                            for (const auto& [recipient_endpoint, recipient] : avatars) {
+                                const auto& target = recipient.controller.state().position;
+                                const auto dx = target.x - origin.x, dy = target.y - origin.y, dz = target.z - origin.z;
+                                if (dx * dx + dy * dy + dz * dz > radius * radius) continue;
+                                if (const auto sent = circuits.send(recipient_endpoint, payload, true, now))
+                                    static_cast<void>(send_udp(viewer_server, recipient_endpoint, *sent));
+                            }
+                        }
                     }
                 }
             }
