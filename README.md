@@ -1,4 +1,6 @@
-# HomeWorldz
+<div style="text-align: left; width: 320px; margin: 0;">
+  <img src="homeworldz.svg" alt="HomeWorldz logo" width="320" style="display: block; margin: 0;">
+</div>
 
 HomeWorldz is a clean-architecture virtual world server targeting practical
 Firestorm compatibility. It is a new implementation informed by Halcyon,
