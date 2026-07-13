@@ -126,6 +126,7 @@ int main() {
     passed &= contains(seed, "<key>GetTexture</key><uri>http://region.example:42001/caps/texture/session-id</uri>");
     passed &= contains(seed, "<key>EnvironmentSettings</key><uri>http://region.example:42001/caps/environment/session-id</uri>");
     passed &= contains(seed, "<key>FetchInventoryDescendents2</key><uri>http://grid.example:42000/caps/inventory/descendents/session-id</uri>");
+    passed &= contains(seed, "<key>FetchInventory2</key><uri>http://grid.example:42000/caps/inventory/items/session-id</uri>");
     const auto event = homeworldz::viewer::event_queue_xml(7,
         homeworldz::viewer::EstablishAgentCommunication{
             "11111111-2222-4333-8444-555555555555", "region.example:42002",

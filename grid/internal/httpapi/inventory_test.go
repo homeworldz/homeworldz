@@ -8,7 +8,10 @@ import (
 	"github.com/homeworldz/homeworldz/grid/internal/inventory"
 )
 
-type memoryInventoryStore struct{ folders map[string][]inventory.Folder }
+type memoryInventoryStore struct {
+	folders map[string][]inventory.Folder
+	items   map[string][]inventory.Item
+}
 
 func (s *memoryInventoryStore) EnsureSystemFolders(_ context.Context, userID string) ([]inventory.Folder, error) {
 	values := inventory.SystemFolders(userID)
@@ -20,12 +23,21 @@ func (s *memoryInventoryStore) ListFolders(_ context.Context, userID string) ([]
 	return s.folders[userID], nil
 }
 
-func (s *memoryInventoryStore) EnsureItem(context.Context, inventory.Item) (bool, error) {
+func (s *memoryInventoryStore) EnsureItem(_ context.Context, item inventory.Item) (bool, error) {
+	if s.items == nil {
+		s.items = make(map[string][]inventory.Item)
+	}
+	for _, existing := range s.items[item.OwnerUserID] {
+		if existing.ID == item.ID {
+			return false, nil
+		}
+	}
+	s.items[item.OwnerUserID] = append(s.items[item.OwnerUserID], item)
 	return true, nil
 }
 
-func (s *memoryInventoryStore) ListItems(context.Context, string) ([]inventory.Item, error) {
-	return nil, nil
+func (s *memoryInventoryStore) ListItems(_ context.Context, userID string) ([]inventory.Item, error) {
+	return s.items[userID], nil
 }
 
 func TestInventoryFoldersEndpoint(t *testing.T) {

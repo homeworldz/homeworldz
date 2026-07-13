@@ -42,13 +42,64 @@ func TestInventoryDescendentsCapability(t *testing.T) {
 	content := w.Body.String()
 	if !strings.Contains(content, "<key>descendents</key><integer>20</integer>") ||
 		!strings.Contains(content, "<key>type_default</key><integer>13</integer>") ||
-		!strings.Contains(content, "<key>items</key><array/>") {
+		!strings.Contains(content, "<key>items</key><array></array>") {
 		t.Fatalf("inventory response = %s", content)
 	}
-	nullResponse := inventoryDescendentsXML(user.ID, []string{nullInventoryFolderID}, folders)
+	nullResponse := inventoryDescendentsXML(user.ID, []string{nullInventoryFolderID}, folders, nil)
 	if strings.Contains(nullResponse, "unknown folder") ||
 		!strings.Contains(nullResponse, "<key>folder_id</key><uuid>"+nullInventoryFolderID+"</uuid>") {
 		t.Fatalf("null inventory folder response = %s", nullResponse)
+	}
+}
+
+func TestInventoryItemsCapability(t *testing.T) {
+	identities := newMemoryIdentityStore()
+	user, err := identities.CreateUser(context.Background(), "inventory.items", "development-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := identities.CreateSession(context.Background(), "inventory.items", "development-password", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.AssignViewerDestination(context.Background(), session.ID, 123456,
+		"30000000-0000-4000-8000-000000000001"); err != nil {
+		t.Fatal(err)
+	}
+	inventories := &memoryInventoryStore{folders: make(map[string][]inventory.Folder)}
+	folders, _ := inventories.EnsureSystemFolders(context.Background(), user.ID)
+	item := inventory.Item{
+		ID: "40000000-0000-4000-8000-000000000001", OwnerUserID: user.ID, CreatorUserID: user.ID,
+		FolderID: folders[9].ID, AssetID: "60000000-0000-4000-8000-000000000001",
+		AssetType: 13, InventoryType: 18, Name: "Default Shape", BasePermissions: 0x7fffffff,
+		CurrentPermissions: 0x7fffffff, NextPermissions: 0x7fffffff,
+	}
+	_, _ = inventories.EnsureItem(context.Background(), item)
+	handler := New(checker{}, "test", Options{Identity: identities, Inventory: inventories})
+	body := `<?xml version="1.0"?><llsd><map><key>items</key><array><map>` +
+		`<key>owner_id</key><uuid>` + user.ID + `</uuid><key>item_id</key><uuid>` + item.ID +
+		`</uuid></map></array></map></llsd>`
+	r := httptest.NewRequest(http.MethodPost, "/caps/inventory/items/"+session.ID, bytes.NewBufferString(body))
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(),
+		"<key>item_id</key><uuid>"+item.ID+"</uuid>") {
+		t.Fatalf("status = %d, inventory item response = %s", w.Code, w.Body.String())
+	}
+}
+
+func TestInventoryItemXML(t *testing.T) {
+	item := inventory.Item{ID: "40000000-0000-4000-8000-000000000001",
+		OwnerUserID: "20000000-0000-4000-8000-000000000001",
+		FolderID:    "50000000-0000-4000-8000-000000000001",
+		AssetID:     "60000000-0000-4000-8000-000000000001", AssetType: 13, InventoryType: 18,
+		Name: "Default <Shape>", BasePermissions: 0x7fffffff, CurrentPermissions: 0x7fffffff}
+	content := inventoryItemXML(item)
+	for _, expected := range []string{"<key>item_id</key><uuid>" + item.ID, "<key>type</key><integer>13</integer>",
+		"<key>inv_type</key><integer>18</integer>", "Default &lt;Shape&gt;"} {
+		if !strings.Contains(content, expected) {
+			t.Fatalf("inventory item XML lacks %q: %s", expected, content)
+		}
 	}
 }
 
