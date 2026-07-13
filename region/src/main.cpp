@@ -347,6 +347,13 @@ int main() {
                             if (const auto outgoing = circuits.send(endpoint,
                                     homeworldz::viewer::encode_agent_movement_complete(response), true, now))
                                 static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
+                            for (std::uint8_t y = 0; y < 16; ++y) {
+                                std::array<homeworldz::viewer::TerrainPatch, 16> row{};
+                                for (std::uint8_t x = 0; x < 16; ++x) row[x] = {x, y};
+                                if (const auto terrain = circuits.send(endpoint,
+                                        homeworldz::viewer::encode_flat_terrain(row, 25.0F), true, now))
+                                    static_cast<void>(send_udp(viewer_server, endpoint, *terrain));
+                            }
                         }
                         const auto update = homeworldz::viewer::decode_agent_update(packet->payload);
                         const auto avatar = avatars.find(endpoint);
