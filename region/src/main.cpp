@@ -85,6 +85,18 @@ int configured_viewer_port() {
     return environment_int("HOMEWORLDZ_VIEWER_PORT", 42002, 1, 65535);
 }
 
+bool configured_bind_address(sockaddr_in& address, const char* environment_name, int port) {
+    address = {};
+    address.sin_family = AF_INET;
+    address.sin_port = htons(static_cast<unsigned short>(port));
+    const auto host = environment_value(environment_name, "127.0.0.1");
+    if (inet_pton(AF_INET, host.c_str(), &address.sin_addr) == 1) return true;
+    std::cerr << "{\"level\":\"error\",\"message\":\"invalid IPv4 bind address\",\"setting\":"
+              << homeworldz::api::json_string(environment_name) << ",\"address\":"
+              << homeworldz::api::json_string(host) << "}" << std::endl;
+    return false;
+}
+
 std::string udp_endpoint(const sockaddr_in& address) {
     std::array<char, INET_ADDRSTRLEN> ip{};
     if (!inet_ntop(AF_INET, &address.sin_addr, ip.data(), ip.size())) return {};
@@ -214,10 +226,8 @@ int main() {
                reinterpret_cast<const char*>(&reuse), sizeof(reuse));
 
     sockaddr_in address{};
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = htonl(INADDR_ANY);
-    address.sin_port = htons(static_cast<unsigned short>(configured_port()));
-    if (bind(server, reinterpret_cast<sockaddr*>(&address), sizeof(address)) != 0 ||
+    if (!configured_bind_address(address, "HOMEWORLDZ_REGION_BIND_ADDRESS", configured_port()) ||
+        bind(server, reinterpret_cast<sockaddr*>(&address), sizeof(address)) != 0 ||
         listen(server, 16) != 0) {
         close_socket(server);
         return 1;
@@ -229,10 +239,8 @@ int main() {
         return 1;
     }
     sockaddr_in viewer_address{};
-    viewer_address.sin_family = AF_INET;
-    viewer_address.sin_addr.s_addr = htonl(INADDR_ANY);
-    viewer_address.sin_port = htons(static_cast<unsigned short>(configured_viewer_port()));
-    if (bind(viewer_server, reinterpret_cast<sockaddr*>(&viewer_address), sizeof(viewer_address)) != 0) {
+    if (!configured_bind_address(viewer_address, "HOMEWORLDZ_VIEWER_BIND_ADDRESS", configured_viewer_port()) ||
+        bind(viewer_server, reinterpret_cast<sockaddr*>(&viewer_address), sizeof(viewer_address)) != 0) {
         close_socket(viewer_server);
         close_socket(server);
         return 1;

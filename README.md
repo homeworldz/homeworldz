@@ -49,8 +49,10 @@ Region operators do not need PostgreSQL credentials. The region will use its
 local storage and authenticated grid APIs once those components are implemented.
 
 Run grid tests from `grid/` with `go test ./...`. The grid service listens on
-`:42000` by default and reads `config/grid.ini` and `config/db.ini`. The region
-service HTTP API listens on `:42001` by default.
+`127.0.0.1:42000` by default and reads `config/grid.ini` and `config/db.ini`.
+The region HTTP and viewer UDP services also bind to `127.0.0.1` by default, on
+ports `42001` and `42002` respectively. Loopback defaults avoid exposing local
+development services or requiring Windows Firewall exceptions.
 
 PostgreSQL lifecycle tests run when `HOMEWORLDZ_TEST_DATABASE_URL` is set and
 otherwise skip cleanly. CI supplies a disposable PostgreSQL service and runs
@@ -77,6 +79,9 @@ overrides are `HOMEWORLDZ_GRID_URL`, `HOMEWORLDZ_REGION_NAME`,
 `HOMEWORLDZ_REGION_GRID_X`, `HOMEWORLDZ_REGION_GRID_Y`,
 `HOMEWORLDZ_REGION_PUBLIC_ENDPOINT`, and `HOMEWORLDZ_REGION_LEASE_SECONDS`.
 `HOMEWORLDZ_VIEWER_PORT` selects the viewer UDP listener and defaults to `42002`.
+Set `HOMEWORLDZ_REGION_BIND_ADDRESS` or `HOMEWORLDZ_VIEWER_BIND_ADDRESS` to an
+explicit IPv4 address (or `0.0.0.0`) only when clients on other machines must
+connect; configure narrowly scoped firewall rules separately for that deployment.
 Without a service token, the region runs without grid registration.
 
 ## Documentation

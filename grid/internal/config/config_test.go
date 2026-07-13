@@ -45,8 +45,8 @@ func TestMissingFilesUseDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Address != ":42000" {
-		t.Fatalf("address = %q, want :42000", got.Address)
+	if got.Address != "127.0.0.1:42000" {
+		t.Fatalf("address = %q, want 127.0.0.1:42000", got.Address)
 	}
 }
 

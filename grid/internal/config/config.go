@@ -31,7 +31,7 @@ func LoadGrid() (Grid, error) {
 	}
 
 	result := Grid{
-		Address:      parsed.Section("server").Key("address").MustString(":42000"),
+		Address:      parsed.Section("server").Key("address").MustString("127.0.0.1:42000"),
 		DatabaseURL:  parsed.Section("database").Key("url").String(),
 		ServiceToken: parsed.Section("auth").Key("service_token").String(),
 		Directory:    directory,
