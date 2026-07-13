@@ -473,6 +473,17 @@ int main() {
                                 const auto entity = scene.create(name, {128.0, 128.0, 25.0});
                                 avatars.emplace(endpoint, LiveAvatar{homeworldz::viewer::AvatarController{}, entity});
                             }
+                            const auto& live_avatar = avatars.at(endpoint);
+                            if (const auto* entity = scene.find(live_avatar.entity_id)) {
+                                const std::array<float, 3> position{
+                                    static_cast<float>(entity->position.x), static_cast<float>(entity->position.y),
+                                    static_cast<float>(entity->position.z)};
+                                if (const auto avatar = circuits.send(endpoint,
+                                        homeworldz::viewer::encode_avatar_object_update(
+                                            response.region_handle, static_cast<std::uint32_t>(live_avatar.entity_id),
+                                            identity->agent_id, position), true, now, true))
+                                    static_cast<void>(send_udp(viewer_server, endpoint, *avatar));
+                            }
                             if (const auto outgoing = circuits.send(endpoint,
                                     homeworldz::viewer::encode_agent_movement_complete(response), true, now))
                                 static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));

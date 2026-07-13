@@ -192,8 +192,13 @@ bool static_object_codec() {
     StaticObject object;
     object.id = *parse_uuid("12345678-1234-4234-8234-123456789abc");
     const auto encoded = encode_static_object_update(0x0102030405060708ULL, object);
-    return encoded.size() > 220 && encoded[0] == std::byte{12} && encoded[1] == std::byte{8} &&
-           encoded[8] == std::byte{1} && encoded[11] == std::byte{1};
+    if (encoded.size() <= 220 || encoded[0] != std::byte{12} || encoded[1] != std::byte{8} ||
+        encoded[8] != std::byte{1} || encoded[11] != std::byte{1} || encoded[37] != std::byte{9})
+        return false;
+    const auto agent = *parse_uuid("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");
+    const auto avatar = encode_avatar_object_update(0x0102030405060708ULL, 42, agent, {128.F, 128.F, 25.F});
+    return avatar.size() == encoded.size() && avatar[37] == std::byte{47} && avatar[38] == std::byte{4} &&
+           std::equal(agent.begin(), agent.end(), avatar.begin() + 17);
 }
 }
 

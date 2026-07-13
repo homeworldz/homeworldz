@@ -373,8 +373,8 @@ std::vector<std::byte> encode_static_object_update(std::uint64_t region_handle, 
     output.push_back(std::byte{}); // state
     append_uuid(output, object.id);
     append_le_u32(output, 0); // CRC
-    output.push_back(std::byte{9}); // volume primitive
-    output.push_back(std::byte{3}); // wood material
+    output.push_back(static_cast<std::byte>(object.pcode));
+    output.push_back(static_cast<std::byte>(object.material));
     output.push_back(std::byte{}); // click action
     for (const auto value : object.scale) append_f32(output, value);
     std::vector<std::byte> transform;
@@ -400,11 +400,25 @@ std::vector<std::byte> encode_static_object_update(std::uint64_t region_handle, 
     const std::array<std::byte, 1> no_extra_params{std::byte{0}};
     if (!append_binary(output, no_extra_params, 1)) return {};
     Uuid zero{};
-    append_uuid(output, zero); append_uuid(output, zero); // sound and owner
+    append_uuid(output, zero); append_uuid(output, object.owner_id); // sound and owner
     append_f32(output, 0.0F); output.push_back(std::byte{}); append_f32(output, 0.0F);
     output.push_back(std::byte{}); // joint type
     for (int index = 0; index < 6; ++index) append_f32(output, 0.0F);
     return output;
+}
+
+std::vector<std::byte> encode_avatar_object_update(std::uint64_t region_handle, std::uint32_t local_id,
+                                                   const Uuid& agent_id,
+                                                   std::array<float, 3> position) {
+    StaticObject avatar;
+    avatar.local_id = local_id;
+    avatar.id = agent_id;
+    avatar.owner_id = agent_id;
+    avatar.pcode = 47; // avatar
+    avatar.material = 4; // flesh
+    avatar.position = position;
+    avatar.scale = {0.45F, 0.60F, 1.90F};
+    return encode_static_object_update(region_handle, avatar);
 }
 
 std::vector<std::byte> encode_packet_ack(std::span<const std::uint32_t> sequences) {

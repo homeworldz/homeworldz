@@ -102,6 +102,9 @@ struct TerrainPatch {
 struct StaticObject {
     std::uint32_t local_id{1};
     Uuid id{};
+    Uuid owner_id{};
+    std::uint8_t pcode{9};
+    std::uint8_t material{3};
     std::array<float, 3> position{132.0F, 128.0F, 26.0F};
     std::array<float, 3> scale{2.0F, 2.0F, 2.0F};
 };
@@ -118,6 +121,9 @@ std::vector<std::byte> encode_chat_from_simulator(const ChatFromSimulator& messa
 std::vector<std::byte> encode_flat_terrain(std::span<const TerrainPatch> patches, float height);
 std::vector<std::byte> encode_static_object_update(std::uint64_t region_handle,
                                                    const StaticObject& object);
+std::vector<std::byte> encode_avatar_object_update(std::uint64_t region_handle, std::uint32_t local_id,
+                                                   const Uuid& agent_id,
+                                                   std::array<float, 3> position);
 std::vector<std::byte> encode_packet_ack(std::span<const std::uint32_t> sequences);
 std::optional<std::vector<std::uint32_t>> decode_packet_ack(std::span<const std::byte> payload);
 
