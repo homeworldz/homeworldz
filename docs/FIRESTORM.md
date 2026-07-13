@@ -126,8 +126,8 @@ and starts the UDP circuit with `UseCircuitCode` in the same
 
 After bootstrapping PostgreSQL and building both services, run:
 
-```powershell
-.\scripts\firestorm-smoke-test.ps1
+```bat
+scripts\firestorm-smoke-test.cmd
 ```
 
 The launcher reads ignored local configuration, starts the grid and region on
@@ -146,6 +146,6 @@ launcher and repeat once to verify persisted scene restoration and grid region
 re-registration. Record the About-dialog version and executable SHA-256 with
 the smoke-test result before completing the milestone.
 
-Use `-FirstName` and `-LastName` for a different development account, or
-`-ValidateOnly` to check service startup without prompting or launching the
+Use `-first` and `-last` for a different development account, or
+`-validate-only` to check service startup without prompting or launching the
 viewer.
