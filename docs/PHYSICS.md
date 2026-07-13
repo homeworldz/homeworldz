@@ -16,7 +16,7 @@ avatar movement, object interaction, vehicles, scripted forces, terrain
 collision, and cross-region behavior must feel coherent to users familiar with
 Second Life/OpenSim-style worlds.
 
-See [PLAN.md](PLAN.md) for the broader HomeWorldz modernization plan.
+See [PLAN.md](PLAN.md) for the broader HomeWorldz implementation plan.
 
 ## Evaluation Criteria
 
@@ -224,4 +224,3 @@ engines have run the lab and the results are documented. A chosen engine should
 pass the avatar movement, terrain collision, object stacking, scripted impulse,
 and region handoff scenarios well enough to support a first playable
 HomeWorldz region.
-

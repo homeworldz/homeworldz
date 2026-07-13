@@ -219,4 +219,3 @@ slice:
 
 After that slice works, expand toward inventory, object editing, scripting,
 cross-region transfer, asset federation, and production operations.
-

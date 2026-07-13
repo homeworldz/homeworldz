@@ -1,23 +1,19 @@
 # HomeWorldz
 
-HomeWorldz is the planned modernized successor to Halcyon, a virtual world
-simulation server compatible with the Second Life viewer protocol.
+HomeWorldz is a clean-architecture virtual world server targeting practical
+Firestorm compatibility. It is a new implementation informed by Halcyon,
+OpenSimulator, and the Second Life viewer protocol without preserving their
+internal service boundaries or storage formats.
 
-This folder is currently for planning and coordination. It does not yet contain
-runtime code for a new server implementation.
+The intended architecture uses a C++20 region server, a Go grid service,
+HTTP/JSON APIs described by OpenAPI, Postgres for central state, and
+region-local scene and asset storage.
 
-## Goals
+This repository is currently in its planning and foundation phase.
 
-- Preserve Halcyon's core virtual world behavior and Second Life viewer
-  compatibility.
-- Establish a reproducible build and test baseline for the existing projects.
-- Modernize the C# runtime and dependency model in controlled stages.
-- Add Postgres storage support while preserving MySQL during the transition.
-- Reduce long-term dependency on centralized WHIP/Aperture asset services by
-  first introducing a cleaner asset storage abstraction.
-- Leave room for a future per-region or decentralized asset architecture.
+## Documentation
 
-## Current Plan
-
-See [PLAN.md](PLAN.md) for the working modernization roadmap.
+- [Implementation plan](docs/PLAN.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Physics evaluation](docs/PHYSICS.md)
 
