@@ -12,7 +12,7 @@ than runtime dependencies.
 - [x] Add a cross-platform Go grid bootstrap and separate region-local bootstrap.
 - [x] Establish INI configuration files with environment-variable overrides.
 - [x] Implement `/ping`, `/ready`, and `/version` in both services.
-- [ ] Add Windows and Linux CI for builds, tests, and migrations.
+- [x] Add Windows and Linux CI for builds, tests, and migrations.
 - [ ] Add generated or validated C++ and Go API models.
 - [ ] Add service-token authentication, request IDs, and structured logging.
 - [ ] Add contract tests shared by grid handlers and the region client.

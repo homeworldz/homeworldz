@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    name: Go (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: grid/go.mod
+          cache-dependency-path: grid/go.sum
+      - name: Test
+        working-directory: grid
+        run: go test ./...
+      - name: Vet
+        working-directory: grid
+        run: go vet ./...
+
+  region:
+    name: Region C++ (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v6
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+      - name: Build
+        run: cmake --build build --config Debug
+      - name: Test
+        run: ctest --test-dir build -C Debug --output-on-failure
+
+  postgres:
+    name: PostgreSQL migration and grid probes
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.4-alpine
+        env:
+          POSTGRES_USER: homeworldz
+          POSTGRES_PASSWORD: homeworldz-ci
+          POSTGRES_DB: homeworldz
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U homeworldz -d homeworldz"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      HOMEWORLDZ_DATABASE_URL: postgres://homeworldz:homeworldz-ci@localhost:5432/homeworldz?sslmode=disable
+      PGPASSWORD: homeworldz-ci
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: grid/go.mod
+          cache-dependency-path: grid/go.sum
+      - name: Apply initial migration
+        run: psql -h localhost -U homeworldz -d homeworldz -v ON_ERROR_STOP=1 -f db/migrations/000001_initial.up.sql
+      - name: Verify schema
+        run: psql -h localhost -U homeworldz -d homeworldz -v ON_ERROR_STOP=1 -c "SELECT version FROM schema_metadata WHERE version = 1"
+      - name: Start grid and verify probes
+        shell: bash
+        run: |
+          go run ./grid/cmd/grid > grid.log 2>&1 &
+          grid_pid=$!
+          trap 'kill "$grid_pid" 2>/dev/null || true; cat grid.log' EXIT
+          for attempt in {1..30}; do
+            if curl --fail --silent http://localhost:42000/ping > /dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          curl --fail --show-error http://localhost:42000/ping
+          curl --fail --show-error http://localhost:42000/ready
+          curl --fail --show-error http://localhost:42000/version
+

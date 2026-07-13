@@ -6,6 +6,8 @@
 #include <string>
 #include <string_view>
 
+#include "homeworldz/http_response.h"
+
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <winsock2.h>
@@ -27,23 +29,6 @@ namespace {
 std::atomic_bool running{true};
 
 void stop(int) { running = false; }
-
-std::string response_for(std::string_view request) {
-    std::string_view status = "HTTP/1.1 404 Not Found\r\n";
-    std::string_view body = R"({"code":"not_found","message":"route not found"})";
-    if (request.starts_with("GET /ping ")) {
-        status = "HTTP/1.1 200 OK\r\n";
-        body = R"({"status":"ok"})";
-    } else if (request.starts_with("GET /ready ")) {
-        status = "HTTP/1.1 200 OK\r\n";
-        body = R"({"status":"ready"})";
-    } else if (request.starts_with("GET /version ")) {
-        status = "HTTP/1.1 200 OK\r\n";
-        body = R"({"service":"region","version":"dev","apiVersion":"v1"})";
-    }
-    return std::string(status) + "Content-Type: application/json\r\nConnection: close\r\nContent-Length: " +
-           std::to_string(body.size()) + "\r\n\r\n" + std::string(body);
-}
 
 int configured_port() {
     if (const char* value = std::getenv("HOMEWORLDZ_REGION_PORT")) {
@@ -86,7 +71,7 @@ int main() {
         std::array<char, 4096> buffer{};
         const auto received = recv(client, buffer.data(), static_cast<int>(buffer.size() - 1), 0);
         if (received > 0) {
-            const auto response = response_for(std::string_view(buffer.data(), received));
+            const auto response = homeworldz::http::response_for(std::string_view(buffer.data(), received));
             send(client, response.data(), static_cast<int>(response.size()), 0);
         }
         close_socket(client);
