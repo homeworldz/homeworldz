@@ -177,7 +177,7 @@ bool chat_codecs() {
 }
 
 bool flat_terrain_codec() {
-    const std::array<TerrainPatch, 2> patches{{{0, 0}, {15, 15}}};
+    const std::array<TerrainPatch, 2> patches{{{1, 0}, {15, 15}}};
     const auto terrain = encode_flat_terrain(patches, 25.0F);
     if (terrain.size() < 20 || terrain[0] != std::byte{11} || terrain[1] != std::byte{0x4c}) return false;
     const auto length = std::to_integer<unsigned>(terrain[2]) |
@@ -186,7 +186,7 @@ bool flat_terrain_codec() {
            terrain[6] == std::byte{16} && terrain[7] == std::byte{0x4c} && terrain[8] == std::byte{0x84} &&
            terrain[9] == std::byte{} && terrain[10] == std::byte{} && terrain[11] == std::byte{0xc4} &&
            terrain[12] == std::byte{0x41} && terrain[13] == std::byte{1} && terrain[14] == std::byte{} &&
-           terrain[16] == std::byte{0x28};
+           terrain[15] == std::byte{0x20} && terrain[16] == std::byte{0x28};
 }
 
 bool static_object_codec() {

@@ -356,7 +356,11 @@ std::vector<std::byte> encode_flat_terrain(std::span<const TerrainPatch> patches
         bits.write_byte(static_cast<std::uint8_t>(offset_bits >> 16));
         bits.write_byte(static_cast<std::uint8_t>(offset_bits >> 24));
         bits.write_byte(1); bits.write_byte(0); // range 1
-        bits.write((static_cast<std::uint32_t>(patch.x) << 5) | patch.y, 10);
+        // LLBitPack serializes a little-endian integer one byte at a time, so
+        // this 10-bit field is its low byte followed by its upper two bits.
+        const auto patch_id = (static_cast<std::uint32_t>(patch.x) << 5) | patch.y;
+        bits.write_byte(static_cast<std::uint8_t>(patch_id));
+        bits.write(patch_id >> 8, 2);
         bits.write(2, 2); // zero end-of-block
     }
     bits.write_byte(97); // end of patches
