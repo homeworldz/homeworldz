@@ -22,7 +22,7 @@ than runtime dependencies.
 - [x] Implement region registration, lease renewal, expiry, and discovery.
 - [x] Implement development users, login sessions, and session validation.
 - [x] Implement presence and stale-presence cleanup.
-- [ ] Add the authoritative scene model and fixed-step simulation loop.
+- [x] Add the authoritative scene model and fixed-step simulation loop.
 - [ ] Add the region-to-grid HTTP client and registration lifecycle.
 - [ ] Add SQLite local scene metadata and atomic snapshots.
 - [ ] Add content-addressed local asset blobs and viewer UUID mappings.

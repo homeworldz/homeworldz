@@ -175,6 +175,12 @@ HomeWorldz owns authoritative scene state:
 - Viewer update state.
 - Edit/build operations.
 
+The initial scene core assigns region-local entity identifiers, tracks state
+revisions, and advances velocity-derived transforms at a fixed 45 Hz. Catch-up
+work is bounded to eight steps per host update to prevent a delayed region from
+entering a simulation spiral. This loop remains independent of the provisional
+physics engine choice.
+
 The physics engine owns a simulation mirror:
 
 - Terrain collision.
