@@ -2,9 +2,18 @@ package main
 
 import (
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 )
+
+func TestViewerArgumentsDisableVoice(t *testing.T) {
+	got := viewerArguments("http://127.0.0.1:42000")
+	want := []string{"--grid", "http://127.0.0.1:42000", "--novoice"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("viewer arguments = %#v, want %#v", got, want)
+	}
+}
 
 func TestValidUsername(t *testing.T) {
 	for _, value := range []string{"smoke.user", "test_123", "a-b"} {

@@ -432,8 +432,22 @@ int main() {
                             handshake.region_id = *region_id;
                             handshake.owner_id = identity->agent_id;
                             if (const auto response = circuits.send(endpoint,
-                                    homeworldz::viewer::encode_region_handshake(handshake), true, now, true))
-                                static_cast<void>(send_udp(viewer_server, endpoint, *response));
+                                    homeworldz::viewer::encode_region_handshake(handshake), true, now, true)) {
+                                const auto sent = send_udp(viewer_server, endpoint, *response);
+                                std::cout << "{\"level\":" << (sent ? "\"info\"" : "\"error\"")
+                                          << ",\"message\":\"region handshake sent\",\"endpoint\":"
+                                          << homeworldz::api::json_string(endpoint)
+                                          << ",\"bytes\":" << response->size()
+                                          << ",\"success\":" << (sent ? "true" : "false");
+#ifdef _WIN32
+                                if (!sent) std::cout << ",\"socketError\":" << WSAGetLastError();
+#endif
+                                std::cout << "}" << std::endl;
+                            } else {
+                                std::cout << "{\"level\":\"error\",\"message\":\"region handshake not queued\","
+                                             "\"endpoint\":"
+                                          << homeworldz::api::json_string(endpoint) << "}" << std::endl;
+                            }
                         }
                     } else if (identity) {
                         const auto handshake_reply = homeworldz::viewer::decode_region_handshake_reply(packet->payload);

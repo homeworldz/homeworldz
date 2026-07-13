@@ -158,7 +158,7 @@ func run(ctx context.Context, opts options) error {
 	if err := prepareViewerLaunch(opts.firestormPath); err != nil {
 		return err
 	}
-	viewer := exec.Command(opts.firestormPath, "--grid", gridURL)
+	viewer := exec.Command(opts.firestormPath, viewerArguments(gridURL)...)
 	viewer.Dir = root
 	if err := viewer.Start(); err != nil {
 		return fmt.Errorf("launch Firestorm: %w", err)
@@ -167,6 +167,10 @@ func run(ctx context.Context, opts options) error {
 		return fmt.Errorf("Firestorm exited: %w", err)
 	}
 	return nil
+}
+
+func viewerArguments(gridURL string) []string {
+	return []string{"--grid", gridURL, "--novoice"}
 }
 
 func iniValue(path, section, key string) (string, error) {
