@@ -74,6 +74,18 @@ func TestViewerLoginResolvesNamedRegion(t *testing.T) {
 	if fields["seed_capability"].text() != wantSeed {
 		t.Fatalf("seed = %q, want %q", fields["seed_capability"].text(), wantSeed)
 	}
+	rootValues := fields["inventory-root"].Array.Values
+	skeletonValues := fields["inventory-skeleton"].Array.Values
+	if len(rootValues) != 1 || len(skeletonValues) != 1 {
+		t.Fatalf("inventory root or skeleton missing: %#v", fields)
+	}
+	rootID := rootValues[0].fields()["folder_id"].text()
+	folder := skeletonValues[0].fields()
+	if rootID == "" || folder["folder_id"].text() != rootID || folder["name"].text() != "My Inventory" ||
+		folder["parent_id"].text() != "00000000-0000-0000-0000-000000000000" ||
+		folder["version"].text() != "1" || folder["type_default"].text() != "8" {
+		t.Fatalf("invalid inventory root skeleton: root=%q folder=%#v", rootID, folder)
+	}
 	session, err := identities.ValidateSession(context.Background(), fields["session_id"].text())
 	if err != nil || session.ViewerCircuitCode == 0 || session.DestinationRegionID != target.ID ||
 		fields["circuit_code"].text() != fmt.Sprint(session.ViewerCircuitCode) {

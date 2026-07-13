@@ -178,6 +178,13 @@ func (a *API) viewerLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	root := rpcStructValue(rpcField("folder_id", rpcString(session.UserID)))
+	rootFolder := rpcStructValue(
+		rpcField("name", rpcString("My Inventory")),
+		rpcField("folder_id", rpcString(session.UserID)),
+		rpcField("parent_id", rpcString("00000000-0000-0000-0000-000000000000")),
+		rpcField("version", rpcInt(1)),
+		rpcField("type_default", rpcInt(8)),
+	)
 	libraryRoot := rpcStructValue(rpcField("folder_id", rpcString("00000000-0000-0000-0000-000000000001")))
 	libraryOwner := rpcStructValue(rpcField("agent_id", rpcString("00000000-0000-0000-0000-000000000002")))
 	response := rpcStructValue(
@@ -192,7 +199,7 @@ func (a *API) viewerLogin(w http.ResponseWriter, r *http.Request) {
 		rpcField("look_at", rpcString("[r1,r0,r0]")),
 		rpcField("seed_capability", rpcString(strings.TrimRight(region.PublicEndpoint, "/")+"/caps/seed/"+session.ID)),
 		rpcField("seconds_since_epoch", rpcInt(int(time.Now().Unix()))),
-		rpcField("inventory-root", rpcArrayValue(root)), rpcField("inventory-skeleton", rpcArrayValue()),
+		rpcField("inventory-root", rpcArrayValue(root)), rpcField("inventory-skeleton", rpcArrayValue(rootFolder)),
 		rpcField("inventory-lib-root", rpcArrayValue(libraryRoot)), rpcField("inventory-lib-owner", rpcArrayValue(libraryOwner)),
 		rpcField("inventory-skel-lib", rpcArrayValue()), rpcField("login-flags", rpcArrayValue()),
 		rpcField("gestures", rpcArrayValue()), rpcField("buddy-list", rpcArrayValue()),
