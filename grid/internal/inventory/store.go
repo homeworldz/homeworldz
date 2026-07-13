@@ -72,8 +72,13 @@ func DefaultWearables(userID string) []Item {
 	definitions := []struct {
 		name         string
 		wearableType uint32
+		assetID      string
 	}{
-		{"Default Shape", 0}, {"Default Skin", 1}, {"Default Hair", 2}, {"Default Eyes", 3},
+		// Firestorm 7.2.4 installs these valid starter body parts in its permanent asset cache.
+		{"Default Shape", 0, "0c5f60ae-1a54-1ee8-398d-7ed278552132"},
+		{"Default Skin", 1, "2d408f13-f437-e00e-8f6d-b0857580b034"},
+		{"Default Hair", 2, "aa9d6d53-2647-f731-97eb-e07a47febb57"},
+		{"Default Eyes", 3, "5725fae1-0087-ec20-a4a0-eaa82d5c121b"},
 	}
 	items := make([]Item, 0, len(definitions)*2)
 	for _, definition := range definitions {
@@ -81,8 +86,7 @@ func DefaultWearables(userID string) []Item {
 			strconv.FormatUint(uint64(definition.wearableType), 10))
 		items = append(items, Item{
 			ID: itemID, OwnerUserID: userID, FolderID: bodyPartsID,
-			AssetID: deterministicUUID("homeworldz-default-wearable-asset\x00" +
-				strconv.FormatUint(uint64(definition.wearableType), 10)),
+			AssetID:   definition.assetID,
 			AssetType: 13, InventoryType: 18, Name: definition.name, Flags: definition.wearableType,
 			BasePermissions: fullPermissions, CurrentPermissions: fullPermissions,
 			NextPermissions: fullPermissions,
