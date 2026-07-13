@@ -289,6 +289,12 @@ std::vector<std::byte> encode_agent_movement_complete(const AgentMovementComplet
     return output;
 }
 
+std::vector<std::byte> encode_start_ping_check(std::uint8_t ping_id, std::uint32_t oldest_unacked) {
+    std::vector<std::byte> output{std::byte{1}, static_cast<std::byte>(ping_id)};
+    append_le_u32(output, oldest_unacked);
+    return output;
+}
+
 std::optional<AgentUpdate> decode_agent_update(std::span<const std::byte> payload) {
     if (payload.size() != 115 || payload[0] != std::byte{4}) return std::nullopt;
     AgentUpdate result;

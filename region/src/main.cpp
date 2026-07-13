@@ -51,6 +51,8 @@ std::atomic_bool running{true};
 struct LiveAvatar {
     homeworldz::viewer::AvatarController controller;
     homeworldz::scene::EntityId entity_id{};
+    std::chrono::steady_clock::time_point next_ping{};
+    std::uint8_t ping_id{};
 };
 
 void stop(int) { running = false; }
@@ -480,7 +482,9 @@ int main() {
                             if (!avatars.contains(endpoint)) {
                                 const auto name = homeworldz::viewer::format_uuid(identity->agent_id);
                                 const auto entity = scene.create(name, {128.0, 128.0, 25.0});
-                                avatars.emplace(endpoint, LiveAvatar{homeworldz::viewer::AvatarController{}, entity});
+                                avatars.emplace(endpoint, LiveAvatar{
+                                    homeworldz::viewer::AvatarController{}, entity,
+                                    now + std::chrono::seconds(5), 0});
                             }
                             const auto& live_avatar = avatars.at(endpoint);
                             if (const auto* entity = scene.find(live_avatar.entity_id)) {
@@ -549,7 +553,12 @@ int main() {
         const auto elapsed = std::chrono::duration<double>(now - previous_tick).count();
         simulation.advance(elapsed);
         for (auto& [endpoint, avatar] : avatars) {
-            static_cast<void>(endpoint);
+            if (now >= avatar.next_ping) {
+                if (const auto ping = circuits.send(endpoint,
+                        homeworldz::viewer::encode_start_ping_check(++avatar.ping_id), false, now))
+                    static_cast<void>(send_udp(viewer_server, endpoint, *ping));
+                avatar.next_ping = now + std::chrono::seconds(5);
+            }
             avatar.controller.step(elapsed);
             if (auto* entity = scene.find(avatar.entity_id)) {
                 entity->position = avatar.controller.state().position;

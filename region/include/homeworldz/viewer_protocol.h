@@ -115,6 +115,7 @@ std::vector<std::byte> encode_region_handshake(const RegionHandshake& message);
 std::optional<AgentMessage> decode_region_handshake_reply(std::span<const std::byte> payload);
 std::optional<CompleteAgentMovement> decode_complete_agent_movement(std::span<const std::byte> payload);
 std::vector<std::byte> encode_agent_movement_complete(const AgentMovementComplete& message);
+std::vector<std::byte> encode_start_ping_check(std::uint8_t ping_id, std::uint32_t oldest_unacked = 0);
 std::optional<AgentUpdate> decode_agent_update(std::span<const std::byte> payload);
 std::optional<ChatFromViewer> decode_chat_from_viewer(std::span<const std::byte> payload);
 std::vector<std::byte> encode_chat_from_simulator(const ChatFromSimulator& message);
