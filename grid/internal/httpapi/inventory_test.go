@@ -20,6 +20,14 @@ func (s *memoryInventoryStore) ListFolders(_ context.Context, userID string) ([]
 	return s.folders[userID], nil
 }
 
+func (s *memoryInventoryStore) EnsureItem(context.Context, inventory.Item) (bool, error) {
+	return true, nil
+}
+
+func (s *memoryInventoryStore) ListItems(context.Context, string) ([]inventory.Item, error) {
+	return nil, nil
+}
+
 func TestInventoryFoldersEndpoint(t *testing.T) {
 	const userID = "20000000-0000-4000-8000-000000000001"
 	store := &memoryInventoryStore{folders: make(map[string][]inventory.Folder)}

@@ -45,4 +45,19 @@ func TestPostgresSystemFolderLifecycle(t *testing.T) {
 	if len(first) != 21 || len(second) != len(first) {
 		t.Fatalf("folder counts = %d, %d", len(first), len(second))
 	}
+	itemID, _ := identifier.NewUUID()
+	assetID, _ := identifier.NewUUID()
+	item := Item{ID: itemID, OwnerUserID: userID, CreatorUserID: userID,
+		FolderID: first[8].ID, AssetID: assetID, AssetType: 13, InventoryType: 18,
+		Name: "Integration Shape", BasePermissions: 0x7fffffff, CurrentPermissions: 0x7fffffff}
+	if inserted, err := store.EnsureItem(ctx, item); err != nil || !inserted {
+		t.Fatalf("first ensure item inserted = %v, error = %v", inserted, err)
+	}
+	if inserted, err := store.EnsureItem(ctx, item); err != nil || inserted {
+		t.Fatalf("second ensure item inserted = %v, error = %v", inserted, err)
+	}
+	items, err := store.ListItems(ctx, userID)
+	if err != nil || len(items) != 1 || items[0].AssetID != assetID {
+		t.Fatalf("inventory items = %#v, error = %v", items, err)
+	}
 }
