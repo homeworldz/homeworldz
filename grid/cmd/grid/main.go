@@ -37,7 +37,11 @@ func main() {
 	}
 
 	server := &http.Server{
-		Addr: settings.Address, Handler: httpapi.New(db, version),
+		Addr: settings.Address,
+		Handler: httpapi.New(db, version, httpapi.Options{
+			ServiceToken: settings.ServiceToken,
+			Logger:       logger,
+		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	stop := make(chan os.Signal, 1)

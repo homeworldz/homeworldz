@@ -6,6 +6,7 @@
 #include <string>
 #include <string_view>
 
+#include "homeworldz/api_models.h"
 #include "homeworldz/http_response.h"
 
 #ifdef _WIN32
@@ -82,7 +83,12 @@ int main() {
         const auto received = recv(client, buffer.data(), static_cast<int>(buffer.size() - 1), 0);
         if (received > 0) {
             const auto response = homeworldz::http::response_for(std::string_view(buffer.data(), received));
-            send(client, response.data(), static_cast<int>(response.size()), 0);
+            send(client, response.content.data(), static_cast<int>(response.content.size()), 0);
+            std::cout << "{\"level\":\"info\",\"message\":\"http request\",\"requestId\":"
+                      << homeworldz::api::json_string(response.request_id)
+                      << ",\"method\":" << homeworldz::api::json_string(response.method)
+                      << ",\"path\":" << homeworldz::api::json_string(response.path)
+                      << ",\"status\":" << response.status_code << "}" << std::endl;
         }
         close_socket(client);
     }

@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"time"
 )
@@ -16,13 +17,21 @@ type API struct {
 	version string
 }
 
-func New(ready ReadinessChecker, version string) http.Handler {
+type Options struct {
+	ServiceToken string
+	Logger       *slog.Logger
+}
+
+func New(ready ReadinessChecker, version string, options Options) http.Handler {
 	a := &API{ready: ready, version: version}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ping", getOnly(a.ping))
 	mux.HandleFunc("/ready", getOnly(a.readiness))
 	mux.HandleFunc("/version", getOnly(a.buildVersion))
-	return mux
+	mux.HandleFunc("/", a.notFound)
+	return withRequestID(withRequestLogging(
+		authenticateInternal(mux, options.ServiceToken), options.Logger,
+	))
 }
 
 func getOnly(next http.HandlerFunc) http.HandlerFunc {
@@ -65,6 +74,10 @@ func (a *API) buildVersion(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, Version{
 		Service: "grid", Version: a.version, APIVersion: APIVersion,
 	})
+}
+
+func (a *API) notFound(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusNotFound, Error{Code: "not_found", Message: "route not found"})
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {

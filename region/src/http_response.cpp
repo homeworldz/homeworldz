@@ -2,23 +2,119 @@
 
 #include "homeworldz/api_models.h"
 
-namespace homeworldz::http {
+#include <atomic>
+#include <chrono>
+#include <cstdint>
+#include <utility>
 
-std::string response_for(std::string_view request) {
+namespace homeworldz::http {
+namespace {
+
+bool ascii_equal_insensitive(std::string_view left, std::string_view right) {
+    if (left.size() != right.size()) return false;
+    for (std::size_t index = 0; index < left.size(); ++index) {
+        char a = left[index];
+        char b = right[index];
+        if (a >= 'A' && a <= 'Z') a = static_cast<char>(a + ('a' - 'A'));
+        if (b >= 'A' && b <= 'Z') b = static_cast<char>(b + ('a' - 'A'));
+        if (a != b) return false;
+    }
+    return true;
+}
+
+bool valid_request_id(std::string_view value) {
+    if (value.empty() || value.size() > 128) return false;
+    for (const char character : value) {
+        if ((character >= 'a' && character <= 'z') ||
+            (character >= 'A' && character <= 'Z') ||
+            (character >= '0' && character <= '9') ||
+            character == '-' || character == '_' || character == '.') {
+            continue;
+        }
+        return false;
+    }
+    return true;
+}
+
+std::string request_header(std::string_view request, std::string_view wanted_name) {
+    auto position = request.find("\r\n");
+    if (position == std::string_view::npos) return {};
+    position += 2;
+    while (position < request.size()) {
+        const auto end = request.find("\r\n", position);
+        if (end == std::string_view::npos || end == position) break;
+        const auto line = request.substr(position, end - position);
+        const auto colon = line.find(':');
+        if (colon != std::string_view::npos &&
+            ascii_equal_insensitive(line.substr(0, colon), wanted_name)) {
+            auto value = line.substr(colon + 1);
+            while (!value.empty() && (value.front() == ' ' || value.front() == '\t')) {
+                value.remove_prefix(1);
+            }
+            while (!value.empty() && (value.back() == ' ' || value.back() == '\t')) {
+                value.remove_suffix(1);
+            }
+            return std::string(value);
+        }
+        position = end + 2;
+    }
+    return {};
+}
+
+std::string new_request_id() {
+    static std::atomic<std::uint64_t> sequence{0};
+    const auto timestamp = static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count());
+    const auto next = sequence.fetch_add(1, std::memory_order_relaxed) + 1;
+    constexpr char hex[] = "0123456789abcdef";
+    std::string result(32, '0');
+    for (int index = 0; index < 16; ++index) {
+        const auto value = index < 8 ? timestamp : next;
+        const auto offset = index < 8 ? index : index - 8;
+        result[index * 2] = hex[(value >> ((15 - offset * 2) * 4)) & 0x0f];
+        result[index * 2 + 1] = hex[(value >> ((14 - offset * 2) * 4)) & 0x0f];
+    }
+    return result;
+}
+
+void parse_request_line(std::string_view request, std::string& method, std::string& path) {
+    const auto first_space = request.find(' ');
+    if (first_space == std::string_view::npos) return;
+    method = request.substr(0, first_space);
+    const auto second_space = request.find(' ', first_space + 1);
+    if (second_space == std::string_view::npos) return;
+    path = request.substr(first_space + 1, second_space - first_space - 1);
+}
+
+} // namespace
+
+Response response_for(std::string_view request) {
+    int status_code = 404;
     std::string_view status = "HTTP/1.1 404 Not Found\r\n";
     std::string body = api::to_json(api::Error{"not_found", "route not found"});
     if (request.starts_with("GET /ping ")) {
+        status_code = 200;
         status = "HTTP/1.1 200 OK\r\n";
         body = api::to_json(api::Status{"ok"});
     } else if (request.starts_with("GET /ready ")) {
+        status_code = 200;
         status = "HTTP/1.1 200 OK\r\n";
         body = api::to_json(api::Status{"ready"});
     } else if (request.starts_with("GET /version ")) {
+        status_code = 200;
         status = "HTTP/1.1 200 OK\r\n";
         body = api::to_json(api::Version{"region", "dev", std::string(api::api_version)});
     }
-    return std::string(status) + "Content-Type: application/json\r\nConnection: close\r\nContent-Length: " +
-           std::to_string(body.size()) + "\r\n\r\n" + body;
+    auto request_id = request_header(request, request_id_header);
+    if (!valid_request_id(request_id)) request_id = new_request_id();
+    std::string method;
+    std::string path;
+    parse_request_line(request, method, path);
+    auto content = std::string(status) + "Content-Type: application/json\r\nConnection: close\r\n" +
+                   std::string(request_id_header) + ": " + request_id + "\r\nContent-Length: " +
+                   std::to_string(body.size()) + "\r\n\r\n" + body;
+    return {status_code, std::move(request_id), std::move(method), std::move(path), std::move(content)};
 }
 
 } // namespace homeworldz::http

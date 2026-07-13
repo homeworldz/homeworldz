@@ -25,7 +25,7 @@ func decode[T any](t *testing.T, w *httptest.ResponseRecorder) T {
 func TestPingDoesNotRequireDatabase(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/ping", nil)
 	w := httptest.NewRecorder()
-	New(nil, "test").ServeHTTP(w, r)
+	New(nil, "test", Options{}).ServeHTTP(w, r)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
 	}
@@ -49,7 +49,7 @@ func TestReady(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			r := httptest.NewRequest(http.MethodGet, "/ready", nil)
 			w := httptest.NewRecorder()
-			New(tt.check, "test").ServeHTTP(w, r)
+			New(tt.check, "test", Options{}).ServeHTTP(w, r)
 			if w.Code != tt.want {
 				t.Fatalf("status = %d, want %d", w.Code, tt.want)
 			}
@@ -67,7 +67,7 @@ func TestReady(t *testing.T) {
 func TestVersion(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/version", nil)
 	w := httptest.NewRecorder()
-	New(checker{}, "1.2.3").ServeHTTP(w, r)
+	New(checker{}, "1.2.3", Options{}).ServeHTTP(w, r)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
 	}
@@ -80,7 +80,7 @@ func TestVersion(t *testing.T) {
 func TestMethodNotAllowedUsesErrorModel(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "/ping", nil)
 	w := httptest.NewRecorder()
-	New(nil, "test").ServeHTTP(w, r)
+	New(nil, "test", Options{}).ServeHTTP(w, r)
 	if w.Code != http.StatusMethodNotAllowed || w.Header().Get("Allow") != http.MethodGet {
 		t.Fatalf("unexpected response status or Allow header: %d %q", w.Code, w.Header().Get("Allow"))
 	}

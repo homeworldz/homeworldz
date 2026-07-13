@@ -98,6 +98,10 @@ Default API policy:
 - Use OpenAPI for schema documentation.
 - Use HTTPS in deployed environments.
 - Use bearer tokens or signed service tokens for service authentication.
+- Require bearer service tokens on grid routes under `/api/`; keep `/ping`,
+  `/ready`, and `/version` available without credentials.
+- Propagate or generate `X-Request-ID` values and include them in responses and
+  structured JSON request logs without logging authentication credentials.
 - Use explicit versioned paths for APIs that need compatibility guarantees.
 - Use HTTP streaming for large transfers where plain request/response is not a
   good fit.

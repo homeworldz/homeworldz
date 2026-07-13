@@ -22,6 +22,7 @@ struct Error {
     std::string message;
 };
 
+std::string json_string(std::string_view value);
 std::string to_json(const Status& value);
 std::string to_json(const Version& value);
 std::string to_json(const Error& value);

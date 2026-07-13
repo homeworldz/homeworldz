@@ -14,7 +14,7 @@ than runtime dependencies.
 - [x] Implement `/ping`, `/ready`, and `/version` in both services.
 - [x] Add Windows and Linux CI for builds, tests, and migrations.
 - [x] Add generated or validated C++ and Go API models.
-- [ ] Add service-token authentication, request IDs, and structured logging.
+- [x] Add service-token authentication, request IDs, and structured logging.
 - [ ] Add contract tests shared by grid handlers and the region client.
 
 ## Milestone 1: Grid And Region Core

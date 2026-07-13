@@ -6,41 +6,76 @@ servers:
   - url: http://localhost:42000
 paths:
   /ping:
+    parameters:
+      - $ref: "#/components/parameters/RequestId"
     get:
       operationId: ping
       summary: Report process liveness
       responses:
         "200":
           description: Process is alive
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Status" }
   /ready:
+    parameters:
+      - $ref: "#/components/parameters/RequestId"
     get:
       operationId: ready
       summary: Report whether the service can accept traffic
       responses:
         "200":
           description: Service is ready
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Status" }
         "503":
           description: A required dependency is unavailable
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
   /version:
+    parameters:
+      - $ref: "#/components/parameters/RequestId"
     get:
       operationId: version
       summary: Report build and API versions
       responses:
         "200":
           description: Version information
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Version" }
 components:
+  parameters:
+    RequestId:
+      name: X-Request-ID
+      in: header
+      required: false
+      description: Caller-provided request identifier; unsafe values are replaced.
+      schema:
+        type: string
+        maxLength: 128
+        pattern: "^[A-Za-z0-9._-]+$"
+  headers:
+    RequestId:
+      required: true
+      description: Valid caller-provided request identifier or a generated identifier.
+      schema:
+        type: string
+  securitySchemes:
+    ServiceToken:
+      type: http
+      scheme: bearer
+      description: Required by service-to-service operations under /api/.
   schemas:
     Status:
       type: object

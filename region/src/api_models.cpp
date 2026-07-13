@@ -1,7 +1,6 @@
 #include "homeworldz/api_models.h"
 
 namespace homeworldz::api {
-namespace {
 
 std::string json_string(std::string_view value) {
     std::string result;
@@ -30,8 +29,6 @@ std::string json_string(std::string_view value) {
     result.push_back('"');
     return result;
 }
-
-} // namespace
 
 std::string to_json(const Status& value) {
     return "{\"status\":" + json_string(value.status) + '}';

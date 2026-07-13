@@ -25,20 +25,33 @@ int main() {
     passed &= homeworldz::api::to_json(homeworldz::api::Error{"bad_input", "quote: \""}) ==
               R"({"code":"bad_input","message":"quote: \""})";
 
-    const auto ping = homeworldz::http::response_for("GET /ping HTTP/1.1\r\n\r\n");
-    passed &= contains(ping, "HTTP/1.1 200 OK");
-    passed &= contains(ping, R"({"status":"ok"})");
-    passed &= contains(ping, "Content-Length: 15");
+    const auto ping = homeworldz::http::response_for(
+        "GET /ping HTTP/1.1\r\nX-Request-ID: caller-request-123\r\n\r\n");
+    passed &= ping.status_code == 200;
+    passed &= ping.request_id == "caller-request-123";
+    passed &= ping.method == "GET";
+    passed &= ping.path == "/ping";
+    passed &= contains(ping.content, "HTTP/1.1 200 OK");
+    passed &= contains(ping.content, "X-Request-ID: caller-request-123");
+    passed &= contains(ping.content, R"({"status":"ok"})");
+    passed &= contains(ping.content, "Content-Length: 15");
 
     const auto ready = homeworldz::http::response_for("GET /ready HTTP/1.1\r\n\r\n");
-    passed &= contains(ready, R"({"status":"ready"})");
+    passed &= !ready.request_id.empty();
+    passed &= contains(ready.content, R"({"status":"ready"})");
 
     const auto version = homeworldz::http::response_for("GET /version HTTP/1.1\r\n\r\n");
-    passed &= contains(version, R"({"service":"region","version":"dev","apiVersion":"v1"})");
+    passed &= contains(version.content, R"({"service":"region","version":"dev","apiVersion":"v1"})");
 
     const auto missing = homeworldz::http::response_for("GET /missing HTTP/1.1\r\n\r\n");
-    passed &= contains(missing, "HTTP/1.1 404 Not Found");
-    passed &= contains(missing, R"("code":"not_found")");
+    passed &= missing.status_code == 404;
+    passed &= contains(missing.content, "HTTP/1.1 404 Not Found");
+    passed &= contains(missing.content, R"("code":"not_found")");
+
+    const auto unsafe_id = homeworldz::http::response_for(
+        "GET /ping HTTP/1.1\r\nX-Request-ID: unsafe value\r\n\r\n");
+    passed &= unsafe_id.request_id != "unsafe value";
+    passed &= unsafe_id.request_id.size() == 32;
     return passed ? 0 : 1;
 }
 
