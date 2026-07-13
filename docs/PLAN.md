@@ -30,7 +30,7 @@ than runtime dependencies.
 
 ## Milestone 2: Physics Gate
 
-- [ ] Define the engine-independent physics world interface.
+- [x] Define the engine-independent physics world interface.
 - [ ] Implement Jolt and PhysX 5 evaluation adapters.
 - [ ] Add common avatar, terrain, stacking, impulse, vehicle, handoff, restore,
   and load scenarios.

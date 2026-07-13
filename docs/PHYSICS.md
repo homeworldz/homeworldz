@@ -185,6 +185,11 @@ C++ harness, or a thin host-language harness that calls native engine adapters.
 The important requirement is that both physics engines run the same scenarios,
 emit comparable traces, and expose the same region-facing API shape.
 
+The shared C++ `homeworldz::physics::World` boundary defines that shape. It
+covers body and character creation, impulses, fixed steps, contact retrieval,
+ray queries, and capture/restore of transferable body state. Engine adapters
+must keep their native handles and configuration behind this boundary.
+
 ### Required Scenarios
 
 - Avatar walking on flat terrain, slopes, ramps, stairs, and mesh surfaces.
