@@ -45,7 +45,7 @@ than runtime dependencies.
 - [x] Implement login response and destination-region resolution.
 - [x] Implement viewer UDP circuits, packet codecs, acknowledgements, throttles,
   and timeouts.
-- [ ] Implement region handshake, seed capability, and required event delivery.
+- [x] Implement region handshake, seed capability, and required event delivery.
 - [ ] Implement avatar movement, flying, jumping, and camera state.
 - [ ] Implement nearby chat, terrain, and static object updates.
 - [ ] Implement local texture and asset fetch.

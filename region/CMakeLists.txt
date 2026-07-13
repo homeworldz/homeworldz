@@ -8,6 +8,7 @@ add_library(homeworldz-region-core
   src/sha256.cpp
   src/simulation_loop.cpp)
 target_sources(homeworldz-region-core PRIVATE src/viewer_protocol.cpp)
+target_sources(homeworldz-region-core PRIVATE src/viewer_capabilities.cpp)
 target_include_directories(homeworldz-region-core PUBLIC include)
 target_compile_features(homeworldz-region-core PUBLIC cxx_std_20)
 target_link_libraries(homeworldz-region-core PUBLIC homeworldz-sqlite)

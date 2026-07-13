@@ -19,6 +19,7 @@
 #include "homeworldz/region_storage.h"
 #include "homeworldz/scene.h"
 #include "homeworldz/simulation_loop.h"
+#include "homeworldz/viewer_capabilities.h"
 #include "homeworldz/viewer_protocol.h"
 
 #ifdef _WIN32
@@ -97,23 +98,22 @@ bool send_udp(socket_handle socket, std::string_view endpoint, std::span<const s
                   reinterpret_cast<const sockaddr*>(&destination), sizeof(destination)) == static_cast<int>(bytes.size());
 }
 
-std::string xml_escape(std::string_view value) {
-    std::string result;
-    for (const char character : value) {
-        if (character == '&') result += "&amp;";
-        else if (character == '<') result += "&lt;";
-        else if (character == '>') result += "&gt;";
-        else if (character == '\"') result += "&quot;";
-        else result.push_back(character);
-    }
-    return result;
-}
-
 std::string capability_session(std::string_view path, std::string_view prefix) {
     if (!path.starts_with(prefix)) return {};
     const auto session = path.substr(prefix.size());
     if (session.empty() || session.find('/') != std::string_view::npos) return {};
     return std::string(session);
+}
+
+std::string simulator_endpoint(std::string_view public_endpoint, int viewer_port) {
+    auto authority = public_endpoint;
+    const auto scheme = authority.find("://");
+    if (scheme != std::string_view::npos) authority.remove_prefix(scheme + 3);
+    const auto slash = authority.find('/');
+    if (slash != std::string_view::npos) authority = authority.substr(0, slash);
+    const auto colon = authority.rfind(':');
+    if (colon != std::string_view::npos) authority = authority.substr(0, colon);
+    return std::string(authority) + ':' + std::to_string(viewer_port);
 }
 } // namespace
 
@@ -220,6 +220,7 @@ int main() {
         return agent && *agent == request.agent_id;
     });
     std::unordered_set<std::string> handshake_replies;
+    std::unordered_set<std::string> established_events;
 
     std::cout << "{\"level\":\"info\",\"message\":\"region service listening\",\"httpPort\":"
               << configured_port() << ",\"viewerPort\":" << configured_viewer_port() << "}" << std::endl;
@@ -250,19 +251,24 @@ int main() {
                             authorized = session && session->destination_region_id == registration->region_id();
                         }
                         if (authorized && seed) {
-                            const auto event_url = xml_escape(
-                                region_public_endpoint + "/caps/event/" + session_id);
-                            const auto body = std::string("<?xml version=\"1.0\"?><llsd><map>") +
-                                "<key>EventQueueGet</key><uri>" + event_url + "</uri></map></llsd>";
                             response = homeworldz::http::response_for_content(
-                                request, 200, "application/llsd+xml", body);
+                                request, 200, "application/llsd+xml",
+                                homeworldz::viewer::seed_capability_xml(region_public_endpoint, session_id));
                         } else if (authorized) {
                             static std::atomic<std::uint64_t> event_id{0};
-                            const auto body = std::string("<?xml version=\"1.0\"?><llsd><map>") +
-                                "<key>events</key><array/><key>id</key><integer>" +
-                                std::to_string(++event_id) + "</integer></map></llsd>";
+                            std::optional<homeworldz::viewer::EstablishAgentCommunication> event;
+                            if (established_events.insert(session_id).second) {
+                                const auto session = viewer_grid->validate_viewer_session(session_id);
+                                if (session) {
+                                    event = homeworldz::viewer::EstablishAgentCommunication{
+                                        session->agent_id,
+                                        simulator_endpoint(region_public_endpoint, configured_viewer_port()),
+                                        region_public_endpoint + "/caps/seed/" + session_id};
+                                }
+                            }
                             response = homeworldz::http::response_for_content(
-                                request, 200, "application/llsd+xml", body);
+                                request, 200, "application/llsd+xml",
+                                homeworldz::viewer::event_queue_xml(++event_id, event));
                         } else {
                             response = homeworldz::http::response_for_content(
                                 request, response.method == "POST" ? 404 : 405,

@@ -94,6 +94,12 @@ listener (default `42002`). The first reliable `UseCircuitCode` datagram is
 accepted only when its circuit code, session, agent, and destination region all
 match the grid's live session record.
 
+The region returns `EventQueueGet` from the authenticated seed capability. Its
+first poll delivers `EstablishAgentCommunication`; later polls return an empty
+event array with a monotonically increasing queue ID. UDP startup enforces
+`UseCircuitCode`, `RegionHandshakeReply`, then `CompleteAgentMovement` before
+returning `AgentMovementComplete`.
+
 The pinned viewer source constructs the request in
 [`lllogininstance.cpp`](https://github.com/FirestormViewer/phoenix-firestorm/blob/10bd3c9f930c76e1427ddd4ecece6cdf36b4406d/indra/newview/lllogininstance.cpp#L155),
 consumes the circuit response in

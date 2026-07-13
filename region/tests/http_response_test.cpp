@@ -1,5 +1,6 @@
 #include "homeworldz/api_models.h"
 #include "homeworldz/http_response.h"
+#include "homeworldz/viewer_capabilities.h"
 
 #include <fstream>
 #include <iostream>
@@ -114,6 +115,15 @@ int main() {
     passed &= llsd.status_code == 200 && llsd.method == "POST" && llsd.path == "/caps/seed/id";
     passed &= contains(llsd.content, "Content-Type: application/llsd+xml");
     passed &= contains(llsd.content, "X-Request-ID: cap-request");
+    const auto seed = homeworldz::viewer::seed_capability_xml("http://region.example:42001/", "session-id");
+    passed &= contains(seed, "<key>EventQueueGet</key><uri>http://region.example:42001/caps/event/session-id</uri>");
+    const auto event = homeworldz::viewer::event_queue_xml(7,
+        homeworldz::viewer::EstablishAgentCommunication{
+            "11111111-2222-4333-8444-555555555555", "region.example:42002",
+            "http://region.example:42001/caps/seed/session&amp;id"});
+    passed &= contains(event, "<string>EstablishAgentCommunication</string>");
+    passed &= contains(event, "<key>id</key><integer>7</integer>");
+    passed &= contains(event, "session&amp;amp;id");
 
     const auto unsafe_id = homeworldz::http::response_for(
         "GET /ping HTTP/1.1\r\nX-Request-ID: unsafe value\r\n\r\n");
