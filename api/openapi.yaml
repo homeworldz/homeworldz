@@ -473,6 +473,8 @@ components:
         id: { type: string, format: uuid }
         userId: { type: string, format: uuid }
         expiresAt: { type: string, format: date-time }
+        viewerCircuitCode: { type: integer, minimum: 1, maximum: 4294967295 }
+        destinationRegionId: { type: string, format: uuid }
     UpdatePresenceRequest:
       type: object
       required: [regionId]

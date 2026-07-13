@@ -6,6 +6,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/xml"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -72,6 +73,11 @@ func TestViewerLoginResolvesNamedRegion(t *testing.T) {
 	wantSeed := strings.TrimRight(target.PublicEndpoint, "/") + "/caps/seed/" + fields["session_id"].text()
 	if fields["seed_capability"].text() != wantSeed {
 		t.Fatalf("seed = %q, want %q", fields["seed_capability"].text(), wantSeed)
+	}
+	session, err := identities.ValidateSession(context.Background(), fields["session_id"].text())
+	if err != nil || session.ViewerCircuitCode == 0 || session.DestinationRegionID != target.ID ||
+		fields["circuit_code"].text() != fmt.Sprint(session.ViewerCircuitCode) {
+		t.Fatalf("viewer circuit was not persisted: session=%#v error=%v", session, err)
 	}
 }
 

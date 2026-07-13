@@ -28,16 +28,19 @@ type User struct {
 }
 
 type Session struct {
-	ID        string    `json:"id"`
-	UserID    string    `json:"userId"`
-	ExpiresAt time.Time `json:"expiresAt"`
-	SecureID  string    `json:"-"`
+	ID                  string    `json:"id"`
+	UserID              string    `json:"userId"`
+	ExpiresAt           time.Time `json:"expiresAt"`
+	SecureID            string    `json:"-"`
+	ViewerCircuitCode   uint32    `json:"viewerCircuitCode,omitempty"`
+	DestinationRegionID string    `json:"destinationRegionId,omitempty"`
 }
 
 type Store interface {
 	CreateUser(context.Context, string, string) (User, error)
 	CreateSession(context.Context, string, string, time.Duration) (Session, error)
 	CreateViewerSession(context.Context, string, string, time.Duration) (Session, error)
+	AssignViewerDestination(context.Context, string, uint32, string) error
 	ValidateSession(context.Context, string) (Session, error)
 	RevokeSession(context.Context, string) error
 }
@@ -130,17 +133,43 @@ func (s *PostgresStore) insertSession(ctx context.Context, userID string, durati
 
 func (s *PostgresStore) ValidateSession(ctx context.Context, id string) (Session, error) {
 	var session Session
+	var circuit sql.NullInt64
+	var regionID sql.NullString
 	err := s.db.QueryRowContext(ctx, `
-		SELECT id, user_id, expires_at, COALESCE(secure_session_id::text, '') FROM sessions
+		SELECT id, user_id, expires_at, COALESCE(secure_session_id::text, ''),
+		       viewer_circuit_code, destination_region_id::text FROM sessions
         WHERE id = $1 AND expires_at > now()`, id,
-	).Scan(&session.ID, &session.UserID, &session.ExpiresAt, &session.SecureID)
+	).Scan(&session.ID, &session.UserID, &session.ExpiresAt, &session.SecureID, &circuit, &regionID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Session{}, ErrSessionNotFound
 	}
 	if err != nil {
 		return Session{}, fmt.Errorf("validate session: %w", err)
 	}
+	if circuit.Valid {
+		session.ViewerCircuitCode = uint32(circuit.Int64)
+	}
+	if regionID.Valid {
+		session.DestinationRegionID = regionID.String
+	}
 	return session, nil
+}
+
+func (s *PostgresStore) AssignViewerDestination(ctx context.Context, sessionID string, circuit uint32, regionID string) error {
+	result, err := s.db.ExecContext(ctx, `
+		UPDATE sessions SET viewer_circuit_code = $2, destination_region_id = $3
+		WHERE id = $1 AND expires_at > now()`, sessionID, circuit, regionID)
+	if err != nil {
+		return fmt.Errorf("assign viewer destination: %w", err)
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("count assigned viewer destinations: %w", err)
+	}
+	if count == 0 {
+		return ErrSessionNotFound
+	}
+	return nil
 }
 
 func (s *PostgresStore) RevokeSession(ctx context.Context, id string) error {

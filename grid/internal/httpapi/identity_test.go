@@ -75,6 +75,17 @@ func (s *memoryIdentityStore) ValidateSession(_ context.Context, id string) (ide
 	return session, nil
 }
 
+func (s *memoryIdentityStore) AssignViewerDestination(_ context.Context, id string, circuit uint32, regionID string) error {
+	session, ok := s.sessions[id]
+	if !ok || !session.ExpiresAt.After(s.now) {
+		return identity.ErrSessionNotFound
+	}
+	session.ViewerCircuitCode = circuit
+	session.DestinationRegionID = regionID
+	s.sessions[id] = session
+	return nil
+}
+
 func (s *memoryIdentityStore) RevokeSession(_ context.Context, id string) error {
 	if _, ok := s.sessions[id]; !ok {
 		return identity.ErrSessionNotFound

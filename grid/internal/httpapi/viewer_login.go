@@ -172,6 +172,11 @@ func (a *API) viewerLogin(w http.ResponseWriter, r *http.Request) {
 		writeViewerLogin(w, loginFailure("unavailable", "The grid could not allocate a viewer circuit."))
 		return
 	}
+	if err := a.identity.AssignViewerDestination(r.Context(), session.ID, circuit, region.ID); err != nil {
+		_ = a.identity.RevokeSession(r.Context(), session.ID)
+		writeViewerLogin(w, loginFailure("unavailable", "The grid could not assign the viewer circuit."))
+		return
+	}
 	root := rpcStructValue(rpcField("folder_id", rpcString(session.UserID)))
 	libraryRoot := rpcStructValue(rpcField("folder_id", rpcString("00000000-0000-0000-0000-000000000001")))
 	libraryOwner := rpcStructValue(rpcField("agent_id", rpcString("00000000-0000-0000-0000-000000000002")))

@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/homeworldz/homeworldz/grid/internal/identifier"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -54,6 +55,23 @@ func TestPostgresIdentityLifecycle(t *testing.T) {
 	}
 	if _, err := store.CreateViewerSession(ctx, username, strings.Repeat("0", 32), time.Hour); !errors.Is(err, ErrInvalidCredentials) {
 		t.Fatalf("invalid viewer login error = %v, want ErrInvalidCredentials", err)
+	}
+	regionID, err := identifier.NewUUID()
+	if err != nil {
+		t.Fatalf("create destination region ID: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO regions
+		(id, name, grid_x, grid_y, public_endpoint, lease_expires_at)
+		VALUES ($1, 'Circuit Test', 32000, 32000, 'http://127.0.0.1:42001', now() + interval '1 minute')`, regionID); err != nil {
+		t.Fatalf("insert destination region: %v", err)
+	}
+	t.Cleanup(func() { _, _ = db.Exec("DELETE FROM regions WHERE id = $1", regionID) })
+	if err := store.AssignViewerDestination(ctx, viewerSession.ID, 123456, regionID); err != nil {
+		t.Fatalf("assign viewer destination: %v", err)
+	}
+	validatedViewer, err := store.ValidateSession(ctx, viewerSession.ID)
+	if err != nil || validatedViewer.ViewerCircuitCode != 123456 || validatedViewer.DestinationRegionID != regionID {
+		t.Fatalf("validated viewer destination = %#v, error = %v", validatedViewer, err)
 	}
 	if _, err := db.ExecContext(ctx, "UPDATE sessions SET expires_at = now() - interval '1 second' WHERE id = $1", session.ID); err != nil {
 		t.Fatal(err)
