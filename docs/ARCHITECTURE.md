@@ -88,6 +88,12 @@ until its lease expires. Initial leases default to 60 seconds and accept values
 from 10 through 300 seconds; expired rows no longer block a new registration at
 the same coordinates.
 
+When grid credentials are configured, the region registers during startup,
+renews halfway through its lease, and deregisters during orderly shutdown. A
+registration or renewal failure stops the region rather than leaving an active
+simulation undiscoverable. The dependency-free socket transport is limited to
+development `http://` URLs; deployed HTTPS will use a maintained TLS transport.
+
 Initial development accounts use normalized lowercase usernames and bcrypt
 password hashes. Successful credential checks create random UUID sessions with
 database-controlled expiry; internal clients validate or revoke those sessions

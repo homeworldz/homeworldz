@@ -59,6 +59,13 @@ cmake --preset default
 cmake --build --preset default
 ```
 
+To enable development registration with a running grid, set
+`HOMEWORLDZ_GRID_SERVICE_TOKEN` to the grid service token. Optional region
+overrides are `HOMEWORLDZ_GRID_URL`, `HOMEWORLDZ_REGION_NAME`,
+`HOMEWORLDZ_REGION_GRID_X`, `HOMEWORLDZ_REGION_GRID_Y`,
+`HOMEWORLDZ_REGION_PUBLIC_ENDPOINT`, and `HOMEWORLDZ_REGION_LEASE_SECONDS`.
+Without a service token, the region runs without grid registration.
+
 ## Documentation
 
 - [Implementation plan](docs/PLAN.md)

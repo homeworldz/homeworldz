@@ -1,0 +1,59 @@
+#pragma once
+
+#include <chrono>
+#include <memory>
+#include <string>
+#include <string_view>
+#include <utility>
+
+namespace homeworldz::grid {
+
+struct HttpResponse {
+    int status_code{};
+    std::string body;
+};
+
+class Transport {
+public:
+    virtual ~Transport() = default;
+    virtual HttpResponse send(std::string_view method, std::string_view path,
+                              std::string_view body) = 0;
+};
+
+std::shared_ptr<Transport> socket_transport(std::string grid_url, std::string service_token);
+
+struct RegionSettings {
+    std::string name;
+    int grid_x{};
+    int grid_y{};
+    std::string public_endpoint;
+    int lease_seconds{60};
+};
+
+class Client {
+public:
+    explicit Client(std::shared_ptr<Transport> transport) : transport_(std::move(transport)) {}
+    std::string register_region(const RegionSettings& settings);
+    bool renew_lease(std::string_view region_id, int lease_seconds);
+    bool deregister(std::string_view region_id);
+
+private:
+    std::shared_ptr<Transport> transport_;
+};
+
+class RegistrationLifecycle {
+public:
+    RegistrationLifecycle(Client client, RegionSettings settings);
+    bool start(std::chrono::steady_clock::time_point now);
+    bool tick(std::chrono::steady_clock::time_point now);
+    void stop();
+    const std::string& region_id() const { return region_id_; }
+
+private:
+    Client client_;
+    RegionSettings settings_;
+    std::string region_id_;
+    std::chrono::steady_clock::time_point renew_at_{};
+};
+
+} // namespace homeworldz::grid
