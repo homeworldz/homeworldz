@@ -155,24 +155,18 @@ func run(ctx context.Context, opts options) error {
 
 	fmt.Printf("Launching Firestorm for %q.\n", opts.firstName+" "+opts.lastName)
 	fmt.Println("Keep this terminal open. Exit Firestorm after the login, disconnect, and reconnect checks are complete.")
+	if err := prepareViewerLaunch(opts.firestormPath); err != nil {
+		return err
+	}
 	viewer := exec.Command(opts.firestormPath, "--grid", gridURL)
 	viewer.Dir = root
 	if err := viewer.Start(); err != nil {
 		return fmt.Errorf("launch Firestorm: %w", err)
 	}
-	viewerDone := make(chan error, 1)
-	go func() { viewerDone <- viewer.Wait() }()
-	select {
-	case err := <-viewerDone:
-		if err != nil {
-			return fmt.Errorf("Firestorm exited: %w", err)
-		}
-		return nil
-	case <-ctx.Done():
-		_ = viewer.Process.Kill()
-		<-viewerDone
-		return ctx.Err()
+	if err := waitForViewer(ctx, viewer, opts.firestormPath); err != nil {
+		return fmt.Errorf("Firestorm exited: %w", err)
 	}
+	return nil
 }
 
 func iniValue(path, section, key string) (string, error) {
