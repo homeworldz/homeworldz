@@ -169,6 +169,21 @@ std::optional<ViewerSession> Client::validate_viewer_session(std::string_view se
     return session;
 }
 
+bool Client::revoke_viewer_session(std::string_view session_id) {
+    const auto status = transport_->send("DELETE", "/api/v1/sessions/" + std::string(session_id), {}).status_code;
+    return status == 204 || status == 404;
+}
+
+bool Client::update_presence(std::string_view user_id, std::string_view region_id) {
+    const auto body = "{\"regionId\":" + api::json_string(region_id) + '}';
+    return transport_->send("PUT", "/api/v1/presence/" + std::string(user_id), body).status_code == 200;
+}
+
+bool Client::clear_presence(std::string_view user_id) {
+    const auto status = transport_->send("DELETE", "/api/v1/presence/" + std::string(user_id), {}).status_code;
+    return status == 204 || status == 404;
+}
+
 RegistrationLifecycle::RegistrationLifecycle(Client client, RegionSettings settings)
     : client_(std::move(client)), settings_(std::move(settings)) {}
 

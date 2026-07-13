@@ -25,6 +25,10 @@ constexpr std::array<std::byte, 4> chat_from_viewer_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x50}};
 constexpr std::array<std::byte, 4> chat_from_simulator_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x8b}};
+constexpr std::array<std::byte, 4> logout_request_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0xfc}};
+constexpr std::array<std::byte, 4> logout_reply_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0xfd}};
 
 class BitWriter {
 public:
@@ -302,6 +306,24 @@ std::optional<std::uint8_t> decode_start_ping_check(std::span<const std::byte> p
 
 std::vector<std::byte> encode_complete_ping_check(std::uint8_t ping_id) {
     return {std::byte{2}, static_cast<std::byte>(ping_id)};
+}
+
+std::optional<AgentMessage> decode_logout_request(std::span<const std::byte> payload) {
+    if (payload.size() != 36 || !std::equal(logout_request_id.begin(), logout_request_id.end(), payload.begin()))
+        return std::nullopt;
+    AgentMessage result;
+    std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
+    return result;
+}
+
+std::vector<std::byte> encode_logout_reply(const AgentMessage& message) {
+    std::vector<std::byte> output(logout_reply_id.begin(), logout_reply_id.end());
+    append_uuid(output, message.agent_id);
+    append_uuid(output, message.session_id);
+    output.push_back(std::byte{1}); // InventoryData block count
+    append_uuid(output, Uuid{}); // no changed inventory items
+    return output;
 }
 
 std::optional<AgentUpdate> decode_agent_update(std::span<const std::byte> payload) {
@@ -642,6 +664,10 @@ std::vector<OutboundDatagram> CircuitRegistry::poll(Clock::time_point now) {
 const UseCircuitCode* CircuitRegistry::identity(std::string_view endpoint) const {
     const auto found = circuits_.find(std::string(endpoint));
     return found == circuits_.end() ? nullptr : &found->second.identity;
+}
+
+bool CircuitRegistry::remove(std::string_view endpoint) {
+    return circuits_.erase(std::string(endpoint)) != 0;
 }
 
 } // namespace homeworldz::viewer

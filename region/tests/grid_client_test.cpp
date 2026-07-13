@@ -51,5 +51,10 @@ int main() {
     if (!session || session->agent_id != "cccccccc-cccc-4ccc-8ccc-cccccccccccc" ||
         session->circuit_code != 123456 || session->destination_region_id != "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" ||
         transport->requests.back().method != "GET") return 1;
+    if (!client.update_presence(session->agent_id, session->destination_region_id) ||
+        transport->requests.back().method != "PUT" ||
+        transport->requests.back().path != "/api/v1/presence/" + session->agent_id) return 1;
+    if (!client.clear_presence(session->agent_id) || !client.revoke_viewer_session(session->session_id) ||
+        transport->requests.back().path != "/api/v1/sessions/" + session->session_id) return 1;
     return 0;
 }

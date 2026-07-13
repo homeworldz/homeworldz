@@ -91,8 +91,15 @@ bool message_codecs() {
     if (encoded_complete.size() <= 80 || encoded_complete[3] != std::byte{0xfa}) return false;
     const auto ping = encode_start_ping_check(7, 0x01020304);
     const auto ping_id = decode_start_ping_check(ping);
+    auto logout_payload = bytes({0xff, 0xff, 0x00, 0xfc});
+    logout_payload.insert(logout_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
+    logout_payload.insert(logout_payload.end(), expected.session_id.begin(), expected.session_id.end());
+    const auto logout = decode_logout_request(logout_payload);
+    const auto logout_reply = logout ? encode_logout_reply(*logout) : std::vector<std::byte>{};
     return ping == bytes({1, 7, 4, 3, 2, 1}) && ping_id && *ping_id == 7 &&
-           !decode_start_ping_check(bytes({1, 7})) && encode_complete_ping_check(*ping_id) == bytes({2, 7});
+           !decode_start_ping_check(bytes({1, 7})) && encode_complete_ping_check(*ping_id) == bytes({2, 7}) &&
+           logout && logout->agent_id == expected.agent_id && logout->session_id == expected.session_id &&
+           logout_reply.size() == 53 && logout_reply[3] == std::byte{0xfd} && logout_reply[36] == std::byte{1};
 }
 
 bool resend_throttle_and_timeout() {
@@ -140,6 +147,9 @@ bool circuit_registry() {
     if (!registry.send("127.0.0.1:50000", bytes({7, 8}), true, start + 3ms) ||
         registry.send("127.0.0.1:50002", bytes({7, 8}), false, start + 3ms))
         return false;
+    if (!registry.remove("127.0.0.1:50000") || registry.remove("127.0.0.1:50000") || registry.size() != 0)
+        return false;
+    if (!registry.receive("127.0.0.1:50000", datagram, start + 4ms)) return false;
     registry.poll(start + 31s);
     return registry.size() == 0;
 }

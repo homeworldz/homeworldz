@@ -51,7 +51,9 @@ std::atomic_bool running{true};
 struct LiveAvatar {
     homeworldz::viewer::AvatarController controller;
     homeworldz::scene::EntityId entity_id{};
+    std::string user_id;
     std::chrono::steady_clock::time_point next_ping{};
+    std::chrono::steady_clock::time_point next_presence{};
     std::uint8_t ping_id{};
 };
 
@@ -466,6 +468,27 @@ int main() {
                                     homeworldz::viewer::encode_complete_ping_check(*ping_id), false, now))
                                 static_cast<void>(send_udp(viewer_server, endpoint, *pong));
                         }
+                        const auto logout = homeworldz::viewer::decode_logout_request(packet->payload);
+                        if (logout && logout->agent_id == identity->agent_id &&
+                            logout->session_id == identity->session_id) {
+                            homeworldz::viewer::AgentMessage reply{identity->agent_id, identity->session_id};
+                            if (const auto outgoing = circuits.send(endpoint,
+                                    homeworldz::viewer::encode_logout_reply(reply), true, now, true))
+                                static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
+                            const auto session_id = homeworldz::viewer::format_uuid(identity->session_id);
+                            const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
+                            if (viewer_grid) {
+                                static_cast<void>(viewer_grid->clear_presence(user_id));
+                                static_cast<void>(viewer_grid->revoke_viewer_session(session_id));
+                            }
+                            avatars.erase(endpoint);
+                            handshake_replies.erase(endpoint);
+                            established_events.erase(session_id);
+                            circuits.remove(endpoint);
+                            std::cout << "{\"level\":\"info\",\"message\":\"viewer logged out\",\"sessionId\":"
+                                      << homeworldz::api::json_string(session_id) << "}" << std::endl;
+                            continue;
+                        }
                         const auto handshake_reply = homeworldz::viewer::decode_region_handshake_reply(packet->payload);
                         if (handshake_reply && handshake_reply->agent_id == identity->agent_id &&
                             handshake_reply->session_id == identity->session_id) {
@@ -486,10 +509,26 @@ int main() {
                                 std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
                             if (!avatars.contains(endpoint)) {
                                 const auto name = homeworldz::viewer::format_uuid(identity->agent_id);
-                                const auto entity = scene.create(name, {128.0, 128.0, 25.0});
+                                homeworldz::scene::EntityId entity{};
+                                std::vector<homeworldz::scene::EntityId> duplicates;
+                                for (const auto& [candidate_id, candidate] : scene.entities()) {
+                                    if (candidate.name != name) continue;
+                                    if (candidate_id > entity) {
+                                        if (entity != 0) duplicates.push_back(entity);
+                                        entity = candidate_id;
+                                    } else {
+                                        duplicates.push_back(candidate_id);
+                                    }
+                                }
+                                for (const auto duplicate : duplicates) scene.remove(duplicate);
+                                if (entity == 0) entity = scene.create(name, {128.0, 128.0, 25.0});
+                                const auto* persisted = scene.find(entity);
+                                const auto spawn = persisted ? persisted->position : homeworldz::scene::Vector3{128.0, 128.0, 25.0};
                                 avatars.emplace(endpoint, LiveAvatar{
-                                    homeworldz::viewer::AvatarController{}, entity,
-                                    now + std::chrono::seconds(5), 0});
+                                    homeworldz::viewer::AvatarController{spawn}, entity, name,
+                                    now + std::chrono::seconds(5), now + std::chrono::seconds(30), 0});
+                                if (viewer_grid && registration)
+                                    static_cast<void>(viewer_grid->update_presence(name, registration->region_id()));
                             }
                             const auto& live_avatar = avatars.at(endpoint);
                             if (const auto* entity = scene.find(live_avatar.entity_id)) {
@@ -563,6 +602,10 @@ int main() {
                         homeworldz::viewer::encode_start_ping_check(++avatar.ping_id), false, now))
                     static_cast<void>(send_udp(viewer_server, endpoint, *ping));
                 avatar.next_ping = now + std::chrono::seconds(5);
+            }
+            if (now >= avatar.next_presence && viewer_grid && registration) {
+                static_cast<void>(viewer_grid->update_presence(avatar.user_id, registration->region_id()));
+                avatar.next_presence = now + std::chrono::seconds(30);
             }
             avatar.controller.step(elapsed);
             if (auto* entity = scene.find(avatar.entity_id)) {

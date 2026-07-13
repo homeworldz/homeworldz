@@ -47,6 +47,9 @@ public:
     bool renew_lease(std::string_view region_id, int lease_seconds);
     bool deregister(std::string_view region_id);
     std::optional<ViewerSession> validate_viewer_session(std::string_view session_id);
+    bool revoke_viewer_session(std::string_view session_id);
+    bool update_presence(std::string_view user_id, std::string_view region_id);
+    bool clear_presence(std::string_view user_id);
 
 private:
     std::shared_ptr<Transport> transport_;
