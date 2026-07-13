@@ -75,6 +75,125 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/regions:
+    parameters:
+      - $ref: "#/components/parameters/RequestId"
+    get:
+      operationId: discoverRegions
+      summary: Discover regions with active leases
+      security:
+        - ServiceToken: []
+      responses:
+        "200":
+          description: Active regions
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegionList" }
+        "401":
+          description: A valid service token is required
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    post:
+      operationId: registerRegion
+      summary: Register a region and acquire a lease
+      security:
+        - ServiceToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegisterRegionRequest" }
+      responses:
+        "201":
+          description: Region registered
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Location:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Region" }
+        "400":
+          description: Invalid registration
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401":
+          description: A valid service token is required
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: Coordinates are already leased
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/regions/{regionId}:
+    parameters:
+      - $ref: "#/components/parameters/RequestId"
+      - $ref: "#/components/parameters/RegionId"
+    get:
+      operationId: getRegion
+      summary: Discover one region with an active lease
+      security:
+        - ServiceToken: []
+      responses:
+        "200":
+          description: Active region
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Region" }
+        "404":
+          description: Region is absent or expired
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    delete:
+      operationId: deregisterRegion
+      summary: Deregister a region
+      security:
+        - ServiceToken: []
+      responses:
+        "204":
+          description: Region deregistered
+        "404":
+          description: Region was not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/regions/{regionId}/lease:
+    parameters:
+      - $ref: "#/components/parameters/RequestId"
+      - $ref: "#/components/parameters/RegionId"
+    put:
+      operationId: renewRegionLease
+      summary: Renew an active region lease
+      security:
+        - ServiceToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RenewRegionLeaseRequest" }
+      responses:
+        "200":
+          description: Renewed region lease
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Region" }
+        "400":
+          description: Invalid lease duration
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Region is absent or expired
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 components:
   parameters:
     RequestId:
@@ -86,6 +205,13 @@ components:
         type: string
         maxLength: 128
         pattern: "^[A-Za-z0-9._-]+$"
+    RegionId:
+      name: regionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
   headers:
     RequestId:
       required: true
@@ -116,3 +242,34 @@ components:
       properties:
         code: { type: string }
         message: { type: string }
+    RegisterRegionRequest:
+      type: object
+      required: [name, gridX, gridY, publicEndpoint]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 128 }
+        gridX: { type: integer, minimum: 0 }
+        gridY: { type: integer, minimum: 0 }
+        publicEndpoint: { type: string, format: uri }
+        leaseSeconds: { type: integer, minimum: 10, maximum: 300, default: 60 }
+    RenewRegionLeaseRequest:
+      type: object
+      required: [leaseSeconds]
+      properties:
+        leaseSeconds: { type: integer, minimum: 10, maximum: 300 }
+    Region:
+      type: object
+      required: [id, name, gridX, gridY, publicEndpoint, leaseExpiresAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        gridX: { type: integer }
+        gridY: { type: integer }
+        publicEndpoint: { type: string, format: uri }
+        leaseExpiresAt: { type: string, format: date-time }
+    RegionList:
+      type: object
+      required: [regions]
+      properties:
+        regions:
+          type: array
+          items: { $ref: "#/components/schemas/Region" }

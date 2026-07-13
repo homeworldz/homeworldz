@@ -64,6 +64,8 @@ jobs:
           --health-retries 10
     env:
       HOMEWORLDZ_DATABASE_URL: postgres://homeworldz:homeworldz-ci@localhost:5432/homeworldz?sslmode=disable
+      HOMEWORLDZ_TEST_DATABASE_URL: postgres://homeworldz:homeworldz-ci@localhost:5432/homeworldz?sslmode=disable
+      HOMEWORLDZ_GRID_SERVICE_TOKEN: homeworldz-ci-token
       PGPASSWORD: homeworldz-ci
     steps:
       - uses: actions/checkout@v6
@@ -75,6 +77,9 @@ jobs:
         run: psql -h localhost -U homeworldz -d homeworldz -v ON_ERROR_STOP=1 -f db/migrations/000001_initial.up.sql
       - name: Verify schema
         run: psql -h localhost -U homeworldz -d homeworldz -v ON_ERROR_STOP=1 -c "SELECT version FROM schema_metadata WHERE version = 1"
+      - name: Test region lease persistence
+        working-directory: grid
+        run: go test ./internal/regions -run TestPostgresRegionLifecycle -count=1
       - name: Start grid and verify probes
         shell: bash
         run: |
@@ -90,4 +95,21 @@ jobs:
           curl --fail --show-error http://localhost:42000/ping
           curl --fail --show-error http://localhost:42000/ready
           curl --fail --show-error http://localhost:42000/version
+          registration=$(curl --fail --show-error \
+            -H 'Authorization: Bearer homeworldz-ci-token' \
+            -H 'Content-Type: application/json' \
+            -d '{"name":"CI Region","gridX":1000,"gridY":1000,"publicEndpoint":"http://localhost:42001","leaseSeconds":60}' \
+            http://localhost:42000/api/v1/regions)
+          region_id=$(echo "$registration" | jq -r .id)
+          curl --fail --show-error \
+            -H 'Authorization: Bearer homeworldz-ci-token' \
+            http://localhost:42000/api/v1/regions
+          curl --fail --show-error -X PUT \
+            -H 'Authorization: Bearer homeworldz-ci-token' \
+            -H 'Content-Type: application/json' \
+            -d '{"leaseSeconds":120}' \
+            "http://localhost:42000/api/v1/regions/$region_id/lease"
+          curl --fail --show-error -X DELETE \
+            -H 'Authorization: Bearer homeworldz-ci-token' \
+            "http://localhost:42000/api/v1/regions/$region_id"
 

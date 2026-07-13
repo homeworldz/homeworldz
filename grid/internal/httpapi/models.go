@@ -1,5 +1,7 @@
 package httpapi
 
+import "github.com/homeworldz/homeworldz/grid/internal/regions"
+
 const APIVersion = "v1"
 
 // Status is the response model for a successful operational status probe.
@@ -18,4 +20,20 @@ type Version struct {
 type Error struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
+}
+
+type RegisterRegionRequest struct {
+	Name           string `json:"name"`
+	GridX          int    `json:"gridX"`
+	GridY          int    `json:"gridY"`
+	PublicEndpoint string `json:"publicEndpoint"`
+	LeaseSeconds   int    `json:"leaseSeconds"`
+}
+
+type RenewRegionLeaseRequest struct {
+	LeaseSeconds int `json:"leaseSeconds"`
+}
+
+type RegionList struct {
+	Regions []regions.Region `json:"regions"`
 }

@@ -82,6 +82,12 @@ Grid services should own:
 - Administrative APIs.
 - Background reconciliation jobs.
 
+Region registration uses renewable leases. A registration claims one grid
+coordinate pair, returns a grid-generated UUID, and remains discoverable only
+until its lease expires. Initial leases default to 60 seconds and accept values
+from 10 through 300 seconds; expired rows no longer block a new registration at
+the same coordinates.
+
 Postgres is the default durable store for grid services.
 
 ## Internal APIs

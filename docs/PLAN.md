@@ -19,7 +19,7 @@ than runtime dependencies.
 
 ## Milestone 1: Grid And Region Core
 
-- [ ] Implement region registration, lease renewal, expiry, and discovery.
+- [x] Implement region registration, lease renewal, expiry, and discovery.
 - [ ] Implement development users, login sessions, and session validation.
 - [ ] Implement presence and stale-presence cleanup.
 - [ ] Add the authoritative scene model and fixed-step simulation loop.
