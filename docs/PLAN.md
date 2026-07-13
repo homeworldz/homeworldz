@@ -36,7 +36,7 @@ than runtime dependencies.
   and load scenarios.
 - [x] Record timing, memory, jitter, tunneling, replay drift, restore accuracy,
   and adapter complexity on Windows and Linux.
-- [ ] Choose Jolt unless a required acceptance scenario fails; otherwise choose
+- [x] Choose Jolt unless a required acceptance scenario fails; otherwise choose
   PhysX 5 and record the decision.
 
 ## Milestone 3: Firestorm Vertical Slice
@@ -91,6 +91,6 @@ explicit viewer version. `/ping` remains successful during dependency outages;
 - Use C++20 and CMake for the region server and Go for one initial grid binary.
 - Use HTTP/JSON with OpenAPI, Postgres centrally, and SQLite plus filesystem
   blobs in each region.
-- Keep Jolt as the provisional physics preference until the comparison gate.
+- Use Jolt as the selected v1 physics backend while retaining the PhysX lab adapter.
 - Defer complete inventory, scripting, editing, federation, and multi-region
   transfer until after the first playable region.

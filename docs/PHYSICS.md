@@ -174,6 +174,15 @@ The likely decision shape is:
 - Keep the HomeWorldz physics API independent of either engine so a future
   backend can be swapped without rewriting region simulation code.
 
+## Selected Backend
+
+The comparison gate selected **Jolt 5.5** for HomeWorldz v1. Both engines passed
+the shared Windows and Linux scenarios, but Jolt had the lower total suite CPU
+cost on both measured platforms, the stronger Windows tick results, and a
+smaller packaging surface. The PhysX adapter remains in the lab as a working
+alternative. See [ADR 0002](adr/0002-physics-evaluation.md) and the
+[recorded results](PHYSICS_RESULTS.md).
+
 ## Physics Lab
 
 Before committing the playable region to a physics backend, build a small

@@ -184,8 +184,8 @@ HomeWorldz owns authoritative scene state:
 The initial scene core assigns region-local entity identifiers, tracks state
 revisions, and advances velocity-derived transforms at a fixed 45 Hz. Catch-up
 work is bounded to eight steps per host update to prevent a delayed region from
-entering a simulation spiral. This loop remains independent of the provisional
-physics engine choice.
+entering a simulation spiral. This loop remains independent of the selected
+physics engine.
 
 The physics engine owns a simulation mirror:
 
@@ -201,8 +201,9 @@ The physics engine owns a simulation mirror:
 Objects marked phantom are excluded from physical collision, though they may
 still exist in the scene graph and query systems.
 
-Jolt is the leading candidate for the physics engine, with PhysX 5 still worth
-comparison. See [PHYSICS.md](PHYSICS.md) for the detailed evaluation.
+Jolt 5.5 is the selected v1 physics engine. PhysX 5 remains behind the same
+adapter boundary as an evaluated alternative. See [PHYSICS.md](PHYSICS.md) and
+[ADR 0002](adr/0002-physics-evaluation.md) for the evaluation and decision.
 
 ## Asset Architecture
 
