@@ -3,7 +3,7 @@ info:
   title: HomeWorldz Internal API
   version: 0.1.0
 servers:
-  - url: http://localhost:8080
+  - url: http://localhost:42000
 paths:
   /ping:
     get:
@@ -60,4 +60,3 @@ components:
       properties:
         code: { type: string }
         message: { type: string }
-

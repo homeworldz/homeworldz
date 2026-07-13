@@ -8,7 +8,7 @@ than runtime dependencies.
 
 - [x] Establish the C++20 and Go monorepo layout.
 - [x] Define initial OpenAPI contracts and common error responses.
-- [x] Add Postgres development infrastructure and initial schema migrations.
+- [x] Define the external Postgres requirement and add initial schema migrations.
 - [x] Implement `/ping`, `/ready`, and `/version` in both services.
 - [ ] Add Windows and Linux CI for builds, tests, and migrations.
 - [ ] Add generated or validated C++ and Go API models.
@@ -71,6 +71,11 @@ than runtime dependencies.
 - Region-local capabilities provide viewer events and asset access.
 - An engine-independent C++ physics boundary owns bodies, characters, contacts,
   queries, simulation steps, and transferable physical state.
+
+Default development ports are `42000/tcp` for grid HTTP, `42001/tcp` for
+region HTTP, and `42002/udp` for the future viewer circuit. Ports
+`42010-42099` are reserved for additional local region instances and services.
+Every port remains configurable in deployment.
 
 ## Acceptance Policy
 

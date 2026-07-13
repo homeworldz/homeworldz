@@ -13,14 +13,22 @@ This repository is currently in its planning and foundation phase.
 
 ## Development
 
-Run grid tests from `grid/` with `go test ./...`. The grid service listens on
-`:8080` by default and reads Postgres from `HOMEWORLDZ_DATABASE_URL`.
+Prerequisites are Go 1.21 or newer, a C++20 toolchain with CMake 3.24 or newer,
+and PostgreSQL 16 or newer. PostgreSQL 18.4 is recommended for new
+installations. PostgreSQL may run locally or on another reachable host;
+HomeWorldz does not require Docker.
 
-Start development Postgres with:
+Create a database and apply the initial migration using your PostgreSQL
+installation. For example, from PowerShell:
 
 ```powershell
-docker compose -f deploy/compose.yaml up -d
+$env:HOMEWORLDZ_DATABASE_URL = "postgres://homeworldz:password@localhost:5432/homeworldz?sslmode=disable"
+psql $env:HOMEWORLDZ_DATABASE_URL -f db/migrations/000001_initial.up.sql
 ```
+
+Run grid tests from `grid/` with `go test ./...`. The grid service listens on
+`:42000` by default and reads PostgreSQL from `HOMEWORLDZ_DATABASE_URL`. The
+region service HTTP API listens on `:42001` by default.
 
 Configure and build the region service with CMake presets:
 

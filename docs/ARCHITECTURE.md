@@ -116,6 +116,16 @@ Possible later reasons to add protobuf or gRPC:
 
 Until one of those reasons is real, HTTP/JSON is the default.
 
+### Default Ports
+
+- `42000/tcp`: grid HTTP API.
+- `42001/tcp`: region HTTP API.
+- `42002/udp`: reserved for the region viewer circuit.
+- `42010-42099`: reserved for additional local region instances and future
+  HomeWorldz development services.
+
+All ports are deployment configuration rather than protocol constants.
+
 ## Physics And Spatial State
 
 The physics engine is important, but it should not be the sole owner of region

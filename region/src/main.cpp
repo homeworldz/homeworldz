@@ -50,7 +50,7 @@ int configured_port() {
         const int port = std::atoi(value);
         if (port > 0 && port <= 65535) return port;
     }
-    return 8090;
+    return 42001;
 }
 } // namespace
 
@@ -97,4 +97,3 @@ int main() {
 #endif
     return 0;
 }
-

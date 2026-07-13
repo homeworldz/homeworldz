@@ -19,7 +19,7 @@ var version = "dev"
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	addr := envOr("HOMEWORLDZ_GRID_ADDR", ":8080")
+	addr := envOr("HOMEWORLDZ_GRID_ADDR", ":42000")
 
 	var db *sql.DB
 	if databaseURL := os.Getenv("HOMEWORLDZ_DATABASE_URL"); databaseURL != "" {
