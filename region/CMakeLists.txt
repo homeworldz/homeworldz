@@ -9,6 +9,10 @@ add_library(homeworldz-region-core
 target_include_directories(homeworldz-region-core PUBLIC include)
 target_compile_features(homeworldz-region-core PUBLIC cxx_std_20)
 target_link_libraries(homeworldz-region-core PUBLIC homeworldz-sqlite)
+if(HOMEWORLDZ_PHYSICS_ADAPTERS_AVAILABLE)
+  target_sources(homeworldz-region-core PRIVATE src/jolt_world.cpp src/physx_world.cpp)
+  target_link_libraries(homeworldz-region-core PUBLIC Jolt::Jolt unofficial::omniverse-physx-sdk::sdk)
+endif()
 
 add_executable(homeworldz-region src/main.cpp)
 target_link_libraries(homeworldz-region PRIVATE homeworldz-region-core)
@@ -41,4 +45,10 @@ add_test(NAME region-storage COMMAND homeworldz-storage-tests)
 add_executable(homeworldz-physics-contract-tests tests/physics_contract_test.cpp)
 target_link_libraries(homeworldz-physics-contract-tests PRIVATE homeworldz-region-core)
 add_test(NAME region-physics-contract COMMAND homeworldz-physics-contract-tests)
+
+if(HOMEWORLDZ_PHYSICS_ADAPTERS_AVAILABLE)
+  add_executable(homeworldz-physics-adapter-smoke tests/physics_adapters_test.cpp)
+  target_link_libraries(homeworldz-physics-adapter-smoke PRIVATE homeworldz-region-core)
+  add_test(NAME region-physics-adapters COMMAND homeworldz-physics-adapter-smoke)
+endif()
 

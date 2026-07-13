@@ -13,7 +13,8 @@ $generator = switch ($major) { 18 { "Visual Studio 18 2026" } 17 { "Visual Studi
 $cmake = Join-Path $vs "Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
 $toolchain = Join-Path $vs "VC\vcpkg\scripts\buildsystems\vcpkg.cmake"
 $build = Join-Path $root "build\windows-vcpkg"
-$configure = @("-S", $root, "-B", $build, "-G", $generator, "-A", "x64")
+$overlayPorts = Join-Path $root "cmake\ports"
+$configure = @("-S", $root, "-B", $build, "-G", $generator, "-A", "x64", "-DVCPKG_OVERLAY_PORTS=$overlayPorts")
 if (-not (Test-Path (Join-Path $build "CMakeCache.txt"))) {
     $configure += "-DCMAKE_TOOLCHAIN_FILE=$toolchain"
 }
