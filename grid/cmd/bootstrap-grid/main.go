@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -17,14 +19,14 @@ import (
 )
 
 type options struct {
-	host      string
-	port      int
-	adminUser string
-	adminDB   string
-	appUser   string
-	appDB     string
-	configDir string
-	migration string
+	host       string
+	port       int
+	adminUser  string
+	adminDB    string
+	appUser    string
+	appDB      string
+	configDir  string
+	migrations string
 }
 
 func main() {
@@ -37,7 +39,7 @@ func main() {
 	flag.StringVar(&opts.appUser, "application-user", "homeworldz", "HomeWorldz application role")
 	flag.StringVar(&opts.appDB, "application-database", "homeworldz", "HomeWorldz database")
 	flag.StringVar(&opts.configDir, "config-dir", filepath.Join(root, "config"), "HomeWorldz configuration directory")
-	flag.StringVar(&opts.migration, "migration", filepath.Join(root, "db", "migrations", "000001_initial.up.sql"), "initial SQL migration")
+	flag.StringVar(&opts.migrations, "migrations", filepath.Join(root, "db", "migrations"), "SQL migration directory")
 	flag.Parse()
 
 	if err := run(context.Background(), opts); err != nil {
@@ -118,21 +120,8 @@ func run(ctx context.Context, opts options) error {
 	}
 	defer application.Close(ctx)
 
-	var migrationApplied bool
-	if err := application.QueryRow(ctx, "SELECT to_regclass('public.schema_metadata') IS NOT NULL").Scan(&migrationApplied); err != nil {
-		return fmt.Errorf("check migration state: %w", err)
-	}
-	if migrationApplied {
-		fmt.Println("Initial migration is already applied.")
-	} else {
-		migration, err := os.ReadFile(opts.migration)
-		if err != nil {
-			return fmt.Errorf("read migration: %w", err)
-		}
-		fmt.Println("Applying initial migration...")
-		if _, err := application.Exec(ctx, string(migration)); err != nil {
-			return fmt.Errorf("apply initial migration: %w", err)
-		}
+	if err := applyMigrations(ctx, application, opts.migrations); err != nil {
+		return err
 	}
 
 	if err := writeDatabaseConfig(opts.configDir, connectionURL(opts.host, opts.port, opts.appUser, appPassword, opts.appDB)); err != nil {
@@ -140,6 +129,46 @@ func run(ctx context.Context, opts options) error {
 	}
 	fmt.Println("HomeWorldz grid bootstrap completed.")
 	fmt.Println("Database configuration written to", filepath.Join(opts.configDir, "db.ini"))
+	return nil
+}
+
+func applyMigrations(ctx context.Context, connection *pgx.Conn, directory string) error {
+	paths, err := filepath.Glob(filepath.Join(directory, "*.up.sql"))
+	if err != nil {
+		return fmt.Errorf("find migrations in %s: %w", directory, err)
+	}
+	if len(paths) == 0 {
+		return fmt.Errorf("find migrations in %s: no .up.sql files", directory)
+	}
+	sort.Strings(paths)
+	for _, path := range paths {
+		prefix, _, found := strings.Cut(filepath.Base(path), "_")
+		version, err := strconv.ParseInt(prefix, 10, 64)
+		if !found || err != nil {
+			return fmt.Errorf("parse migration version from %s", path)
+		}
+		var metadataExists bool
+		if err := connection.QueryRow(ctx, "SELECT to_regclass('public.schema_metadata') IS NOT NULL").Scan(&metadataExists); err != nil {
+			return fmt.Errorf("check migration metadata: %w", err)
+		}
+		if metadataExists {
+			var applied bool
+			if err := connection.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM schema_metadata WHERE version=$1)", version).Scan(&applied); err != nil {
+				return fmt.Errorf("check migration %d: %w", version, err)
+			}
+			if applied {
+				continue
+			}
+		}
+		migration, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("read migration %d: %w", version, err)
+		}
+		fmt.Printf("Applying migration %06d...\n", version)
+		if _, err := connection.Exec(ctx, string(migration)); err != nil {
+			return fmt.Errorf("apply migration %d: %w", version, err)
+		}
+	}
 	return nil
 }
 

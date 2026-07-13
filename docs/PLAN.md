@@ -42,7 +42,7 @@ than runtime dependencies.
 ## Milestone 3: Firestorm Vertical Slice
 
 - [x] Pin the supported Firestorm version and capture the minimum login flow.
-- [ ] Implement login response and destination-region resolution.
+- [x] Implement login response and destination-region resolution.
 - [ ] Implement viewer UDP circuits, packet codecs, acknowledgements, throttles,
   and timeouts.
 - [ ] Implement region handshake, seed capability, and required event delivery.

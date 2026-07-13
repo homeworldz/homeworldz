@@ -42,6 +42,7 @@ func New(ready ReadinessChecker, version string, options Options) http.Handler {
 	mux.HandleFunc("/ping", getOnly(a.ping))
 	mux.HandleFunc("/ready", getOnly(a.readiness))
 	mux.HandleFunc("/version", getOnly(a.buildVersion))
+	mux.HandleFunc("/login", a.viewerLogin)
 	mux.HandleFunc("/api/v1/regions", a.regionsRoot)
 	mux.HandleFunc("/api/v1/regions/", a.regionByID)
 	mux.HandleFunc("/api/v1/users", a.usersRoot)

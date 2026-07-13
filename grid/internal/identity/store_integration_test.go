@@ -2,10 +2,13 @@ package identity
 
 import (
 	"context"
+	"crypto/md5"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -41,8 +44,16 @@ func TestPostgresIdentityLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if validated, err := store.ValidateSession(ctx, session.ID); err != nil || validated.UserID != user.ID {
+	if validated, err := store.ValidateSession(ctx, session.ID); err != nil || validated.UserID != user.ID || validated.SecureID == "" {
 		t.Fatalf("validated session = %#v, error = %v", validated, err)
+	}
+	viewerDigest := md5.Sum([]byte("integration-password"))
+	viewerSession, err := store.CreateViewerSession(ctx, username, hex.EncodeToString(viewerDigest[:]), time.Hour)
+	if err != nil || viewerSession.UserID != user.ID || viewerSession.SecureID == "" {
+		t.Fatalf("viewer session = %#v, error = %v", viewerSession, err)
+	}
+	if _, err := store.CreateViewerSession(ctx, username, strings.Repeat("0", 32), time.Hour); !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("invalid viewer login error = %v, want ErrInvalidCredentials", err)
 	}
 	if _, err := db.ExecContext(ctx, "UPDATE sessions SET expires_at = now() - interval '1 second' WHERE id = $1", session.ID); err != nil {
 		t.Fatal(err)

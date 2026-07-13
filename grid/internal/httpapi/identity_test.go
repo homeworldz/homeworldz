@@ -2,6 +2,8 @@ package httpapi
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"testing"
@@ -48,9 +50,21 @@ func (s *memoryIdentityStore) CreateSession(_ context.Context, username, passwor
 	if !ok || stored.password != password {
 		return identity.Session{}, identity.ErrInvalidCredentials
 	}
-	session := identity.Session{ID: s.id(), UserID: stored.user.ID, ExpiresAt: s.now.Add(duration)}
+	session := identity.Session{ID: s.id(), UserID: stored.user.ID, ExpiresAt: s.now.Add(duration), SecureID: s.id()}
 	s.sessions[session.ID] = session
 	return session, nil
+}
+
+func (s *memoryIdentityStore) CreateViewerSession(ctx context.Context, username, passwordHash string, duration time.Duration) (identity.Session, error) {
+	stored, ok := s.users[username]
+	if !ok {
+		return identity.Session{}, identity.ErrInvalidCredentials
+	}
+	digest := md5.Sum([]byte(stored.password))
+	if hex.EncodeToString(digest[:]) != passwordHash {
+		return identity.Session{}, identity.ErrInvalidCredentials
+	}
+	return s.CreateSession(ctx, username, stored.password, duration)
 }
 
 func (s *memoryIdentityStore) ValidateSession(_ context.Context, id string) (identity.Session, error) {

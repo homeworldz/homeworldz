@@ -24,7 +24,8 @@ of silently following new viewer releases.
 ## Minimum Login Request
 
 For the initial slice, the grid is added manually in Firestorm with the
-HomeWorldz login URI. Automatic grid-info discovery is not required yet.
+HomeWorldz login URI, `http://<grid-host>:42000/login`. Automatic grid-info
+discovery is not required yet.
 
 The OpenSim-enabled viewer posts a `login_to_simulator` request to that URI. The
 wire encoding is the viewer-compatible XML-RPC/LLSD login envelope; it is an

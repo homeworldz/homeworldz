@@ -27,7 +27,7 @@ one region instance. Files directly under `config/` are ignored by Git because
 they may contain credentials. Environment variables override INI values.
 
 After installing PostgreSQL, grid operators bootstrap the application role,
-database, initial migration, and ignored `config/db.ini`. The cross-platform Go
+database, all pending migrations, and ignored `config/db.ini`. The cross-platform Go
 command securely prompts for the PostgreSQL administrator password and the
 password to assign to the `homeworldz` application role:
 
