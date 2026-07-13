@@ -18,13 +18,25 @@ and PostgreSQL 16 or newer. PostgreSQL 18.4 is recommended for new
 installations. PostgreSQL may run locally or on another reachable host;
 HomeWorldz does not require Docker.
 
-Create a database and apply the initial migration using your PostgreSQL
-installation. For example, from PowerShell:
+Grid operators bootstrap the application role, database, and initial migration
+from PowerShell. The script prompts securely for the PostgreSQL administrator
+password and the password to assign to the `homeworldz` application role:
 
 ```powershell
-$env:HOMEWORLDZ_DATABASE_URL = "postgres://homeworldz:password@localhost:5432/homeworldz?sslmode=disable"
-psql $env:HOMEWORLDZ_DATABASE_URL -f db/migrations/000001_initial.up.sql
+.\scripts\bootstrap-grid.ps1
 ```
+
+Use `-HostName`, `-Port`, `-AdminUser`, or `-PsqlPath` when PostgreSQL is remote
+or `psql` is not discoverable automatically.
+
+Region operators prepare region-local scene, asset, and log storage separately:
+
+```powershell
+.\scripts\bootstrap-region.ps1
+```
+
+Region operators do not need PostgreSQL credentials. The region will use its
+local storage and authenticated grid APIs once those components are implemented.
 
 Run grid tests from `grid/` with `go test ./...`. The grid service listens on
 `:42000` by default and reads PostgreSQL from `HOMEWORLDZ_DATABASE_URL`. The

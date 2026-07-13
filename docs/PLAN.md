@@ -9,6 +9,7 @@ than runtime dependencies.
 - [x] Establish the C++20 and Go monorepo layout.
 - [x] Define initial OpenAPI contracts and common error responses.
 - [x] Define the external Postgres requirement and add initial schema migrations.
+- [x] Add separate grid-database and region-local PowerShell bootstrap scripts.
 - [x] Implement `/ping`, `/ready`, and `/version` in both services.
 - [ ] Add Windows and Linux CI for builds, tests, and migrations.
 - [ ] Add generated or validated C++ and Go API models.
