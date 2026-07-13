@@ -254,6 +254,11 @@ orderly shutdown.
 
 Firestorm is the first practical compatibility target.
 
+The first playable slice is pinned to the OpenSim-enabled Firestorm 7.2.4
+release branch at commit `10bd3c9f930c76e1427ddd4ecece6cdf36b4406d`.
+The minimum login and region-entry flow is recorded in
+[FIRESTORM.md](FIRESTORM.md).
+
 The official Second Life viewer and existing OpenSim/Halcyon codebases are
 references for protocol behavior, but HomeWorldz only needs to preserve what
 the viewer sees and depends on:

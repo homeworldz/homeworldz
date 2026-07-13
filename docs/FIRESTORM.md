@@ -1,0 +1,95 @@
+# Firestorm Compatibility Target
+
+## Pinned Viewer
+
+HomeWorldz targets the OpenSim-enabled **Firestorm 7.2.4** viewer for the first
+playable vertical slice.
+
+- Official source branch: [`Firestorm_7.2.4`](https://github.com/FirestormViewer/phoenix-firestorm/tree/Firestorm_7.2.4)
+- Pinned source commit: [`10bd3c9f930c76e1427ddd4ecece6cdf36b4406d`](https://github.com/FirestormViewer/phoenix-firestorm/commit/10bd3c9f930c76e1427ddd4ecece6cdf36b4406d)
+- Firestorm version file: `7.2.4`
+- Upstream viewer version file: `26.1.1`
+- Build flavor: 64-bit OpenSim-enabled release build
+
+The source commit, not a moving download URL, is the protocol reference. A
+repeatable smoke-test record must additionally capture the installed viewer's
+full About dialog version and installer checksum when the binary is introduced
+into the manual test workflow.
+
+Firestorm's official repository advises downstream users to use official
+release branches rather than `master`, preview, or nightly builds. HomeWorldz
+therefore upgrades this pin deliberately and reruns the login smoke test instead
+of silently following new viewer releases.
+
+## Minimum Login Request
+
+For the initial slice, the grid is added manually in Firestorm with the
+HomeWorldz login URI. Automatic grid-info discovery is not required yet.
+
+The OpenSim-enabled viewer posts a `login_to_simulator` request to that URI. The
+wire encoding is the viewer-compatible XML-RPC/LLSD login envelope; it is an
+edge protocol and does not become an internal HomeWorldz service protocol.
+
+The request parameters relevant to the first slice are:
+
+- credentials: `first`, `last`, and `passwd`;
+- destination: `start`, using `home`, `last`, or
+  `uri:<region>&<x>&<y>&<z>`;
+- viewer identity: `version`, `channel`, `platform`, `platform_version`, and
+  `address_size`;
+- device/session metadata: `mac`, `id0`, `host_id`, `last_exec_event`,
+  `last_exec_duration`, and `last_exec_session_id`;
+- protocol controls: `agree_to_tos`, `read_critical`, `extended_errors`, and
+  the requested `options` array.
+
+Firestorm 7.2.4 requests inventory roots and skeletons, initial outfit,
+gestures, buddy data, UI/login flags, global textures, map/voice settings, and
+OpenSim extensions such as currency and maximum groups. HomeWorldz may return
+empty optional collections, but it must preserve their expected LLSD types.
+
+## Minimum Successful Response
+
+The login endpoint returns a successful viewer login envelope with at least:
+
+- `login`: `true`;
+- identity: `agent_id`, `session_id`, `secure_session_id`, `first_name`, and
+  `last_name`;
+- destination circuit: nonzero `circuit_code`, `sim_ip`, `sim_port`,
+  `region_x`, `region_y`, and `seed_capability`;
+- placement: `start_location`, `look_at`, `region_size_x`, and `region_size_y`;
+- startup text/time: `message` and `seconds_since_epoch`;
+- inventory shapes: one `inventory-root` entry, one `inventory-lib-root` entry,
+  one `inventory-lib-owner` entry, plus array-valued `inventory-skeleton` and
+  `inventory-skel-lib` (initially allowed to be empty);
+- array-valued `login-flags`, `gestures`, and `buddy-list` (initially allowed to
+  be empty where Firestorm tolerates it).
+
+Failures return `login: false`, a stable `reason`, and a human-readable
+`message`. Passwords, session IDs, and secure session IDs must not be logged.
+
+## Startup Sequence After Login
+
+The minimum observable flow is:
+
+1. Firestorm posts `login_to_simulator` to the grid login URI.
+2. The grid authenticates the development user, resolves `start`, creates the
+   viewer session, and selects an online region lease.
+3. The grid returns the session IDs, destination UDP circuit, and region-local
+   seed-capability URL.
+4. Firestorm creates the destination region and requests the seed capability;
+   the region returns the capability map needed by the slice.
+5. Firestorm sends reliable UDP `UseCircuitCode` with circuit code, session ID,
+   and agent ID. The region acknowledges it.
+6. Firestorm and the region exchange `RegionHandshake` and
+   `RegionHandshakeReply`.
+7. Firestorm sends `CompleteAgentMovement`; the region replies with
+   `AgentMovementComplete` and begins required event/object delivery.
+8. The smoke test passes when the viewer leaves the startup screen, renders the
+   destination region, and can move the avatar and use nearby chat.
+
+The pinned viewer source constructs the request in
+[`lllogininstance.cpp`](https://github.com/FirestormViewer/phoenix-firestorm/blob/10bd3c9f930c76e1427ddd4ecece6cdf36b4406d/indra/newview/lllogininstance.cpp#L155),
+consumes the circuit response in
+[`llstartup.cpp`](https://github.com/FirestormViewer/phoenix-firestorm/blob/10bd3c9f930c76e1427ddd4ecece6cdf36b4406d/indra/newview/llstartup.cpp#L4748),
+and starts the UDP circuit with `UseCircuitCode` in the same
+[`llstartup.cpp`](https://github.com/FirestormViewer/phoenix-firestorm/blob/10bd3c9f930c76e1427ddd4ecece6cdf36b4406d/indra/newview/llstartup.cpp#L2455).
