@@ -91,6 +91,14 @@ if(NOT TARGET unofficial::omniverse-physx-sdk)
         select_library_configurations(OMNIVERSE_${name})
     endforeach()
 
+    # The static Linux SDK loads its optional GPU module with dlopen/dlsym.
+    # Keep libdl after the PhysX archives so one-pass linkers resolve them.
+    if(UNIX)
+        set_property(TARGET unofficial::omniverse-physx-sdk::sdk APPEND PROPERTY
+            INTERFACE_LINK_LIBRARIES "${CMAKE_DL_LIBS}"
+        )
+    endif()
+
     # Lastly also provide a target for clients to link with the GPU library (optional, provided by NVIDIA and downloaded through packman)
 
     # Find GPU library files (these are used at late-binding to enable GPU acceleration)
