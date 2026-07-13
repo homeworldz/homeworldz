@@ -353,6 +353,21 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/inventory/{userId}/folders:
+    parameters:
+      - $ref: "#/components/parameters/RequestId"
+      - $ref: "#/components/parameters/UserId"
+    get:
+      operationId: listInventoryFolders
+      summary: List inventory folders for one user
+      security:
+        - ServiceToken: []
+      responses:
+        "200":
+          description: Inventory folders
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryFolderList" }
 components:
   parameters:
     RequestId:
@@ -496,3 +511,20 @@ components:
         presence:
           type: array
           items: { $ref: "#/components/schemas/Presence" }
+    InventoryFolder:
+      type: object
+      required: [id, ownerUserId, parentId, name, typeDefault, version]
+      properties:
+        id: { type: string, format: uuid }
+        ownerUserId: { type: string, format: uuid }
+        parentId: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 255 }
+        typeDefault: { type: integer, minimum: -1, maximum: 127 }
+        version: { type: integer, format: int64, minimum: 1 }
+    InventoryFolderList:
+      type: object
+      required: [folders]
+      properties:
+        folders:
+          type: array
+          items: { $ref: "#/components/schemas/InventoryFolder" }

@@ -1,7 +1,10 @@
 package httpapi
 
-import "github.com/homeworldz/homeworldz/grid/internal/regions"
-import "github.com/homeworldz/homeworldz/grid/internal/presence"
+import (
+	"github.com/homeworldz/homeworldz/grid/internal/inventory"
+	"github.com/homeworldz/homeworldz/grid/internal/presence"
+	"github.com/homeworldz/homeworldz/grid/internal/regions"
+)
 
 const APIVersion = "v1"
 
@@ -57,4 +60,8 @@ type UpdatePresenceRequest struct {
 
 type PresenceList struct {
 	Presence []presence.Presence `json:"presence"`
+}
+
+type InventoryFolderList struct {
+	Folders []inventory.Folder `json:"folders"`
 }

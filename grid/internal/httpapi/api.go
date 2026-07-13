@@ -61,6 +61,7 @@ func New(ready ReadinessChecker, version string, options Options) http.Handler {
 	mux.HandleFunc("/api/v1/sessions/", a.sessionByID)
 	mux.HandleFunc("/api/v1/presence", a.presenceRoot)
 	mux.HandleFunc("/api/v1/presence/", a.presenceByUser)
+	mux.HandleFunc("/api/v1/inventory/", a.inventoryByUser)
 	mux.HandleFunc("/", a.notFound)
 	return withRequestID(withRequestLogging(
 		authenticateInternal(mux, options.ServiceToken), options.Logger,
