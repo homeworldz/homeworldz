@@ -398,7 +398,7 @@ std::vector<std::byte> encode_static_object_update(std::uint64_t region_handle, 
     append_le_u16(output, 0); append_le_u16(output, 0); // path begin/end
     output.push_back(std::byte{100}); output.push_back(std::byte{100}); // path scale
     for (int index = 0; index < 7; ++index) output.push_back(std::byte{}); // shear through taper
-    output.push_back(std::byte{67}); // one path revolution
+    output.push_back(std::byte{}); // one path revolution: (value * 0.015) + 1.0
     output.push_back(std::byte{}); // skew
     append_le_u16(output, 0); append_le_u16(output, 0); append_le_u16(output, 0); // profile
     if (!append_binary(output, {}, 2) || !append_binary(output, {}, 1) ||
