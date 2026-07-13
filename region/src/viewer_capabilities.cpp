@@ -20,8 +20,9 @@ std::string seed_capability_xml(std::string_view public_endpoint, std::string_vi
     auto base = std::string(public_endpoint);
     while (!base.empty() && base.back() == '/') base.pop_back();
     const auto event_url = xml_escape(base + "/caps/event/" + std::string(session_id));
+    const auto texture_url = xml_escape(base + "/caps/texture/" + std::string(session_id));
     return "<?xml version=\"1.0\"?><llsd><map><key>EventQueueGet</key><uri>" + event_url +
-           "</uri></map></llsd>";
+           "</uri><key>GetTexture</key><uri>" + texture_url + "</uri></map></llsd>";
 }
 
 std::string event_queue_xml(std::uint64_t id, const std::optional<EstablishAgentCommunication>& event) {

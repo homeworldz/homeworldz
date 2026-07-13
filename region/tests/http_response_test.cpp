@@ -117,6 +117,7 @@ int main() {
     passed &= contains(llsd.content, "X-Request-ID: cap-request");
     const auto seed = homeworldz::viewer::seed_capability_xml("http://region.example:42001/", "session-id");
     passed &= contains(seed, "<key>EventQueueGet</key><uri>http://region.example:42001/caps/event/session-id</uri>");
+    passed &= contains(seed, "<key>GetTexture</key><uri>http://region.example:42001/caps/texture/session-id</uri>");
     const auto event = homeworldz::viewer::event_queue_xml(7,
         homeworldz::viewer::EstablishAgentCommunication{
             "11111111-2222-4333-8444-555555555555", "region.example:42002",

@@ -48,7 +48,7 @@ than runtime dependencies.
 - [x] Implement region handshake, seed capability, and required event delivery.
 - [x] Implement avatar movement, flying, jumping, and camera state.
 - [x] Implement nearby chat, terrain, and static object updates.
-- [ ] Implement local texture and asset fetch.
+- [x] Implement local texture and asset fetch.
 - [ ] Verify persistence, restart, disconnect, and reconnect.
 
 ## Later Milestones

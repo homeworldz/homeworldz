@@ -8,11 +8,13 @@
 #include <exception>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 
 #include "homeworldz/api_models.h"
 #include "homeworldz/avatar_controller.h"
@@ -110,6 +112,19 @@ std::string capability_session(std::string_view path, std::string_view prefix) {
     const auto session = path.substr(prefix.size());
     if (session.empty() || session.find('/') != std::string_view::npos) return {};
     return std::string(session);
+}
+
+std::optional<std::pair<std::string, std::string>> texture_request(std::string_view path) {
+    constexpr std::string_view prefix = "/caps/texture/";
+    constexpr std::string_view marker = "/?texture_id=";
+    if (!path.starts_with(prefix)) return std::nullopt;
+    const auto separator = path.find(marker, prefix.size());
+    if (separator == std::string_view::npos) return std::nullopt;
+    const auto session = path.substr(prefix.size(), separator - prefix.size());
+    const auto texture = path.substr(separator + marker.size());
+    if (session.empty() || texture.empty() || texture.find('&') != std::string_view::npos)
+        return std::nullopt;
+    return std::pair{std::string(session), std::string(texture)};
 }
 
 std::string simulator_endpoint(std::string_view public_endpoint, int viewer_port) {
@@ -252,9 +267,12 @@ int main() {
                     const bool seed = !session_id.empty();
                     if (!seed) session_id = capability_session(response.path, "/caps/event/");
                     const bool event_queue = !seed && !session_id.empty();
-                    if (seed || event_queue) {
+                    const auto texture = texture_request(response.path);
+                    if (texture) session_id = texture->first;
+                    if (seed || event_queue || texture) {
                         bool authorized = false;
-                        if (response.method == "POST" && registration && viewer_grid) {
+                        const auto expected_method = texture ? "GET" : "POST";
+                        if (response.method == expected_method && registration && viewer_grid) {
                             const auto session = viewer_grid->validate_viewer_session(session_id);
                             authorized = session && session->destination_region_id == registration->region_id();
                         }
@@ -262,7 +280,7 @@ int main() {
                             response = homeworldz::http::response_for_content(
                                 request, 200, "application/llsd+xml",
                                 homeworldz::viewer::seed_capability_xml(region_public_endpoint, session_id));
-                        } else if (authorized) {
+                        } else if (authorized && event_queue) {
                             static std::atomic<std::uint64_t> event_id{0};
                             std::optional<homeworldz::viewer::EstablishAgentCommunication> event;
                             if (established_events.insert(session_id).second) {
@@ -277,9 +295,21 @@ int main() {
                             response = homeworldz::http::response_for_content(
                                 request, 200, "application/llsd+xml",
                                 homeworldz::viewer::event_queue_xml(++event_id, event));
+                        } else if (authorized && texture && homeworldz::viewer::parse_uuid(texture->second)) {
+                            try {
+                                const auto asset = storage->read_asset(texture->second);
+                                response = homeworldz::http::response_for_content(
+                                    request, 200, "image/x-j2c",
+                                    std::string(reinterpret_cast<const char*>(asset.data()), asset.size()));
+                            } catch (const std::exception&) {
+                                response = homeworldz::http::response_for_content(
+                                    request, 404, "application/json",
+                                    homeworldz::api::to_json(homeworldz::api::Error{
+                                        "asset_not_found", "texture asset was not found"}));
+                            }
                         } else {
                             response = homeworldz::http::response_for_content(
-                                request, response.method == "POST" ? 404 : 405,
+                                request, response.method == expected_method ? 404 : 405,
                                 "application/llsd+xml", "<llsd><undef/></llsd>");
                         }
                     }
