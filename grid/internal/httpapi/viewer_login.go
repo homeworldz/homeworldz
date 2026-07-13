@@ -3,12 +3,15 @@ package httpapi
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/xml"
 	"errors"
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -114,6 +117,45 @@ func rpcField(name string, value rpcOutputValue) rpcOutputMember {
 	return rpcOutputMember{Name: name, Value: value}
 }
 
+func inventoryFolderID(userID string, folderType int) string {
+	value := sha256.Sum256([]byte(userID + "\x00homeworldz-inventory-folder\x00" + strconv.Itoa(folderType)))
+	value[6] = (value[6] & 0x0f) | 0x80
+	value[8] = (value[8] & 0x3f) | 0x80
+	encoded := hex.EncodeToString(value[:16])
+	return encoded[0:8] + "-" + encoded[8:12] + "-" + encoded[12:16] + "-" +
+		encoded[16:20] + "-" + encoded[20:32]
+}
+
+func inventoryFolder(name, id, parent string, folderType int) rpcOutputValue {
+	return rpcStructValue(
+		rpcField("name", rpcString(name)),
+		rpcField("folder_id", rpcString(id)),
+		rpcField("parent_id", rpcString(parent)),
+		rpcField("version", rpcInt(1)),
+		rpcField("type_default", rpcInt(folderType)),
+	)
+}
+
+func inventorySkeleton(userID string) (string, []rpcOutputValue) {
+	rootID := inventoryFolderID(userID, 8)
+	folders := []rpcOutputValue{inventoryFolder("My Inventory", rootID,
+		"00000000-0000-0000-0000-000000000000", 8)}
+	for _, folder := range []struct {
+		name       string
+		folderType int
+	}{
+		{"Textures", 0}, {"Sounds", 1}, {"Calling Cards", 2}, {"Landmarks", 3},
+		{"Clothing", 5}, {"Objects", 6}, {"Notecards", 7}, {"Scripts", 10},
+		{"Body Parts", 13}, {"Trash", 14}, {"Photo Album", 15}, {"Lost And Found", 16},
+		{"Animations", 20}, {"Gestures", 21}, {"Favorites", 23}, {"Current Outfit", 46},
+		{"My Outfits", 48}, {"Received Items", 50}, {"Settings", 56}, {"Materials", 57},
+	} {
+		folders = append(folders, inventoryFolder(folder.name,
+			inventoryFolderID(userID, folder.folderType), rootID, folder.folderType))
+	}
+	return rootID, folders
+}
+
 func (a *API) viewerLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", http.MethodPost)
@@ -177,14 +219,8 @@ func (a *API) viewerLogin(w http.ResponseWriter, r *http.Request) {
 		writeViewerLogin(w, loginFailure("unavailable", "The grid could not assign the viewer circuit."))
 		return
 	}
-	root := rpcStructValue(rpcField("folder_id", rpcString(session.UserID)))
-	rootFolder := rpcStructValue(
-		rpcField("name", rpcString("My Inventory")),
-		rpcField("folder_id", rpcString(session.UserID)),
-		rpcField("parent_id", rpcString("00000000-0000-0000-0000-000000000000")),
-		rpcField("version", rpcInt(1)),
-		rpcField("type_default", rpcInt(8)),
-	)
+	rootID, skeleton := inventorySkeleton(session.UserID)
+	root := rpcStructValue(rpcField("folder_id", rpcString(rootID)))
 	libraryRoot := rpcStructValue(rpcField("folder_id", rpcString("00000000-0000-0000-0000-000000000001")))
 	libraryOwner := rpcStructValue(rpcField("agent_id", rpcString("00000000-0000-0000-0000-000000000002")))
 	response := rpcStructValue(
@@ -199,7 +235,7 @@ func (a *API) viewerLogin(w http.ResponseWriter, r *http.Request) {
 		rpcField("look_at", rpcString("[r1,r0,r0]")),
 		rpcField("seed_capability", rpcString(strings.TrimRight(region.PublicEndpoint, "/")+"/caps/seed/"+session.ID)),
 		rpcField("seconds_since_epoch", rpcInt(int(time.Now().Unix()))),
-		rpcField("inventory-root", rpcArrayValue(root)), rpcField("inventory-skeleton", rpcArrayValue(rootFolder)),
+		rpcField("inventory-root", rpcArrayValue(root)), rpcField("inventory-skeleton", rpcArrayValue(skeleton...)),
 		rpcField("inventory-lib-root", rpcArrayValue(libraryRoot)), rpcField("inventory-lib-owner", rpcArrayValue(libraryOwner)),
 		rpcField("inventory-skel-lib", rpcArrayValue()), rpcField("login-flags", rpcArrayValue()),
 		rpcField("gestures", rpcArrayValue()), rpcField("buddy-list", rpcArrayValue()),

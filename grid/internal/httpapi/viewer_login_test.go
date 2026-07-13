@@ -76,15 +76,34 @@ func TestViewerLoginResolvesNamedRegion(t *testing.T) {
 	}
 	rootValues := fields["inventory-root"].Array.Values
 	skeletonValues := fields["inventory-skeleton"].Array.Values
-	if len(rootValues) != 1 || len(skeletonValues) != 1 {
+	if len(rootValues) != 1 || len(skeletonValues) != 21 {
 		t.Fatalf("inventory root or skeleton missing: %#v", fields)
 	}
 	rootID := rootValues[0].fields()["folder_id"].text()
-	folder := skeletonValues[0].fields()
-	if rootID == "" || folder["folder_id"].text() != rootID || folder["name"].text() != "My Inventory" ||
-		folder["parent_id"].text() != "00000000-0000-0000-0000-000000000000" ||
-		folder["version"].text() != "1" || folder["type_default"].text() != "8" {
-		t.Fatalf("invalid inventory root skeleton: root=%q folder=%#v", rootID, folder)
+	types := make(map[string]bool)
+	ids := make(map[string]bool)
+	for index, value := range skeletonValues {
+		folder := value.fields()
+		id := folder["folder_id"].text()
+		parent := folder["parent_id"].text()
+		if id == "" || ids[id] || folder["version"].text() != "1" {
+			t.Fatalf("invalid inventory folder %d: %#v", index, folder)
+		}
+		ids[id] = true
+		types[folder["type_default"].text()] = true
+		if index == 0 {
+			if id != rootID || folder["name"].text() != "My Inventory" ||
+				parent != "00000000-0000-0000-0000-000000000000" {
+				t.Fatalf("invalid inventory root: %#v", folder)
+			}
+		} else if parent != rootID {
+			t.Fatalf("inventory folder %d parent = %q, want %q", index, parent, rootID)
+		}
+	}
+	for _, required := range []string{"0", "1", "5", "6", "7", "10", "13", "15", "16", "20", "21"} {
+		if !types[required] {
+			t.Fatalf("inventory skeleton lacks required folder type %s", required)
+		}
 	}
 	session, err := identities.ValidateSession(context.Background(), fields["session_id"].text())
 	if err != nil || session.ViewerCircuitCode == 0 || session.DestinationRegionID != target.ID ||
