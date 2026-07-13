@@ -2,6 +2,7 @@ add_library(homeworldz-region-core
   src/api_models.cpp
   src/grid_client.cpp
   src/http_response.cpp
+  src/physics_scenarios.cpp
   src/region_storage.cpp
   src/scene.cpp
   src/sha256.cpp
@@ -50,5 +51,8 @@ if(HOMEWORLDZ_PHYSICS_ADAPTERS_AVAILABLE)
   add_executable(homeworldz-physics-adapter-smoke tests/physics_adapters_test.cpp)
   target_link_libraries(homeworldz-physics-adapter-smoke PRIVATE homeworldz-region-core)
   add_test(NAME region-physics-adapters COMMAND homeworldz-physics-adapter-smoke)
+  add_executable(homeworldz-physics-scenario-tests tests/physics_scenarios_test.cpp)
+  target_link_libraries(homeworldz-physics-scenario-tests PRIVATE homeworldz-region-core)
+  add_test(NAME region-physics-scenarios COMMAND homeworldz-physics-scenario-tests)
 endif()
 

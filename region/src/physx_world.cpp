@@ -79,9 +79,10 @@ public:
         shape->release();
         material->release();
         if (auto* dynamic = actor->is<physx::PxRigidDynamic>()) {
-            dynamic->setLinearVelocity(vec(definition.velocity));
-            if (definition.motion == MotionType::Dynamic)
+            if (definition.motion == MotionType::Dynamic) {
+                dynamic->setLinearVelocity(vec(definition.velocity));
                 physx::PxRigidBodyExt::setMassAndUpdateInertia(*dynamic, static_cast<float>(std::max(0.001, definition.mass)));
+            }
         }
         scene_->addActor(*actor);
         const auto id = next_body_++;

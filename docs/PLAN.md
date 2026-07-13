@@ -32,7 +32,7 @@ than runtime dependencies.
 
 - [x] Define the engine-independent physics world interface.
 - [x] Implement Jolt and PhysX 5 evaluation adapters.
-- [ ] Add common avatar, terrain, stacking, impulse, vehicle, handoff, restore,
+- [x] Add common avatar, terrain, stacking, impulse, vehicle, handoff, restore,
   and load scenarios.
 - [ ] Record timing, memory, jitter, tunneling, replay drift, restore accuracy,
   and adapter complexity on Windows and Linux.
