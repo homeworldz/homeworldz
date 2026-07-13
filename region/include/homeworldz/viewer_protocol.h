@@ -40,8 +40,36 @@ struct UseCircuitCode {
     Uuid agent_id{};
 };
 
+struct AgentMessage {
+    Uuid agent_id{};
+    Uuid session_id{};
+};
+
+struct CompleteAgentMovement : AgentMessage {
+    std::uint32_t circuit_code{};
+};
+
+struct RegionHandshake {
+    std::string name{"My Region"};
+    Uuid region_id{};
+    Uuid owner_id{};
+    float water_height{20.0F};
+};
+
+struct AgentMovementComplete : AgentMessage {
+    std::array<float, 3> position{128.0F, 128.0F, 25.0F};
+    std::array<float, 3> look_at{1.0F, 0.0F, 0.0F};
+    std::uint64_t region_handle{};
+    std::uint32_t timestamp{};
+    std::string channel_version{"HomeWorldz dev"};
+};
+
 std::vector<std::byte> encode_use_circuit_code(const UseCircuitCode& message);
 std::optional<UseCircuitCode> decode_use_circuit_code(std::span<const std::byte> payload);
+std::vector<std::byte> encode_region_handshake(const RegionHandshake& message);
+std::optional<AgentMessage> decode_region_handshake_reply(std::span<const std::byte> payload);
+std::optional<CompleteAgentMovement> decode_complete_agent_movement(std::span<const std::byte> payload);
+std::vector<std::byte> encode_agent_movement_complete(const AgentMovementComplete& message);
 std::vector<std::byte> encode_packet_ack(std::span<const std::uint32_t> sequences);
 std::optional<std::vector<std::uint32_t>> decode_packet_ack(std::span<const std::byte> payload);
 
@@ -56,7 +84,7 @@ public:
                      std::chrono::seconds idle_timeout = std::chrono::seconds(30));
 
     std::optional<std::vector<std::byte>> send(std::vector<std::byte> payload, bool reliable,
-                                               Clock::time_point now);
+                                               Clock::time_point now, bool zero_coded = false);
     std::optional<Packet> receive(std::span<const std::byte> datagram, Clock::time_point now);
     std::vector<std::vector<std::byte>> poll(Clock::time_point now);
     bool expired(Clock::time_point now) const;
@@ -98,7 +126,7 @@ public:
     std::optional<Packet> receive(std::string_view endpoint, std::span<const std::byte> datagram,
                                   Clock::time_point now);
     std::optional<std::vector<std::byte>> send(std::string_view endpoint, std::vector<std::byte> payload,
-                                               bool reliable, Clock::time_point now);
+                                               bool reliable, Clock::time_point now, bool zero_coded = false);
     std::vector<OutboundDatagram> poll(Clock::time_point now);
     const UseCircuitCode* identity(std::string_view endpoint) const;
     std::size_t size() const { return circuits_.size(); }

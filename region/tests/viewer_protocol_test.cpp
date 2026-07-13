@@ -59,12 +59,36 @@ bool message_codecs() {
         decoded->agent_id != expected.agent_id)
         return false;
     if (payload.size() != 40 || payload[0] != std::byte{0xff} || payload[1] != std::byte{0xff} ||
-        payload[2] != std::byte{0} || payload[3] != std::byte{3})
+        payload[2] != std::byte{0} || payload[3] != std::byte{3} || payload[4] != std::byte{0x40} ||
+        payload[5] != std::byte{0x30} || payload[6] != std::byte{0x20} || payload[7] != std::byte{0x10})
         return false;
     const std::array<std::uint32_t, 2> sequences{0x01020304, 0xa0b0c0d0};
     const auto ack = encode_packet_ack(sequences);
+    if (ack.size() != 13 || ack[5] != std::byte{4} || ack[6] != std::byte{3} ||
+        ack[7] != std::byte{2} || ack[8] != std::byte{1}) return false;
     const auto ack_decoded = decode_packet_ack(ack);
-    return ack_decoded && *ack_decoded == std::vector<std::uint32_t>(sequences.begin(), sequences.end());
+    if (!ack_decoded || *ack_decoded != std::vector<std::uint32_t>(sequences.begin(), sequences.end())) return false;
+
+    auto reply = bytes({0xff, 0xff, 0x00, 0x95});
+    reply.insert(reply.end(), expected.agent_id.begin(), expected.agent_id.end());
+    reply.insert(reply.end(), expected.session_id.begin(), expected.session_id.end());
+    reply.insert(reply.end(), {std::byte{7}, std::byte{}, std::byte{}, std::byte{}});
+    const auto handshake_reply = decode_region_handshake_reply(reply);
+    if (!handshake_reply || handshake_reply->agent_id != expected.agent_id ||
+        handshake_reply->session_id != expected.session_id) return false;
+    reply[3] = std::byte{0xf9};
+    const auto movement = decode_complete_agent_movement(reply);
+    if (!movement || movement->circuit_code != 7 || movement->agent_id != expected.agent_id) return false;
+
+    RegionHandshake handshake{"Test Region", expected.agent_id, expected.session_id, 21.5F};
+    const auto encoded_handshake = encode_region_handshake(handshake);
+    if (encoded_handshake.size() < 250 || encoded_handshake[3] != std::byte{0x94}) return false;
+    AgentMovementComplete complete;
+    complete.agent_id = expected.agent_id;
+    complete.session_id = expected.session_id;
+    complete.region_handle = 0x0102030405060708ULL;
+    const auto encoded_complete = encode_agent_movement_complete(complete);
+    return encoded_complete.size() > 80 && encoded_complete[3] == std::byte{0xfa};
 }
 
 bool resend_throttle_and_timeout() {
