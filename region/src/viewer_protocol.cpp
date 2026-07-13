@@ -42,6 +42,17 @@ std::uint32_t read_le_u32(std::span<const std::byte> data, std::size_t offset) {
            (std::to_integer<std::uint32_t>(data[offset + 3]) << 24);
 }
 
+float read_f32(std::span<const std::byte> data, std::size_t offset) {
+    const auto bits = read_le_u32(data, offset);
+    float result{};
+    std::memcpy(&result, &bits, sizeof(result));
+    return result;
+}
+
+std::array<float, 3> read_vector3(std::span<const std::byte> data, std::size_t offset) {
+    return {read_f32(data, offset), read_f32(data, offset + 4), read_f32(data, offset + 8)};
+}
+
 void append_le_u32(std::vector<std::byte>& output, std::uint32_t value) {
     output.push_back(static_cast<std::byte>(value & 0xff));
     output.push_back(static_cast<std::byte>((value >> 8) & 0xff));
@@ -220,6 +231,24 @@ std::vector<std::byte> encode_agent_movement_complete(const AgentMovementComplet
     append_le_u32(output, message.timestamp);
     if (!append_variable2(output, message.channel_version)) return {};
     return output;
+}
+
+std::optional<AgentUpdate> decode_agent_update(std::span<const std::byte> payload) {
+    if (payload.size() != 115 || payload[0] != std::byte{4}) return std::nullopt;
+    AgentUpdate result;
+    std::copy_n(payload.begin() + 1, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 17, 16, result.session_id.begin());
+    result.body_rotation = read_vector3(payload, 33);
+    result.head_rotation = read_vector3(payload, 45);
+    result.state = std::to_integer<std::uint8_t>(payload[57]);
+    result.camera_center = read_vector3(payload, 58);
+    result.camera_at = read_vector3(payload, 70);
+    result.camera_left = read_vector3(payload, 82);
+    result.camera_up = read_vector3(payload, 94);
+    result.draw_distance = read_f32(payload, 106);
+    result.control_flags = read_le_u32(payload, 110);
+    result.flags = std::to_integer<std::uint8_t>(payload[114]);
+    return result;
 }
 
 std::vector<std::byte> encode_packet_ack(std::span<const std::uint32_t> sequences) {

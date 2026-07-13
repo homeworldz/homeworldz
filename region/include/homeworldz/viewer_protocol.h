@@ -64,12 +64,26 @@ struct AgentMovementComplete : AgentMessage {
     std::string channel_version{"HomeWorldz dev"};
 };
 
+struct AgentUpdate : AgentMessage {
+    std::array<float, 3> body_rotation{};
+    std::array<float, 3> head_rotation{};
+    std::uint8_t state{};
+    std::array<float, 3> camera_center{};
+    std::array<float, 3> camera_at{};
+    std::array<float, 3> camera_left{};
+    std::array<float, 3> camera_up{};
+    float draw_distance{};
+    std::uint32_t control_flags{};
+    std::uint8_t flags{};
+};
+
 std::vector<std::byte> encode_use_circuit_code(const UseCircuitCode& message);
 std::optional<UseCircuitCode> decode_use_circuit_code(std::span<const std::byte> payload);
 std::vector<std::byte> encode_region_handshake(const RegionHandshake& message);
 std::optional<AgentMessage> decode_region_handshake_reply(std::span<const std::byte> payload);
 std::optional<CompleteAgentMovement> decode_complete_agent_movement(std::span<const std::byte> payload);
 std::vector<std::byte> encode_agent_movement_complete(const AgentMovementComplete& message);
+std::optional<AgentUpdate> decode_agent_update(std::span<const std::byte> payload);
 std::vector<std::byte> encode_packet_ack(std::span<const std::uint32_t> sequences);
 std::optional<std::vector<std::uint32_t>> decode_packet_ack(std::span<const std::byte> payload);
 

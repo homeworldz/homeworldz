@@ -139,6 +139,25 @@ bool circuit_registry() {
     registry.poll(start + 31s);
     return registry.size() == 0;
 }
+
+bool agent_update_codec() {
+    auto payload = bytes({4});
+    const auto agent = parse_uuid("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");
+    const auto session = parse_uuid("11111111-2222-4333-8444-555555555555");
+    if (!agent || !session) return false;
+    payload.insert(payload.end(), agent->begin(), agent->end());
+    payload.insert(payload.end(), session->begin(), session->end());
+    payload.resize(115, std::byte{});
+    // Body rotation x = 1.0, camera center x = 2.0, draw distance = 128.0.
+    payload[35] = std::byte{0x80}; payload[36] = std::byte{0x3f};
+    payload[60] = std::byte{0x00}; payload[61] = std::byte{0x40};
+    payload[108] = std::byte{0x00}; payload[109] = std::byte{0x43};
+    payload[110] = std::byte{0x01}; payload[111] = std::byte{0x20};
+    const auto update = decode_agent_update(payload);
+    return update && update->agent_id == *agent && update->session_id == *session &&
+           update->body_rotation[0] == 1.0F && update->camera_center[0] == 2.0F &&
+           update->draw_distance == 128.0F && update->control_flags == 0x2001;
+}
 }
 
 int main() {
@@ -147,6 +166,7 @@ int main() {
     if (!reliability()) return 3;
     if (!resend_throttle_and_timeout()) return 4;
     if (!circuit_registry()) return 5;
-    if (decode_packet(std::array<std::byte, 2>{})) return 6;
+    if (!agent_update_codec()) return 6;
+    if (decode_packet(std::array<std::byte, 2>{})) return 7;
     return 0;
 }
