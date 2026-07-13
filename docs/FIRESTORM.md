@@ -132,21 +132,31 @@ scripts\firestorm-smoke-test.cmd
 ```
 
 The launcher reads ignored local configuration, starts the grid and region on
-loopback, verifies both readiness endpoints, and securely prompts for a
-development-user password. It creates the default `smoke.user` account or
+loopback, and verifies both readiness endpoints. Put reusable local credentials
+in `config/smoke-test.ini`:
+
+```ini
+[user]
+first_name = Smoke
+last_name = User
+password = your-local-test-password
+```
+
+When the file or password is absent, the launcher prompts for a password. It
+creates the default `smoke.user` account or
 validates the supplied password when that account already exists, then launches
 the installed OpenSim-enabled Firestorm with the HomeWorldz login URI. Service
 logs are written beneath ignored `var/smoke-test/`, and the services stop when
 Firestorm exits or the launcher is interrupted.
 
-Inside Firestorm, log in as first name `Smoke`, last name `User`, using the
-password entered at the prompt. Verify initial region entry, avatar movement,
+Inside Firestorm, log in with the configured name and password. Verify initial
+region entry, avatar movement,
 nearby chat, terrain and the welcome primitive. Log out to prove circuit and
 session disconnection, then log in again to prove reconnection. Restart the
 launcher and repeat once to verify persisted scene restoration and grid region
 re-registration. Record the About-dialog version and executable SHA-256 with
 the smoke-test result before completing the milestone.
 
-Use `-first` and `-last` for a different development account, or
-`-validate-only` to check service startup without prompting or launching the
-viewer.
+Use `-first` and `-last` to override the configured account, `-config` to select
+a different credentials file, or `-validate-only` to check service startup
+without prompting or launching the viewer.

@@ -2,10 +2,37 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 )
+
+func TestLoadSmokeConfig(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "smoke-test.ini")
+	if err := os.WriteFile(path, []byte("[user]\nfirst_name = Configured\nlast_name = Tester\npassword = configured-password\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := loadSmokeConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := smokeConfig{firstName: "Configured", lastName: "Tester", password: "configured-password"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("smoke config = %#v, want %#v", got, want)
+	}
+}
+
+func TestLoadSmokeConfigAllowsMissingFile(t *testing.T) {
+	got, err := loadSmokeConfig(filepath.Join(t.TempDir(), "missing.ini"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != (smokeConfig{}) {
+		t.Fatalf("smoke config = %#v, want empty", got)
+	}
+}
 
 func TestViewerArgumentsDisableVoice(t *testing.T) {
 	got := viewerArguments("http://127.0.0.1:42000")

@@ -32,7 +32,14 @@ type options struct {
 	firstName     string
 	lastName      string
 	firestormPath string
+	configPath    string
 	validateOnly  bool
+}
+
+type smokeConfig struct {
+	firstName string
+	lastName  string
+	password  string
 }
 
 type childProcess struct {
@@ -46,9 +53,10 @@ type childProcess struct {
 
 func main() {
 	opts := options{}
-	flag.StringVar(&opts.firstName, "first", "Smoke", "Firestorm development user's first name")
-	flag.StringVar(&opts.lastName, "last", "User", "Firestorm development user's last name")
+	flag.StringVar(&opts.firstName, "first", "", "Firestorm development user's first name (overrides smoke config)")
+	flag.StringVar(&opts.lastName, "last", "", "Firestorm development user's last name (overrides smoke config)")
 	flag.StringVar(&opts.firestormPath, "firestorm", "", "path to the Firestorm executable")
+	flag.StringVar(&opts.configPath, "config", "", "path to smoke-test user config (default config/smoke-test.ini)")
 	flag.BoolVar(&opts.validateOnly, "validate-only", false, "verify service startup without prompting or launching Firestorm")
 	flag.Parse()
 
@@ -64,6 +72,28 @@ func run(ctx context.Context, opts options) error {
 	root, err := repositoryRoot()
 	if err != nil {
 		return err
+	}
+	configPath := opts.configPath
+	if configPath == "" {
+		configPath = filepath.Join(root, "config", "smoke-test.ini")
+	} else if !filepath.IsAbs(configPath) {
+		configPath = filepath.Join(root, configPath)
+	}
+	smoke, err := loadSmokeConfig(configPath)
+	if err != nil {
+		return err
+	}
+	if opts.firstName == "" {
+		opts.firstName = smoke.firstName
+	}
+	if opts.firstName == "" {
+		opts.firstName = "Smoke"
+	}
+	if opts.lastName == "" {
+		opts.lastName = smoke.lastName
+	}
+	if opts.lastName == "" {
+		opts.lastName = "User"
 	}
 	gridExecutable := filepath.Join(root, "build", "windows-vcpkg", "grid", "homeworldz-grid.exe")
 	regionExecutable := filepath.Join(root, "build", "windows-vcpkg", "region", "Debug", "homeworldz-region.exe")
@@ -141,9 +171,12 @@ func run(ctx context.Context, opts options) error {
 	if !validUsername(username) {
 		return fmt.Errorf("combined development username %q is invalid", username)
 	}
-	password, err := readPassword(fmt.Sprintf("Password for Firestorm user %q (8-128 characters): ", opts.firstName+" "+opts.lastName))
-	if err != nil {
-		return err
+	password := []byte(smoke.password)
+	if len(password) == 0 {
+		password, err = readPassword(fmt.Sprintf("Password for Firestorm user %q (8-128 characters): ", opts.firstName+" "+opts.lastName))
+		if err != nil {
+			return err
+		}
 	}
 	defer clear(password)
 	if len(password) < 8 || len(password) > 128 {
@@ -183,6 +216,22 @@ func iniValue(path, section, key string) (string, error) {
 		return "", fmt.Errorf("missing [%s] %s in %s", section, key, path)
 	}
 	return value, nil
+}
+
+func loadSmokeConfig(path string) (smokeConfig, error) {
+	parsed, err := ini.LoadSources(ini.LoadOptions{IgnoreInlineComment: true}, path)
+	if errors.Is(err, os.ErrNotExist) {
+		return smokeConfig{}, nil
+	}
+	if err != nil {
+		return smokeConfig{}, fmt.Errorf("load %s: %w", path, err)
+	}
+	user := parsed.Section("user")
+	return smokeConfig{
+		firstName: strings.TrimSpace(user.Key("first_name").Value()),
+		lastName:  strings.TrimSpace(user.Key("last_name").Value()),
+		password:  user.Key("password").Value(),
+	}, nil
 }
 
 func startChild(executable, directory string, environment []string, stdoutPath, stderrPath string) (*childProcess, error) {
