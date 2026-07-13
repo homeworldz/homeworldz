@@ -258,7 +258,14 @@ int main() {
             return false;
         };
         if (!registration || !viewer_grid) return reject("region_not_registered");
-        const auto session = viewer_grid->validate_viewer_session(homeworldz::viewer::format_uuid(request.session_id));
+        std::optional<homeworldz::grid::ViewerSession> session;
+        try {
+            session = viewer_grid->validate_viewer_session(homeworldz::viewer::format_uuid(request.session_id));
+        } catch (const std::exception& error) {
+            std::cout << "{\"level\":\"error\",\"message\":\"viewer session validation failed\",\"error\":"
+                      << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+            return reject("session_validation_error");
+        }
         if (!session) return reject("session_not_found");
         if (session->circuit_code != request.circuit_code) return reject("circuit_code_mismatch");
         if (session->destination_region_id != registration->region_id())
@@ -266,6 +273,10 @@ int main() {
         const auto agent = homeworldz::viewer::parse_uuid(session->agent_id);
         if (!agent) return reject("invalid_session_agent");
         if (*agent != request.agent_id) return reject("agent_id_mismatch");
+        std::cout << "{\"level\":\"info\",\"message\":\"viewer circuit authorized\",\"circuitCode\":"
+                  << request.circuit_code << ",\"sessionId\":"
+                  << homeworldz::api::json_string(homeworldz::viewer::format_uuid(request.session_id))
+                  << "}" << std::endl;
         return true;
     });
     std::unordered_set<std::string> handshake_replies;
