@@ -43,7 +43,7 @@ than runtime dependencies.
 
 - [x] Pin the supported Firestorm version and capture the minimum login flow.
 - [x] Implement login response and destination-region resolution.
-- [ ] Implement viewer UDP circuits, packet codecs, acknowledgements, throttles,
+- [x] Implement viewer UDP circuits, packet codecs, acknowledgements, throttles,
   and timeouts.
 - [ ] Implement region handshake, seed capability, and required event delivery.
 - [ ] Implement avatar movement, flying, jumping, and camera state.

@@ -34,12 +34,13 @@ int main() {
     auto transport = std::make_shared<FakeTransport>();
     homeworldz::grid::Client client(transport);
     homeworldz::grid::RegionSettings settings{
-        "Test Region", 1000, 1001, "http://localhost:42001", 60};
+        "Test Region", 1000, 1001, "http://localhost:42001", 42003, 60};
     homeworldz::grid::RegistrationLifecycle lifecycle(client, settings);
     const auto started = std::chrono::steady_clock::time_point{};
     if (!lifecycle.start(started) || lifecycle.region_id() != "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa") return 1;
     if (transport->requests.size() != 1 || transport->requests[0].method != "POST" ||
-        transport->requests[0].body.find(R"("gridX":1000)") == std::string::npos) return 1;
+        transport->requests[0].body.find(R"("gridX":1000)") == std::string::npos ||
+        transport->requests[0].body.find(R"("viewerPort":42003)") == std::string::npos) return 1;
     if (!lifecycle.tick(started + std::chrono::seconds(29)) || transport->requests.size() != 1) return 1;
     if (!lifecycle.tick(started + std::chrono::seconds(30)) || transport->requests.size() != 2 ||
         transport->requests[1].method != "PUT") return 1;

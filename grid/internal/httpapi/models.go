@@ -28,6 +28,7 @@ type RegisterRegionRequest struct {
 	GridX          int    `json:"gridX"`
 	GridY          int    `json:"gridY"`
 	PublicEndpoint string `json:"publicEndpoint"`
+	ViewerPort     int    `json:"viewerPort"`
 	LeaseSeconds   int    `json:"leaseSeconds"`
 }
 

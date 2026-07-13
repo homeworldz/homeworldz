@@ -138,6 +138,7 @@ std::string Client::register_region(const RegionSettings& settings) {
                       ",\"gridX\":" + std::to_string(settings.grid_x) +
                       ",\"gridY\":" + std::to_string(settings.grid_y) +
                       ",\"publicEndpoint\":" + api::json_string(settings.public_endpoint) +
+                      ",\"viewerPort\":" + std::to_string(settings.viewer_port) +
                       ",\"leaseSeconds\":" + std::to_string(settings.lease_seconds) + '}';
     const auto response = transport_->send("POST", "/api/v1/regions", body);
     if (response.status_code != 201) return {};

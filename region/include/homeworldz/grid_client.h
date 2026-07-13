@@ -29,6 +29,7 @@ struct RegionSettings {
     int grid_x{};
     int grid_y{};
     std::string public_endpoint;
+    int viewer_port{42002};
     int lease_seconds{60};
 };
 

@@ -88,6 +88,12 @@ The minimum observable flow is:
 8. The smoke test passes when the viewer leaves the startup screen, renders the
    destination region, and can move the avatar and use nearby chat.
 
+Each region registers its viewer UDP port with the grid. Login advertises that
+stored port, while `HOMEWORLDZ_VIEWER_PORT` controls the matching region
+listener (default `42002`). The first reliable `UseCircuitCode` datagram is
+accepted only when its circuit code, session, agent, and destination region all
+match the grid's live session record.
+
 The pinned viewer source constructs the request in
 [`lllogininstance.cpp`](https://github.com/FirestormViewer/phoenix-firestorm/blob/10bd3c9f930c76e1427ddd4ecece6cdf36b4406d/indra/newview/lllogininstance.cpp#L155),
 consumes the circuit response in

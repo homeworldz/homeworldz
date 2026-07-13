@@ -116,6 +116,7 @@ int main() {
                 environment_int("HOMEWORLDZ_REGION_GRID_Y", 1000, 0, 1000000),
                 environment_value("HOMEWORLDZ_REGION_PUBLIC_ENDPOINT",
                                   "http://localhost:" + std::to_string(configured_port())),
+                configured_viewer_port(),
                 environment_int("HOMEWORLDZ_REGION_LEASE_SECONDS", 60, 10, 300)};
             auto transport = homeworldz::grid::socket_transport(
                 environment_value("HOMEWORLDZ_GRID_URL", "http://localhost:42000"), service_token);

@@ -87,8 +87,9 @@ jobs:
           psql -h localhost -U homeworldz -d homeworldz -v ON_ERROR_STOP=1 -f db/migrations/000001_initial.up.sql
           psql -h localhost -U homeworldz -d homeworldz -v ON_ERROR_STOP=1 -f db/migrations/000002_viewer_login.up.sql
           psql -h localhost -U homeworldz -d homeworldz -v ON_ERROR_STOP=1 -f db/migrations/000003_viewer_circuit.up.sql
+          psql -h localhost -U homeworldz -d homeworldz -v ON_ERROR_STOP=1 -f db/migrations/000004_region_viewer_port.up.sql
       - name: Verify schema
-        run: psql -h localhost -U homeworldz -d homeworldz -v ON_ERROR_STOP=1 -c "SELECT version FROM schema_metadata WHERE version IN (1, 2, 3) ORDER BY version"
+        run: psql -h localhost -U homeworldz -d homeworldz -v ON_ERROR_STOP=1 -c "SELECT version FROM schema_metadata WHERE version IN (1, 2, 3, 4) ORDER BY version"
       - name: Test region lease persistence
         working-directory: grid
         run: go test ./internal/regions -run TestPostgresRegionLifecycle -count=1

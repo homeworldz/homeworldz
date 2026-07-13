@@ -185,7 +185,7 @@ func (a *API) viewerLogin(w http.ResponseWriter, r *http.Request) {
 		rpcField("agent_id", rpcString(session.UserID)), rpcField("session_id", rpcString(session.ID)),
 		rpcField("secure_session_id", rpcString(session.SecureID)), rpcField("first_name", rpcString(first)),
 		rpcField("last_name", rpcString(last)), rpcField("circuit_code", rpcInt(int(circuit))),
-		rpcField("sim_ip", rpcString(endpoint.Hostname())), rpcField("sim_port", rpcInt(42002)),
+		rpcField("sim_ip", rpcString(endpoint.Hostname())), rpcField("sim_port", rpcInt(region.ViewerPort)),
 		rpcField("region_x", rpcInt(region.GridX*256)), rpcField("region_y", rpcInt(region.GridY*256)),
 		rpcField("region_size_x", rpcInt(256)), rpcField("region_size_y", rpcInt(256)),
 		rpcField("start_location", rpcString(normalizeStart(fields["start"].text()))),

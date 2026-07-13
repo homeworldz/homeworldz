@@ -423,6 +423,7 @@ components:
         gridX: { type: integer, minimum: 0 }
         gridY: { type: integer, minimum: 0 }
         publicEndpoint: { type: string, format: uri }
+        viewerPort: { type: integer, minimum: 1, maximum: 65535, default: 42002 }
         leaseSeconds: { type: integer, minimum: 10, maximum: 300, default: 60 }
     RenewRegionLeaseRequest:
       type: object
@@ -431,13 +432,14 @@ components:
         leaseSeconds: { type: integer, minimum: 10, maximum: 300 }
     Region:
       type: object
-      required: [id, name, gridX, gridY, publicEndpoint, leaseExpiresAt]
+      required: [id, name, gridX, gridY, publicEndpoint, viewerPort, leaseExpiresAt]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
         gridX: { type: integer }
         gridY: { type: integer }
         publicEndpoint: { type: string, format: uri }
+        viewerPort: { type: integer, minimum: 1, maximum: 65535 }
         leaseExpiresAt: { type: string, format: date-time }
     RegionList:
       type: object

@@ -118,9 +118,12 @@ func (a *API) regionsRoot(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		request.Name = strings.TrimSpace(request.Name)
+		if request.ViewerPort == 0 {
+			request.ViewerPort = 42002
+		}
 		region, err := a.regions.Register(r.Context(), regions.Registration{
 			Name: request.Name, GridX: request.GridX, GridY: request.GridY,
-			PublicEndpoint: request.PublicEndpoint, LeaseDuration: lease,
+			PublicEndpoint: request.PublicEndpoint, ViewerPort: request.ViewerPort, LeaseDuration: lease,
 		})
 		if errors.Is(err, regions.ErrConflict) {
 			writeJSON(w, http.StatusConflict, Error{Code: "region_coordinates_in_use", Message: "region coordinates are already leased"})
@@ -224,7 +227,11 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, target any) bool {
 func validateRegistration(w http.ResponseWriter, request RegisterRegionRequest) bool {
 	name := strings.TrimSpace(request.Name)
 	endpoint, err := url.ParseRequestURI(request.PublicEndpoint)
-	if name == "" || len(name) > 128 || request.GridX < 0 || request.GridY < 0 || err != nil ||
+	if request.ViewerPort == 0 {
+		request.ViewerPort = 42002
+	}
+	if name == "" || len(name) > 128 || request.GridX < 0 || request.GridY < 0 ||
+		request.ViewerPort < 1 || request.ViewerPort > 65535 || err != nil ||
 		(endpoint.Scheme != "http" && endpoint.Scheme != "https") || endpoint.Host == "" {
 		writeJSON(w, http.StatusBadRequest, Error{Code: "invalid_region", Message: "region name, coordinates, or public endpoint is invalid"})
 		return false

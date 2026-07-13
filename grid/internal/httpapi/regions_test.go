@@ -28,6 +28,9 @@ func newMemoryRegionStore() *memoryRegionStore {
 }
 
 func (s *memoryRegionStore) Register(_ context.Context, input regions.Registration) (regions.Region, error) {
+	if input.ViewerPort == 0 {
+		input.ViewerPort = 42002
+	}
 	for id, region := range s.regions {
 		if !region.LeaseExpiresAt.After(s.now) {
 			delete(s.regions, id)
@@ -41,7 +44,8 @@ func (s *memoryRegionStore) Register(_ context.Context, input regions.Registrati
 	region := regions.Region{
 		ID:   fmt.Sprintf("00000000-0000-4000-8000-%012d", s.nextID),
 		Name: input.Name, GridX: input.GridX, GridY: input.GridY,
-		PublicEndpoint: input.PublicEndpoint, LeaseExpiresAt: s.now.Add(input.LeaseDuration),
+		PublicEndpoint: input.PublicEndpoint, ViewerPort: input.ViewerPort,
+		LeaseExpiresAt: s.now.Add(input.LeaseDuration),
 	}
 	s.regions[region.ID] = region
 	return region, nil
@@ -92,7 +96,7 @@ func TestRegionRegistrationLifecycle(t *testing.T) {
         "name":"Test Region","gridX":1000,"gridY":1001,
         "publicEndpoint":"http://region.example:42001","leaseSeconds":60
     }`, http.StatusCreated)
-	if created.Name != "Test Region" || created.GridX != 1000 || created.GridY != 1001 {
+	if created.Name != "Test Region" || created.GridX != 1000 || created.GridY != 1001 || created.ViewerPort != 42002 {
 		t.Fatalf("unexpected registered region: %#v", created)
 	}
 

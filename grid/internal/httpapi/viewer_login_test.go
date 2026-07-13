@@ -57,7 +57,7 @@ func TestViewerLoginResolvesNamedRegion(t *testing.T) {
 	_, _ = regionStore.Register(context.Background(), regions.Registration{Name: "Fallback", GridX: 1000, GridY: 1000,
 		PublicEndpoint: "http://fallback.example:42001", LeaseDuration: time.Minute})
 	target, _ := regionStore.Register(context.Background(), regions.Registration{Name: "Welcome", GridX: 1001, GridY: 1002,
-		PublicEndpoint: "http://127.0.0.1:42001", LeaseDuration: time.Minute})
+		PublicEndpoint: "http://127.0.0.1:42001", ViewerPort: 43002, LeaseDuration: time.Minute})
 	handler := New(checker{}, "test", Options{Identity: identities, Regions: regionStore})
 	fields := viewerResponse(t, handler, viewerRequest("Test", "User", "development-password", "uri:Welcome&128&128&25"))
 	if fields["login"].text() != "true" {
@@ -66,7 +66,7 @@ func TestViewerLoginResolvesNamedRegion(t *testing.T) {
 	if fields["agent_id"].text() == "" || fields["session_id"].text() == "" || fields["secure_session_id"].text() == "" {
 		t.Fatalf("missing session identity: %#v", fields)
 	}
-	if fields["sim_ip"].text() != "127.0.0.1" || fields["sim_port"].text() != "42002" ||
+	if fields["sim_ip"].text() != "127.0.0.1" || fields["sim_port"].text() != "43002" ||
 		fields["region_x"].text() != "256256" || fields["region_y"].text() != "256512" {
 		t.Fatalf("unexpected destination: %#v", fields)
 	}

@@ -22,6 +22,7 @@ type Region struct {
 	GridX          int       `json:"gridX"`
 	GridY          int       `json:"gridY"`
 	PublicEndpoint string    `json:"publicEndpoint"`
+	ViewerPort     int       `json:"viewerPort"`
 	LeaseExpiresAt time.Time `json:"leaseExpiresAt"`
 }
 
@@ -30,6 +31,7 @@ type Registration struct {
 	GridX          int
 	GridY          int
 	PublicEndpoint string
+	ViewerPort     int
 	LeaseDuration  time.Duration
 }
 
@@ -50,6 +52,9 @@ func NewPostgresStore(db *sql.DB) *PostgresStore {
 }
 
 func (s *PostgresStore) Register(ctx context.Context, input Registration) (Region, error) {
+	if input.ViewerPort == 0 {
+		input.ViewerPort = 42002
+	}
 	id, err := identifier.NewUUID()
 	if err != nil {
 		return Region{}, err
@@ -64,13 +69,13 @@ func (s *PostgresStore) Register(ctx context.Context, input Registration) (Regio
 	}
 	region := Region{ID: id}
 	err = tx.QueryRowContext(ctx, `
-        INSERT INTO regions (id, name, grid_x, grid_y, public_endpoint, lease_expires_at)
-        VALUES ($1, $2, $3, $4, $5, now() + $6 * interval '1 second')
-        RETURNING id, name, grid_x, grid_y, public_endpoint, lease_expires_at`,
-		region.ID, input.Name, input.GridX, input.GridY, input.PublicEndpoint,
+        INSERT INTO regions (id, name, grid_x, grid_y, public_endpoint, viewer_port, lease_expires_at)
+        VALUES ($1, $2, $3, $4, $5, $6, now() + $7 * interval '1 second')
+        RETURNING id, name, grid_x, grid_y, public_endpoint, viewer_port, lease_expires_at`,
+		region.ID, input.Name, input.GridX, input.GridY, input.PublicEndpoint, input.ViewerPort,
 		int64(input.LeaseDuration/time.Second),
 	).Scan(&region.ID, &region.Name, &region.GridX, &region.GridY,
-		&region.PublicEndpoint, &region.LeaseExpiresAt)
+		&region.PublicEndpoint, &region.ViewerPort, &region.LeaseExpiresAt)
 	if err != nil {
 		var postgresError *pgconn.PgError
 		if errors.As(err, &postgresError) && postgresError.Code == "23505" {
@@ -90,10 +95,10 @@ func (s *PostgresStore) Renew(ctx context.Context, id string, duration time.Dura
         UPDATE regions
         SET lease_expires_at = now() + $2 * interval '1 second', updated_at = now()
         WHERE id = $1 AND lease_expires_at > now()
-        RETURNING id, name, grid_x, grid_y, public_endpoint, lease_expires_at`,
+        RETURNING id, name, grid_x, grid_y, public_endpoint, viewer_port, lease_expires_at`,
 		id, int64(duration/time.Second),
 	).Scan(&region.ID, &region.Name, &region.GridX, &region.GridY,
-		&region.PublicEndpoint, &region.LeaseExpiresAt)
+		&region.PublicEndpoint, &region.ViewerPort, &region.LeaseExpiresAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Region{}, ErrNotFound
 	}
@@ -121,10 +126,10 @@ func (s *PostgresStore) Deregister(ctx context.Context, id string) error {
 func (s *PostgresStore) Get(ctx context.Context, id string) (Region, error) {
 	var region Region
 	err := s.db.QueryRowContext(ctx, `
-        SELECT id, name, grid_x, grid_y, public_endpoint, lease_expires_at
+        SELECT id, name, grid_x, grid_y, public_endpoint, viewer_port, lease_expires_at
         FROM regions WHERE id = $1 AND lease_expires_at > now()`, id,
 	).Scan(&region.ID, &region.Name, &region.GridX, &region.GridY,
-		&region.PublicEndpoint, &region.LeaseExpiresAt)
+		&region.PublicEndpoint, &region.ViewerPort, &region.LeaseExpiresAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Region{}, ErrNotFound
 	}
@@ -136,7 +141,7 @@ func (s *PostgresStore) Get(ctx context.Context, id string) (Region, error) {
 
 func (s *PostgresStore) List(ctx context.Context) ([]Region, error) {
 	rows, err := s.db.QueryContext(ctx, `
-        SELECT id, name, grid_x, grid_y, public_endpoint, lease_expires_at
+        SELECT id, name, grid_x, grid_y, public_endpoint, viewer_port, lease_expires_at
         FROM regions WHERE lease_expires_at > now() ORDER BY grid_y, grid_x`)
 	if err != nil {
 		return nil, fmt.Errorf("list regions: %w", err)
@@ -146,7 +151,7 @@ func (s *PostgresStore) List(ctx context.Context) ([]Region, error) {
 	for rows.Next() {
 		var region Region
 		if err := rows.Scan(&region.ID, &region.Name, &region.GridX, &region.GridY,
-			&region.PublicEndpoint, &region.LeaseExpiresAt); err != nil {
+			&region.PublicEndpoint, &region.ViewerPort, &region.LeaseExpiresAt); err != nil {
 			return nil, fmt.Errorf("scan region: %w", err)
 		}
 		regions = append(regions, region)
