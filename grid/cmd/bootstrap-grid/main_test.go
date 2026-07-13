@@ -36,3 +36,11 @@ func TestWriteDatabaseConfig(t *testing.T) {
 		t.Fatalf("unexpected config: %q", contents)
 	}
 }
+
+func TestFormatQueryTypesPolymorphicArguments(t *testing.T) {
+	got := formatQuery(3)
+	want := "SELECT format($1::text,$2::text,$3::text)"
+	if got != want {
+		t.Fatalf("format query = %q, want %q", got, want)
+	}
+}

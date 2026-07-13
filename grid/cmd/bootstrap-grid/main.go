@@ -176,15 +176,22 @@ func formattedSQL(ctx context.Context, conn *pgx.Conn, format string, args ...an
 	queryArgs := make([]any, 0, len(args)+1)
 	queryArgs = append(queryArgs, format)
 	queryArgs = append(queryArgs, args...)
-	placeholders := make([]string, len(queryArgs))
-	for i := range queryArgs {
-		placeholders[i] = fmt.Sprintf("$%d", i+1)
-	}
 	var result string
-	if err := conn.QueryRow(ctx, "SELECT format("+strings.Join(placeholders, ",")+")", queryArgs...).Scan(&result); err != nil {
+	if err := conn.QueryRow(ctx, formatQuery(len(queryArgs)), queryArgs...).Scan(&result); err != nil {
 		return "", fmt.Errorf("format PostgreSQL command: %w", err)
 	}
 	return result, nil
+}
+
+func formatQuery(argumentCount int) string {
+	placeholders := make([]string, argumentCount)
+	for i := range placeholders {
+		// PostgreSQL's format() accepts polymorphic arguments, so parameters
+		// after the format string have no type context under the extended query
+		// protocol. All bootstrap values are textual identifiers or literals.
+		placeholders[i] = fmt.Sprintf("$%d::text", i+1)
+	}
+	return "SELECT format(" + strings.Join(placeholders, ",") + ")"
 }
 
 func connectionURL(host string, port int, user, password, database string) string {
