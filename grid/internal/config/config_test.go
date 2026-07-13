@@ -13,13 +13,14 @@ func TestLoadGridFromINI(t *testing.T) {
 	t.Setenv("HOMEWORLDZ_CONFIG_DIR", directory)
 	unsetEnv(t, "HOMEWORLDZ_DATABASE_URL")
 	unsetEnv(t, "HOMEWORLDZ_GRID_ADDR")
+	unsetEnv(t, "HOMEWORLDZ_GRID_PUBLIC_URL")
 	unsetEnv(t, "HOMEWORLDZ_GRID_SERVICE_TOKEN")
 
 	got, err := LoadGrid()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Address != ":43000" || got.DatabaseURL != "postgres://user:semicolon;hash#password@file/database" || got.ServiceToken != "file-token" {
+	if got.Address != ":43000" || got.PublicURL != "http://127.0.0.1:42000" || got.DatabaseURL != "postgres://user:semicolon;hash#password@file/database" || got.ServiceToken != "file-token" {
 		t.Fatalf("unexpected configuration: %#v", got)
 	}
 }
@@ -41,12 +42,33 @@ func TestEnvironmentOverridesINI(t *testing.T) {
 
 func TestMissingFilesUseDefaults(t *testing.T) {
 	t.Setenv("HOMEWORLDZ_CONFIG_DIR", t.TempDir())
+	unsetEnv(t, "HOMEWORLDZ_GRID_ADDR")
+	unsetEnv(t, "HOMEWORLDZ_GRID_PUBLIC_URL")
 	got, err := LoadGrid()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got.Address != "127.0.0.1:42000" {
 		t.Fatalf("address = %q, want 127.0.0.1:42000", got.Address)
+	}
+	if got.PublicURL != "http://127.0.0.1:42000" {
+		t.Fatalf("public URL = %q, want http://127.0.0.1:42000", got.PublicURL)
+	}
+}
+
+func TestPublicURLOverrideIsValidated(t *testing.T) {
+	directory := t.TempDir()
+	writeFile(t, directory, "grid.ini", "[server]\npublic_url=http://grid.example:8002/\n")
+	t.Setenv("HOMEWORLDZ_CONFIG_DIR", directory)
+	unsetEnv(t, "HOMEWORLDZ_GRID_PUBLIC_URL")
+
+	got, err := LoadGrid()
+	if err != nil || got.PublicURL != "http://grid.example:8002" {
+		t.Fatalf("public URL = %q, error = %v", got.PublicURL, err)
+	}
+	t.Setenv("HOMEWORLDZ_GRID_PUBLIC_URL", "javascript:bad")
+	if _, err := LoadGrid(); err == nil {
+		t.Fatal("invalid public URL was accepted")
 	}
 }
 

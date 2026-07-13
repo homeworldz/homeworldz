@@ -43,6 +43,7 @@ func main() {
 		Addr: settings.Address,
 		Handler: httpapi.New(db, version, httpapi.Options{
 			ServiceToken: settings.ServiceToken,
+			GridPublicURL: settings.PublicURL,
 			Logger:       logger,
 			Regions:      regionStore(db),
 			Identity:     identityStore(db),

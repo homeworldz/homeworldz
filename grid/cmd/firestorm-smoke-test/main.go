@@ -24,9 +24,8 @@ import (
 )
 
 const (
-	gridURL     = "http://127.0.0.1:42000"
-	regionURL   = "http://127.0.0.1:42001"
-	viewerLogin = gridURL + "/login"
+	gridURL   = "http://127.0.0.1:42000"
+	regionURL = "http://127.0.0.1:42001"
 )
 
 type options struct {
@@ -103,6 +102,7 @@ func run(ctx context.Context, opts options) error {
 	environment := environmentWith(map[string]string{
 		"HOMEWORLDZ_CONFIG_DIR":             filepath.Join(root, "config"),
 		"HOMEWORLDZ_DATABASE_URL":           databaseURL,
+		"HOMEWORLDZ_GRID_PUBLIC_URL":        gridURL,
 		"HOMEWORLDZ_GRID_SERVICE_TOKEN":     serviceToken,
 		"HOMEWORLDZ_GRID_URL":               gridURL,
 		"HOMEWORLDZ_REGION_PUBLIC_ENDPOINT": regionURL,
@@ -155,7 +155,7 @@ func run(ctx context.Context, opts options) error {
 
 	fmt.Printf("Launching Firestorm for %q.\n", opts.firstName+" "+opts.lastName)
 	fmt.Println("Keep this terminal open. Exit Firestorm after the login, disconnect, and reconnect checks are complete.")
-	viewer := exec.Command(opts.firestormPath, "--loginuri", viewerLogin)
+	viewer := exec.Command(opts.firestormPath, "--grid", gridURL)
 	viewer.Dir = root
 	if err := viewer.Start(); err != nil {
 		return fmt.Errorf("launch Firestorm: %w", err)

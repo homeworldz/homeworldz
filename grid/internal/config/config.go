@@ -2,14 +2,17 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 
 	ini "gopkg.in/ini.v1"
 )
 
 type Grid struct {
 	Address      string
+	PublicURL    string
 	DatabaseURL  string
 	ServiceToken string
 	Directory    string
@@ -32,13 +35,20 @@ func LoadGrid() (Grid, error) {
 
 	result := Grid{
 		Address:      parsed.Section("server").Key("address").MustString("127.0.0.1:42000"),
+		PublicURL:    parsed.Section("server").Key("public_url").MustString("http://127.0.0.1:42000"),
 		DatabaseURL:  parsed.Section("database").Key("url").String(),
 		ServiceToken: parsed.Section("auth").Key("service_token").String(),
 		Directory:    directory,
 	}
 	result.Address = environmentOr("HOMEWORLDZ_GRID_ADDR", result.Address)
+	result.PublicURL = strings.TrimRight(environmentOr("HOMEWORLDZ_GRID_PUBLIC_URL", result.PublicURL), "/")
 	result.DatabaseURL = environmentOr("HOMEWORLDZ_DATABASE_URL", result.DatabaseURL)
 	result.ServiceToken = environmentOr("HOMEWORLDZ_GRID_SERVICE_TOKEN", result.ServiceToken)
+	publicURL, err := url.Parse(result.PublicURL)
+	if err != nil || (publicURL.Scheme != "http" && publicURL.Scheme != "https") || publicURL.Host == "" ||
+		publicURL.User != nil || publicURL.RawQuery != "" || publicURL.Fragment != "" {
+		return Grid{}, fmt.Errorf("invalid grid public URL %q", result.PublicURL)
+	}
 	return result, nil
 }
 

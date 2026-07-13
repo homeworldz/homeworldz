@@ -54,6 +54,10 @@ The region HTTP and viewer UDP services also bind to `127.0.0.1` by default, on
 ports `42001` and `42002` respectively. Loopback defaults avoid exposing local
 development services or requiring Windows Firewall exceptions.
 
+Firestorm discovers the local grid from `http://127.0.0.1:42000/` through the
+standard `/get_grid_info` endpoint. `HOMEWORLDZ_GRID_PUBLIC_URL` overrides the
+URLs advertised to viewers when the grid is exposed at a different address.
+
 PostgreSQL lifecycle tests run when `HOMEWORLDZ_TEST_DATABASE_URL` is set and
 otherwise skip cleanly. CI supplies a disposable PostgreSQL service and runs
 the region lease, identity/session, and presence cleanup suites against it.

@@ -21,24 +21,32 @@ type ReadinessChecker interface {
 }
 
 type API struct {
-	ready    ReadinessChecker
-	version  string
-	regions  regions.Store
-	identity identity.Store
-	presence presence.Store
+	ready     ReadinessChecker
+	version   string
+	publicURL string
+	regions   regions.Store
+	identity  identity.Store
+	presence  presence.Store
 }
 
 type Options struct {
-	ServiceToken string
-	Logger       *slog.Logger
-	Regions      regions.Store
-	Identity     identity.Store
-	Presence     presence.Store
+	ServiceToken  string
+	GridPublicURL string
+	Logger        *slog.Logger
+	Regions       regions.Store
+	Identity      identity.Store
+	Presence      presence.Store
 }
 
 func New(ready ReadinessChecker, version string, options Options) http.Handler {
-	a := &API{ready: ready, version: version, regions: options.Regions, identity: options.Identity, presence: options.Presence}
+	a := &API{ready: ready, version: version, publicURL: strings.TrimRight(options.GridPublicURL, "/"),
+		regions: options.Regions, identity: options.Identity, presence: options.Presence}
+	if a.publicURL == "" {
+		a.publicURL = "http://127.0.0.1:42000"
+	}
 	mux := http.NewServeMux()
+	mux.HandleFunc("/get_grid_info", getOnly(a.gridInfo))
+	mux.HandleFunc("/welcome", getOnly(a.welcome))
 	mux.HandleFunc("/ping", getOnly(a.ping))
 	mux.HandleFunc("/ready", getOnly(a.readiness))
 	mux.HandleFunc("/version", getOnly(a.buildVersion))
