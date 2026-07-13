@@ -120,6 +120,11 @@ Possible later reasons to add protobuf or gRPC:
 
 Until one of those reasons is real, HTTP/JSON is the default.
 
+Language-neutral operational cases under `api/contracts/` are consumed by both
+the Go handler tests and the C++ region tests. These cases keep status codes,
+response schema shapes, and cross-cutting headers aligned as both HTTP stacks
+evolve.
+
 ## Configuration
 
 HomeWorldz uses INI files under `config/`. Grid hosts use `grid.ini` and

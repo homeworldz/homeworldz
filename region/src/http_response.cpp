@@ -90,28 +90,35 @@ void parse_request_line(std::string_view request, std::string& method, std::stri
 } // namespace
 
 Response response_for(std::string_view request) {
-    int status_code = 404;
-    std::string_view status = "HTTP/1.1 404 Not Found\r\n";
-    std::string body = api::to_json(api::Error{"not_found", "route not found"});
-    if (request.starts_with("GET /ping ")) {
-        status_code = 200;
-        status = "HTTP/1.1 200 OK\r\n";
-        body = api::to_json(api::Status{"ok"});
-    } else if (request.starts_with("GET /ready ")) {
-        status_code = 200;
-        status = "HTTP/1.1 200 OK\r\n";
-        body = api::to_json(api::Status{"ready"});
-    } else if (request.starts_with("GET /version ")) {
-        status_code = 200;
-        status = "HTTP/1.1 200 OK\r\n";
-        body = api::to_json(api::Version{"region", "dev", std::string(api::api_version)});
-    }
-    auto request_id = request_header(request, request_id_header);
-    if (!valid_request_id(request_id)) request_id = new_request_id();
     std::string method;
     std::string path;
     parse_request_line(request, method, path);
-    auto content = std::string(status) + "Content-Type: application/json\r\nConnection: close\r\n" +
+    int status_code = 404;
+    std::string_view status = "HTTP/1.1 404 Not Found\r\n";
+    std::string body = api::to_json(api::Error{"not_found", "route not found"});
+    std::string_view additional_headers;
+    if (method == "GET" && path == "/ping") {
+        status_code = 200;
+        status = "HTTP/1.1 200 OK\r\n";
+        body = api::to_json(api::Status{"ok"});
+    } else if (method == "GET" && path == "/ready") {
+        status_code = 200;
+        status = "HTTP/1.1 200 OK\r\n";
+        body = api::to_json(api::Status{"ready"});
+    } else if (method == "GET" && path == "/version") {
+        status_code = 200;
+        status = "HTTP/1.1 200 OK\r\n";
+        body = api::to_json(api::Version{"region", "dev", std::string(api::api_version)});
+    } else if (path == "/ping" || path == "/ready" || path == "/version") {
+        status_code = 405;
+        status = "HTTP/1.1 405 Method Not Allowed\r\n";
+        additional_headers = "Allow: GET\r\n";
+        body = api::to_json(api::Error{"method_not_allowed", "only GET is supported"});
+    }
+    auto request_id = request_header(request, request_id_header);
+    if (!valid_request_id(request_id)) request_id = new_request_id();
+    auto content = std::string(status) + std::string(additional_headers) +
+                   "Content-Type: application/json\r\nConnection: close\r\n" +
                    std::string(request_id_header) + ": " + request_id + "\r\nContent-Length: " +
                    std::to_string(body.size()) + "\r\n\r\n" + body;
     return {status_code, std::move(request_id), std::move(method), std::move(path), std::move(content)};

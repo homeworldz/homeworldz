@@ -14,5 +14,7 @@ endif()
 
 add_executable(homeworldz-region-tests tests/http_response_test.cpp)
 target_link_libraries(homeworldz-region-tests PRIVATE homeworldz-region-core)
+target_compile_definitions(homeworldz-region-tests PRIVATE
+  HOMEWORLDZ_OPERATIONAL_CONTRACT_PATH="${CMAKE_SOURCE_DIR}/api/contracts/operational.tsv")
 add_test(NAME region-http-response COMMAND homeworldz-region-tests)
 

@@ -19,6 +19,13 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Status" }
+        "405":
+          description: The endpoint only supports GET
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /ready:
     parameters:
       - $ref: "#/components/parameters/RequestId"
@@ -40,6 +47,13 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "405":
+          description: The endpoint only supports GET
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /version:
     parameters:
       - $ref: "#/components/parameters/RequestId"
@@ -54,6 +68,13 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Version" }
+        "405":
+          description: The endpoint only supports GET
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 components:
   parameters:
     RequestId:

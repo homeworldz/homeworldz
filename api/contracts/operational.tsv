@@ -1,0 +1,6 @@
+# method	path	status	schema
+GET	/ping	200	Status
+GET	/ready	200	Status
+GET	/version	200	Version
+GET	/missing	404	Error
+POST	/ping	405	Error

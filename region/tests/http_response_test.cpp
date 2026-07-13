@@ -1,8 +1,10 @@
 #include "homeworldz/api_models.h"
 #include "homeworldz/http_response.h"
 
+#include <fstream>
 #include <iostream>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -10,6 +12,64 @@ bool contains(const std::string& value, const std::string& expected) {
     if (value.find(expected) != std::string::npos) return true;
     std::cerr << "response did not contain: " << expected << '\n' << value << '\n';
     return false;
+}
+
+struct ContractCase {
+    std::string method;
+    std::string path;
+    int status;
+    std::string schema;
+};
+
+std::vector<ContractCase> load_contract() {
+    std::ifstream input(HOMEWORLDZ_OPERATIONAL_CONTRACT_PATH);
+    if (!input) {
+        std::cerr << "could not open contract: " << HOMEWORLDZ_OPERATIONAL_CONTRACT_PATH << '\n';
+        return {};
+    }
+    std::vector<ContractCase> contracts;
+    std::string line;
+    while (std::getline(input, line)) {
+        if (line.empty() || line.front() == '#') continue;
+        std::vector<std::string> fields;
+        std::size_t position = 0;
+        while (position <= line.size()) {
+            const auto tab = line.find('\t', position);
+            fields.push_back(line.substr(position, tab - position));
+            if (tab == std::string::npos) break;
+            position = tab + 1;
+        }
+        if (fields.size() != 4) {
+            std::cerr << "invalid contract line: " << line << '\n';
+            return {};
+        }
+        contracts.push_back({fields[0], fields[1], std::stoi(fields[2]), fields[3]});
+    }
+    return contracts;
+}
+
+bool matches_schema(const std::string& response, const std::string& schema) {
+    const auto body_start = response.find("\r\n\r\n");
+    if (body_start == std::string::npos) return false;
+    const auto body = response.substr(body_start + 4);
+    std::vector<std::string> fields;
+    if (schema == "Status") {
+        fields = {"status"};
+    } else if (schema == "Version") {
+        fields = {"service", "version", "apiVersion"};
+    } else if (schema == "Error") {
+        fields = {"code", "message"};
+    } else {
+        std::cerr << "unknown contract schema: " << schema << '\n';
+        return false;
+    }
+    for (const auto& field : fields) {
+        if (body.find("\"" + field + "\":\"") == std::string::npos) {
+            std::cerr << schema << " response lacks string field " << field << ": " << body << '\n';
+            return false;
+        }
+    }
+    return !body.empty() && body.front() == '{' && body.back() == '}';
 }
 
 } // namespace
@@ -52,6 +112,19 @@ int main() {
         "GET /ping HTTP/1.1\r\nX-Request-ID: unsafe value\r\n\r\n");
     passed &= unsafe_id.request_id != "unsafe value";
     passed &= unsafe_id.request_id.size() == 32;
+
+    const auto contracts = load_contract();
+    passed &= !contracts.empty();
+    for (const auto& contract : contracts) {
+        const auto response = homeworldz::http::response_for(
+            contract.method + " " + contract.path + " HTTP/1.1\r\n\r\n");
+        if (response.status_code != contract.status) {
+            std::cerr << contract.method << ' ' << contract.path << " status "
+                      << response.status_code << ", want " << contract.status << '\n';
+            passed = false;
+        }
+        passed &= !response.request_id.empty();
+        passed &= matches_schema(response.content, contract.schema);
+    }
     return passed ? 0 : 1;
 }
-
