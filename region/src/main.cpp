@@ -215,6 +215,8 @@ int main() {
     const auto region_grid_y = environment_int("HOMEWORLDZ_REGION_GRID_Y", 1000, 0, 1000000);
     const auto region_public_endpoint = environment_value(
         "HOMEWORLDZ_REGION_PUBLIC_ENDPOINT", "http://localhost:" + std::to_string(configured_port()));
+    const auto grid_public_endpoint = environment_value(
+        "HOMEWORLDZ_GRID_PUBLIC_URL", environment_value("HOMEWORLDZ_GRID_URL", "http://localhost:42000"));
     std::unique_ptr<homeworldz::grid::RegistrationLifecycle> registration;
     std::unique_ptr<homeworldz::grid::Client> viewer_grid;
     const auto service_token = environment_value("HOMEWORLDZ_GRID_SERVICE_TOKEN");
@@ -372,7 +374,8 @@ int main() {
                         if (authorized && seed) {
                             response = homeworldz::http::response_for_content(
                                 request, 200, "application/llsd+xml",
-                                homeworldz::viewer::seed_capability_xml(region_public_endpoint, session_id));
+                                homeworldz::viewer::seed_capability_xml(
+                                    region_public_endpoint, grid_public_endpoint, session_id));
                         } else if (authorized && event_queue) {
                             static std::atomic<std::uint64_t> event_id{0};
                             std::optional<homeworldz::viewer::EstablishAgentCommunication> event;

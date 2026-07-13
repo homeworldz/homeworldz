@@ -16,15 +16,20 @@ std::string xml_escape(std::string_view value) {
 }
 } // namespace
 
-std::string seed_capability_xml(std::string_view public_endpoint, std::string_view session_id) {
+std::string seed_capability_xml(std::string_view public_endpoint, std::string_view grid_public_endpoint,
+                                std::string_view session_id) {
     auto base = std::string(public_endpoint);
     while (!base.empty() && base.back() == '/') base.pop_back();
     const auto event_url = xml_escape(base + "/caps/event/" + std::string(session_id));
     const auto texture_url = xml_escape(base + "/caps/texture/" + std::string(session_id));
     const auto environment_url = xml_escape(base + "/caps/environment/" + std::string(session_id));
+    auto grid_base = std::string(grid_public_endpoint);
+    while (!grid_base.empty() && grid_base.back() == '/') grid_base.pop_back();
+    const auto inventory_url = xml_escape(grid_base + "/caps/inventory/descendents/" + std::string(session_id));
     return "<?xml version=\"1.0\"?><llsd><map><key>EventQueueGet</key><uri>" + event_url +
            "</uri><key>GetTexture</key><uri>" + texture_url +
-           "</uri><key>EnvironmentSettings</key><uri>" + environment_url + "</uri></map></llsd>";
+           "</uri><key>EnvironmentSettings</key><uri>" + environment_url +
+           "</uri><key>FetchInventoryDescendents2</key><uri>" + inventory_url + "</uri></map></llsd>";
 }
 
 std::string event_queue_xml(std::uint64_t id, const std::optional<EstablishAgentCommunication>& event) {

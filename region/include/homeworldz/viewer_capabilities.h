@@ -13,7 +13,8 @@ struct EstablishAgentCommunication {
     std::string seed_capability;
 };
 
-std::string seed_capability_xml(std::string_view public_endpoint, std::string_view session_id);
+std::string seed_capability_xml(std::string_view public_endpoint, std::string_view grid_public_endpoint,
+                                std::string_view session_id);
 std::string event_queue_xml(std::uint64_t id,
                             const std::optional<EstablishAgentCommunication>& event = std::nullopt);
 std::string environment_settings_xml(std::string_view region_id);

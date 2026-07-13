@@ -120,10 +120,12 @@ int main() {
     passed &= homeworldz::http::request_content_length("GET /ready HTTP/1.1\r\n\r\n") == 0;
     passed &= !homeworldz::http::request_content_length(
                    "POST /caps/seed/id HTTP/1.1\r\nContent-Length: invalid\r\n\r\n");
-    const auto seed = homeworldz::viewer::seed_capability_xml("http://region.example:42001/", "session-id");
+    const auto seed = homeworldz::viewer::seed_capability_xml(
+        "http://region.example:42001/", "http://grid.example:42000/", "session-id");
     passed &= contains(seed, "<key>EventQueueGet</key><uri>http://region.example:42001/caps/event/session-id</uri>");
     passed &= contains(seed, "<key>GetTexture</key><uri>http://region.example:42001/caps/texture/session-id</uri>");
     passed &= contains(seed, "<key>EnvironmentSettings</key><uri>http://region.example:42001/caps/environment/session-id</uri>");
+    passed &= contains(seed, "<key>FetchInventoryDescendents2</key><uri>http://grid.example:42000/caps/inventory/descendents/session-id</uri>");
     const auto event = homeworldz::viewer::event_queue_xml(7,
         homeworldz::viewer::EstablishAgentCommunication{
             "11111111-2222-4333-8444-555555555555", "region.example:42002",
