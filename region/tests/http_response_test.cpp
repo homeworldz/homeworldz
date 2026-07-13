@@ -123,6 +123,7 @@ int main() {
     const auto seed = homeworldz::viewer::seed_capability_xml("http://region.example:42001/", "session-id");
     passed &= contains(seed, "<key>EventQueueGet</key><uri>http://region.example:42001/caps/event/session-id</uri>");
     passed &= contains(seed, "<key>GetTexture</key><uri>http://region.example:42001/caps/texture/session-id</uri>");
+    passed &= contains(seed, "<key>EnvironmentSettings</key><uri>http://region.example:42001/caps/environment/session-id</uri>");
     const auto event = homeworldz::viewer::event_queue_xml(7,
         homeworldz::viewer::EstablishAgentCommunication{
             "11111111-2222-4333-8444-555555555555", "region.example:42002",
@@ -130,6 +131,10 @@ int main() {
     passed &= contains(event, "<string>EstablishAgentCommunication</string>");
     passed &= contains(event, "<key>id</key><integer>7</integer>");
     passed &= contains(event, "session&amp;amp;id");
+    const auto environment = homeworldz::viewer::environment_settings_xml(
+        "11111111-2222-4333-8444-555555555555");
+    passed &= contains(environment, "<key>messageID</key><uuid>00000000-0000-0000-0000-000000000000</uuid>");
+    passed &= contains(environment, "<key>regionID</key><uuid>11111111-2222-4333-8444-555555555555</uuid>");
 
     const auto unsafe_id = homeworldz::http::response_for(
         "GET /ping HTTP/1.1\r\nX-Request-ID: unsafe value\r\n\r\n");

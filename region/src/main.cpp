@@ -353,9 +353,14 @@ int main() {
                     const bool event_queue = !seed && !session_id.empty();
                     const auto texture = texture_request(response.path);
                     if (texture) session_id = texture->first;
-                    if (seed || event_queue || texture) {
+                    std::string environment_session;
+                    if (!seed && !event_queue && !texture)
+                        environment_session = capability_session(response.path, "/caps/environment/");
+                    const bool environment_settings = !environment_session.empty();
+                    if (environment_settings) session_id = environment_session;
+                    if (seed || event_queue || texture || environment_settings) {
                         bool authorized = false;
-                        const auto expected_method = texture ? "GET" : "POST";
+                        const auto expected_method = texture || environment_settings ? "GET" : "POST";
                         if (response.method == expected_method && registration && viewer_grid) {
                             const auto session = viewer_grid->validate_viewer_session(session_id);
                             authorized = session && session->destination_region_id == registration->region_id();
@@ -391,6 +396,10 @@ int main() {
                                     homeworldz::api::to_json(homeworldz::api::Error{
                                         "asset_not_found", "texture asset was not found"}));
                             }
+                        } else if (authorized && environment_settings && registration) {
+                            response = homeworldz::http::response_for_content(
+                                request, 200, "application/llsd+xml",
+                                homeworldz::viewer::environment_settings_xml(registration->region_id()));
                         } else {
                             response = homeworldz::http::response_for_content(
                                 request, response.method == expected_method ? 404 : 405,

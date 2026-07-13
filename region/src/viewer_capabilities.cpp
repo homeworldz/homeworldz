@@ -21,8 +21,10 @@ std::string seed_capability_xml(std::string_view public_endpoint, std::string_vi
     while (!base.empty() && base.back() == '/') base.pop_back();
     const auto event_url = xml_escape(base + "/caps/event/" + std::string(session_id));
     const auto texture_url = xml_escape(base + "/caps/texture/" + std::string(session_id));
+    const auto environment_url = xml_escape(base + "/caps/environment/" + std::string(session_id));
     return "<?xml version=\"1.0\"?><llsd><map><key>EventQueueGet</key><uri>" + event_url +
-           "</uri><key>GetTexture</key><uri>" + texture_url + "</uri></map></llsd>";
+           "</uri><key>GetTexture</key><uri>" + texture_url +
+           "</uri><key>EnvironmentSettings</key><uri>" + environment_url + "</uri></map></llsd>";
 }
 
 std::string event_queue_xml(std::uint64_t id, const std::optional<EstablishAgentCommunication>& event) {
@@ -36,6 +38,13 @@ std::string event_queue_xml(std::uint64_t id, const std::optional<EstablishAgent
     }
     return "<?xml version=\"1.0\"?><llsd><map><key>events</key>" + events +
            "<key>id</key><integer>" + std::to_string(id) + "</integer></map></llsd>";
+}
+
+std::string environment_settings_xml(std::string_view region_id) {
+    return "<?xml version=\"1.0\"?><llsd><array><map>"
+           "<key>messageID</key><uuid>00000000-0000-0000-0000-000000000000</uuid>"
+           "<key>regionID</key><uuid>" + xml_escape(region_id) +
+           "</uuid></map></array></llsd>";
 }
 
 } // namespace homeworldz::viewer
