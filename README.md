@@ -15,10 +15,10 @@ This repository is currently in its planning and foundation phase.
 
 ## Development
 
-Prerequisites are Go 1.21 or newer, a C++20 toolchain with CMake 3.24 or newer,
-and PostgreSQL 16 or newer. PostgreSQL 18.4 is recommended for new
-installations. PostgreSQL may run locally or on another reachable host;
-HomeWorldz does not require Docker.
+Central grid hosts require Go 1.21 or newer and a reachable PostgreSQL 16 or
+newer installation. PostgreSQL 18.4 is recommended for new installations.
+Region builds require a C++20 toolchain with CMake 3.24 or newer. PostgreSQL may
+run locally or on another reachable host; HomeWorldz does not require Docker.
 
 Runtime configuration uses ordinary INI files in `config/`. Start from the
 matching files in `config/examples/`: `grid.ini` controls grid server and client
@@ -26,16 +26,18 @@ settings, `db.ini` contains central database access, and `region.ini` controls
 one region instance. Files directly under `config/` are ignored by Git because
 they may contain credentials. Environment variables override INI values.
 
-Grid operators bootstrap the application role, database, and initial migration
-from PowerShell. The script prompts securely for the PostgreSQL administrator
-password and the password to assign to the `homeworldz` application role:
+After installing PostgreSQL, grid operators bootstrap the application role,
+database, initial migration, and ignored `config/db.ini`. The cross-platform Go
+command securely prompts for the PostgreSQL administrator password and the
+password to assign to the `homeworldz` application role:
 
-```powershell
-.\scripts\bootstrap-grid.ps1
+```text
+go run ./grid/cmd/bootstrap-grid
 ```
 
-Use `-HostName`, `-Port`, `-AdminUser`, or `-PsqlPath` when PostgreSQL is remote
-or `psql` is not discoverable automatically.
+Use `-host`, `-port`, or `-admin-user` when PostgreSQL is remote or uses
+non-default connection settings. The command uses the Go PostgreSQL driver and
+does not require `psql` on `PATH`.
 
 Region operators prepare region-local scene, asset, and log storage separately:
 
