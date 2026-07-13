@@ -11,6 +11,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 
 #include "homeworldz/api_models.h"
 #include "homeworldz/grid_client.h"
@@ -105,15 +106,16 @@ int main() {
     std::signal(SIGINT, stop);
     std::signal(SIGTERM, stop);
 
+    const auto region_name = environment_value("HOMEWORLDZ_REGION_NAME", "My Region");
+    const auto region_grid_x = environment_int("HOMEWORLDZ_REGION_GRID_X", 1000, 0, 1000000);
+    const auto region_grid_y = environment_int("HOMEWORLDZ_REGION_GRID_Y", 1000, 0, 1000000);
     std::unique_ptr<homeworldz::grid::RegistrationLifecycle> registration;
     std::unique_ptr<homeworldz::grid::Client> viewer_grid;
     const auto service_token = environment_value("HOMEWORLDZ_GRID_SERVICE_TOKEN");
     if (!service_token.empty()) {
         try {
             homeworldz::grid::RegionSettings settings{
-                environment_value("HOMEWORLDZ_REGION_NAME", "My Region"),
-                environment_int("HOMEWORLDZ_REGION_GRID_X", 1000, 0, 1000000),
-                environment_int("HOMEWORLDZ_REGION_GRID_Y", 1000, 0, 1000000),
+                region_name, region_grid_x, region_grid_y,
                 environment_value("HOMEWORLDZ_REGION_PUBLIC_ENDPOINT",
                                   "http://localhost:" + std::to_string(configured_port())),
                 configured_viewer_port(),
@@ -197,6 +199,7 @@ int main() {
         const auto agent = homeworldz::viewer::parse_uuid(session->agent_id);
         return agent && *agent == request.agent_id;
     });
+    std::unordered_set<std::string> handshake_replies;
 
     std::cout << "{\"level\":\"info\",\"message\":\"region service listening\",\"httpPort\":"
               << configured_port() << ",\"viewerPort\":" << configured_viewer_port() << "}" << std::endl;
@@ -235,8 +238,48 @@ int main() {
                                            reinterpret_cast<sockaddr*>(&sender), &sender_size);
             const auto endpoint = udp_endpoint(sender);
             if (received > 0 && !endpoint.empty()) {
-                static_cast<void>(circuits.receive(
-                    endpoint, std::span<const std::byte>(datagram.data(), static_cast<std::size_t>(received)), now));
+                const auto packet = circuits.receive(
+                    endpoint, std::span<const std::byte>(datagram.data(), static_cast<std::size_t>(received)), now);
+                if (packet) {
+                    const auto identity = circuits.identity(endpoint);
+                    if (identity && homeworldz::viewer::decode_use_circuit_code(packet->payload)) {
+                        handshake_replies.erase(endpoint);
+                        const auto region_id = registration ?
+                            homeworldz::viewer::parse_uuid(registration->region_id()) : std::nullopt;
+                        if (region_id) {
+                            homeworldz::viewer::RegionHandshake handshake;
+                            handshake.name = region_name;
+                            handshake.region_id = *region_id;
+                            handshake.owner_id = identity->agent_id;
+                            if (const auto response = circuits.send(endpoint,
+                                    homeworldz::viewer::encode_region_handshake(handshake), true, now, true))
+                                static_cast<void>(send_udp(viewer_server, endpoint, *response));
+                        }
+                    } else if (identity) {
+                        const auto handshake_reply = homeworldz::viewer::decode_region_handshake_reply(packet->payload);
+                        if (handshake_reply && handshake_reply->agent_id == identity->agent_id &&
+                            handshake_reply->session_id == identity->session_id) {
+                            handshake_replies.insert(endpoint);
+                        }
+                        const auto complete = homeworldz::viewer::decode_complete_agent_movement(packet->payload);
+                        if (complete && handshake_replies.contains(endpoint) &&
+                            complete->agent_id == identity->agent_id &&
+                            complete->session_id == identity->session_id &&
+                            complete->circuit_code == identity->circuit_code) {
+                            homeworldz::viewer::AgentMovementComplete response;
+                            response.agent_id = identity->agent_id;
+                            response.session_id = identity->session_id;
+                            response.region_handle =
+                                (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
+                                static_cast<std::uint32_t>(region_grid_y * 256);
+                            response.timestamp = static_cast<std::uint32_t>(
+                                std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
+                            if (const auto outgoing = circuits.send(endpoint,
+                                    homeworldz::viewer::encode_agent_movement_complete(response), true, now))
+                                static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
+                        }
+                    }
+                }
             }
         }
         for (const auto& outgoing : circuits.poll(now))
