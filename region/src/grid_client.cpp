@@ -116,6 +116,17 @@ std::string json_field(std::string_view body, std::string_view name) {
     return end == std::string_view::npos ? std::string{} : std::string(body.substr(value_start, end - value_start));
 }
 
+std::optional<std::uint32_t> json_u32(std::string_view body, std::string_view name) {
+    const auto marker = "\"" + std::string(name) + "\":";
+    const auto start = body.find(marker);
+    if (start == std::string_view::npos) return std::nullopt;
+    const auto value_start = start + marker.size();
+    std::uint32_t value{};
+    const auto result = std::from_chars(body.data() + value_start, body.data() + body.size(), value);
+    if (result.ec != std::errc{} || result.ptr == body.data() + value_start) return std::nullopt;
+    return value;
+}
+
 } // namespace
 
 std::shared_ptr<Transport> socket_transport(std::string grid_url, std::string service_token) {
@@ -140,6 +151,21 @@ bool Client::renew_lease(std::string_view region_id, int lease_seconds) {
 
 bool Client::deregister(std::string_view region_id) {
     return transport_->send("DELETE", "/api/v1/regions/" + std::string(region_id), {}).status_code == 204;
+}
+
+std::optional<ViewerSession> Client::validate_viewer_session(std::string_view session_id) {
+    const auto response = transport_->send("GET", "/api/v1/sessions/" + std::string(session_id), {});
+    if (response.status_code != 200) return std::nullopt;
+    ViewerSession session;
+    session.session_id = json_field(response.body, "id");
+    session.agent_id = json_field(response.body, "userId");
+    session.destination_region_id = json_field(response.body, "destinationRegionId");
+    const auto circuit = json_u32(response.body, "viewerCircuitCode");
+    if (session.session_id != session_id || session.agent_id.empty() || session.destination_region_id.empty() ||
+        !circuit || *circuit == 0)
+        return std::nullopt;
+    session.circuit_code = *circuit;
+    return session;
 }
 
 RegistrationLifecycle::RegistrationLifecycle(Client client, RegionSettings settings)

@@ -1,7 +1,9 @@
 #pragma once
 
 #include <chrono>
+#include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -30,12 +32,20 @@ struct RegionSettings {
     int lease_seconds{60};
 };
 
+struct ViewerSession {
+    std::string session_id;
+    std::string agent_id;
+    std::uint32_t circuit_code{};
+    std::string destination_region_id;
+};
+
 class Client {
 public:
     explicit Client(std::shared_ptr<Transport> transport) : transport_(std::move(transport)) {}
     std::string register_region(const RegionSettings& settings);
     bool renew_lease(std::string_view region_id, int lease_seconds);
     bool deregister(std::string_view region_id);
+    std::optional<ViewerSession> validate_viewer_session(std::string_view session_id);
 
 private:
     std::shared_ptr<Transport> transport_;

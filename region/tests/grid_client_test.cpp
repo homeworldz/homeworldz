@@ -21,6 +21,7 @@ public:
         if (method == "POST") return {201, R"({"id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"})"};
         if (method == "PUT") return {200, R"({"id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"})"};
         if (method == "DELETE") return {204, {}};
+        if (method == "GET") return {200, R"({"id":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","userId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","expiresAt":"2026-07-14T00:00:00Z","viewerCircuitCode":123456,"destinationRegionId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"})"};
         return {500, {}};
     }
 
@@ -45,5 +46,9 @@ int main() {
     lifecycle.stop();
     if (transport->requests.size() != 3 || transport->requests[2].method != "DELETE" ||
         !lifecycle.region_id().empty()) return 1;
+    const auto session = client.validate_viewer_session("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
+    if (!session || session->agent_id != "cccccccc-cccc-4ccc-8ccc-cccccccccccc" ||
+        session->circuit_code != 123456 || session->destination_region_id != "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" ||
+        transport->requests.back().method != "GET") return 1;
     return 0;
 }
