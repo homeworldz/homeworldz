@@ -220,6 +220,11 @@ The asset model should support:
 - Asset metadata lookup through grid services where useful.
 - Optional central fallback storage later, but not as a v1 foundation.
 
+Local asset bytes are immutable SHA-256-addressed blobs sharded by the first
+hash byte. SQLite maps viewer-facing UUIDs to hashes and sizes, allowing many
+UUIDs to share one blob. Reads verify the content hash before returning bytes;
+garbage collection is deferred until retention and replication rules exist.
+
 This replaces the assumption that WHIP/Aperture are central platform services.
 They remain useful references for asset behavior and performance expectations.
 

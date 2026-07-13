@@ -4,6 +4,7 @@ add_library(homeworldz-region-core
   src/http_response.cpp
   src/region_storage.cpp
   src/scene.cpp
+  src/sha256.cpp
   src/simulation_loop.cpp)
 target_include_directories(homeworldz-region-core PUBLIC include)
 target_compile_features(homeworldz-region-core PUBLIC cxx_std_20)
