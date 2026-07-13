@@ -246,12 +246,27 @@ int main() {
         return 1;
     }
     homeworldz::viewer::CircuitRegistry circuits([&](const homeworldz::viewer::UseCircuitCode& request) {
-        if (!registration || !viewer_grid) return false;
+        const auto reject = [&](std::string_view reason) {
+            std::cout << "{\"level\":\"warn\",\"message\":\"viewer circuit rejected\",\"reason\":"
+                      << homeworldz::api::json_string(reason)
+                      << ",\"circuitCode\":" << request.circuit_code
+                      << ",\"sessionId\":"
+                      << homeworldz::api::json_string(homeworldz::viewer::format_uuid(request.session_id))
+                      << ",\"agentId\":"
+                      << homeworldz::api::json_string(homeworldz::viewer::format_uuid(request.agent_id))
+                      << "}" << std::endl;
+            return false;
+        };
+        if (!registration || !viewer_grid) return reject("region_not_registered");
         const auto session = viewer_grid->validate_viewer_session(homeworldz::viewer::format_uuid(request.session_id));
-        if (!session || session->circuit_code != request.circuit_code ||
-            session->destination_region_id != registration->region_id()) return false;
+        if (!session) return reject("session_not_found");
+        if (session->circuit_code != request.circuit_code) return reject("circuit_code_mismatch");
+        if (session->destination_region_id != registration->region_id())
+            return reject("destination_region_mismatch");
         const auto agent = homeworldz::viewer::parse_uuid(session->agent_id);
-        return agent && *agent == request.agent_id;
+        if (!agent) return reject("invalid_session_agent");
+        if (*agent != request.agent_id) return reject("agent_id_mismatch");
+        return true;
     });
     std::unordered_set<std::string> handshake_replies;
     std::unordered_set<std::string> established_events;
