@@ -35,6 +35,14 @@ func TestPostgresRegionLifecycle(t *testing.T) {
 	}
 	t.Cleanup(func() { _, _ = db.Exec("DELETE FROM regions WHERE id = $1", created.ID) })
 
+	reconnected, err := store.Register(ctx, Registration{
+		Name: "Integration Region", GridX: coordinate, GridY: coordinate,
+		PublicEndpoint: "http://localhost:42001", LeaseDuration: 90 * time.Second,
+	})
+	if err != nil || reconnected.ID != created.ID || !reconnected.LeaseExpiresAt.After(created.LeaseExpiresAt) {
+		t.Fatalf("reconnected region = %#v, error = %v", reconnected, err)
+	}
+
 	if _, err := store.Register(ctx, Registration{
 		Name: "Conflict", GridX: coordinate, GridY: coordinate,
 		PublicEndpoint: "http://localhost:42002", LeaseDuration: 60 * time.Second,

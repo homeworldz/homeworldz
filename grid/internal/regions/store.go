@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/homeworldz/homeworldz/grid/internal/identifier"
-	"github.com/jackc/pgx/v5/pgconn"
 )
 
 var (
@@ -71,16 +70,20 @@ func (s *PostgresStore) Register(ctx context.Context, input Registration) (Regio
 	err = tx.QueryRowContext(ctx, `
         INSERT INTO regions (id, name, grid_x, grid_y, public_endpoint, viewer_port, lease_expires_at)
         VALUES ($1, $2, $3, $4, $5, $6, now() + $7 * interval '1 second')
+        ON CONFLICT (grid_x, grid_y) DO UPDATE
+        SET lease_expires_at = EXCLUDED.lease_expires_at, updated_at = now()
+        WHERE regions.name = EXCLUDED.name
+          AND regions.public_endpoint = EXCLUDED.public_endpoint
+          AND regions.viewer_port = EXCLUDED.viewer_port
         RETURNING id, name, grid_x, grid_y, public_endpoint, viewer_port, lease_expires_at`,
 		region.ID, input.Name, input.GridX, input.GridY, input.PublicEndpoint, input.ViewerPort,
 		int64(input.LeaseDuration/time.Second),
 	).Scan(&region.ID, &region.Name, &region.GridX, &region.GridY,
 		&region.PublicEndpoint, &region.ViewerPort, &region.LeaseExpiresAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Region{}, ErrConflict
+	}
 	if err != nil {
-		var postgresError *pgconn.PgError
-		if errors.As(err, &postgresError) && postgresError.Code == "23505" {
-			return Region{}, ErrConflict
-		}
 		return Region{}, fmt.Errorf("insert region: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
