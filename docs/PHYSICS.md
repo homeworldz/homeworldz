@@ -229,3 +229,6 @@ engines have run the lab and the results are documented. A chosen engine should
 pass the avatar movement, terrain collision, object stacking, scripted impulse,
 and region handoff scenarios well enough to support a first playable
 HomeWorldz region.
+
+The initial shared-lab measurements are recorded in
+[`PHYSICS_RESULTS.md`](PHYSICS_RESULTS.md).

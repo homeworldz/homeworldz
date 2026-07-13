@@ -34,7 +34,7 @@ than runtime dependencies.
 - [x] Implement Jolt and PhysX 5 evaluation adapters.
 - [x] Add common avatar, terrain, stacking, impulse, vehicle, handoff, restore,
   and load scenarios.
-- [ ] Record timing, memory, jitter, tunneling, replay drift, restore accuracy,
+- [x] Record timing, memory, jitter, tunneling, replay drift, restore accuracy,
   and adapter complexity on Windows and Linux.
 - [ ] Choose Jolt unless a required acceptance scenario fails; otherwise choose
   PhysX 5 and record the decision.
