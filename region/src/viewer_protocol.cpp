@@ -1,6 +1,7 @@
 #include "homeworldz/viewer_protocol.h"
 
 #include <algorithm>
+#include <charconv>
 #include <limits>
 
 namespace homeworldz::viewer {
@@ -60,6 +61,22 @@ std::optional<std::vector<std::byte>> zero_decode(std::span<const std::byte> inp
 }
 
 } // namespace
+
+std::optional<Uuid> parse_uuid(std::string_view text) {
+    if (text.size() != 36 || text[8] != '-' || text[13] != '-' || text[18] != '-' || text[23] != '-')
+        return std::nullopt;
+    Uuid result;
+    std::size_t input = 0;
+    for (auto& byte : result) {
+        if (input == 8 || input == 13 || input == 18 || input == 23) ++input;
+        unsigned value{};
+        const auto parsed = std::from_chars(text.data() + input, text.data() + input + 2, value, 16);
+        if (parsed.ec != std::errc{} || parsed.ptr != text.data() + input + 2) return std::nullopt;
+        byte = static_cast<std::byte>(value);
+        input += 2;
+    }
+    return result;
+}
 
 std::vector<std::byte> encode_use_circuit_code(const UseCircuitCode& message) {
     std::vector<std::byte> output(use_circuit_code_id.begin(), use_circuit_code_id.end());
@@ -229,6 +246,59 @@ std::vector<std::uint32_t> Circuit::take_acks() {
     std::vector<std::uint32_t> result(queued_acks_.begin(), queued_acks_.begin() + count);
     queued_acks_.erase(queued_acks_.begin(), queued_acks_.begin() + count);
     return result;
+}
+
+std::optional<Packet> CircuitRegistry::receive(std::string_view endpoint, std::span<const std::byte> datagram,
+                                               Clock::time_point now) {
+    auto found = circuits_.find(std::string(endpoint));
+    if (found == circuits_.end()) {
+        const auto packet = decode_packet(datagram);
+        if (!packet || !(packet->flags & flag_reliable)) return std::nullopt;
+        const auto requested = decode_use_circuit_code(packet->payload);
+        if (!requested) return std::nullopt;
+        bool authorized = false;
+        try {
+            authorized = authorizer_ && authorizer_(*requested);
+        } catch (...) {
+            return std::nullopt;
+        }
+        if (!authorized) return std::nullopt;
+        for (const auto& [key, entry] : circuits_) {
+            static_cast<void>(key);
+            if (entry.identity.circuit_code == requested->circuit_code ||
+                entry.identity.session_id == requested->session_id || entry.identity.agent_id == requested->agent_id)
+                return std::nullopt;
+        }
+        found = circuits_.emplace(std::string(endpoint), Entry{*requested, Circuit(now)}).first;
+    }
+    return found->second.circuit.receive(datagram, now);
+}
+
+std::optional<std::vector<std::byte>> CircuitRegistry::send(std::string_view endpoint,
+                                                            std::vector<std::byte> payload, bool reliable,
+                                                            Clock::time_point now) {
+    const auto found = circuits_.find(std::string(endpoint));
+    if (found == circuits_.end()) return std::nullopt;
+    return found->second.circuit.send(std::move(payload), reliable, now);
+}
+
+std::vector<OutboundDatagram> CircuitRegistry::poll(Clock::time_point now) {
+    std::vector<OutboundDatagram> output;
+    for (auto iterator = circuits_.begin(); iterator != circuits_.end();) {
+        if (iterator->second.circuit.expired(now)) {
+            iterator = circuits_.erase(iterator);
+            continue;
+        }
+        auto datagrams = iterator->second.circuit.poll(now);
+        for (auto& datagram : datagrams) output.push_back({iterator->first, std::move(datagram)});
+        ++iterator;
+    }
+    return output;
+}
+
+const UseCircuitCode* CircuitRegistry::identity(std::string_view endpoint) const {
+    const auto found = circuits_.find(std::string(endpoint));
+    return found == circuits_.end() ? nullptr : &found->second.identity;
 }
 
 } // namespace homeworldz::viewer

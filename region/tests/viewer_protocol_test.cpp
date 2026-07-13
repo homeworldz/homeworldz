@@ -80,6 +80,40 @@ bool resend_throttle_and_timeout() {
     if (circuit.send(oversized, false, start + 601ms)) return false;
     return !circuit.expired(start + 2s) && circuit.expired(start + 3s);
 }
+
+bool circuit_registry() {
+    const auto start = Circuit::Clock::time_point{};
+    const auto session = parse_uuid("11111111-2222-4333-8444-555555555555");
+    const auto agent = parse_uuid("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");
+    if (!session || !agent || parse_uuid("not-a-uuid")) return false;
+    UseCircuitCode expected{987654, *session, *agent};
+    unsigned authorizations = 0;
+    CircuitRegistry registry([&](const UseCircuitCode& candidate) {
+        ++authorizations;
+        return candidate.circuit_code == expected.circuit_code && candidate.session_id == expected.session_id &&
+               candidate.agent_id == expected.agent_id;
+    });
+    Packet opening;
+    opening.flags = flag_reliable;
+    opening.sequence = 42;
+    opening.payload = encode_use_circuit_code(expected);
+    const auto datagram = encode_packet(opening);
+    if (!registry.receive("127.0.0.1:50000", datagram, start) || registry.size() != 1 || authorizations != 1)
+        return false;
+    if (!registry.identity("127.0.0.1:50000") ||
+        registry.identity("127.0.0.1:50000")->circuit_code != expected.circuit_code)
+        return false;
+    if (registry.receive("127.0.0.1:50001", datagram, start + 1ms) || registry.size() != 1) return false;
+    const auto replies = registry.poll(start + 2ms);
+    if (replies.size() != 1 || replies.front().endpoint != "127.0.0.1:50000") return false;
+    const auto reply = decode_packet(replies.front().bytes);
+    if (!reply || !decode_packet_ack(reply->payload)) return false;
+    if (!registry.send("127.0.0.1:50000", bytes({7, 8}), true, start + 3ms) ||
+        registry.send("127.0.0.1:50002", bytes({7, 8}), false, start + 3ms))
+        return false;
+    registry.poll(start + 31s);
+    return registry.size() == 0;
+}
 }
 
 int main() {
@@ -87,6 +121,7 @@ int main() {
     if (!message_codecs()) return 2;
     if (!reliability()) return 3;
     if (!resend_throttle_and_timeout()) return 4;
-    if (decode_packet(std::array<std::byte, 2>{})) return 5;
+    if (!circuit_registry()) return 5;
+    if (decode_packet(std::array<std::byte, 2>{})) return 6;
     return 0;
 }

@@ -3,10 +3,14 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <span>
+#include <string>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 #include <array>
 
@@ -26,6 +30,8 @@ struct Packet {
 };
 
 using Uuid = std::array<std::byte, 16>;
+
+std::optional<Uuid> parse_uuid(std::string_view text);
 
 struct UseCircuitCode {
     std::uint32_t circuit_code{};
@@ -75,6 +81,35 @@ private:
     double capacity_;
     double tokens_;
     std::chrono::seconds idle_timeout_;
+};
+
+struct OutboundDatagram {
+    std::string endpoint;
+    std::vector<std::byte> bytes;
+};
+
+class CircuitRegistry {
+public:
+    using Clock = Circuit::Clock;
+    using Authorizer = std::function<bool(const UseCircuitCode&)>;
+
+    explicit CircuitRegistry(Authorizer authorizer) : authorizer_(std::move(authorizer)) {}
+    std::optional<Packet> receive(std::string_view endpoint, std::span<const std::byte> datagram,
+                                  Clock::time_point now);
+    std::optional<std::vector<std::byte>> send(std::string_view endpoint, std::vector<std::byte> payload,
+                                               bool reliable, Clock::time_point now);
+    std::vector<OutboundDatagram> poll(Clock::time_point now);
+    const UseCircuitCode* identity(std::string_view endpoint) const;
+    std::size_t size() const { return circuits_.size(); }
+
+private:
+    struct Entry {
+        UseCircuitCode identity;
+        Circuit circuit;
+    };
+
+    Authorizer authorizer_;
+    std::unordered_map<std::string, Entry> circuits_;
 };
 
 } // namespace homeworldz::viewer
