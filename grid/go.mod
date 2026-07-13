@@ -2,7 +2,10 @@ module github.com/homeworldz/homeworldz/grid
 
 go 1.21
 
-require github.com/jackc/pgx/v5 v5.5.5
+require (
+	github.com/jackc/pgx/v5 v5.5.5
+	gopkg.in/ini.v1 v1.67.3
+)
 
 require (
 	github.com/jackc/pgpassfile v1.0.0 // indirect

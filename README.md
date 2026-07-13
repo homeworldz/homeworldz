@@ -18,6 +18,12 @@ and PostgreSQL 16 or newer. PostgreSQL 18.4 is recommended for new
 installations. PostgreSQL may run locally or on another reachable host;
 HomeWorldz does not require Docker.
 
+Runtime configuration uses ordinary INI files in `config/`. Start from the
+matching files in `config/examples/`: `grid.ini` controls grid server and client
+settings, `db.ini` contains central database access, and `region.ini` controls
+one region instance. Files directly under `config/` are ignored by Git because
+they may contain credentials. Environment variables override INI values.
+
 Grid operators bootstrap the application role, database, and initial migration
 from PowerShell. The script prompts securely for the PostgreSQL administrator
 password and the password to assign to the `homeworldz` application role:
@@ -39,8 +45,8 @@ Region operators do not need PostgreSQL credentials. The region will use its
 local storage and authenticated grid APIs once those components are implemented.
 
 Run grid tests from `grid/` with `go test ./...`. The grid service listens on
-`:42000` by default and reads PostgreSQL from `HOMEWORLDZ_DATABASE_URL`. The
-region service HTTP API listens on `:42001` by default.
+`:42000` by default and reads `config/grid.ini` and `config/db.ini`. The region
+service HTTP API listens on `:42001` by default.
 
 Configure and build the region service with CMake presets:
 

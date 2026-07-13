@@ -116,6 +116,14 @@ Possible later reasons to add protobuf or gRPC:
 
 Until one of those reasons is real, HTTP/JSON is the default.
 
+## Configuration
+
+HomeWorldz uses INI files under `config/`. Grid hosts use `grid.ini` and
+`db.ini`; region hosts use `region.ini` and `grid.ini`. Files are separated by
+operational ownership, and environment variables override file values for
+service-manager and deployment integration. Configuration containing secrets is
+not committed.
+
 ### Default Ports
 
 - `42000/tcp`: grid HTTP API.

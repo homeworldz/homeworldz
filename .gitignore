@@ -3,6 +3,7 @@
 build/
 out/
 var/
+config/*.ini
 *.user
 *.db
 *.db-shm
