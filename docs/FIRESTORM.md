@@ -100,6 +100,11 @@ event array with a monotonically increasing queue ID. UDP startup enforces
 `UseCircuitCode`, `RegionHandshakeReply`, then `CompleteAgentMovement` before
 returning `AgentMovementComplete`.
 
+After movement completes, authenticated `AgentUpdate` packets drive the
+authoritative avatar controller. It retains viewer camera axes and draw
+distance, resolves walking and running relative to body orientation, applies
+jump gravity and grounding, and supports fly-mode vertical controls.
+
 The pinned viewer source constructs the request in
 [`lllogininstance.cpp`](https://github.com/FirestormViewer/phoenix-firestorm/blob/10bd3c9f930c76e1427ddd4ecece6cdf36b4406d/indra/newview/lllogininstance.cpp#L155),
 consumes the circuit response in

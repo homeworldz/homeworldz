@@ -11,9 +11,11 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <unordered_set>
 
 #include "homeworldz/api_models.h"
+#include "homeworldz/avatar_controller.h"
 #include "homeworldz/grid_client.h"
 #include "homeworldz/http_response.h"
 #include "homeworldz/region_storage.h"
@@ -43,6 +45,11 @@ static void close_socket(socket_handle socket) { close(socket); }
 
 namespace {
 std::atomic_bool running{true};
+
+struct LiveAvatar {
+    homeworldz::viewer::AvatarController controller;
+    homeworldz::scene::EntityId entity_id{};
+};
 
 void stop(int) { running = false; }
 
@@ -221,6 +228,7 @@ int main() {
     });
     std::unordered_set<std::string> handshake_replies;
     std::unordered_set<std::string> established_events;
+    std::unordered_map<std::string, LiveAvatar> avatars;
 
     std::cout << "{\"level\":\"info\",\"message\":\"region service listening\",\"httpPort\":"
               << configured_port() << ",\"viewerPort\":" << configured_viewer_port() << "}" << std::endl;
@@ -331,17 +339,36 @@ int main() {
                                 static_cast<std::uint32_t>(region_grid_y * 256);
                             response.timestamp = static_cast<std::uint32_t>(
                                 std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
+                            if (!avatars.contains(endpoint)) {
+                                const auto name = homeworldz::viewer::format_uuid(identity->agent_id);
+                                const auto entity = scene.create(name, {128.0, 128.0, 25.0});
+                                avatars.emplace(endpoint, LiveAvatar{homeworldz::viewer::AvatarController{}, entity});
+                            }
                             if (const auto outgoing = circuits.send(endpoint,
                                     homeworldz::viewer::encode_agent_movement_complete(response), true, now))
                                 static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
                         }
+                        const auto update = homeworldz::viewer::decode_agent_update(packet->payload);
+                        const auto avatar = avatars.find(endpoint);
+                        if (update && avatar != avatars.end() && update->agent_id == identity->agent_id &&
+                            update->session_id == identity->session_id)
+                            avatar->second.controller.apply(*update);
                     }
                 }
             }
         }
         for (const auto& outgoing : circuits.poll(now))
             static_cast<void>(send_udp(viewer_server, outgoing.endpoint, outgoing.bytes));
-        simulation.advance(std::chrono::duration<double>(now - previous_tick).count());
+        const auto elapsed = std::chrono::duration<double>(now - previous_tick).count();
+        simulation.advance(elapsed);
+        for (auto& [endpoint, avatar] : avatars) {
+            static_cast<void>(endpoint);
+            avatar.controller.step(elapsed);
+            if (auto* entity = scene.find(avatar.entity_id)) {
+                entity->position = avatar.controller.state().position;
+                entity->velocity = avatar.controller.state().velocity;
+            }
+        }
         previous_tick = now;
         if (now >= next_snapshot) {
             try {
