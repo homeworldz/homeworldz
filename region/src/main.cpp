@@ -461,6 +461,11 @@ int main() {
                             }
                         }
                     } else if (identity) {
+                        if (const auto ping_id = homeworldz::viewer::decode_start_ping_check(packet->payload)) {
+                            if (const auto pong = circuits.send(endpoint,
+                                    homeworldz::viewer::encode_complete_ping_check(*ping_id), false, now))
+                                static_cast<void>(send_udp(viewer_server, endpoint, *pong));
+                        }
                         const auto handshake_reply = homeworldz::viewer::decode_region_handshake_reply(packet->payload);
                         if (handshake_reply && handshake_reply->agent_id == identity->agent_id &&
                             handshake_reply->session_id == identity->session_id) {

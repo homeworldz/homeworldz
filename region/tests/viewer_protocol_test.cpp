@@ -89,7 +89,10 @@ bool message_codecs() {
     complete.region_handle = 0x0102030405060708ULL;
     const auto encoded_complete = encode_agent_movement_complete(complete);
     if (encoded_complete.size() <= 80 || encoded_complete[3] != std::byte{0xfa}) return false;
-    return encode_start_ping_check(7, 0x01020304) == bytes({1, 7, 4, 3, 2, 1});
+    const auto ping = encode_start_ping_check(7, 0x01020304);
+    const auto ping_id = decode_start_ping_check(ping);
+    return ping == bytes({1, 7, 4, 3, 2, 1}) && ping_id && *ping_id == 7 &&
+           !decode_start_ping_check(bytes({1, 7})) && encode_complete_ping_check(*ping_id) == bytes({2, 7});
 }
 
 bool resend_throttle_and_timeout() {

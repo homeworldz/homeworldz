@@ -295,6 +295,15 @@ std::vector<std::byte> encode_start_ping_check(std::uint8_t ping_id, std::uint32
     return output;
 }
 
+std::optional<std::uint8_t> decode_start_ping_check(std::span<const std::byte> payload) {
+    if (payload.size() != 6 || payload[0] != std::byte{1}) return std::nullopt;
+    return std::to_integer<std::uint8_t>(payload[1]);
+}
+
+std::vector<std::byte> encode_complete_ping_check(std::uint8_t ping_id) {
+    return {std::byte{2}, static_cast<std::byte>(ping_id)};
+}
+
 std::optional<AgentUpdate> decode_agent_update(std::span<const std::byte> payload) {
     if (payload.size() != 115 || payload[0] != std::byte{4}) return std::nullopt;
     AgentUpdate result;
