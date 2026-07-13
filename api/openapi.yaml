@@ -285,6 +285,74 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/presence:
+    parameters:
+      - $ref: "#/components/parameters/RequestId"
+    get:
+      operationId: listPresence
+      summary: List non-stale online presence
+      security:
+        - ServiceToken: []
+      responses:
+        "200":
+          description: Online presence
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PresenceList" }
+  /api/v1/presence/{userId}:
+    parameters:
+      - $ref: "#/components/parameters/RequestId"
+      - $ref: "#/components/parameters/UserId"
+    get:
+      operationId: getPresence
+      summary: Get non-stale presence for one user
+      security:
+        - ServiceToken: []
+      responses:
+        "200":
+          description: Online presence
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Presence" }
+        "404":
+          description: Online presence was not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    put:
+      operationId: updatePresence
+      summary: Create or refresh online presence
+      security:
+        - ServiceToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdatePresenceRequest" }
+      responses:
+        "200":
+          description: Updated online presence
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Presence" }
+        "404":
+          description: User or active region was not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    delete:
+      operationId: clearPresence
+      summary: Clear online presence
+      security:
+        - ServiceToken: []
+      responses:
+        "204":
+          description: Presence cleared
+        "404":
+          description: Online presence was not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 components:
   parameters:
     RequestId:
@@ -305,6 +373,13 @@ components:
         format: uuid
     SessionId:
       name: sessionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    UserId:
+      name: userId
       in: path
       required: true
       schema:
@@ -398,3 +473,22 @@ components:
         id: { type: string, format: uuid }
         userId: { type: string, format: uuid }
         expiresAt: { type: string, format: date-time }
+    UpdatePresenceRequest:
+      type: object
+      required: [regionId]
+      properties:
+        regionId: { type: string, format: uuid }
+    Presence:
+      type: object
+      required: [userId, regionId, lastSeenAt]
+      properties:
+        userId: { type: string, format: uuid }
+        regionId: { type: string, format: uuid }
+        lastSeenAt: { type: string, format: date-time }
+    PresenceList:
+      type: object
+      required: [presence]
+      properties:
+        presence:
+          type: array
+          items: { $ref: "#/components/schemas/Presence" }

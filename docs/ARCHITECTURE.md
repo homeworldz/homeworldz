@@ -94,6 +94,10 @@ database-controlled expiry; internal clients validate or revoke those sessions
 through service-authenticated grid APIs. Viewer-facing login can build on this
 boundary without exposing password hashes to region servers.
 
+Online presence is a grid-owned heartbeat record linking a user to an actively
+leased region. Heartbeats become stale after 90 seconds, are hidden from lookup,
+and are deleted during discovery; normal disconnects clear presence directly.
+
 Postgres is the default durable store for grid services.
 
 ## Internal APIs

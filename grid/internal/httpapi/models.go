@@ -1,6 +1,7 @@
 package httpapi
 
 import "github.com/homeworldz/homeworldz/grid/internal/regions"
+import "github.com/homeworldz/homeworldz/grid/internal/presence"
 
 const APIVersion = "v1"
 
@@ -47,4 +48,12 @@ type CreateSessionRequest struct {
 	Username       string `json:"username"`
 	Password       string `json:"password"`
 	SessionSeconds int    `json:"sessionSeconds"`
+}
+
+type UpdatePresenceRequest struct {
+	RegionID string `json:"regionId"`
+}
+
+type PresenceList struct {
+	Presence []presence.Presence `json:"presence"`
 }

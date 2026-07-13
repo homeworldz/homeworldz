@@ -83,6 +83,9 @@ jobs:
       - name: Test identity and session persistence
         working-directory: grid
         run: go test ./internal/identity -run TestPostgresIdentityLifecycle -count=1
+      - name: Test presence persistence and cleanup
+        working-directory: grid
+        run: go test ./internal/presence -run TestPostgresPresenceLifecycle -count=1
       - name: Start grid and verify probes
         shell: bash
         run: |

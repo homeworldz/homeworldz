@@ -14,6 +14,7 @@ import (
 	"github.com/homeworldz/homeworldz/grid/internal/config"
 	"github.com/homeworldz/homeworldz/grid/internal/httpapi"
 	"github.com/homeworldz/homeworldz/grid/internal/identity"
+	"github.com/homeworldz/homeworldz/grid/internal/presence"
 	"github.com/homeworldz/homeworldz/grid/internal/regions"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -45,6 +46,7 @@ func main() {
 			Logger:       logger,
 			Regions:      regionStore(db),
 			Identity:     identityStore(db),
+			Presence:     presenceStore(db),
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
@@ -79,4 +81,11 @@ func identityStore(db *sql.DB) identity.Store {
 		return nil
 	}
 	return identity.NewPostgresStore(db)
+}
+
+func presenceStore(db *sql.DB) presence.Store {
+	if db == nil {
+		return nil
+	}
+	return presence.NewPostgresStore(db)
 }
