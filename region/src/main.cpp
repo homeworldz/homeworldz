@@ -354,6 +354,14 @@ int main() {
                                         homeworldz::viewer::encode_flat_terrain(row, 25.0F), true, now))
                                     static_cast<void>(send_udp(viewer_server, endpoint, *terrain));
                             }
+                            homeworldz::viewer::StaticObject welcome_prim;
+                            if (const auto id = homeworldz::viewer::parse_uuid(
+                                    "00000000-0000-4000-8000-000000000001"))
+                                welcome_prim.id = *id;
+                            if (const auto object = circuits.send(endpoint,
+                                    homeworldz::viewer::encode_static_object_update(
+                                        response.region_handle, welcome_prim), true, now, true))
+                                static_cast<void>(send_udp(viewer_server, endpoint, *object));
                         }
                         const auto update = homeworldz::viewer::decode_agent_update(packet->payload);
                         const auto avatar = avatars.find(endpoint);

@@ -103,6 +103,11 @@ void append_le_u32(std::vector<std::byte>& output, std::uint32_t value) {
     output.push_back(static_cast<std::byte>((value >> 24) & 0xff));
 }
 
+void append_le_u16(std::vector<std::byte>& output, std::uint16_t value) {
+    output.push_back(static_cast<std::byte>(value));
+    output.push_back(static_cast<std::byte>(value >> 8));
+}
+
 void append_le_u64(std::vector<std::byte>& output, std::uint64_t value) {
     append_le_u32(output, static_cast<std::uint32_t>(value));
     append_le_u32(output, static_cast<std::uint32_t>(value >> 32));
@@ -136,6 +141,14 @@ bool append_variable2(std::vector<std::byte>& output, std::string_view value) {
     output.insert(output.end(), reinterpret_cast<const std::byte*>(value.data()),
                   reinterpret_cast<const std::byte*>(value.data() + value.size()));
     output.push_back(std::byte{});
+    return true;
+}
+
+bool append_binary(std::vector<std::byte>& output, std::span<const std::byte> value, unsigned length_bytes) {
+    if ((length_bytes == 1 && value.size() > 255) || value.size() > 65535) return false;
+    output.push_back(static_cast<std::byte>(value.size()));
+    if (length_bytes == 2) output.push_back(static_cast<std::byte>(value.size() >> 8));
+    output.insert(output.end(), value.begin(), value.end());
     return true;
 }
 
@@ -348,6 +361,49 @@ std::vector<std::byte> encode_flat_terrain(std::span<const TerrainPatch> patches
     output.push_back(static_cast<std::byte>(size));
     output.push_back(static_cast<std::byte>(size >> 8));
     output.insert(output.end(), encoded.begin(), encoded.end());
+    return output;
+}
+
+std::vector<std::byte> encode_static_object_update(std::uint64_t region_handle, const StaticObject& object) {
+    std::vector<std::byte> output{std::byte{12}}; // high-frequency ObjectUpdate
+    append_le_u64(output, region_handle);
+    append_le_u16(output, 65535); // full time dilation
+    output.push_back(std::byte{1}); // one ObjectData block
+    append_le_u32(output, object.local_id);
+    output.push_back(std::byte{}); // state
+    append_uuid(output, object.id);
+    append_le_u32(output, 0); // CRC
+    output.push_back(std::byte{9}); // volume primitive
+    output.push_back(std::byte{3}); // wood material
+    output.push_back(std::byte{}); // click action
+    for (const auto value : object.scale) append_f32(output, value);
+    std::vector<std::byte> transform;
+    for (const auto value : object.position) append_f32(transform, value);
+    for (int index = 0; index < 12; ++index) append_f32(transform, 0.0F); // velocity, acceleration, rotation, omega
+    if (!append_binary(output, transform, 1)) return {};
+    append_le_u32(output, 0); // parent
+    append_le_u32(output, 0); // update flags
+    output.push_back(std::byte{16}); // straight path
+    output.push_back(std::byte{1}); // square profile
+    append_le_u16(output, 0); append_le_u16(output, 0); // path begin/end
+    output.push_back(std::byte{100}); output.push_back(std::byte{100}); // path scale
+    for (int index = 0; index < 7; ++index) output.push_back(std::byte{}); // shear through taper
+    output.push_back(std::byte{67}); // one path revolution
+    output.push_back(std::byte{}); // skew
+    append_le_u16(output, 0); append_le_u16(output, 0); append_le_u16(output, 0); // profile
+    if (!append_binary(output, {}, 2) || !append_binary(output, {}, 1) ||
+        !append_binary(output, {}, 2)) return {}; // texture, animation, name/value
+    const std::array<std::byte, 1> prim_count{std::byte{1}};
+    if (!append_binary(output, prim_count, 2) || !append_binary(output, {}, 1)) return {}; // data, text
+    output.insert(output.end(), 4, std::byte{}); // text color
+    if (!append_binary(output, {}, 1) || !append_binary(output, {}, 1)) return {}; // media, particles
+    const std::array<std::byte, 1> no_extra_params{std::byte{0}};
+    if (!append_binary(output, no_extra_params, 1)) return {};
+    Uuid zero{};
+    append_uuid(output, zero); append_uuid(output, zero); // sound and owner
+    append_f32(output, 0.0F); output.push_back(std::byte{}); append_f32(output, 0.0F);
+    output.push_back(std::byte{}); // joint type
+    for (int index = 0; index < 6; ++index) append_f32(output, 0.0F);
     return output;
 }
 

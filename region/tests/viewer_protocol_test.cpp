@@ -187,6 +187,14 @@ bool flat_terrain_codec() {
            terrain[12] == std::byte{0x41} && terrain[13] == std::byte{1} && terrain[14] == std::byte{} &&
            terrain[16] == std::byte{0x28};
 }
+
+bool static_object_codec() {
+    StaticObject object;
+    object.id = *parse_uuid("12345678-1234-4234-8234-123456789abc");
+    const auto encoded = encode_static_object_update(0x0102030405060708ULL, object);
+    return encoded.size() > 220 && encoded[0] == std::byte{12} && encoded[1] == std::byte{8} &&
+           encoded[8] == std::byte{1} && encoded[11] == std::byte{1};
+}
 }
 
 int main() {
@@ -198,6 +206,7 @@ int main() {
     if (!agent_update_codec()) return 6;
     if (!chat_codecs()) return 7;
     if (!flat_terrain_codec()) return 8;
-    if (decode_packet(std::array<std::byte, 2>{})) return 9;
+    if (!static_object_codec()) return 9;
+    if (decode_packet(std::array<std::byte, 2>{})) return 10;
     return 0;
 }

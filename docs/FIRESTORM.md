@@ -105,6 +105,11 @@ authoritative avatar controller. It retains viewer camera axes and draw
 distance, resolves walking and running relative to body orientation, applies
 jump gravity and grounding, and supports fly-mode vertical controls.
 
+Once movement completes, the region streams all 256 flat 16-by-16 terrain
+patches in bounded reliable batches and sends a full static volume-primitive
+update. Channel-zero viewer chat is rebroadcast reliably to avatars within the
+viewer whisper, normal, or shout radius.
+
 The pinned viewer source constructs the request in
 [`lllogininstance.cpp`](https://github.com/FirestormViewer/phoenix-firestorm/blob/10bd3c9f930c76e1427ddd4ecece6cdf36b4406d/indra/newview/lllogininstance.cpp#L155),
 consumes the circuit response in
