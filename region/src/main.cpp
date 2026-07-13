@@ -31,10 +31,20 @@ std::atomic_bool running{true};
 void stop(int) { running = false; }
 
 int configured_port() {
+#ifdef _WIN32
+    char* value = nullptr;
+    std::size_t length = 0;
+    if (_dupenv_s(&value, &length, "HOMEWORLDZ_REGION_PORT") == 0 && value != nullptr) {
+        const int port = std::atoi(value);
+        std::free(value);
+        if (port > 0 && port <= 65535) return port;
+    }
+#else
     if (const char* value = std::getenv("HOMEWORLDZ_REGION_PORT")) {
         const int port = std::atoi(value);
         if (port > 0 && port <= 65535) return port;
     }
+#endif
     return 42001;
 }
 } // namespace

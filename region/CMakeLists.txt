@@ -1,4 +1,4 @@
-add_library(homeworldz-region-core src/http_response.cpp)
+add_library(homeworldz-region-core src/api_models.cpp src/http_response.cpp)
 target_include_directories(homeworldz-region-core PUBLIC include)
 target_compile_features(homeworldz-region-core PUBLIC cxx_std_20)
 

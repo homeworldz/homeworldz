@@ -13,7 +13,7 @@ than runtime dependencies.
 - [x] Establish INI configuration files with environment-variable overrides.
 - [x] Implement `/ping`, `/ready`, and `/version` in both services.
 - [x] Add Windows and Linux CI for builds, tests, and migrations.
-- [ ] Add generated or validated C++ and Go API models.
+- [x] Add generated or validated C++ and Go API models.
 - [ ] Add service-token authentication, request IDs, and structured logging.
 - [ ] Add contract tests shared by grid handlers and the region client.
 

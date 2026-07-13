@@ -11,6 +11,9 @@ func TestLoadGridFromINI(t *testing.T) {
 	writeFile(t, directory, "grid.ini", "[server]\naddress=:43000\n[auth]\nservice_token=file-token\n")
 	writeFile(t, directory, "db.ini", "[database]\nurl=postgres://file/database\n")
 	t.Setenv("HOMEWORLDZ_CONFIG_DIR", directory)
+	unsetEnv(t, "HOMEWORLDZ_DATABASE_URL")
+	unsetEnv(t, "HOMEWORLDZ_GRID_ADDR")
+	unsetEnv(t, "HOMEWORLDZ_GRID_SERVICE_TOKEN")
 
 	got, err := LoadGrid()
 	if err != nil {
@@ -52,4 +55,21 @@ func writeFile(t *testing.T, directory, name, contents string) {
 	if err := os.WriteFile(filepath.Join(directory, name), []byte(contents), 0o600); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func unsetEnv(t *testing.T, name string) {
+	t.Helper()
+	value, present := os.LookupEnv(name)
+	if err := os.Unsetenv(name); err != nil {
+		t.Fatalf("unset %s: %v", name, err)
+	}
+	t.Cleanup(func() {
+		if present {
+			if err := os.Setenv(name, value); err != nil {
+				t.Errorf("restore %s: %v", name, err)
+			}
+		} else if err := os.Unsetenv(name); err != nil {
+			t.Errorf("clear %s: %v", name, err)
+		}
+	})
 }
