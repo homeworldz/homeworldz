@@ -1,13 +1,13 @@
-package regions
+package identifier
 
 import "testing"
 
 func TestNewUUID(t *testing.T) {
-	first, err := newUUID()
+	first, err := NewUUID()
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := newUUID()
+	second, err := NewUUID()
 	if err != nil {
 		t.Fatal(err)
 	}

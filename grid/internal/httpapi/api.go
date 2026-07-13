@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/homeworldz/homeworldz/grid/internal/identity"
 	"github.com/homeworldz/homeworldz/grid/internal/regions"
 )
 
@@ -19,25 +20,30 @@ type ReadinessChecker interface {
 }
 
 type API struct {
-	ready   ReadinessChecker
-	version string
-	regions regions.Store
+	ready    ReadinessChecker
+	version  string
+	regions  regions.Store
+	identity identity.Store
 }
 
 type Options struct {
 	ServiceToken string
 	Logger       *slog.Logger
 	Regions      regions.Store
+	Identity     identity.Store
 }
 
 func New(ready ReadinessChecker, version string, options Options) http.Handler {
-	a := &API{ready: ready, version: version, regions: options.Regions}
+	a := &API{ready: ready, version: version, regions: options.Regions, identity: options.Identity}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ping", getOnly(a.ping))
 	mux.HandleFunc("/ready", getOnly(a.readiness))
 	mux.HandleFunc("/version", getOnly(a.buildVersion))
 	mux.HandleFunc("/api/v1/regions", a.regionsRoot)
 	mux.HandleFunc("/api/v1/regions/", a.regionByID)
+	mux.HandleFunc("/api/v1/users", a.usersRoot)
+	mux.HandleFunc("/api/v1/sessions", a.sessionsRoot)
+	mux.HandleFunc("/api/v1/sessions/", a.sessionByID)
 	mux.HandleFunc("/", a.notFound)
 	return withRequestID(withRequestLogging(
 		authenticateInternal(mux, options.ServiceToken), options.Logger,

@@ -194,6 +194,97 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/users:
+    parameters:
+      - $ref: "#/components/parameters/RequestId"
+    post:
+      operationId: createDevelopmentUser
+      summary: Create a development user
+      security:
+        - ServiceToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateUserRequest" }
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "400":
+          description: Invalid development user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: Username is already registered
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/sessions:
+    parameters:
+      - $ref: "#/components/parameters/RequestId"
+    post:
+      operationId: createSession
+      summary: Validate development credentials and create a session
+      security:
+        - ServiceToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateSessionRequest" }
+      responses:
+        "201":
+          description: Session created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+        "400":
+          description: Invalid login request
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401":
+          description: Service authentication or credentials failed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/sessions/{sessionId}:
+    parameters:
+      - $ref: "#/components/parameters/RequestId"
+      - $ref: "#/components/parameters/SessionId"
+    get:
+      operationId: validateSession
+      summary: Validate an unexpired session
+      security:
+        - ServiceToken: []
+      responses:
+        "200":
+          description: Valid session
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+        "404":
+          description: Session is absent, expired, or revoked
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    delete:
+      operationId: revokeSession
+      summary: Revoke a session
+      security:
+        - ServiceToken: []
+      responses:
+        "204":
+          description: Session revoked
+        "404":
+          description: Session was not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 components:
   parameters:
     RequestId:
@@ -207,6 +298,13 @@ components:
         pattern: "^[A-Za-z0-9._-]+$"
     RegionId:
       name: regionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    SessionId:
+      name: sessionId
       in: path
       required: true
       schema:
@@ -273,3 +371,30 @@ components:
         regions:
           type: array
           items: { $ref: "#/components/schemas/Region" }
+    CreateUserRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username: { type: string, minLength: 3, maxLength: 32, pattern: "^[A-Za-z0-9._-]+$" }
+        password: { type: string, minLength: 8, maxLength: 128, format: password }
+    User:
+      type: object
+      required: [id, username, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        username: { type: string }
+        createdAt: { type: string, format: date-time }
+    CreateSessionRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username: { type: string }
+        password: { type: string, format: password }
+        sessionSeconds: { type: integer, minimum: 300, maximum: 86400, default: 43200 }
+    Session:
+      type: object
+      required: [id, userId, expiresAt]
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        expiresAt: { type: string, format: date-time }

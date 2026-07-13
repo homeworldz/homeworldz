@@ -88,6 +88,12 @@ until its lease expires. Initial leases default to 60 seconds and accept values
 from 10 through 300 seconds; expired rows no longer block a new registration at
 the same coordinates.
 
+Initial development accounts use normalized lowercase usernames and bcrypt
+password hashes. Successful credential checks create random UUID sessions with
+database-controlled expiry; internal clients validate or revoke those sessions
+through service-authenticated grid APIs. Viewer-facing login can build on this
+boundary without exposing password hashes to region servers.
+
 Postgres is the default durable store for grid services.
 
 ## Internal APIs

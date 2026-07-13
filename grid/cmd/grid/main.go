@@ -13,6 +13,7 @@ import (
 
 	"github.com/homeworldz/homeworldz/grid/internal/config"
 	"github.com/homeworldz/homeworldz/grid/internal/httpapi"
+	"github.com/homeworldz/homeworldz/grid/internal/identity"
 	"github.com/homeworldz/homeworldz/grid/internal/regions"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -43,6 +44,7 @@ func main() {
 			ServiceToken: settings.ServiceToken,
 			Logger:       logger,
 			Regions:      regionStore(db),
+			Identity:     identityStore(db),
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
@@ -70,4 +72,11 @@ func regionStore(db *sql.DB) regions.Store {
 		return nil
 	}
 	return regions.NewPostgresStore(db)
+}
+
+func identityStore(db *sql.DB) identity.Store {
+	if db == nil {
+		return nil
+	}
+	return identity.NewPostgresStore(db)
 }

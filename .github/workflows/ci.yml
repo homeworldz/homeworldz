@@ -80,6 +80,9 @@ jobs:
       - name: Test region lease persistence
         working-directory: grid
         run: go test ./internal/regions -run TestPostgresRegionLifecycle -count=1
+      - name: Test identity and session persistence
+        working-directory: grid
+        run: go test ./internal/identity -run TestPostgresIdentityLifecycle -count=1
       - name: Start grid and verify probes
         shell: bash
         run: |

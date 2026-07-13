@@ -2,13 +2,12 @@ package regions
 
 import (
 	"context"
-	"crypto/rand"
 	"database/sql"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
 
+	"github.com/homeworldz/homeworldz/grid/internal/identifier"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -51,7 +50,7 @@ func NewPostgresStore(db *sql.DB) *PostgresStore {
 }
 
 func (s *PostgresStore) Register(ctx context.Context, input Registration) (Region, error) {
-	id, err := newUUID()
+	id, err := identifier.NewUUID()
 	if err != nil {
 		return Region{}, err
 	}
@@ -156,16 +155,4 @@ func (s *PostgresStore) List(ctx context.Context) ([]Region, error) {
 		return nil, fmt.Errorf("iterate regions: %w", err)
 	}
 	return regions, nil
-}
-
-func newUUID() (string, error) {
-	value := make([]byte, 16)
-	if _, err := rand.Read(value); err != nil {
-		return "", fmt.Errorf("generate region UUID: %w", err)
-	}
-	value[6] = (value[6] & 0x0f) | 0x40
-	value[8] = (value[8] & 0x3f) | 0x80
-	encoded := hex.EncodeToString(value)
-	return encoded[0:8] + "-" + encoded[8:12] + "-" + encoded[12:16] + "-" +
-		encoded[16:20] + "-" + encoded[20:32], nil
 }

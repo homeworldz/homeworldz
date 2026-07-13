@@ -37,3 +37,14 @@ type RenewRegionLeaseRequest struct {
 type RegionList struct {
 	Regions []regions.Region `json:"regions"`
 }
+
+type CreateUserRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type CreateSessionRequest struct {
+	Username       string `json:"username"`
+	Password       string `json:"password"`
+	SessionSeconds int    `json:"sessionSeconds"`
+}
