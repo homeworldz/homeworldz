@@ -38,8 +38,33 @@ bool reliability() {
     if (receiver.receive(*first, start + 2ms)) return false;
     const auto acknowledgements = receiver.poll(start + 3ms);
     if (acknowledgements.size() != 1) return false;
+    const auto acknowledgement_packet = decode_packet(acknowledgements.front());
+    if (!acknowledgement_packet) return false;
+    const auto acknowledged = decode_packet_ack(acknowledgement_packet->payload);
+    if (!acknowledged || *acknowledged != std::vector<std::uint32_t>{1}) return false;
     if (!sender.receive(acknowledgements.front(), start + 4ms) || sender.pending_reliable() != 0) return false;
     return true;
+}
+
+bool message_codecs() {
+    UseCircuitCode expected;
+    expected.circuit_code = 0x10203040;
+    for (std::size_t index = 0; index < expected.session_id.size(); ++index) {
+        expected.session_id[index] = static_cast<std::byte>(index);
+        expected.agent_id[index] = static_cast<std::byte>(index + 16);
+    }
+    const auto payload = encode_use_circuit_code(expected);
+    const auto decoded = decode_use_circuit_code(payload);
+    if (!decoded || decoded->circuit_code != expected.circuit_code || decoded->session_id != expected.session_id ||
+        decoded->agent_id != expected.agent_id)
+        return false;
+    if (payload.size() != 40 || payload[0] != std::byte{0xff} || payload[1] != std::byte{0xff} ||
+        payload[2] != std::byte{0} || payload[3] != std::byte{3})
+        return false;
+    const std::array<std::uint32_t, 2> sequences{0x01020304, 0xa0b0c0d0};
+    const auto ack = encode_packet_ack(sequences);
+    const auto ack_decoded = decode_packet_ack(ack);
+    return ack_decoded && *ack_decoded == std::vector<std::uint32_t>(sequences.begin(), sequences.end());
 }
 
 bool resend_throttle_and_timeout() {
@@ -59,8 +84,9 @@ bool resend_throttle_and_timeout() {
 
 int main() {
     if (!packet_round_trip()) return 1;
-    if (!reliability()) return 1;
-    if (!resend_throttle_and_timeout()) return 1;
-    if (decode_packet(std::array<std::byte, 2>{})) return 1;
+    if (!message_codecs()) return 2;
+    if (!reliability()) return 3;
+    if (!resend_throttle_and_timeout()) return 4;
+    if (decode_packet(std::array<std::byte, 2>{})) return 5;
     return 0;
 }

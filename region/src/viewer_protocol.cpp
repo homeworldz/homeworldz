@@ -6,6 +6,11 @@
 namespace homeworldz::viewer {
 namespace {
 
+constexpr std::array<std::byte, 4> use_circuit_code_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x03}};
+constexpr std::array<std::byte, 4> packet_ack_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0xff}, std::byte{0xfb}};
+
 std::uint32_t read_u32(std::span<const std::byte> data, std::size_t offset) {
     return (std::to_integer<std::uint32_t>(data[offset]) << 24) |
            (std::to_integer<std::uint32_t>(data[offset + 1]) << 16) |
@@ -55,6 +60,45 @@ std::optional<std::vector<std::byte>> zero_decode(std::span<const std::byte> inp
 }
 
 } // namespace
+
+std::vector<std::byte> encode_use_circuit_code(const UseCircuitCode& message) {
+    std::vector<std::byte> output(use_circuit_code_id.begin(), use_circuit_code_id.end());
+    output.reserve(40);
+    append_u32(output, message.circuit_code);
+    output.insert(output.end(), message.session_id.begin(), message.session_id.end());
+    output.insert(output.end(), message.agent_id.begin(), message.agent_id.end());
+    return output;
+}
+
+std::optional<UseCircuitCode> decode_use_circuit_code(std::span<const std::byte> payload) {
+    if (payload.size() != 40 || !std::equal(use_circuit_code_id.begin(), use_circuit_code_id.end(), payload.begin()))
+        return std::nullopt;
+    UseCircuitCode message;
+    message.circuit_code = read_u32(payload, 4);
+    std::copy_n(payload.begin() + 8, 16, message.session_id.begin());
+    std::copy_n(payload.begin() + 24, 16, message.agent_id.begin());
+    return message;
+}
+
+std::vector<std::byte> encode_packet_ack(std::span<const std::uint32_t> sequences) {
+    if (sequences.empty() || sequences.size() > 255) return {};
+    std::vector<std::byte> output(packet_ack_id.begin(), packet_ack_id.end());
+    output.reserve(5 + sequences.size() * 4);
+    output.push_back(static_cast<std::byte>(sequences.size()));
+    for (const auto sequence : sequences) append_u32(output, sequence);
+    return output;
+}
+
+std::optional<std::vector<std::uint32_t>> decode_packet_ack(std::span<const std::byte> payload) {
+    if (payload.size() < 9 || !std::equal(packet_ack_id.begin(), packet_ack_id.end(), payload.begin()))
+        return std::nullopt;
+    const auto count = std::to_integer<std::size_t>(payload[4]);
+    if (count == 0 || payload.size() != 5 + count * 4) return std::nullopt;
+    std::vector<std::uint32_t> result;
+    result.reserve(count);
+    for (std::size_t offset = 5; offset < payload.size(); offset += 4) result.push_back(read_u32(payload, offset));
+    return result;
+}
 
 std::vector<std::byte> encode_packet(const Packet& packet) {
     if (packet.extra_header.size() > 255 || packet.acknowledgements.size() > 255) return {};
@@ -128,8 +172,11 @@ std::optional<Packet> Circuit::receive(std::span<const std::byte> datagram, Cloc
     if (!packet) return std::nullopt;
     last_activity_ = now;
     for (const auto acknowledgement : packet->acknowledgements) pending_.erase(acknowledgement);
+    if (const auto acknowledgements = decode_packet_ack(packet->payload))
+        for (const auto acknowledgement : *acknowledgements) pending_.erase(acknowledgement);
     if (packet->flags & flag_reliable) {
-        queued_acks_.push_back(packet->sequence);
+        if (std::find(queued_acks_.begin(), queued_acks_.end(), packet->sequence) == queued_acks_.end())
+            queued_acks_.push_back(packet->sequence);
         if (!received_reliable_.insert(packet->sequence).second) return std::nullopt;
         if (received_reliable_.size() > 4096) received_reliable_.clear();
     }
@@ -157,10 +204,11 @@ std::vector<std::vector<std::byte>> Circuit::poll(Clock::time_point now) {
     if (output.empty() && !queued_acks_.empty()) {
         Packet ack;
         ack.sequence = next_sequence_++;
-        ack.acknowledgements = take_acks();
+        const auto acknowledgements = take_acks();
+        ack.payload = encode_packet_ack(acknowledgements);
         auto datagram = encode_packet(ack);
         if (consume(datagram.size(), now)) output.push_back(std::move(datagram));
-        else queued_acks_.insert(queued_acks_.begin(), ack.acknowledgements.begin(), ack.acknowledgements.end());
+        else queued_acks_.insert(queued_acks_.begin(), acknowledgements.begin(), acknowledgements.end());
     }
     return output;
 }

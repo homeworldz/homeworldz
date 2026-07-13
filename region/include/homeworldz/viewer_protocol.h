@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <array>
 
 namespace homeworldz::viewer {
 
@@ -23,6 +24,19 @@ struct Packet {
     std::vector<std::byte> payload;
     std::vector<std::uint32_t> acknowledgements;
 };
+
+using Uuid = std::array<std::byte, 16>;
+
+struct UseCircuitCode {
+    std::uint32_t circuit_code{};
+    Uuid session_id{};
+    Uuid agent_id{};
+};
+
+std::vector<std::byte> encode_use_circuit_code(const UseCircuitCode& message);
+std::optional<UseCircuitCode> decode_use_circuit_code(std::span<const std::byte> payload);
+std::vector<std::byte> encode_packet_ack(std::span<const std::uint32_t> sequences);
+std::optional<std::vector<std::uint32_t>> decode_packet_ack(std::span<const std::byte> payload);
 
 std::vector<std::byte> encode_packet(const Packet& packet);
 std::optional<Packet> decode_packet(std::span<const std::byte> datagram);
