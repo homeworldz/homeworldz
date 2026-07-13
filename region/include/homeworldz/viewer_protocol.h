@@ -94,6 +94,11 @@ struct ChatFromSimulator {
     std::string message;
 };
 
+struct TerrainPatch {
+    std::uint8_t x{};
+    std::uint8_t y{};
+};
+
 std::vector<std::byte> encode_use_circuit_code(const UseCircuitCode& message);
 std::optional<UseCircuitCode> decode_use_circuit_code(std::span<const std::byte> payload);
 std::vector<std::byte> encode_region_handshake(const RegionHandshake& message);
@@ -103,6 +108,7 @@ std::vector<std::byte> encode_agent_movement_complete(const AgentMovementComplet
 std::optional<AgentUpdate> decode_agent_update(std::span<const std::byte> payload);
 std::optional<ChatFromViewer> decode_chat_from_viewer(std::span<const std::byte> payload);
 std::vector<std::byte> encode_chat_from_simulator(const ChatFromSimulator& message);
+std::vector<std::byte> encode_flat_terrain(std::span<const TerrainPatch> patches, float height);
 std::vector<std::byte> encode_packet_ack(std::span<const std::uint32_t> sequences);
 std::optional<std::vector<std::uint32_t>> decode_packet_ack(std::span<const std::byte> payload);
 

@@ -174,6 +174,19 @@ bool chat_codecs() {
     const auto encoded = encode_chat_from_simulator(outgoing);
     return encoded.size() > 60 && encoded[3] == std::byte{0x8b};
 }
+
+bool flat_terrain_codec() {
+    const std::array<TerrainPatch, 2> patches{{{0, 0}, {15, 15}}};
+    const auto terrain = encode_flat_terrain(patches, 25.0F);
+    if (terrain.size() < 20 || terrain[0] != std::byte{11} || terrain[1] != std::byte{0x4c}) return false;
+    const auto length = std::to_integer<unsigned>(terrain[2]) |
+                        (std::to_integer<unsigned>(terrain[3]) << 8);
+    return length + 4 == terrain.size() && terrain[4] == std::byte{8} && terrain[5] == std::byte{1} &&
+           terrain[6] == std::byte{16} && terrain[7] == std::byte{0x4c} && terrain[8] == std::byte{0x84} &&
+           terrain[9] == std::byte{} && terrain[10] == std::byte{} && terrain[11] == std::byte{0xc4} &&
+           terrain[12] == std::byte{0x41} && terrain[13] == std::byte{1} && terrain[14] == std::byte{} &&
+           terrain[16] == std::byte{0x28};
+}
 }
 
 int main() {
@@ -184,6 +197,7 @@ int main() {
     if (!circuit_registry()) return 5;
     if (!agent_update_codec()) return 6;
     if (!chat_codecs()) return 7;
-    if (decode_packet(std::array<std::byte, 2>{})) return 8;
+    if (!flat_terrain_codec()) return 8;
+    if (decode_packet(std::array<std::byte, 2>{})) return 9;
     return 0;
 }

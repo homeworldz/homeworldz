@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <charconv>
+#include <cmath>
 #include <cstring>
 #include <limits>
 
@@ -24,6 +25,33 @@ constexpr std::array<std::byte, 4> chat_from_viewer_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x50}};
 constexpr std::array<std::byte, 4> chat_from_simulator_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x8b}};
+
+class BitWriter {
+public:
+    void write(std::uint32_t value, unsigned bits) {
+        for (unsigned remaining = bits; remaining > 0; --remaining) {
+            current_ = static_cast<std::uint8_t>((current_ << 1) | ((value >> (remaining - 1)) & 1));
+            if (++used_ == 8) flush_byte();
+        }
+    }
+    void write_byte(std::uint8_t value) { write(value, 8); }
+    std::vector<std::byte> finish() {
+        if (used_ != 0) {
+            current_ <<= (8 - used_);
+            flush_byte();
+        }
+        return std::move(bytes_);
+    }
+private:
+    void flush_byte() {
+        bytes_.push_back(static_cast<std::byte>(current_));
+        current_ = 0;
+        used_ = 0;
+    }
+    std::vector<std::byte> bytes_;
+    std::uint8_t current_{};
+    unsigned used_{};
+};
 
 std::uint32_t read_be_u32(std::span<const std::byte> data, std::size_t offset) {
     return (std::to_integer<std::uint32_t>(data[offset]) << 24) |
@@ -290,6 +318,36 @@ std::vector<std::byte> encode_chat_from_simulator(const ChatFromSimulator& messa
     output.push_back(static_cast<std::byte>(message.audible));
     for (const auto value : message.position) append_f32(output, value);
     if (!append_variable2(output, message.message)) return {};
+    return output;
+}
+
+std::vector<std::byte> encode_flat_terrain(std::span<const TerrainPatch> patches, float height) {
+    if (patches.empty() || patches.size() > 32 || !std::isfinite(height)) return {};
+    BitWriter bits;
+    bits.write_byte(0x08); bits.write_byte(0x01); // stride 264, little endian
+    bits.write_byte(16); bits.write_byte(0x4c); // 16x16 land layer
+    float offset = height - 0.5F;
+    std::uint32_t offset_bits{};
+    std::memcpy(&offset_bits, &offset, sizeof(offset_bits));
+    for (const auto patch : patches) {
+        if (patch.x >= 16 || patch.y >= 16) return {};
+        bits.write_byte(0x84); // prequant 10, six-bit coefficient words
+        bits.write_byte(static_cast<std::uint8_t>(offset_bits));
+        bits.write_byte(static_cast<std::uint8_t>(offset_bits >> 8));
+        bits.write_byte(static_cast<std::uint8_t>(offset_bits >> 16));
+        bits.write_byte(static_cast<std::uint8_t>(offset_bits >> 24));
+        bits.write_byte(1); bits.write_byte(0); // range 1
+        bits.write((static_cast<std::uint32_t>(patch.x) << 5) | patch.y, 10);
+        bits.write(2, 2); // zero end-of-block
+    }
+    bits.write_byte(97); // end of patches
+    const auto encoded = bits.finish();
+    if (encoded.size() > 65535) return {};
+    std::vector<std::byte> output{std::byte{11}, std::byte{0x4c}}; // LayerData, land
+    const auto size = static_cast<std::uint16_t>(encoded.size());
+    output.push_back(static_cast<std::byte>(size));
+    output.push_back(static_cast<std::byte>(size >> 8));
+    output.insert(output.end(), encoded.begin(), encoded.end());
     return output;
 }
 
