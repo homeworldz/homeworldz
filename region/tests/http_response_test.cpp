@@ -108,6 +108,13 @@ int main() {
     passed &= contains(missing.content, "HTTP/1.1 404 Not Found");
     passed &= contains(missing.content, R"("code":"not_found")");
 
+    const auto llsd = homeworldz::http::response_for_content(
+        "POST /caps/seed/id HTTP/1.1\r\nX-Request-ID: cap-request\r\n\r\n", 200,
+        "application/llsd+xml", "<llsd><map/></llsd>");
+    passed &= llsd.status_code == 200 && llsd.method == "POST" && llsd.path == "/caps/seed/id";
+    passed &= contains(llsd.content, "Content-Type: application/llsd+xml");
+    passed &= contains(llsd.content, "X-Request-ID: cap-request");
+
     const auto unsafe_id = homeworldz::http::response_for(
         "GET /ping HTTP/1.1\r\nX-Request-ID: unsafe value\r\n\r\n");
     passed &= unsafe_id.request_id != "unsafe value";

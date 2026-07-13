@@ -16,6 +16,8 @@ struct Response {
 };
 
 Response response_for(std::string_view request);
+Response response_for_content(std::string_view request, int status_code,
+                              std::string_view content_type, std::string body);
 
 } // namespace homeworldz::http
 

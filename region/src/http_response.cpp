@@ -89,6 +89,24 @@ void parse_request_line(std::string_view request, std::string& method, std::stri
 
 } // namespace
 
+Response response_for_content(std::string_view request, int status_code,
+                              std::string_view content_type, std::string body) {
+    std::string method;
+    std::string path;
+    parse_request_line(request, method, path);
+    std::string_view status = "HTTP/1.1 500 Internal Server Error\r\n";
+    if (status_code == 200) status = "HTTP/1.1 200 OK\r\n";
+    else if (status_code == 400) status = "HTTP/1.1 400 Bad Request\r\n";
+    else if (status_code == 404) status = "HTTP/1.1 404 Not Found\r\n";
+    else if (status_code == 405) status = "HTTP/1.1 405 Method Not Allowed\r\n";
+    auto request_id = request_header(request, request_id_header);
+    if (!valid_request_id(request_id)) request_id = new_request_id();
+    auto content = std::string(status) + "Content-Type: " + std::string(content_type) +
+                   "\r\nConnection: close\r\n" + std::string(request_id_header) + ": " + request_id +
+                   "\r\nContent-Length: " + std::to_string(body.size()) + "\r\n\r\n" + body;
+    return {status_code, std::move(request_id), std::move(method), std::move(path), std::move(content)};
+}
+
 Response response_for(std::string_view request) {
     std::string method;
     std::string path;

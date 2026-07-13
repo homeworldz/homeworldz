@@ -96,6 +96,25 @@ bool send_udp(socket_handle socket, std::string_view endpoint, std::span<const s
     return sendto(socket, reinterpret_cast<const char*>(bytes.data()), static_cast<int>(bytes.size()), 0,
                   reinterpret_cast<const sockaddr*>(&destination), sizeof(destination)) == static_cast<int>(bytes.size());
 }
+
+std::string xml_escape(std::string_view value) {
+    std::string result;
+    for (const char character : value) {
+        if (character == '&') result += "&amp;";
+        else if (character == '<') result += "&lt;";
+        else if (character == '>') result += "&gt;";
+        else if (character == '\"') result += "&quot;";
+        else result.push_back(character);
+    }
+    return result;
+}
+
+std::string capability_session(std::string_view path, std::string_view prefix) {
+    if (!path.starts_with(prefix)) return {};
+    const auto session = path.substr(prefix.size());
+    if (session.empty() || session.find('/') != std::string_view::npos) return {};
+    return std::string(session);
+}
 } // namespace
 
 int main() {
@@ -109,6 +128,8 @@ int main() {
     const auto region_name = environment_value("HOMEWORLDZ_REGION_NAME", "My Region");
     const auto region_grid_x = environment_int("HOMEWORLDZ_REGION_GRID_X", 1000, 0, 1000000);
     const auto region_grid_y = environment_int("HOMEWORLDZ_REGION_GRID_Y", 1000, 0, 1000000);
+    const auto region_public_endpoint = environment_value(
+        "HOMEWORLDZ_REGION_PUBLIC_ENDPOINT", "http://localhost:" + std::to_string(configured_port()));
     std::unique_ptr<homeworldz::grid::RegistrationLifecycle> registration;
     std::unique_ptr<homeworldz::grid::Client> viewer_grid;
     const auto service_token = environment_value("HOMEWORLDZ_GRID_SERVICE_TOKEN");
@@ -116,8 +137,7 @@ int main() {
         try {
             homeworldz::grid::RegionSettings settings{
                 region_name, region_grid_x, region_grid_y,
-                environment_value("HOMEWORLDZ_REGION_PUBLIC_ENDPOINT",
-                                  "http://localhost:" + std::to_string(configured_port())),
+                region_public_endpoint,
                 configured_viewer_port(),
                 environment_int("HOMEWORLDZ_REGION_LEASE_SECONDS", 60, 10, 300)};
             auto transport = homeworldz::grid::socket_transport(
@@ -217,7 +237,38 @@ int main() {
                 std::array<char, 4096> buffer{};
                 const auto received = recv(client, buffer.data(), static_cast<int>(buffer.size() - 1), 0);
                 if (received > 0) {
-                    const auto response = homeworldz::http::response_for(std::string_view(buffer.data(), received));
+                    const std::string_view request(buffer.data(), received);
+                    auto response = homeworldz::http::response_for(request);
+                    auto session_id = capability_session(response.path, "/caps/seed/");
+                    const bool seed = !session_id.empty();
+                    if (!seed) session_id = capability_session(response.path, "/caps/event/");
+                    const bool event_queue = !seed && !session_id.empty();
+                    if (seed || event_queue) {
+                        bool authorized = false;
+                        if (response.method == "POST" && registration && viewer_grid) {
+                            const auto session = viewer_grid->validate_viewer_session(session_id);
+                            authorized = session && session->destination_region_id == registration->region_id();
+                        }
+                        if (authorized && seed) {
+                            const auto event_url = xml_escape(
+                                region_public_endpoint + "/caps/event/" + session_id);
+                            const auto body = std::string("<?xml version=\"1.0\"?><llsd><map>") +
+                                "<key>EventQueueGet</key><uri>" + event_url + "</uri></map></llsd>";
+                            response = homeworldz::http::response_for_content(
+                                request, 200, "application/llsd+xml", body);
+                        } else if (authorized) {
+                            static std::atomic<std::uint64_t> event_id{0};
+                            const auto body = std::string("<?xml version=\"1.0\"?><llsd><map>") +
+                                "<key>events</key><array/><key>id</key><integer>" +
+                                std::to_string(++event_id) + "</integer></map></llsd>";
+                            response = homeworldz::http::response_for_content(
+                                request, 200, "application/llsd+xml", body);
+                        } else {
+                            response = homeworldz::http::response_for_content(
+                                request, response.method == "POST" ? 404 : 405,
+                                "application/llsd+xml", "<llsd><undef/></llsd>");
+                        }
+                    }
                     send(client, response.content.data(), static_cast<int>(response.content.size()), 0);
                     std::cout << "{\"level\":\"info\",\"message\":\"http request\",\"requestId\":"
                               << homeworldz::api::json_string(response.request_id)
