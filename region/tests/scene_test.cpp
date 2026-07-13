@@ -3,6 +3,7 @@
 
 #include <cmath>
 #include <iostream>
+#include <vector>
 
 namespace {
 
@@ -30,5 +31,12 @@ int main() {
     if (loop.advance(10.0) != 4) return 1;
     if (scene.simulation_steps() != 6 || loop.interpolation_alpha() >= 1.0) return 1;
     if (!scene.remove(id) || scene.remove(id) || scene.size() != 0) return 1;
+
+    scene.restore(42, std::vector<homeworldz::scene::Entity>{
+        {7, "restored", {9.0, 8.0, 7.0}, {1.0, 2.0, 3.0}}});
+    const auto* restored = scene.find(7);
+    if (scene.size() != 1 || scene.revision() != 42 || scene.simulation_steps() != 0 ||
+        restored == nullptr || restored->name != "restored" || !near(restored->position.y, 8.0)) return 1;
+    if (scene.create("after restore") != 8) return 1;
     return 0;
 }

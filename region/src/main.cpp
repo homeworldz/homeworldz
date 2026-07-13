@@ -185,10 +185,15 @@ int main() {
         }
     }
 
+    homeworldz::scene::Scene scene;
     std::unique_ptr<homeworldz::storage::RegionStorage> storage;
     try {
         storage = std::make_unique<homeworldz::storage::RegionStorage>(
             environment_value("HOMEWORLDZ_REGION_DATA_PATH", "var/region"));
+        if (storage->load_snapshot(scene)) {
+            std::cout << "{\"level\":\"info\",\"message\":\"scene snapshot restored\",\"revision\":"
+                      << scene.revision() << ",\"entities\":" << scene.size() << "}" << std::endl;
+        }
     } catch (const std::exception& error) {
         std::cerr << "{\"level\":\"error\",\"message\":\"open region storage failed\",\"error\":"
                   << homeworldz::api::json_string(error.what()) << "}" << std::endl;
@@ -198,7 +203,6 @@ int main() {
 #endif
         return 1;
     }
-    homeworldz::scene::Scene scene;
     homeworldz::simulation::FixedStepLoop simulation(scene);
     auto previous_tick = std::chrono::steady_clock::now();
     auto next_snapshot = previous_tick + std::chrono::seconds(30);

@@ -32,6 +32,7 @@ public:
     RegionStorage& operator=(const RegionStorage&) = delete;
 
     void save_snapshot(const scene::Scene& scene);
+    bool load_snapshot(scene::Scene& scene) const;
     SnapshotMetadata snapshot_metadata() const;
     AssetMetadata store_asset(std::string viewer_id, std::span<const std::byte> content);
     std::optional<AssetMetadata> find_asset(std::string_view viewer_id) const;

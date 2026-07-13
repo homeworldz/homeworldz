@@ -6,9 +6,13 @@
 #include <sqlite3.h>
 
 #include <algorithm>
+#include <charconv>
+#include <cctype>
 #include <cstdio>
 #include <fstream>
+#include <iterator>
 #include <stdexcept>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -40,6 +44,170 @@ void replace_file(const std::filesystem::path& source, const std::filesystem::pa
     }
 #endif
 }
+
+class SnapshotReader {
+public:
+    explicit SnapshotReader(std::string_view input) : input_(input) {}
+
+    std::pair<std::uint64_t, std::vector<scene::Entity>> read() {
+        expect("{");
+        expect_string("revision");
+        expect(":");
+        const auto revision = unsigned_integer();
+        expect(",");
+        expect_string("entities");
+        expect(":");
+        expect("[");
+        std::vector<scene::Entity> entities;
+        if (!consume("]")) {
+            do entities.push_back(entity()); while (consume(","));
+            expect("]");
+        }
+        expect("}");
+        skip_space();
+        if (position_ != input_.size()) fail("unexpected content after snapshot");
+        return {revision, std::move(entities)};
+    }
+
+private:
+    [[noreturn]] void fail(const char* message) const {
+        throw std::runtime_error(std::string("parse scene snapshot at byte ") +
+                                 std::to_string(position_) + ": " + message);
+    }
+
+    void skip_space() {
+        while (position_ < input_.size() &&
+               std::isspace(static_cast<unsigned char>(input_[position_]))) ++position_;
+    }
+
+    bool consume(std::string_view token) {
+        skip_space();
+        if (!input_.substr(position_).starts_with(token)) return false;
+        position_ += token.size();
+        return true;
+    }
+
+    void expect(std::string_view token) {
+        if (!consume(token)) fail("unexpected token");
+    }
+
+    void expect_string(std::string_view expected) {
+        if (string() != expected) fail("unexpected object field");
+    }
+
+    std::uint64_t unsigned_integer() {
+        skip_space();
+        std::uint64_t value{};
+        const auto* first = input_.data() + position_;
+        const auto* last = input_.data() + input_.size();
+        const auto result = std::from_chars(first, last, value);
+        if (result.ec != std::errc{} || result.ptr == first) fail("expected unsigned integer");
+        position_ = static_cast<std::size_t>(result.ptr - input_.data());
+        return value;
+    }
+
+    double number() {
+        skip_space();
+        double value{};
+        const auto* first = input_.data() + position_;
+        const auto* last = input_.data() + input_.size();
+        const auto result = std::from_chars(first, last, value);
+        if (result.ec != std::errc{} || result.ptr == first) fail("expected number");
+        position_ = static_cast<std::size_t>(result.ptr - input_.data());
+        return value;
+    }
+
+    static int hex_digit(char value) {
+        if (value >= '0' && value <= '9') return value - '0';
+        if (value >= 'a' && value <= 'f') return value - 'a' + 10;
+        if (value >= 'A' && value <= 'F') return value - 'A' + 10;
+        return -1;
+    }
+
+    std::string string() {
+        skip_space();
+        if (position_ >= input_.size() || input_[position_++] != '"') fail("expected string");
+        std::string result;
+        while (position_ < input_.size()) {
+            const char value = input_[position_++];
+            if (value == '"') return result;
+            if (static_cast<unsigned char>(value) < 0x20) fail("unescaped control character");
+            if (value != '\\') {
+                result.push_back(value);
+                continue;
+            }
+            if (position_ >= input_.size()) fail("incomplete string escape");
+            switch (input_[position_++]) {
+            case '"': result.push_back('"'); break;
+            case '\\': result.push_back('\\'); break;
+            case '/': result.push_back('/'); break;
+            case 'b': result.push_back('\b'); break;
+            case 'f': result.push_back('\f'); break;
+            case 'n': result.push_back('\n'); break;
+            case 'r': result.push_back('\r'); break;
+            case 't': result.push_back('\t'); break;
+            case 'u': {
+                if (position_ + 4 > input_.size()) fail("incomplete unicode escape");
+                unsigned codepoint{};
+                for (int i = 0; i < 4; ++i) {
+                    const int digit = hex_digit(input_[position_++]);
+                    if (digit < 0) fail("invalid unicode escape");
+                    codepoint = codepoint * 16 + static_cast<unsigned>(digit);
+                }
+                if (codepoint >= 0xd800 && codepoint <= 0xdfff) fail("unsupported unicode surrogate");
+                if (codepoint <= 0x7f) {
+                    result.push_back(static_cast<char>(codepoint));
+                } else if (codepoint <= 0x7ff) {
+                    result.push_back(static_cast<char>(0xc0 | (codepoint >> 6)));
+                    result.push_back(static_cast<char>(0x80 | (codepoint & 0x3f)));
+                } else {
+                    result.push_back(static_cast<char>(0xe0 | (codepoint >> 12)));
+                    result.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3f)));
+                    result.push_back(static_cast<char>(0x80 | (codepoint & 0x3f)));
+                }
+                break;
+            }
+            default: fail("invalid string escape");
+            }
+        }
+        fail("unterminated string");
+    }
+
+    scene::Vector3 vector() {
+        expect("[");
+        const auto x = number();
+        expect(",");
+        const auto y = number();
+        expect(",");
+        const auto z = number();
+        expect("]");
+        return {x, y, z};
+    }
+
+    scene::Entity entity() {
+        expect("{");
+        expect_string("id");
+        expect(":");
+        const auto id = unsigned_integer();
+        expect(",");
+        expect_string("name");
+        expect(":");
+        auto name = string();
+        expect(",");
+        expect_string("position");
+        expect(":");
+        const auto position = vector();
+        expect(",");
+        expect_string("velocity");
+        expect(":");
+        const auto velocity = vector();
+        expect("}");
+        return {id, std::move(name), position, velocity};
+    }
+
+    std::string_view input_;
+    std::size_t position_{};
+};
 
 std::string snapshot_json(const scene::Scene& scene) {
     std::vector<const scene::Entity*> entities;
@@ -115,6 +283,28 @@ void RegionStorage::save_snapshot(const scene::Scene& scene) {
     const auto result = sqlite3_step(statement);
     sqlite3_finalize(statement);
     if (result != SQLITE_DONE) throw std::runtime_error(sqlite3_errmsg(database_));
+}
+
+bool RegionStorage::load_snapshot(scene::Scene& scene) const {
+    const auto metadata = snapshot_metadata();
+    const auto relative = std::filesystem::path(metadata.path);
+    if (relative.is_absolute() || std::find(relative.begin(), relative.end(), "..") != relative.end()) {
+        throw std::runtime_error("scene snapshot path is outside the region data directory");
+    }
+    const auto path = data_path_ / relative;
+    if (!std::filesystem::exists(path)) {
+        if (metadata.revision == 0) return false;
+        throw std::runtime_error("committed scene snapshot is missing");
+    }
+    std::ifstream input(path, std::ios::binary);
+    input.exceptions(std::ios::badbit);
+    const std::string contents((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+    auto [revision, entities] = SnapshotReader(contents).read();
+    if (revision != metadata.revision) {
+        throw std::runtime_error("scene snapshot revision does not match committed metadata");
+    }
+    scene.restore(revision, std::move(entities));
+    return true;
 }
 
 SnapshotMetadata RegionStorage::snapshot_metadata() const {

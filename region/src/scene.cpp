@@ -1,5 +1,8 @@
 #include "homeworldz/scene.h"
 
+#include <algorithm>
+#include <limits>
+#include <stdexcept>
 #include <utility>
 
 namespace homeworldz::scene {
@@ -36,6 +39,25 @@ void Scene::step(double seconds) {
     }
     ++simulation_steps_;
     ++revision_;
+}
+
+void Scene::restore(std::uint64_t revision, std::vector<Entity> entities) {
+    std::unordered_map<EntityId, Entity> restored;
+    restored.reserve(entities.size());
+    EntityId next_id = 1;
+    for (auto& entity : entities) {
+        if (entity.id == 0 || entity.id == std::numeric_limits<EntityId>::max()) {
+            throw std::invalid_argument("restored entity ID is outside the supported range");
+        }
+        next_id = std::max(next_id, entity.id + 1);
+        const auto [position, inserted] = restored.emplace(entity.id, std::move(entity));
+        static_cast<void>(position);
+        if (!inserted) throw std::invalid_argument("restored scene contains duplicate entity IDs");
+    }
+    entities_ = std::move(restored);
+    next_id_ = next_id;
+    revision_ = revision;
+    simulation_steps_ = 0;
 }
 
 } // namespace homeworldz::scene

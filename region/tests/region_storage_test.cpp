@@ -19,7 +19,7 @@ int main() {
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad") return 1;
         homeworldz::scene::Scene scene;
         const auto first = scene.create("first", {1, 2, 3}, {0.5, 0, 0});
-        scene.create("second", {4, 5, 6});
+        const auto second = scene.create("second \"line\"\n", {4, 5, 6});
         {
             homeworldz::storage::RegionStorage storage(path);
             storage.save_snapshot(scene);
@@ -29,7 +29,7 @@ int main() {
                 std::ifstream input(path / metadata.path, std::ios::binary);
                 const std::string snapshot((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
                 if (snapshot.find(R"("name":"first")") == std::string::npos ||
-                    snapshot.find(R"("name":"second")") == std::string::npos) return 1;
+                    snapshot.find(R"("name":"second \"line\"\n")") == std::string::npos) return 1;
             }
             auto* entity = scene.find(first);
             if (entity == nullptr) return 1;
@@ -38,6 +38,14 @@ int main() {
             storage.save_snapshot(scene);
             metadata = storage.snapshot_metadata();
             if (metadata.revision != scene.revision() || std::filesystem::exists(path / "scene/snapshot.json.tmp")) return 1;
+
+            homeworldz::scene::Scene restored;
+            if (!storage.load_snapshot(restored) || restored.revision() != scene.revision() || restored.size() != 2) return 1;
+            const auto* restored_first = restored.find(first);
+            const auto* restored_second = restored.find(second);
+            if (restored_first == nullptr || restored_first->position.x != 2.0 ||
+                restored_first->velocity.x != 1.0 || restored_second == nullptr ||
+                restored_second->name != "second \"line\"\n" || restored.create("next") != 3) return 1;
 
             const std::array content{std::byte{0x00}, std::byte{0x7f}, std::byte{0xff}, std::byte{0x42}};
             const auto first_asset = storage.store_asset("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", content);

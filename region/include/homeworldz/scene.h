@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace homeworldz::scene {
 
@@ -28,6 +29,7 @@ public:
     Entity* find(EntityId id);
     const Entity* find(EntityId id) const;
     void step(double seconds);
+    void restore(std::uint64_t revision, std::vector<Entity> entities);
 
     std::size_t size() const { return entities_.size(); }
     std::uint64_t revision() const { return revision_; }
