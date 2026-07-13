@@ -7,6 +7,7 @@ add_library(homeworldz-region-core
   src/scene.cpp
   src/sha256.cpp
   src/simulation_loop.cpp)
+target_sources(homeworldz-region-core PRIVATE src/viewer_protocol.cpp)
 target_include_directories(homeworldz-region-core PUBLIC include)
 target_compile_features(homeworldz-region-core PUBLIC cxx_std_20)
 target_link_libraries(homeworldz-region-core PUBLIC homeworldz-sqlite)
@@ -46,6 +47,10 @@ add_test(NAME region-storage COMMAND homeworldz-storage-tests)
 add_executable(homeworldz-physics-contract-tests tests/physics_contract_test.cpp)
 target_link_libraries(homeworldz-physics-contract-tests PRIVATE homeworldz-region-core)
 add_test(NAME region-physics-contract COMMAND homeworldz-physics-contract-tests)
+
+add_executable(homeworldz-viewer-protocol-tests tests/viewer_protocol_test.cpp)
+target_link_libraries(homeworldz-viewer-protocol-tests PRIVATE homeworldz-region-core)
+add_test(NAME region-viewer-protocol COMMAND homeworldz-viewer-protocol-tests)
 
 if(HOMEWORLDZ_PHYSICS_ADAPTERS_AVAILABLE)
   add_executable(homeworldz-physics-adapter-smoke tests/physics_adapters_test.cpp)
