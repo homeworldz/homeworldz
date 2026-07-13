@@ -32,6 +32,7 @@ public:
     std::size_t size() const { return entities_.size(); }
     std::uint64_t revision() const { return revision_; }
     std::uint64_t simulation_steps() const { return simulation_steps_; }
+    const std::unordered_map<EntityId, Entity>& entities() const { return entities_; }
 
 private:
     EntityId next_id_{1};

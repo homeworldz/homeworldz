@@ -12,6 +12,9 @@
 #include "homeworldz/api_models.h"
 #include "homeworldz/grid_client.h"
 #include "homeworldz/http_response.h"
+#include "homeworldz/region_storage.h"
+#include "homeworldz/scene.h"
+#include "homeworldz/simulation_loop.h"
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -102,6 +105,24 @@ int main() {
         }
     }
 
+    std::unique_ptr<homeworldz::storage::RegionStorage> storage;
+    try {
+        storage = std::make_unique<homeworldz::storage::RegionStorage>(
+            environment_value("HOMEWORLDZ_REGION_DATA_PATH", "var/region"));
+    } catch (const std::exception& error) {
+        std::cerr << "{\"level\":\"error\",\"message\":\"open region storage failed\",\"error\":"
+                  << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+        if (registration) registration->stop();
+#ifdef _WIN32
+        WSACleanup();
+#endif
+        return 1;
+    }
+    homeworldz::scene::Scene scene;
+    homeworldz::simulation::FixedStepLoop simulation(scene);
+    auto previous_tick = std::chrono::steady_clock::now();
+    auto next_snapshot = previous_tick + std::chrono::seconds(30);
+
     const auto server = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (server == invalid_socket) return 1;
     int reuse = 1;
@@ -124,7 +145,7 @@ int main() {
         fd_set readable;
         FD_ZERO(&readable);
         FD_SET(server, &readable);
-        timeval timeout{1, 0};
+        timeval timeout{0, 10000};
         const auto ready = select(static_cast<int>(server) + 1, &readable, nullptr, nullptr, &timeout);
         if (ready > 0 && FD_ISSET(server, &readable)) {
             const auto client = accept(server, nullptr, nullptr);
@@ -143,10 +164,29 @@ int main() {
                 close_socket(client);
             }
         }
-        if (registration && !registration->tick(std::chrono::steady_clock::now())) {
+        const auto now = std::chrono::steady_clock::now();
+        simulation.advance(std::chrono::duration<double>(now - previous_tick).count());
+        previous_tick = now;
+        if (now >= next_snapshot) {
+            try {
+                storage->save_snapshot(scene);
+                next_snapshot = now + std::chrono::seconds(30);
+            } catch (const std::exception& error) {
+                std::cerr << "{\"level\":\"error\",\"message\":\"save scene snapshot failed\",\"error\":"
+                          << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+                running = false;
+            }
+        }
+        if (registration && !registration->tick(now)) {
             std::cerr << "{\"level\":\"error\",\"message\":\"region lease renewal failed\"}" << std::endl;
             running = false;
         }
+    }
+    try {
+        storage->save_snapshot(scene);
+    } catch (const std::exception& error) {
+        std::cerr << "{\"level\":\"error\",\"message\":\"final scene snapshot failed\",\"error\":"
+                  << homeworldz::api::json_string(error.what()) << "}" << std::endl;
     }
     if (registration) registration->stop();
     close_socket(server);

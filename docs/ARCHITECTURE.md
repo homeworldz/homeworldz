@@ -238,6 +238,12 @@ The first design should avoid over-committing to a distributed database. Region
 servers should be operationally understandable and recoverable from their local
 state plus grid-service metadata.
 
+The initial region store uses SQLite in WAL mode for snapshot metadata and a
+deterministic JSON scene snapshot under `scene/`. Snapshots are written to a
+same-directory temporary file and atomically replace the prior snapshot before
+SQLite records the new revision. Regions snapshot every 30 seconds and during
+orderly shutdown.
+
 ## Viewer Compatibility
 
 Firestorm is the first practical compatibility target.

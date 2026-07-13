@@ -2,10 +2,12 @@ add_library(homeworldz-region-core
   src/api_models.cpp
   src/grid_client.cpp
   src/http_response.cpp
+  src/region_storage.cpp
   src/scene.cpp
   src/simulation_loop.cpp)
 target_include_directories(homeworldz-region-core PUBLIC include)
 target_compile_features(homeworldz-region-core PUBLIC cxx_std_20)
+target_link_libraries(homeworldz-region-core PUBLIC homeworldz-sqlite)
 
 add_executable(homeworldz-region src/main.cpp)
 target_link_libraries(homeworldz-region PRIVATE homeworldz-region-core)
@@ -30,4 +32,8 @@ add_test(NAME region-scene COMMAND homeworldz-scene-tests)
 add_executable(homeworldz-grid-client-tests tests/grid_client_test.cpp)
 target_link_libraries(homeworldz-grid-client-tests PRIVATE homeworldz-region-core)
 add_test(NAME region-grid-client COMMAND homeworldz-grid-client-tests)
+
+add_executable(homeworldz-storage-tests tests/region_storage_test.cpp)
+target_link_libraries(homeworldz-storage-tests PRIVATE homeworldz-region-core)
+add_test(NAME region-storage COMMAND homeworldz-storage-tests)
 

@@ -2,6 +2,7 @@
 .vscode/
 .idea/
 build/
+vcpkg_installed/
 out/
 var/
 config/*.ini

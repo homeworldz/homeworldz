@@ -38,12 +38,21 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v6
-      - name: Configure
+      - name: Install SQLite development package
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install --yes libsqlite3-dev
+      - name: Configure (Linux)
+        if: runner.os == 'Linux'
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
-      - name: Build
+      - name: Build (Linux)
+        if: runner.os == 'Linux'
         run: cmake --build build --config Debug
-      - name: Test
+      - name: Test (Linux)
+        if: runner.os == 'Linux'
         run: ctest --test-dir build -C Debug --output-on-failure
+      - name: Build and test (Windows)
+        if: runner.os == 'Windows'
+        run: .\scripts\build-region.ps1 -Test
 
   postgres:
     name: PostgreSQL migration and grid probes

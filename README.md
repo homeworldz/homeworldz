@@ -52,11 +52,19 @@ Run grid tests from `grid/` with `go test ./...`. The grid service listens on
 `:42000` by default and reads `config/grid.ini` and `config/db.ini`. The region
 service HTTP API listens on `:42001` by default.
 
-Configure and build the region service with CMake presets:
+On Windows with Visual Studio, install the pinned vcpkg dependencies and build
+the region service with:
 
 ```powershell
+.\scripts\build-region.ps1 -Test
+```
+
+On Linux, install the SQLite development package and use the CMake presets:
+
+```sh
 cmake --preset default
 cmake --build --preset default
+ctest --preset default --output-on-failure
 ```
 
 To enable development registration with a running grid, set
