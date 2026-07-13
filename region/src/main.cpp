@@ -119,6 +119,53 @@ bool send_udp(socket_handle socket, std::string_view endpoint, std::span<const s
                   reinterpret_cast<const sockaddr*>(&destination), sizeof(destination)) == static_cast<int>(bytes.size());
 }
 
+std::optional<std::string> receive_http_request(socket_handle client) {
+    constexpr std::size_t maximum_header_size = 64 * 1024;
+    constexpr std::size_t maximum_body_size = 1024 * 1024;
+    std::string request;
+    std::array<char, 4096> buffer{};
+    std::optional<std::size_t> expected_size;
+    while (request.size() <= maximum_header_size + maximum_body_size) {
+        const auto received = recv(client, buffer.data(), static_cast<int>(buffer.size()), 0);
+        if (received <= 0) return std::nullopt;
+        request.append(buffer.data(), static_cast<std::size_t>(received));
+        if (!expected_size) {
+            const auto header_end = request.find("\r\n\r\n");
+            if (header_end == std::string::npos) {
+                if (request.size() > maximum_header_size) return std::nullopt;
+                continue;
+            }
+            const auto content_length = homeworldz::http::request_content_length(
+                std::string_view(request).substr(0, header_end + 4));
+            if (!content_length || *content_length > maximum_body_size) return std::nullopt;
+            expected_size = header_end + 4 + *content_length;
+        }
+        if (request.size() >= *expected_size) {
+            request.resize(*expected_size);
+            return request;
+        }
+    }
+    return std::nullopt;
+}
+
+bool send_all(socket_handle client, std::string_view content) {
+    std::size_t sent = 0;
+    while (sent < content.size()) {
+        const auto count = send(client, content.data() + sent, static_cast<int>(content.size() - sent), 0);
+        if (count <= 0) return false;
+        sent += static_cast<std::size_t>(count);
+    }
+    return true;
+}
+
+void finish_http_response(socket_handle client) {
+#ifdef _WIN32
+    shutdown(client, SD_SEND);
+#else
+    shutdown(client, SHUT_WR);
+#endif
+}
+
 std::string capability_session(std::string_view path, std::string_view prefix) {
     if (!path.starts_with(prefix)) return {};
     const auto session = path.substr(prefix.size());
@@ -296,10 +343,9 @@ int main() {
         if (ready > 0 && FD_ISSET(server, &readable)) {
             const auto client = accept(server, nullptr, nullptr);
             if (client != invalid_socket) {
-                std::array<char, 4096> buffer{};
-                const auto received = recv(client, buffer.data(), static_cast<int>(buffer.size() - 1), 0);
-                if (received > 0) {
-                    const std::string_view request(buffer.data(), received);
+                const auto received_request = receive_http_request(client);
+                if (received_request) {
+                    const std::string_view request(*received_request);
                     auto response = homeworldz::http::response_for(request);
                     auto session_id = capability_session(response.path, "/caps/seed/");
                     const bool seed = !session_id.empty();
@@ -351,7 +397,8 @@ int main() {
                                 "application/llsd+xml", "<llsd><undef/></llsd>");
                         }
                     }
-                    send(client, response.content.data(), static_cast<int>(response.content.size()), 0);
+                    static_cast<void>(send_all(client, response.content));
+                    finish_http_response(client);
                     std::cout << "{\"level\":\"info\",\"message\":\"http request\",\"requestId\":"
                               << homeworldz::api::json_string(response.request_id)
                               << ",\"method\":" << homeworldz::api::json_string(response.method)

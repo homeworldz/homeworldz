@@ -115,6 +115,11 @@ int main() {
     passed &= llsd.status_code == 200 && llsd.method == "POST" && llsd.path == "/caps/seed/id";
     passed &= contains(llsd.content, "Content-Type: application/llsd+xml");
     passed &= contains(llsd.content, "X-Request-ID: cap-request");
+    passed &= homeworldz::http::request_content_length(
+                  "POST /caps/seed/id HTTP/1.1\r\ncontent-length: 8192\r\n\r\n") == 8192;
+    passed &= homeworldz::http::request_content_length("GET /ready HTTP/1.1\r\n\r\n") == 0;
+    passed &= !homeworldz::http::request_content_length(
+                   "POST /caps/seed/id HTTP/1.1\r\nContent-Length: invalid\r\n\r\n");
     const auto seed = homeworldz::viewer::seed_capability_xml("http://region.example:42001/", "session-id");
     passed &= contains(seed, "<key>EventQueueGet</key><uri>http://region.example:42001/caps/event/session-id</uri>");
     passed &= contains(seed, "<key>GetTexture</key><uri>http://region.example:42001/caps/texture/session-id</uri>");

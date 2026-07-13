@@ -3,6 +3,7 @@
 #include "homeworldz/api_models.h"
 
 #include <atomic>
+#include <charconv>
 #include <chrono>
 #include <cstdint>
 #include <utility>
@@ -88,6 +89,15 @@ void parse_request_line(std::string_view request, std::string& method, std::stri
 }
 
 } // namespace
+
+std::optional<std::size_t> request_content_length(std::string_view request) {
+    const auto value = request_header(request, "Content-Length");
+    if (value.empty()) return 0;
+    std::size_t length{};
+    const auto parsed = std::from_chars(value.data(), value.data() + value.size(), length);
+    if (parsed.ec != std::errc{} || parsed.ptr != value.data() + value.size()) return std::nullopt;
+    return length;
+}
 
 Response response_for_content(std::string_view request, int status_code,
                               std::string_view content_type, std::string body) {
