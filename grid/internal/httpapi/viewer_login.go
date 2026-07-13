@@ -208,6 +208,19 @@ func (a *API) viewerLogin(w http.ResponseWriter, r *http.Request) {
 			writeViewerLogin(w, loginFailure("unavailable", "The grid could not prepare the viewer inventory."))
 			return
 		}
+		for _, item := range inventory.DefaultWearables(session.UserID) {
+			if _, err := a.inventory.EnsureItem(r.Context(), item); err != nil {
+				_ = a.identity.RevokeSession(r.Context(), session.ID)
+				writeViewerLogin(w, loginFailure("unavailable", "The grid could not prepare the default outfit."))
+				return
+			}
+		}
+		folders, err = a.inventory.ListFolders(r.Context(), session.UserID)
+		if err != nil {
+			_ = a.identity.RevokeSession(r.Context(), session.ID)
+			writeViewerLogin(w, loginFailure("unavailable", "The grid could not refresh the viewer inventory."))
+			return
+		}
 	}
 	rootID, skeleton := inventorySkeleton(folders)
 	root := rpcStructValue(rpcField("folder_id", rpcString(rootID)))

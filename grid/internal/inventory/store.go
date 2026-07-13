@@ -53,12 +53,50 @@ type PostgresStore struct{ db *sql.DB }
 func NewPostgresStore(db *sql.DB) *PostgresStore { return &PostgresStore{db: db} }
 
 func SystemFolderID(userID string, folderType int) string {
-	value := sha256.Sum256([]byte(userID + "\x00homeworldz-inventory-folder\x00" + strconv.Itoa(folderType)))
+	return deterministicUUID(userID + "\x00homeworldz-inventory-folder\x00" + strconv.Itoa(folderType))
+}
+
+func deterministicUUID(seed string) string {
+	value := sha256.Sum256([]byte(seed))
 	value[6] = (value[6] & 0x0f) | 0x80
 	value[8] = (value[8] & 0x3f) | 0x80
 	encoded := hex.EncodeToString(value[:16])
 	return encoded[0:8] + "-" + encoded[8:12] + "-" + encoded[12:16] + "-" +
 		encoded[16:20] + "-" + encoded[20:32]
+}
+
+func DefaultWearables(userID string) []Item {
+	const fullPermissions = uint32(0x7fffffff)
+	bodyPartsID := SystemFolderID(userID, 13)
+	currentOutfitID := SystemFolderID(userID, 46)
+	definitions := []struct {
+		name         string
+		wearableType uint32
+	}{
+		{"Default Shape", 0}, {"Default Skin", 1}, {"Default Hair", 2}, {"Default Eyes", 3},
+	}
+	items := make([]Item, 0, len(definitions)*2)
+	for _, definition := range definitions {
+		itemID := deterministicUUID(userID + "\x00homeworldz-default-wearable-item\x00" +
+			strconv.FormatUint(uint64(definition.wearableType), 10))
+		items = append(items, Item{
+			ID: itemID, OwnerUserID: userID, FolderID: bodyPartsID,
+			AssetID: deterministicUUID("homeworldz-default-wearable-asset\x00" +
+				strconv.FormatUint(uint64(definition.wearableType), 10)),
+			AssetType: 13, InventoryType: 18, Name: definition.name, Flags: definition.wearableType,
+			BasePermissions: fullPermissions, CurrentPermissions: fullPermissions,
+			NextPermissions: fullPermissions,
+		})
+		items = append(items, Item{
+			ID: deterministicUUID(userID + "\x00homeworldz-current-outfit-link\x00" +
+				strconv.FormatUint(uint64(definition.wearableType), 10)),
+			OwnerUserID: userID, FolderID: currentOutfitID, AssetID: itemID,
+			AssetType: 24, InventoryType: 18, Name: definition.name, Flags: definition.wearableType,
+			BasePermissions: fullPermissions, CurrentPermissions: fullPermissions,
+			NextPermissions: fullPermissions,
+		})
+	}
+	return items
 }
 
 func SystemFolders(userID string) []Folder {

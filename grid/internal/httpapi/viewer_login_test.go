@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/homeworldz/homeworldz/grid/internal/inventory"
 	"github.com/homeworldz/homeworldz/grid/internal/regions"
 )
 
@@ -58,7 +59,8 @@ func TestViewerLoginResolvesNamedRegion(t *testing.T) {
 		PublicEndpoint: "http://fallback.example:42001", LeaseDuration: time.Minute})
 	target, _ := regionStore.Register(context.Background(), regions.Registration{Name: "Welcome", GridX: 1001, GridY: 1002,
 		PublicEndpoint: "http://127.0.0.1:42001", ViewerPort: 43002, LeaseDuration: time.Minute})
-	handler := New(checker{}, "test", Options{Identity: identities, Regions: regionStore})
+	inventories := &memoryInventoryStore{folders: make(map[string][]inventory.Folder)}
+	handler := New(checker{}, "test", Options{Identity: identities, Regions: regionStore, Inventory: inventories})
 	fields := viewerResponse(t, handler, viewerRequest("Test", "User", "development-password", "uri:Welcome&128&128&25"))
 	if fields["login"].text() != "true" {
 		t.Fatalf("login = %q, reason = %q, message = %q", fields["login"].text(), fields["reason"].text(), fields["message"].text())
@@ -86,7 +88,7 @@ func TestViewerLoginResolvesNamedRegion(t *testing.T) {
 		folder := value.fields()
 		id := folder["folder_id"].text()
 		parent := folder["parent_id"].text()
-		if id == "" || ids[id] || folder["version"].text() != "1" {
+		if id == "" || ids[id] || folder["version"].text() == "" {
 			t.Fatalf("invalid inventory folder %d: %#v", index, folder)
 		}
 		ids[id] = true
@@ -99,6 +101,10 @@ func TestViewerLoginResolvesNamedRegion(t *testing.T) {
 		} else if parent != rootID {
 			t.Fatalf("inventory folder %d parent = %q, want %q", index, parent, rootID)
 		}
+	}
+	items, err := inventories.ListItems(context.Background(), fields["agent_id"].text())
+	if err != nil || len(items) != 8 {
+		t.Fatalf("default inventory items = %#v, error = %v", items, err)
 	}
 	for _, required := range []string{"0", "1", "5", "6", "7", "10", "13", "15", "16", "20", "21"} {
 		if !types[required] {
