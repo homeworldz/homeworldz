@@ -20,6 +20,10 @@ constexpr std::array<std::byte, 4> complete_agent_movement_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0xf9}};
 constexpr std::array<std::byte, 4> agent_movement_complete_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0xfa}};
+constexpr std::array<std::byte, 4> chat_from_viewer_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x50}};
+constexpr std::array<std::byte, 4> chat_from_simulator_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x8b}};
 
 std::uint32_t read_be_u32(std::span<const std::byte> data, std::size_t offset) {
     return (std::to_integer<std::uint32_t>(data[offset]) << 24) |
@@ -51,6 +55,17 @@ float read_f32(std::span<const std::byte> data, std::size_t offset) {
 
 std::array<float, 3> read_vector3(std::span<const std::byte> data, std::size_t offset) {
     return {read_f32(data, offset), read_f32(data, offset + 4), read_f32(data, offset + 8)};
+}
+
+std::optional<std::pair<std::string, std::size_t>> read_variable2(
+    std::span<const std::byte> data, std::size_t offset) {
+    if (offset + 2 > data.size()) return std::nullopt;
+    const auto size = std::to_integer<std::size_t>(data[offset]) |
+                      (std::to_integer<std::size_t>(data[offset + 1]) << 8);
+    if (size == 0 || offset + 2 + size > data.size() || data[offset + 1 + size] != std::byte{})
+        return std::nullopt;
+    const auto begin = reinterpret_cast<const char*>(data.data() + offset + 2);
+    return std::pair{std::string(begin, size - 1), offset + 2 + size};
 }
 
 void append_le_u32(std::vector<std::byte>& output, std::uint32_t value) {
@@ -249,6 +264,33 @@ std::optional<AgentUpdate> decode_agent_update(std::span<const std::byte> payloa
     result.control_flags = read_le_u32(payload, 110);
     result.flags = std::to_integer<std::uint8_t>(payload[114]);
     return result;
+}
+
+std::optional<ChatFromViewer> decode_chat_from_viewer(std::span<const std::byte> payload) {
+    if (payload.size() < 43 || !std::equal(chat_from_viewer_id.begin(), chat_from_viewer_id.end(), payload.begin()))
+        return std::nullopt;
+    ChatFromViewer result;
+    std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
+    const auto message = read_variable2(payload, 36);
+    if (!message || message->second + 5 != payload.size()) return std::nullopt;
+    result.message = message->first;
+    result.type = std::to_integer<std::uint8_t>(payload[message->second]);
+    result.channel = static_cast<std::int32_t>(read_le_u32(payload, message->second + 1));
+    return result;
+}
+
+std::vector<std::byte> encode_chat_from_simulator(const ChatFromSimulator& message) {
+    std::vector<std::byte> output(chat_from_simulator_id.begin(), chat_from_simulator_id.end());
+    if (!append_variable1(output, message.from_name)) return {};
+    append_uuid(output, message.source_id);
+    append_uuid(output, message.owner_id);
+    output.push_back(static_cast<std::byte>(message.source_type));
+    output.push_back(static_cast<std::byte>(message.chat_type));
+    output.push_back(static_cast<std::byte>(message.audible));
+    for (const auto value : message.position) append_f32(output, value);
+    if (!append_variable2(output, message.message)) return {};
+    return output;
 }
 
 std::vector<std::byte> encode_packet_ack(std::span<const std::uint32_t> sequences) {

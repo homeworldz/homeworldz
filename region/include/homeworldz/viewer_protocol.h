@@ -77,6 +77,23 @@ struct AgentUpdate : AgentMessage {
     std::uint8_t flags{};
 };
 
+struct ChatFromViewer : AgentMessage {
+    std::string message;
+    std::uint8_t type{};
+    std::int32_t channel{};
+};
+
+struct ChatFromSimulator {
+    std::string from_name;
+    Uuid source_id{};
+    Uuid owner_id{};
+    std::uint8_t source_type{1};
+    std::uint8_t chat_type{1};
+    std::uint8_t audible{1};
+    std::array<float, 3> position{};
+    std::string message;
+};
+
 std::vector<std::byte> encode_use_circuit_code(const UseCircuitCode& message);
 std::optional<UseCircuitCode> decode_use_circuit_code(std::span<const std::byte> payload);
 std::vector<std::byte> encode_region_handshake(const RegionHandshake& message);
@@ -84,6 +101,8 @@ std::optional<AgentMessage> decode_region_handshake_reply(std::span<const std::b
 std::optional<CompleteAgentMovement> decode_complete_agent_movement(std::span<const std::byte> payload);
 std::vector<std::byte> encode_agent_movement_complete(const AgentMovementComplete& message);
 std::optional<AgentUpdate> decode_agent_update(std::span<const std::byte> payload);
+std::optional<ChatFromViewer> decode_chat_from_viewer(std::span<const std::byte> payload);
+std::vector<std::byte> encode_chat_from_simulator(const ChatFromSimulator& message);
 std::vector<std::byte> encode_packet_ack(std::span<const std::uint32_t> sequences);
 std::optional<std::vector<std::uint32_t>> decode_packet_ack(std::span<const std::byte> payload);
 

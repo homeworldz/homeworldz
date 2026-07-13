@@ -158,6 +158,22 @@ bool agent_update_codec() {
            update->body_rotation[0] == 1.0F && update->camera_center[0] == 2.0F &&
            update->draw_distance == 128.0F && update->control_flags == 0x2001;
 }
+
+bool chat_codecs() {
+    const auto agent = parse_uuid("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");
+    const auto session = parse_uuid("11111111-2222-4333-8444-555555555555");
+    if (!agent || !session) return false;
+    auto payload = bytes({0xff, 0xff, 0x00, 0x50});
+    payload.insert(payload.end(), agent->begin(), agent->end());
+    payload.insert(payload.end(), session->begin(), session->end());
+    payload.insert(payload.end(), {std::byte{3}, std::byte{}, std::byte{'h'}, std::byte{'i'}, std::byte{},
+                                   std::byte{1}, std::byte{}, std::byte{}, std::byte{}, std::byte{}});
+    const auto incoming = decode_chat_from_viewer(payload);
+    if (!incoming || incoming->message != "hi" || incoming->type != 1 || incoming->channel != 0) return false;
+    ChatFromSimulator outgoing{"Test User", *agent, *agent, 1, 1, 1, {1.F, 2.F, 3.F}, "hello"};
+    const auto encoded = encode_chat_from_simulator(outgoing);
+    return encoded.size() > 60 && encoded[3] == std::byte{0x8b};
+}
 }
 
 int main() {
@@ -167,6 +183,7 @@ int main() {
     if (!resend_throttle_and_timeout()) return 4;
     if (!circuit_registry()) return 5;
     if (!agent_update_codec()) return 6;
-    if (decode_packet(std::array<std::byte, 2>{})) return 7;
+    if (!chat_codecs()) return 7;
+    if (decode_packet(std::array<std::byte, 2>{})) return 8;
     return 0;
 }
