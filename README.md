@@ -76,6 +76,7 @@ To enable development registration with a running grid, set
 overrides are `HOMEWORLDZ_GRID_URL`, `HOMEWORLDZ_REGION_NAME`,
 `HOMEWORLDZ_REGION_GRID_X`, `HOMEWORLDZ_REGION_GRID_Y`,
 `HOMEWORLDZ_REGION_PUBLIC_ENDPOINT`, and `HOMEWORLDZ_REGION_LEASE_SECONDS`.
+`HOMEWORLDZ_VIEWER_PORT` selects the viewer UDP listener and defaults to `42002`.
 Without a service token, the region runs without grid registration.
 
 ## Documentation

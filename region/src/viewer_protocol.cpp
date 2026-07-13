@@ -78,6 +78,19 @@ std::optional<Uuid> parse_uuid(std::string_view text) {
     return result;
 }
 
+std::string format_uuid(const Uuid& value) {
+    constexpr char digits[] = "0123456789abcdef";
+    std::string result;
+    result.reserve(36);
+    for (std::size_t index = 0; index < value.size(); ++index) {
+        if (index == 4 || index == 6 || index == 8 || index == 10) result.push_back('-');
+        const auto byte = std::to_integer<unsigned>(value[index]);
+        result.push_back(digits[byte >> 4]);
+        result.push_back(digits[byte & 0x0f]);
+    }
+    return result;
+}
+
 std::vector<std::byte> encode_use_circuit_code(const UseCircuitCode& message) {
     std::vector<std::byte> output(use_circuit_code_id.begin(), use_circuit_code_id.end());
     output.reserve(40);

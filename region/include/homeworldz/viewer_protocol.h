@@ -32,6 +32,7 @@ struct Packet {
 using Uuid = std::array<std::byte, 16>;
 
 std::optional<Uuid> parse_uuid(std::string_view text);
+std::string format_uuid(const Uuid& value);
 
 struct UseCircuitCode {
     std::uint32_t circuit_code{};

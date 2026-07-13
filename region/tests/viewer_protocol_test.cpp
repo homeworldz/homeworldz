@@ -86,6 +86,7 @@ bool circuit_registry() {
     const auto session = parse_uuid("11111111-2222-4333-8444-555555555555");
     const auto agent = parse_uuid("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");
     if (!session || !agent || parse_uuid("not-a-uuid")) return false;
+    if (format_uuid(*session) != "11111111-2222-4333-8444-555555555555") return false;
     UseCircuitCode expected{987654, *session, *agent};
     unsigned authorizations = 0;
     CircuitRegistry registry([&](const UseCircuitCode& candidate) {
