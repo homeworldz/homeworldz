@@ -25,7 +25,7 @@ func LoadGrid() (Grid, error) {
 		filepath.Join(directory, "grid.ini"),
 		filepath.Join(directory, "db.ini"),
 	}
-	parsed, err := ini.LoadSources(ini.LoadOptions{Loose: true}, files[0], files[1])
+	parsed, err := ini.LoadSources(ini.LoadOptions{Loose: true, IgnoreInlineComment: true}, files[0], files[1])
 	if err != nil {
 		return Grid{}, fmt.Errorf("load configuration: %w", err)
 	}

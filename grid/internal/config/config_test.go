@@ -9,7 +9,7 @@ import (
 func TestLoadGridFromINI(t *testing.T) {
 	directory := t.TempDir()
 	writeFile(t, directory, "grid.ini", "[server]\naddress=:43000\n[auth]\nservice_token=file-token\n")
-	writeFile(t, directory, "db.ini", "[database]\nurl=postgres://file/database\n")
+	writeFile(t, directory, "db.ini", "[database]\nurl=postgres://user:semicolon;hash#password@file/database\n")
 	t.Setenv("HOMEWORLDZ_CONFIG_DIR", directory)
 	unsetEnv(t, "HOMEWORLDZ_DATABASE_URL")
 	unsetEnv(t, "HOMEWORLDZ_GRID_ADDR")
@@ -19,7 +19,7 @@ func TestLoadGridFromINI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Address != ":43000" || got.DatabaseURL != "postgres://file/database" || got.ServiceToken != "file-token" {
+	if got.Address != ":43000" || got.DatabaseURL != "postgres://user:semicolon;hash#password@file/database" || got.ServiceToken != "file-token" {
 		t.Fatalf("unexpected configuration: %#v", got)
 	}
 }
