@@ -1,4 +1,5 @@
 add_library(homeworldz-region-core
+  src/avatar_controller.cpp
   src/api_models.cpp
   src/grid_client.cpp
   src/http_response.cpp
@@ -52,6 +53,10 @@ add_test(NAME region-physics-contract COMMAND homeworldz-physics-contract-tests)
 add_executable(homeworldz-viewer-protocol-tests tests/viewer_protocol_test.cpp)
 target_link_libraries(homeworldz-viewer-protocol-tests PRIVATE homeworldz-region-core)
 add_test(NAME region-viewer-protocol COMMAND homeworldz-viewer-protocol-tests)
+
+add_executable(homeworldz-avatar-controller-tests tests/avatar_controller_test.cpp)
+target_link_libraries(homeworldz-avatar-controller-tests PRIVATE homeworldz-region-core)
+add_test(NAME region-avatar-controller COMMAND homeworldz-avatar-controller-tests)
 
 if(HOMEWORLDZ_PHYSICS_ADAPTERS_AVAILABLE)
   add_executable(homeworldz-physics-adapter-smoke tests/physics_adapters_test.cpp)
