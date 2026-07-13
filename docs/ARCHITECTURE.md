@@ -101,6 +101,8 @@ Default API policy:
 - Use explicit versioned paths for APIs that need compatibility guarantees.
 - Use HTTP streaming for large transfers where plain request/response is not a
   good fit.
+- Expose `/ping` for process liveness, `/ready` for dependency-aware readiness,
+  and `/version` for build and compatibility information.
 - Defer gRPC, protobuf, FlatBuffers, or a message bus until a concrete measured
   need appears.
 

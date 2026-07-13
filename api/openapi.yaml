@@ -1,0 +1,63 @@
+openapi: 3.0.3
+info:
+  title: HomeWorldz Internal API
+  version: 0.1.0
+servers:
+  - url: http://localhost:8080
+paths:
+  /ping:
+    get:
+      operationId: ping
+      summary: Report process liveness
+      responses:
+        "200":
+          description: Process is alive
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Status" }
+  /ready:
+    get:
+      operationId: ready
+      summary: Report whether the service can accept traffic
+      responses:
+        "200":
+          description: Service is ready
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Status" }
+        "503":
+          description: A required dependency is unavailable
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /version:
+    get:
+      operationId: version
+      summary: Report build and API versions
+      responses:
+        "200":
+          description: Version information
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Version" }
+components:
+  schemas:
+    Status:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string }
+    Version:
+      type: object
+      required: [service, version, apiVersion]
+      properties:
+        service: { type: string }
+        version: { type: string }
+        apiVersion: { type: string }
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }
+

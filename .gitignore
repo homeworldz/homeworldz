@@ -1,0 +1,11 @@
+.idea/
+.vscode/
+build/
+out/
+*.user
+*.db
+*.db-shm
+*.db-wal
+grid/homeworldz-grid
+grid/homeworldz-grid.exe
+

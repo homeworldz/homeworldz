@@ -6,10 +6,10 @@ than runtime dependencies.
 
 ## Milestone 0: Foundation
 
-- [ ] Establish the C++20 and Go monorepo layout.
-- [ ] Define initial OpenAPI contracts and common error responses.
-- [ ] Add Postgres development infrastructure and initial schema migrations.
-- [ ] Implement `/ping`, `/ready`, and `/version` in both services.
+- [x] Establish the C++20 and Go monorepo layout.
+- [x] Define initial OpenAPI contracts and common error responses.
+- [x] Add Postgres development infrastructure and initial schema migrations.
+- [x] Implement `/ping`, `/ready`, and `/version` in both services.
 - [ ] Add Windows and Linux CI for builds, tests, and migrations.
 - [ ] Add generated or validated C++ and Go API models.
 - [ ] Add service-token authentication, request IDs, and structured logging.
@@ -87,4 +87,3 @@ explicit viewer version. `/ping` remains successful during dependency outages;
 - Keep Jolt as the provisional physics preference until the comparison gate.
 - Defer complete inventory, scripting, editing, federation, and multi-region
   transfer until after the first playable region.
-

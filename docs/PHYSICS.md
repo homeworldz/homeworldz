@@ -4,10 +4,10 @@
 
 HomeWorldz is considering a clean architecture where region servers run
 distributed simulations with local asset management and central grid services
-for users, region registration, presence, and coordination. Physics should be
-chosen before the final server implementation language, because the engine
-choice affects native interop, process boundaries, determinism, deployment, and
-the shape of region handoff.
+for users, region registration, presence, and coordination. The region server
+language is C++20. Physics still requires an explicit evaluation because the
+engine choice affects integration boundaries, determinism, deployment, and the
+shape of region handoff.
 
 The primary compatibility target is Firestorm-first viewer behavior, with the
 Second Life viewer protocol remaining an important reference point. The physics
@@ -176,7 +176,7 @@ The likely decision shape is:
 
 ## Physics Lab
 
-Before selecting a server language or storage architecture, build a small
+Before committing the playable region to a physics backend, build a small
 standalone physics lab that exercises both Jolt and PhysX 5 against the same
 scenario set.
 

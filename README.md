@@ -11,9 +11,26 @@ region-local scene and asset storage.
 
 This repository is currently in its planning and foundation phase.
 
+## Development
+
+Run grid tests from `grid/` with `go test ./...`. The grid service listens on
+`:8080` by default and reads Postgres from `HOMEWORLDZ_DATABASE_URL`.
+
+Start development Postgres with:
+
+```powershell
+docker compose -f deploy/compose.yaml up -d
+```
+
+Configure and build the region service with CMake presets:
+
+```powershell
+cmake --preset default
+cmake --build --preset default
+```
+
 ## Documentation
 
 - [Implementation plan](docs/PLAN.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Physics evaluation](docs/PHYSICS.md)
-

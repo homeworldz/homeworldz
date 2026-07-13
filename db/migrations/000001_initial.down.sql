@@ -1,0 +1,6 @@
+DROP TABLE IF EXISTS presence;
+DROP TABLE IF EXISTS regions;
+DROP TABLE IF EXISTS sessions;
+DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS schema_metadata;
+
