@@ -45,6 +45,11 @@ func TestInventoryDescendentsCapability(t *testing.T) {
 		!strings.Contains(content, "<key>items</key><array/>") {
 		t.Fatalf("inventory response = %s", content)
 	}
+	nullResponse := inventoryDescendentsXML(user.ID, []string{nullInventoryFolderID}, folders)
+	if strings.Contains(nullResponse, "unknown folder") ||
+		!strings.Contains(nullResponse, "<key>folder_id</key><uuid>"+nullInventoryFolderID+"</uuid>") {
+		t.Fatalf("null inventory folder response = %s", nullResponse)
+	}
 }
 
 func TestInventoryDescendentsCapabilityRejectsBadRequest(t *testing.T) {

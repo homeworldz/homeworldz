@@ -14,6 +14,7 @@ import (
 )
 
 const maximumInventoryFolderBatch = 256
+const nullInventoryFolderID = "00000000-0000-0000-0000-000000000000"
 
 func (a *API) inventoryDescendentsCapability(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -124,6 +125,12 @@ func inventoryDescendentsXML(ownerID string, requested []string, folders []inven
 	}
 	var good, bad strings.Builder
 	for _, folderID := range requested {
+		if folderID == nullInventoryFolderID {
+			fmt.Fprintf(&good, "<map><key>folder_id</key><uuid>%s</uuid><key>owner_id</key><uuid>%s</uuid>"+
+				"<key>version</key><integer>0</integer><key>descendents</key><integer>0</integer>"+
+				"<key>categories</key><array/><key>items</key><array/></map>", folderID, html.EscapeString(ownerID))
+			continue
+		}
 		folder, ok := byID[folderID]
 		if !ok {
 			fmt.Fprintf(&bad, "<map><key>folder_id</key><uuid>%s</uuid><key>error</key><string>unknown folder</string></map>",
