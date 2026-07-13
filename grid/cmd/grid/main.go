@@ -14,6 +14,7 @@ import (
 	"github.com/homeworldz/homeworldz/grid/internal/config"
 	"github.com/homeworldz/homeworldz/grid/internal/httpapi"
 	"github.com/homeworldz/homeworldz/grid/internal/identity"
+	"github.com/homeworldz/homeworldz/grid/internal/inventory"
 	"github.com/homeworldz/homeworldz/grid/internal/presence"
 	"github.com/homeworldz/homeworldz/grid/internal/regions"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -42,12 +43,13 @@ func main() {
 	server := &http.Server{
 		Addr: settings.Address,
 		Handler: httpapi.New(db, version, httpapi.Options{
-			ServiceToken: settings.ServiceToken,
+			ServiceToken:  settings.ServiceToken,
 			GridPublicURL: settings.PublicURL,
-			Logger:       logger,
-			Regions:      regionStore(db),
-			Identity:     identityStore(db),
-			Presence:     presenceStore(db),
+			Logger:        logger,
+			Regions:       regionStore(db),
+			Identity:      identityStore(db),
+			Presence:      presenceStore(db),
+			Inventory:     inventoryStore(db),
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
@@ -89,4 +91,11 @@ func presenceStore(db *sql.DB) presence.Store {
 		return nil
 	}
 	return presence.NewPostgresStore(db)
+}
+
+func inventoryStore(db *sql.DB) inventory.Store {
+	if db == nil {
+		return nil
+	}
+	return inventory.NewPostgresStore(db)
 }

@@ -3,19 +3,17 @@ package httpapi
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/binary"
-	"encoding/hex"
 	"encoding/xml"
 	"errors"
 	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/homeworldz/homeworldz/grid/internal/identity"
+	"github.com/homeworldz/homeworldz/grid/internal/inventory"
 	"github.com/homeworldz/homeworldz/grid/internal/regions"
 )
 
@@ -117,43 +115,26 @@ func rpcField(name string, value rpcOutputValue) rpcOutputMember {
 	return rpcOutputMember{Name: name, Value: value}
 }
 
-func inventoryFolderID(userID string, folderType int) string {
-	value := sha256.Sum256([]byte(userID + "\x00homeworldz-inventory-folder\x00" + strconv.Itoa(folderType)))
-	value[6] = (value[6] & 0x0f) | 0x80
-	value[8] = (value[8] & 0x3f) | 0x80
-	encoded := hex.EncodeToString(value[:16])
-	return encoded[0:8] + "-" + encoded[8:12] + "-" + encoded[12:16] + "-" +
-		encoded[16:20] + "-" + encoded[20:32]
-}
-
-func inventoryFolder(name, id, parent string, folderType int) rpcOutputValue {
+func inventoryFolder(folder inventory.Folder) rpcOutputValue {
 	return rpcStructValue(
-		rpcField("name", rpcString(name)),
-		rpcField("folder_id", rpcString(id)),
-		rpcField("parent_id", rpcString(parent)),
-		rpcField("version", rpcInt(1)),
-		rpcField("type_default", rpcInt(folderType)),
+		rpcField("name", rpcString(folder.Name)),
+		rpcField("folder_id", rpcString(folder.ID)),
+		rpcField("parent_id", rpcString(folder.ParentID)),
+		rpcField("version", rpcInt(int(folder.Version))),
+		rpcField("type_default", rpcInt(folder.TypeDefault)),
 	)
 }
 
-func inventorySkeleton(userID string) (string, []rpcOutputValue) {
-	rootID := inventoryFolderID(userID, 8)
-	folders := []rpcOutputValue{inventoryFolder("My Inventory", rootID,
-		"00000000-0000-0000-0000-000000000000", 8)}
-	for _, folder := range []struct {
-		name       string
-		folderType int
-	}{
-		{"Textures", 0}, {"Sounds", 1}, {"Calling Cards", 2}, {"Landmarks", 3},
-		{"Clothing", 5}, {"Objects", 6}, {"Notecards", 7}, {"Scripts", 10},
-		{"Body Parts", 13}, {"Trash", 14}, {"Photo Album", 15}, {"Lost And Found", 16},
-		{"Animations", 20}, {"Gestures", 21}, {"Favorites", 23}, {"Current Outfit", 46},
-		{"My Outfits", 48}, {"Received Items", 50}, {"Settings", 56}, {"Materials", 57},
-	} {
-		folders = append(folders, inventoryFolder(folder.name,
-			inventoryFolderID(userID, folder.folderType), rootID, folder.folderType))
+func inventorySkeleton(folders []inventory.Folder) (string, []rpcOutputValue) {
+	values := make([]rpcOutputValue, 0, len(folders))
+	rootID := ""
+	for _, folder := range folders {
+		if folder.TypeDefault == 8 {
+			rootID = folder.ID
+		}
+		values = append(values, inventoryFolder(folder))
 	}
-	return rootID, folders
+	return rootID, values
 }
 
 func (a *API) viewerLogin(w http.ResponseWriter, r *http.Request) {
@@ -219,7 +200,16 @@ func (a *API) viewerLogin(w http.ResponseWriter, r *http.Request) {
 		writeViewerLogin(w, loginFailure("unavailable", "The grid could not assign the viewer circuit."))
 		return
 	}
-	rootID, skeleton := inventorySkeleton(session.UserID)
+	folders := inventory.SystemFolders(session.UserID)
+	if a.inventory != nil {
+		folders, err = a.inventory.EnsureSystemFolders(r.Context(), session.UserID)
+		if err != nil {
+			_ = a.identity.RevokeSession(r.Context(), session.ID)
+			writeViewerLogin(w, loginFailure("unavailable", "The grid could not prepare the viewer inventory."))
+			return
+		}
+	}
+	rootID, skeleton := inventorySkeleton(folders)
 	root := rpcStructValue(rpcField("folder_id", rpcString(rootID)))
 	libraryRoot := rpcStructValue(rpcField("folder_id", rpcString("00000000-0000-0000-0000-000000000001")))
 	libraryOwner := rpcStructValue(rpcField("agent_id", rpcString("00000000-0000-0000-0000-000000000002")))

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/homeworldz/homeworldz/grid/internal/identity"
+	"github.com/homeworldz/homeworldz/grid/internal/inventory"
 	"github.com/homeworldz/homeworldz/grid/internal/presence"
 	"github.com/homeworldz/homeworldz/grid/internal/regions"
 )
@@ -27,6 +28,7 @@ type API struct {
 	regions   regions.Store
 	identity  identity.Store
 	presence  presence.Store
+	inventory inventory.Store
 }
 
 type Options struct {
@@ -36,11 +38,12 @@ type Options struct {
 	Regions       regions.Store
 	Identity      identity.Store
 	Presence      presence.Store
+	Inventory     inventory.Store
 }
 
 func New(ready ReadinessChecker, version string, options Options) http.Handler {
 	a := &API{ready: ready, version: version, publicURL: strings.TrimRight(options.GridPublicURL, "/"),
-		regions: options.Regions, identity: options.Identity, presence: options.Presence}
+		regions: options.Regions, identity: options.Identity, presence: options.Presence, inventory: options.Inventory}
 	if a.publicURL == "" {
 		a.publicURL = "http://127.0.0.1:42000"
 	}
