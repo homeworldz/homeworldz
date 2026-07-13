@@ -49,7 +49,7 @@ than runtime dependencies.
 - [x] Implement avatar movement, flying, jumping, and camera state.
 - [x] Implement nearby chat, terrain, and static object updates.
 - [x] Implement local texture and asset fetch.
-- [ ] Verify persistence, restart, disconnect, and reconnect.
+- [x] Verify persistence, restart, disconnect, and reconnect.
 
 ## Later Milestones
 

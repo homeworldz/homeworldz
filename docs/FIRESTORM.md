@@ -160,3 +160,27 @@ the smoke-test result before completing the milestone.
 Use `-first` and `-last` to override the configured account, `-config` to select
 a different credentials file, or `-validate-only` to check service startup
 without prompting or launching the viewer.
+
+## Milestone 3 Smoke-Test Result
+
+Milestone 3 passed on 2026-07-13 using the Windows OpenSim release executable:
+
+- About/log version: `Firestorm-Releasex64 7.2.4.80712 [10bd3c9f93]`;
+- executable: `FirestormOS-Releasex64.exe` (54,033,256 bytes);
+- executable SHA-256:
+  `9c891171eecab1c24f2eec47aa77f26b5e7f559dd2da72b49dd0e3db6de45bb1`.
+
+The viewer discovered and authenticated against HomeWorldz, entered the region,
+rendered the complete 256-by-256 terrain, water, environment lighting, shadows,
+and the welcome primitive, and accepted avatar movement. The UDP circuit
+remained connected for more than 30 minutes without a heartbeat timeout. A
+normal logout received an immediate server reply, cleared grid presence,
+revoked the viewer session, and stopped both development services. A subsequent
+launcher run restored the scene and reconnected successfully; the avatar
+returned to its persisted position of approximately `(140.144, 142.803, 25)`.
+Repeated pre-fix avatar entities were consolidated to the one persisted entity.
+
+Default wearable assets remain deferred with the later inventory milestone, so
+the smoke avatar is a cloud and Firestorm may report missing shape, hair, eyes,
+skin, or per-user settings. These limitations do not block the transport,
+simulation, persistence, or reconnect acceptance covered by this milestone.
