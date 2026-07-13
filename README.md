@@ -52,6 +52,10 @@ Run grid tests from `grid/` with `go test ./...`. The grid service listens on
 `:42000` by default and reads `config/grid.ini` and `config/db.ini`. The region
 service HTTP API listens on `:42001` by default.
 
+PostgreSQL lifecycle tests run when `HOMEWORLDZ_TEST_DATABASE_URL` is set and
+otherwise skip cleanly. CI supplies a disposable PostgreSQL service and runs
+the region lease, identity/session, and presence cleanup suites against it.
+
 On Windows with Visual Studio, install the pinned vcpkg dependencies and build
 the region service with:
 

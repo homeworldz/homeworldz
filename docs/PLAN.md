@@ -26,7 +26,7 @@ than runtime dependencies.
 - [x] Add the region-to-grid HTTP client and registration lifecycle.
 - [x] Add SQLite local scene metadata and atomic snapshots.
 - [x] Add content-addressed local asset blobs and viewer UUID mappings.
-- [ ] Add integration tests using disposable Postgres.
+- [x] Add integration tests using disposable Postgres.
 
 ## Milestone 2: Physics Gate
 
