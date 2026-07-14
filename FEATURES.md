@@ -51,6 +51,16 @@ WHIP/Aperture boundaries, C#/.NET implementation constraints, or protobuf as
 an architectural default. Viewer-protocol compatibility remains a goal even
 when the server internals differ.
 
+### Pluggable physics engines
+
+HomeWorldz keeps simulation behind an engine-independent physics plugin
+boundary rather than making one third-party engine part of the scene model.
+[Jolt Physics](https://github.com/jrouwe/JoltPhysics) is the initial target and
+default engine. NVIDIA PhysX 5.x is also intended to become a supported plugin;
+its current adapter and shared acceptance lab remain the foundation for that
+eventual production support. A region selects one engine implementation while
+the authoritative scene, persistence, and transfer contracts remain common.
+
 ## Planned differences
 
 ### Variable-sized regions
