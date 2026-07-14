@@ -306,3 +306,8 @@ The first personal AIS item rename passed on 2026-07-14. While logged in as
 to `Terrain Island 5`; both viewer PATCH requests returned success and the
 stored item immediately reported the new name. Persistence across a fresh
 viewer login remains to be confirmed.
+
+The packaged login-logo update passed on 2026-07-14. After rebuilding and
+restarting the grid, Firestorm's login screen displayed the swapped-color
+HomeWorldz SVG. An automated test also requires the grid's embedded SVG to
+remain byte-for-byte identical to the project-root logo.
