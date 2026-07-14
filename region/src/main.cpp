@@ -24,6 +24,7 @@
 #include "homeworldz/avatar_controller.h"
 #include "homeworldz/grid_client.h"
 #include "homeworldz/http_response.h"
+#include "homeworldz/region_config.h"
 #include "homeworldz/region_storage.h"
 #include "homeworldz/scene.h"
 #include "homeworldz/simulation_loop.h"
@@ -52,6 +53,7 @@ static void close_socket(socket_handle socket) { close(socket); }
 namespace {
 std::atomic_bool running{true};
 constexpr std::string_view system_creator_id = "00000000-0000-0000-0000-000000000002";
+homeworldz::config::RegionSettings configured_values;
 
 struct LiveAvatar {
     homeworldz::viewer::AvatarController controller;
@@ -90,6 +92,8 @@ std::string environment_value(const char* name, std::string fallback = {}) {
 #else
     if (const char* value = std::getenv(name)) return value;
 #endif
+    const auto configured = configured_values.find(name);
+    if (configured != configured_values.end()) return configured->second;
     return fallback;
 }
 
@@ -325,6 +329,24 @@ int main() {
 #endif
     std::signal(SIGINT, stop);
     std::signal(SIGTERM, stop);
+
+    try {
+        const auto config_directory = environment_value("HOMEWORLDZ_CONFIG_DIR", "config");
+        const auto config_path = std::filesystem::path(config_directory) / "region.ini";
+        configured_values = homeworldz::config::load_region_ini(config_path);
+        if (!configured_values.empty()) {
+            std::cout << "{\"level\":\"info\",\"message\":\"region configuration loaded\",\"path\":"
+                      << homeworldz::api::json_string(config_path.string()) << ",\"settings\":"
+                      << configured_values.size() << "}" << std::endl;
+        }
+    } catch (const std::exception& error) {
+        std::cerr << "{\"level\":\"error\",\"message\":\"load region configuration failed\",\"error\":"
+                  << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+#ifdef _WIN32
+        WSACleanup();
+#endif
+        return 1;
+    }
 
     const auto region_name = environment_value("HOMEWORLDZ_REGION_NAME", "My Region");
     const auto region_grid_x = environment_int("HOMEWORLDZ_REGION_GRID_X", 1000, 0, 1000000);

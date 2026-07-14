@@ -4,6 +4,7 @@ add_library(homeworldz-region-core
   src/grid_client.cpp
   src/http_response.cpp
   src/physics_scenarios.cpp
+  src/region_config.cpp
   src/region_storage.cpp
   src/scene.cpp
   src/sha256.cpp
@@ -43,6 +44,10 @@ add_test(NAME region-scene COMMAND homeworldz-scene-tests)
 add_executable(homeworldz-grid-client-tests tests/grid_client_test.cpp)
 target_link_libraries(homeworldz-grid-client-tests PRIVATE homeworldz-region-core)
 add_test(NAME region-grid-client COMMAND homeworldz-grid-client-tests)
+
+add_executable(homeworldz-region-config-tests tests/region_config_test.cpp)
+target_link_libraries(homeworldz-region-config-tests PRIVATE homeworldz-region-core)
+add_test(NAME region-config COMMAND homeworldz-region-config-tests)
 
 add_executable(homeworldz-storage-tests tests/region_storage_test.cpp)
 target_link_libraries(homeworldz-storage-tests PRIVATE homeworldz-region-core)
