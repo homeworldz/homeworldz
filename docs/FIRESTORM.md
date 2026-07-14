@@ -343,3 +343,10 @@ the region's compatibility adapter forwarded two inactive `Default Avatar`
 folder moves to the authoritative grid inventory service. Both moves returned
 success, and a subsequent clean login showed only the active copy in Clothing
 and both inactive copies in Trash without disturbing the worn outfit.
+
+AIS v3 Trash purge also passed on 2026-07-14. Firestorm sent HTTP `DELETE` to
+`InventoryAPIv3/category/{trash-id}/children`; the grid recursively removed the
+two inactive outfit folders and their items while retaining the protected
+Trash folder. The request returned success, Trash remained empty after a clean
+login, and the active Clothing folder, six Current Outfit links, worn state,
+and rendered avatar were unchanged.
