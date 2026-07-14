@@ -1764,7 +1764,7 @@ int main() {
                                         item_created = viewer_grid && viewer_grid->create_object_inventory_item(
                                             user_id, homeworldz::grid::ObjectInventoryItem{
                                                 item_id, entity->creator_id, destination_id, asset_id,
-                                                entity->name, "", entity->base_permissions,
+                                                entity->name, entity->description, entity->base_permissions,
                                                 entity->owner_permissions, entity->everyone_permissions,
                                                 entity->next_owner_permissions});
                                     } catch (const std::exception& error) {
@@ -1894,7 +1894,8 @@ int main() {
                                             entity->scale = asset->scale;
                                             entity->rotation = asset->rotation;
                                             entity->material = asset->material;
-                                            entity->description = item->description;
+                                            entity->description = item->description.empty()
+                                                ? asset->description : item->description;
                                             entity->base_permissions = item->base_permissions;
                                             entity->owner_permissions = item->current_permissions;
                                             entity->everyone_permissions = item->everyone_permissions;
