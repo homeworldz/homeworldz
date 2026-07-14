@@ -91,6 +91,7 @@ bool message_codecs() {
     if (encoded_complete.size() <= 80 || encoded_complete[3] != std::byte{0xfa}) return false;
     const auto ping = encode_start_ping_check(7, 0x01020304);
     const auto ping_id = decode_start_ping_check(ping);
+    const auto economy = encode_economy_data(0, 15000, 3);
     auto logout_payload = bytes({0xff, 0xff, 0x00, 0xfc});
     logout_payload.insert(logout_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
     logout_payload.insert(logout_payload.end(), expected.session_id.begin(), expected.session_id.end());
@@ -143,6 +144,13 @@ bool message_codecs() {
     const auto resumed_transfer = encode_image_transfer(expected.agent_id, image_content, 2);
     return ping == bytes({1, 7, 4, 3, 2, 1}) && ping_id && *ping_id == 7 &&
            !decode_start_ping_check(bytes({1, 7})) && encode_complete_ping_check(*ping_id) == bytes({2, 7}) &&
+           is_economy_data_request(bytes({0xff, 0xff, 0x00, 0x18})) &&
+           !is_economy_data_request(bytes({0xff, 0xff, 0x00, 0x19})) &&
+           economy.size() == 72 && economy[3] == std::byte{0x19} &&
+           economy[4] == std::byte{0x98} && economy[5] == std::byte{0x3a} &&
+           economy[8] == std::byte{3} && economy[36] == std::byte{0} &&
+           economy[52] == std::byte{0} && economy[53] == std::byte{0} &&
+           economy[54] == std::byte{0x80} && economy[55] == std::byte{0x3f} &&
            logout && logout->agent_id == expected.agent_id && logout->session_id == expected.session_id &&
            create_folder && create_folder->agent_id == expected.agent_id &&
            create_folder->session_id == expected.session_id && create_folder->folder_id == expected.session_id &&

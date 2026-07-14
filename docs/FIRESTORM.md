@@ -275,3 +275,13 @@ the project-generated square plateau at the intended approximately
 slightly softened corners, and a calm 22-metre surface above the standard
 20-metre waterline. This large square terrain is the development default; the
 separate bundled 200-metre round plateau remains an optional alternative.
+
+The first ordinary texture upload passed on 2026-07-14 while logged in as
+`HomeWorldz Library`. Firestorm uploaded `terrain-island5.png` virtually
+instantly and created `Terrain Island 5 Heightmap` in the account's personal
+Textures folder. The region stored a 3,990-byte JPEG2000 asset, returned
+distinct asset and inventory-item UUIDs, and recorded the stable Library UUID
+`00000000-0000-0000-0000-000000000002` as both authenticated uploader and
+creator provenance. The initial button showed `OS$-1` because the region had
+not yet answered `EconomyDataRequest`; the subsequent zero-price economy
+response requires viewer confirmation.

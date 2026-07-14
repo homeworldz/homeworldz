@@ -37,6 +37,10 @@ constexpr std::array<std::byte, 4> agent_set_appearance_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x54}};
 constexpr std::array<std::byte, 4> create_inventory_folder_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x11}};
+constexpr std::array<std::byte, 4> economy_data_request_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x18}};
+constexpr std::array<std::byte, 4> economy_data_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x19}};
 
 class BitWriter {
 public:
@@ -484,6 +488,38 @@ std::optional<std::uint8_t> decode_start_ping_check(std::span<const std::byte> p
 
 std::vector<std::byte> encode_complete_ping_check(std::uint8_t ping_id) {
     return {std::byte{2}, static_cast<std::byte>(ping_id)};
+}
+
+bool is_economy_data_request(std::span<const std::byte> payload) {
+    return payload.size() == economy_data_request_id.size() &&
+           std::equal(economy_data_request_id.begin(), economy_data_request_id.end(), payload.begin());
+}
+
+std::vector<std::byte> encode_economy_data(std::int32_t price_upload,
+                                           std::int32_t object_capacity,
+                                           std::int32_t object_count) {
+    std::vector<std::byte> output(economy_data_id.begin(), economy_data_id.end());
+    const auto integer = [&output](std::int32_t value) {
+        append_le_u32(output, static_cast<std::uint32_t>(value));
+    };
+    integer(object_capacity);
+    integer(object_count);
+    integer(0); // price energy unit
+    integer(0); // price object claim
+    integer(0); // price public object decay
+    integer(0); // price public object delete
+    integer(0); // price parcel claim
+    append_f32(output, 0.0F); // price parcel claim factor
+    integer(price_upload);
+    integer(0); // price rent light
+    integer(0); // teleport minimum price
+    append_f32(output, 0.0F); // teleport price exponent
+    append_f32(output, 1.0F); // energy efficiency
+    append_f32(output, 0.0F); // price object rent
+    append_f32(output, 0.0F); // price object scale factor
+    integer(0); // price parcel rent
+    integer(0); // price group create
+    return output;
 }
 
 std::optional<AgentMessage> decode_logout_request(std::span<const std::byte> payload) {

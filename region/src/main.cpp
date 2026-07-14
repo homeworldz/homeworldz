@@ -728,6 +728,11 @@ int main() {
                                     homeworldz::viewer::encode_complete_ping_check(*ping_id), false, now))
                                 static_cast<void>(send_udp(viewer_server, endpoint, *pong));
                         }
+                        if (homeworldz::viewer::is_economy_data_request(packet->payload)) {
+                            if (const auto economy = circuits.send(endpoint,
+                                    homeworldz::viewer::encode_economy_data(), true, now, true))
+                                static_cast<void>(send_udp(viewer_server, endpoint, *economy));
+                        }
                         const auto logout = homeworldz::viewer::decode_logout_request(packet->payload);
                         if (logout && logout->agent_id == identity->agent_id &&
                             logout->session_id == identity->session_id) {

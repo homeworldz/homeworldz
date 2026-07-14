@@ -155,6 +155,10 @@ std::vector<std::byte> encode_agent_movement_complete(const AgentMovementComplet
 std::vector<std::byte> encode_start_ping_check(std::uint8_t ping_id, std::uint32_t oldest_unacked = 0);
 std::optional<std::uint8_t> decode_start_ping_check(std::span<const std::byte> payload);
 std::vector<std::byte> encode_complete_ping_check(std::uint8_t ping_id);
+bool is_economy_data_request(std::span<const std::byte> payload);
+std::vector<std::byte> encode_economy_data(std::int32_t price_upload = 0,
+                                           std::int32_t object_capacity = 15000,
+                                           std::int32_t object_count = 0);
 std::optional<AgentMessage> decode_logout_request(std::span<const std::byte> payload);
 std::optional<CreateInventoryFolder> decode_create_inventory_folder(std::span<const std::byte> payload);
 std::vector<std::byte> encode_logout_reply(const AgentMessage& message);
