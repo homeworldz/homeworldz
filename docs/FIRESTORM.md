@@ -300,3 +300,9 @@ response was accepted and changed the button to `OS$0`. Firestorm obtains the
 currency symbol separately from the region's `SimulatorFeatures` capability;
 the subsequent capability response was accepted and the preview button showed
 `Upload (C$0)`.
+
+The first personal AIS item rename passed on 2026-07-14. While logged in as
+`HomeWorldz Library`, Firestorm renamed the uploaded `terrain-island5` texture
+to `Terrain Island 5`; both viewer PATCH requests returned success and the
+stored item immediately reported the new name. Persistence across a fresh
+viewer login remains to be confirmed.
