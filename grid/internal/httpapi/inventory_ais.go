@@ -6,6 +6,7 @@ import (
 	"html"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/homeworldz/homeworldz/grid/internal/identifier"
@@ -86,27 +87,15 @@ func (a *API) fetchAISInventoryFolder(w http.ResponseWriter, r *http.Request, us
 		writeLLSDError(w, http.StatusNotFound, "AIS inventory folder was not found")
 		return
 	}
-	var categories, ordinaryItems, links strings.Builder
-	if !linksOnly {
-		for _, folder := range folders {
-			if folder.ParentID == requested.ID {
-				categories.WriteString("<key>" + html.EscapeString(folder.ID) + "</key>")
-				categories.WriteString(inventoryAISFolderXML(folder, userID))
-			}
+	depth := 0
+	if value := r.URL.Query().Get("depth"); value != "" && value != "*" {
+		if parsed, parseErr := strconv.Atoi(value); parseErr == nil && parsed > 0 {
+			depth = min(parsed, 8)
 		}
+	} else if value == "*" {
+		depth = 8
 	}
-	for _, item := range items {
-		if item.FolderID != requested.ID {
-			continue
-		}
-		if item.AssetType == 24 {
-			links.WriteString("<key>" + html.EscapeString(item.ID) + "</key>")
-			links.WriteString(inventoryAISItemXML(item, true))
-		} else if !linksOnly {
-			ordinaryItems.WriteString("<key>" + html.EscapeString(item.ID) + "</key>")
-			ordinaryItems.WriteString(inventoryAISItemXML(item, false))
-		}
-	}
+	embedded := inventoryAISEmbeddedXML(requested.ID, userID, folders, items, depth, linksOnly)
 	w.Header().Set("Content-Type", "application/llsd+xml; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_, _ = io.WriteString(w, "<?xml version=\"1.0\"?><llsd><map>"+
@@ -117,11 +106,7 @@ func (a *API) fetchAISInventoryFolder(w http.ResponseWriter, r *http.Request, us
 		"<key>type_default</key><integer>"+fmt.Sprint(requested.TypeDefault)+"</integer>"+
 		"<key>name</key><string>"+html.EscapeString(requested.Name)+"</string>"+
 		"<key>version</key><integer>"+fmt.Sprint(requested.Version)+"</integer>"+
-		"<key>_embedded</key><map>"+
-		"<key>categories</key><map>"+categories.String()+"</map>"+
-		"<key>items</key><map>"+ordinaryItems.String()+"</map>"+
-		"<key>links</key><map>"+links.String()+"</map>"+
-		"</map></map></llsd>")
+		embedded+"</map></llsd>")
 }
 
 func inventoryAISFolderXML(folder inventory.Folder, userID string) string {
@@ -131,6 +116,41 @@ func inventoryAISFolderXML(folder inventory.Folder, userID string) string {
 		"<key>version</key><integer>%d</integer></map>",
 		html.EscapeString(folder.ID), html.EscapeString(folder.ID), html.EscapeString(userID),
 		html.EscapeString(folder.ParentID), folder.TypeDefault, html.EscapeString(folder.Name), folder.Version)
+}
+
+func inventoryAISEmbeddedXML(folderID, userID string, folders []inventory.Folder, items []inventory.Item,
+	depth int, linksOnly bool) string {
+	var categories, ordinaryItems, links strings.Builder
+	if !linksOnly {
+		for _, folder := range folders {
+			if folder.ParentID != folderID {
+				continue
+			}
+			categories.WriteString("<key>" + html.EscapeString(folder.ID) + "</key>")
+			folderXML := inventoryAISFolderXML(folder, userID)
+			if depth > 0 {
+				folderXML = strings.TrimSuffix(folderXML, "</map>") +
+					inventoryAISEmbeddedXML(folder.ID, userID, folders, items, depth-1, false) + "</map>"
+			}
+			categories.WriteString(folderXML)
+		}
+	}
+	for _, item := range items {
+		if item.FolderID != folderID {
+			continue
+		}
+		if item.AssetType == 24 {
+			links.WriteString("<key>" + html.EscapeString(item.ID) + "</key>")
+			links.WriteString(inventoryAISItemXML(item, true))
+		} else if !linksOnly {
+			ordinaryItems.WriteString("<key>" + html.EscapeString(item.ID) + "</key>")
+			ordinaryItems.WriteString(inventoryAISItemXML(item, false))
+		}
+	}
+	return "<key>_embedded</key><map>" +
+		"<key>categories</key><map>" + categories.String() + "</map>" +
+		"<key>items</key><map>" + ordinaryItems.String() + "</map>" +
+		"<key>links</key><map>" + links.String() + "</map></map>"
 }
 
 func inventoryAISItemXML(item inventory.Item, link bool) string {

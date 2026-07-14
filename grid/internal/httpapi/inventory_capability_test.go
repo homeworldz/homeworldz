@@ -204,6 +204,15 @@ func TestAISFetchInventoryFolderChildrenAndCurrentLinks(t *testing.T) {
 	}
 	handler := New(checker{}, "test", Options{Identity: identities, Inventory: inventories})
 	base := "/caps/inventory/ais/" + session.ID
+	rootRequest := httptest.NewRequest(http.MethodGet, base+"/category/"+folders[0].ID+"/children?depth=50", nil)
+	rootResponse := httptest.NewRecorder()
+	handler.ServeHTTP(rootResponse, rootRequest)
+	if rootResponse.Code != http.StatusOK ||
+		!strings.Contains(rootResponse.Body.String(), "<string>Default Shape</string>") ||
+		!strings.Contains(rootResponse.Body.String(), "<string>Default Pants</string>") {
+		t.Fatalf("status = %d, recursive AIS root response lacks default outfit: %s",
+			rootResponse.Code, rootResponse.Body.String())
+	}
 	bodyPartsID := inventory.SystemFolderID(user.ID, 13)
 	request := httptest.NewRequest(http.MethodGet, base+"/category/"+bodyPartsID+"/children?depth=0", nil)
 	response := httptest.NewRecorder()
