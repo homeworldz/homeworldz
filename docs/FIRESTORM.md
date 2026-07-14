@@ -465,3 +465,5 @@ stored an object asset and inventory item with the scene object's creator,
 owner, permissions, name, and serialized state, removed exactly one object
 from the authoritative scene snapshot, and immediately showed `Prim2` in
 Firestorm's Objects folder.
+After a complete service and viewer restart, only the original Prim2 remained
+in the scene and the taken Prim2 remained in Jim Tarber's Objects folder.
