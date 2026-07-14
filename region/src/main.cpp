@@ -5,6 +5,7 @@
 #include <cctype>
 #include <csignal>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <deque>
 #include <exception>
@@ -1225,6 +1226,81 @@ int main() {
                                         static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
                                 }
                                 break;
+                            }
+                        }
+                        const auto transform_update =
+                            homeworldz::viewer::decode_multiple_object_update(packet->payload);
+                        if (transform_update && transform_update->agent_id == identity->agent_id &&
+                            transform_update->session_id == identity->session_id) {
+                            using OriginalTransform =
+                                std::pair<homeworldz::scene::Vector3, homeworldz::scene::Vector3>;
+                            std::unordered_map<homeworldz::scene::EntityId, OriginalTransform> originals;
+                            std::unordered_set<homeworldz::scene::EntityId> requested_entities;
+                            const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
+                            for (const auto& update : transform_update->objects) {
+                                auto* entity = scene.find(update.local_id);
+                                if (!entity) continue;
+                                requested_entities.insert(entity->id);
+                                if (entity->owner_id != user_id ||
+                                    (entity->owner_permissions & homeworldz::scene::permission_modify) == 0)
+                                    continue;
+                                const auto finite_vector = [](const std::array<float, 3>& value) {
+                                    return std::all_of(value.begin(), value.end(),
+                                        [](float component) { return std::isfinite(component); });
+                                };
+                                const bool valid_position = !update.position ||
+                                    (finite_vector(*update.position) && (*update.position)[0] >= 0.0F &&
+                                     (*update.position)[0] <= 256.0F && (*update.position)[1] >= 0.0F &&
+                                     (*update.position)[1] <= 256.0F && (*update.position)[2] >= -64.0F &&
+                                     (*update.position)[2] <= 4096.0F);
+                                const bool valid_rotation = !update.rotation || finite_vector(*update.rotation);
+                                const bool valid_scale = !update.scale ||
+                                    (finite_vector(*update.scale) &&
+                                     std::all_of(update.scale->begin(), update.scale->end(),
+                                         [](float component) { return component >= 0.01F && component <= 64.0F; }));
+                                if (!valid_position || !valid_rotation || !valid_scale) continue;
+                                if (!update.position && !update.scale) continue;
+                                originals.try_emplace(entity->id, entity->position, entity->scale);
+                                if (update.position)
+                                    entity->position = {(*update.position)[0], (*update.position)[1],
+                                                        (*update.position)[2]};
+                                if (update.scale)
+                                    entity->scale = {(*update.scale)[0], (*update.scale)[1], (*update.scale)[2]};
+                            }
+                            bool persisted = false;
+                            if (!originals.empty()) {
+                                try {
+                                    storage->save_snapshot(scene);
+                                    persisted = true;
+                                } catch (const std::exception& error) {
+                                    for (const auto& [entity_id, original] : originals) {
+                                        if (auto* entity = scene.find(entity_id)) {
+                                            entity->position = original.first;
+                                            entity->scale = original.second;
+                                        }
+                                    }
+                                    std::cout << "{\"level\":\"error\",\"message\":\"primitive update persistence failed\",\"error\":"
+                                              << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+                                }
+                            }
+                            const auto region_handle =
+                                (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
+                                static_cast<std::uint32_t>(region_grid_y * 256);
+                            for (const auto entity_id : requested_entities) {
+                                const auto* entity = scene.find(entity_id);
+                                if (!entity) continue;
+                                for (const auto& [recipient_endpoint, recipient] : avatars) {
+                                    const auto object = static_object_from_entity(*entity, recipient.user_id);
+                                    if (!object) continue;
+                                    if (const auto sent = circuits.send(recipient_endpoint,
+                                            homeworldz::viewer::encode_static_object_update(
+                                                region_handle, *object), true, now, true))
+                                        static_cast<void>(send_udp(viewer_server, recipient_endpoint, *sent));
+                                }
+                            }
+                            if (persisted) {
+                                std::cout << "{\"level\":\"info\",\"message\":\"primitive transforms updated\",\"count\":"
+                                          << originals.size() << "}" << std::endl;
                             }
                         }
                         const auto object_add = homeworldz::viewer::decode_object_add(packet->payload);

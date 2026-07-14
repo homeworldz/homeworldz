@@ -209,6 +209,21 @@ bool message_codecs() {
     select_payload.insert(select_payload.end(), {std::byte{1}, std::byte{0x78}, std::byte{0x56},
                                                   std::byte{0x34}, std::byte{0x12}});
     const auto selected = decode_object_select(select_payload);
+    auto transform_payload = bytes({0xff, 0x02});
+    transform_payload.insert(transform_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
+    transform_payload.insert(transform_payload.end(), expected.session_id.begin(), expected.session_id.end());
+    transform_payload.insert(transform_payload.end(), {std::byte{1}, std::byte{0x78}, std::byte{0x56},
+                                                        std::byte{0x34}, std::byte{0x12}, std::byte{0x0d},
+                                                        std::byte{24}});
+    const auto transform_data = transform_payload.size();
+    transform_payload.resize(transform_data + 24);
+    write_f32(transform_payload, transform_data, 130.0F);
+    write_f32(transform_payload, transform_data + 4, 131.0F);
+    write_f32(transform_payload, transform_data + 8, 25.0F);
+    write_f32(transform_payload, transform_data + 12, 1.0F);
+    write_f32(transform_payload, transform_data + 16, 2.0F);
+    write_f32(transform_payload, transform_data + 20, 3.0F);
+    const auto transform = decode_multiple_object_update(transform_payload);
     auto family_payload = bytes({0xff, 0x05});
     family_payload.insert(family_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
     family_payload.insert(family_payload.end(), expected.session_id.begin(), expected.session_id.end());
@@ -312,6 +327,12 @@ bool message_codecs() {
            killed == bytes({0x10, 2, 0x78, 0x56, 0x34, 0x12, 0x04, 0x03, 0x02, 0x01}) &&
            selected && selected->agent_id == expected.agent_id && selected->session_id == expected.session_id &&
            selected->local_ids == std::vector<std::uint32_t>{0x12345678} &&
+           transform && transform->agent_id == expected.agent_id &&
+           transform->session_id == expected.session_id && transform->objects.size() == 1 &&
+           transform->objects[0].local_id == 0x12345678 && transform->objects[0].type == 0x0d &&
+           transform->objects[0].position && (*transform->objects[0].position)[1] == 131.0F &&
+           !transform->objects[0].rotation && transform->objects[0].scale &&
+           (*transform->objects[0].scale)[2] == 3.0F &&
            family && family->request_flags == 0x01020304 && family->object_id == expected.agent_id &&
            encoded_properties.size() > 180 && encoded_properties[0] == std::byte{0xff} &&
            encoded_properties[1] == std::byte{0x09} && encoded_properties[2] == std::byte{1} &&

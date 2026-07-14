@@ -50,6 +50,8 @@ constexpr std::array<std::byte, 4> derez_object_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x23}};
 constexpr std::array<std::byte, 4> object_select_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x6e}};
+constexpr std::array<std::byte, 2> multiple_object_update_id{
+    std::byte{0xff}, std::byte{0x02}};
 constexpr std::array<std::byte, 2> request_object_properties_family_id{
     std::byte{0xff}, std::byte{0x05}};
 constexpr std::array<std::byte, 4> uuid_name_request_id{
@@ -722,6 +724,50 @@ std::optional<ObjectSelect> decode_object_select(std::span<const std::byte> payl
     result.local_ids.reserve(count);
     for (std::size_t index = 0; index < count; ++index)
         result.local_ids.push_back(read_le_u32(payload, header_size + index * sizeof(std::uint32_t)));
+    return result;
+}
+
+std::optional<MultipleObjectUpdate> decode_multiple_object_update(std::span<const std::byte> payload) {
+    constexpr std::uint8_t update_position = 0x01;
+    constexpr std::uint8_t update_rotation = 0x02;
+    constexpr std::uint8_t update_scale = 0x04;
+    constexpr std::uint8_t known_flags = 0x1f;
+    constexpr std::size_t header_size = 35;
+    if (payload.size() < header_size ||
+        !std::equal(multiple_object_update_id.begin(), multiple_object_update_id.end(), payload.begin()))
+        return std::nullopt;
+    MultipleObjectUpdate result;
+    std::copy_n(payload.begin() + 2, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 18, 16, result.session_id.begin());
+    const auto count = std::to_integer<std::size_t>(payload[34]);
+    if (count == 0) return std::nullopt;
+    result.objects.reserve(count);
+    std::size_t offset = header_size;
+    for (std::size_t index = 0; index < count; ++index) {
+        if (offset + 6 > payload.size()) return std::nullopt;
+        ObjectTransformUpdate update;
+        update.local_id = read_le_u32(payload, offset);
+        update.type = std::to_integer<std::uint8_t>(payload[offset + 4]);
+        const auto data_size = std::to_integer<std::size_t>(payload[offset + 5]);
+        offset += 6;
+        const auto vector_count = static_cast<std::size_t>((update.type & update_position) != 0) +
+            static_cast<std::size_t>((update.type & update_rotation) != 0) +
+            static_cast<std::size_t>((update.type & update_scale) != 0);
+        if ((update.type & ~known_flags) != 0 || vector_count == 0 ||
+            data_size != vector_count * 12 || offset + data_size > payload.size())
+            return std::nullopt;
+        const auto read_vector = [&]() {
+            std::array<float, 3> value{
+                read_f32(payload, offset), read_f32(payload, offset + 4), read_f32(payload, offset + 8)};
+            offset += 12;
+            return value;
+        };
+        if ((update.type & update_position) != 0) update.position = read_vector();
+        if ((update.type & update_rotation) != 0) update.rotation = read_vector();
+        if ((update.type & update_scale) != 0) update.scale = read_vector();
+        result.objects.push_back(update);
+    }
+    if (offset != payload.size()) return std::nullopt;
     return result;
 }
 
