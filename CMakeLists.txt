@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.24)
 project(homeworldz VERSION 0.1.0 LANGUAGES CXX)
 
+set(HOMEWORLDZ_VERSION "dev" CACHE STRING "Version reported by HomeWorldz executables")
+
 find_package(unofficial-sqlite3 CONFIG QUIET)
 find_package(Jolt CONFIG QUIET)
 find_package(unofficial-omniverse-physx-sdk CONFIG QUIET)

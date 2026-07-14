@@ -1,0 +1,294 @@
+package main
+
+import (
+	"archive/zip"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"io/fs"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"sort"
+	"strings"
+	"time"
+)
+
+type options struct {
+	version          string
+	outputDirectory  string
+	regionExecutable string
+}
+
+type archiveEntry struct {
+	source string
+	name   string
+}
+
+func main() {
+	var opts options
+	flag.StringVar(&opts.version, "version", "dev", "release version used in archive names")
+	flag.StringVar(&opts.outputDirectory, "output", "dist", "release archive output directory")
+	flag.StringVar(&opts.regionExecutable, "region-executable", "", "path to the native homeworldz-region executable")
+	flag.Parse()
+	if err := run(context.Background(), opts); err != nil {
+		fmt.Fprintln(os.Stderr, "package release:", err)
+		os.Exit(1)
+	}
+}
+
+func run(ctx context.Context, opts options) error {
+	if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
+		return errors.New("native release packaging currently supports windows-amd64")
+	}
+	version, err := safeVersion(opts.version)
+	if err != nil {
+		return err
+	}
+	root, err := repositoryRoot()
+	if err != nil {
+		return err
+	}
+	output := opts.outputDirectory
+	if !filepath.IsAbs(output) {
+		output = filepath.Join(root, output)
+	}
+	if err := os.MkdirAll(output, 0o755); err != nil {
+		return fmt.Errorf("create output directory: %w", err)
+	}
+	work, err := os.MkdirTemp("", "homeworldz-release-")
+	if err != nil {
+		return fmt.Errorf("create release workspace: %w", err)
+	}
+	defer os.RemoveAll(work)
+
+	gridBins := []struct{ command, name string }{
+		{"./grid/cmd/grid", "homeworldz-grid.exe"},
+		{"./grid/cmd/bootstrap-grid", "bootstrap-grid.exe"},
+		{"./grid/cmd/configure-library", "configure-library.exe"},
+	}
+	gridEntries := make([]archiveEntry, 0, len(gridBins)+8)
+	for _, binary := range gridBins {
+		destination := filepath.Join(work, binary.name)
+		if err := buildGoCommand(ctx, root, binary.command, destination, version); err != nil {
+			return err
+		}
+		gridEntries = append(gridEntries, archiveEntry{destination, binary.name})
+	}
+	gridEntries = append(gridEntries,
+		archiveEntry{filepath.Join(root, "config", "examples", "grid.ini"), "config/examples/grid.ini"},
+		archiveEntry{filepath.Join(root, "docs", "INSTALL-GRID.md"), "INSTALL-GRID.md"},
+	)
+	gridEntries, err = appendTree(gridEntries, filepath.Join(root, "db", "migrations"), "db/migrations", func(path string) bool {
+		return strings.HasSuffix(path, ".up.sql")
+	})
+	if err != nil {
+		return err
+	}
+
+	regionExecutable, err := findRegionExecutable(root, opts.regionExecutable)
+	if err != nil {
+		return err
+	}
+	regionEntries := []archiveEntry{
+		{regionExecutable, "homeworldz-region.exe"},
+		{filepath.Join(root, "config", "examples", "region.ini"), "config/examples/region.ini"},
+		{filepath.Join(root, "docs", "INSTALL-REGION.md"), "INSTALL-REGION.md"},
+	}
+	for _, dll := range siblingDLLs(regionExecutable) {
+		regionEntries = append(regionEntries, archiveEntry{dll, filepath.Base(dll)})
+	}
+	regionEntries, err = appendTree(regionEntries, filepath.Join(root, "assets", "region"), "assets/region", nil)
+	if err != nil {
+		return err
+	}
+
+	platform := "windows-x64"
+	gridArchive := filepath.Join(output, "homeworldz-grid-"+version+"-"+platform+".zip")
+	regionArchive := filepath.Join(output, "homeworldz-region-"+version+"-"+platform+".zip")
+	if err := writeZIP(gridArchive, "homeworldz-grid", gridEntries); err != nil {
+		return err
+	}
+	if err := writeZIP(regionArchive, "homeworldz-region", regionEntries); err != nil {
+		return err
+	}
+	if err := writeChecksums(filepath.Join(output, "SHA256SUMS"), []string{gridArchive, regionArchive}); err != nil {
+		return err
+	}
+	fmt.Println(gridArchive)
+	fmt.Println(regionArchive)
+	return nil
+}
+
+func safeVersion(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", errors.New("version must not be empty")
+	}
+	for _, r := range value {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '.' && r != '-' && r != '_' {
+			return "", fmt.Errorf("version %q contains an unsafe archive-name character", value)
+		}
+	}
+	return value, nil
+}
+
+func repositoryRoot() (string, error) {
+	directory, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(directory, "go.work")); err == nil {
+			return directory, nil
+		}
+		parent := filepath.Dir(directory)
+		if parent == directory {
+			return "", errors.New("repository root containing go.work was not found")
+		}
+		directory = parent
+	}
+}
+
+func buildGoCommand(ctx context.Context, root, commandPath, destination, version string) error {
+	args := []string{"build", "-trimpath", "-o", destination}
+	if commandPath == "./grid/cmd/grid" {
+		args = append(args, "-ldflags", "-s -w -X main.version="+version)
+	} else {
+		args = append(args, "-ldflags", "-s -w")
+	}
+	args = append(args, commandPath)
+	command := exec.CommandContext(ctx, "go", args...)
+	command.Dir = root
+	command.Env = append(os.Environ(), "GOOS=windows", "GOARCH=amd64", "CGO_ENABLED=0")
+	output, err := command.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("build %s: %w: %s", commandPath, err, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
+func findRegionExecutable(root, supplied string) (string, error) {
+	if supplied != "" {
+		if !filepath.IsAbs(supplied) {
+			supplied = filepath.Join(root, supplied)
+		}
+		if info, err := os.Stat(supplied); err == nil && !info.IsDir() {
+			return supplied, nil
+		}
+		return "", fmt.Errorf("region executable %s was not found", supplied)
+	}
+	for _, candidate := range []string{
+		filepath.Join(root, "build", "windows-vcpkg", "region", "Release", "homeworldz-region.exe"),
+		filepath.Join(root, "build", "windows-vcpkg", "region", "Debug", "homeworldz-region.exe"),
+		filepath.Join(root, "build", "default", "region", "homeworldz-region.exe"),
+	} {
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			return candidate, nil
+		}
+	}
+	return "", errors.New("homeworldz-region.exe was not found; build it or pass -region-executable")
+}
+
+func siblingDLLs(executable string) []string {
+	paths, _ := filepath.Glob(filepath.Join(filepath.Dir(executable), "*.dll"))
+	sort.Strings(paths)
+	return paths
+}
+
+func appendTree(entries []archiveEntry, sourceRoot, archiveRoot string, include func(string) bool) ([]archiveEntry, error) {
+	err := filepath.WalkDir(sourceRoot, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() || (include != nil && !include(path)) {
+			return nil
+		}
+		relative, err := filepath.Rel(sourceRoot, path)
+		if err != nil {
+			return err
+		}
+		entries = append(entries, archiveEntry{path, filepath.ToSlash(filepath.Join(archiveRoot, relative))})
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("collect %s: %w", sourceRoot, err)
+	}
+	return entries, nil
+}
+
+func writeZIP(path, root string, entries []archiveEntry) error {
+	sort.Slice(entries, func(i, j int) bool { return entries[i].name < entries[j].name })
+	file, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("create %s: %w", path, err)
+	}
+	archive := zip.NewWriter(file)
+	for _, entry := range entries {
+		if err := addZIPFile(archive, entry.source, root+"/"+entry.name); err != nil {
+			archive.Close()
+			file.Close()
+			return err
+		}
+	}
+	if err := archive.Close(); err != nil {
+		file.Close()
+		return fmt.Errorf("finish %s: %w", path, err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("close %s: %w", path, err)
+	}
+	return nil
+}
+
+func addZIPFile(archive *zip.Writer, source, name string) error {
+	input, err := os.Open(source)
+	if err != nil {
+		return fmt.Errorf("open %s: %w", source, err)
+	}
+	defer input.Close()
+	header := &zip.FileHeader{Name: filepath.ToSlash(name), Method: zip.Deflate}
+	header.SetModTime(time.Unix(0, 0).UTC())
+	header.SetMode(0o644)
+	if strings.HasSuffix(strings.ToLower(name), ".exe") {
+		header.SetMode(0o755)
+	}
+	output, err := archive.CreateHeader(header)
+	if err != nil {
+		return fmt.Errorf("create archive entry %s: %w", name, err)
+	}
+	if _, err := io.Copy(output, input); err != nil {
+		return fmt.Errorf("write archive entry %s: %w", name, err)
+	}
+	return nil
+}
+
+func writeChecksums(path string, archives []string) error {
+	sort.Strings(archives)
+	var content strings.Builder
+	for _, archive := range archives {
+		file, err := os.Open(archive)
+		if err != nil {
+			return err
+		}
+		hash := sha256.New()
+		_, copyErr := io.Copy(hash, file)
+		closeErr := file.Close()
+		if copyErr != nil {
+			return copyErr
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+		content.WriteString(hex.EncodeToString(hash.Sum(nil)))
+		content.WriteString("  ")
+		content.WriteString(filepath.Base(archive))
+		content.WriteByte('\n')
+	}
+	return os.WriteFile(path, []byte(content.String()), 0o644)
+}

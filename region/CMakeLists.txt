@@ -12,6 +12,8 @@ target_sources(homeworldz-region-core PRIVATE src/viewer_protocol.cpp)
 target_sources(homeworldz-region-core PRIVATE src/viewer_capabilities.cpp)
 target_include_directories(homeworldz-region-core PUBLIC include)
 target_compile_features(homeworldz-region-core PUBLIC cxx_std_20)
+target_compile_definitions(homeworldz-region-core PUBLIC
+  HOMEWORLDZ_VERSION="${HOMEWORLDZ_VERSION}")
 target_link_libraries(homeworldz-region-core PUBLIC homeworldz-sqlite)
 if(HOMEWORLDZ_PHYSICS_ADAPTERS_AVAILABLE)
   target_sources(homeworldz-region-core PRIVATE src/jolt_world.cpp src/physx_world.cpp)

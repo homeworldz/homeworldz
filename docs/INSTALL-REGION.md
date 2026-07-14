@@ -5,9 +5,8 @@ HomeWorldz grid. You do not need PostgreSQL, its credentials, or access to the
 grid database. If you operate the central grid too, complete
 [INSTALL-GRID.md](INSTALL-GRID.md) first.
 
-HomeWorldz does not yet publish an installer or release ZIP. The package names
-and layout below describe the intended region-owner release and must not be
-read as an announcement that one is currently available.
+Development snapshots can now be assembled as release ZIPs. Public release
+publication and an installer remain future work.
 
 ## Information to obtain from the grid operator
 
@@ -25,13 +24,15 @@ calls and must not appear in screenshots, public logs, or source control.
 
 ## Expected region package
 
-The planned `homeworldz-region-<version>-windows-x64.zip` or
+The `homeworldz-region-<version>-windows-x64.zip` or future
 `homeworldz-region-<version>-linux-x64.tar.gz` will contain a prebuilt region
 program and its static assets:
 
 ```text
 homeworldz-region/
+  INSTALL-REGION.md
   homeworldz-region[.exe]
+  *.dll                 # Windows runtime libraries, when required
   config/
     examples/region.ini
   assets/

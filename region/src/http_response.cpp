@@ -136,7 +136,7 @@ Response response_for(std::string_view request) {
     } else if (method == "GET" && path == "/version") {
         status_code = 200;
         status = "HTTP/1.1 200 OK\r\n";
-        body = api::to_json(api::Version{"region", "dev", std::string(api::api_version)});
+        body = api::to_json(api::Version{"region", HOMEWORLDZ_VERSION, std::string(api::api_version)});
     } else if (path == "/ping" || path == "/ready" || path == "/version") {
         status_code = 405;
         status = "HTTP/1.1 405 Method Not Allowed\r\n";

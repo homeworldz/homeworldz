@@ -5,18 +5,18 @@ identity, inventory, presence, and region-registration services. If you only
 own a region connected to somebody else's grid, use [INSTALL-REGION.md](INSTALL-REGION.md)
 instead. Region owners do not need the grid's PostgreSQL credentials.
 
-HomeWorldz does not yet publish an installer or release ZIP. The package names
-and layout below describe the intended operator release and must not be read as
-an announcement that one is currently available.
+Development snapshots can now be assembled as release ZIPs. Public release
+publication and an installer remain future work.
 
 ## Expected grid package
 
-The planned `homeworldz-grid-<version>-windows-x64.zip` or
+The `homeworldz-grid-<version>-windows-x64.zip` or future
 `homeworldz-grid-<version>-linux-x64.tar.gz` will contain the prebuilt grid and
 bootstrap programs plus the files they need:
 
 ```text
 homeworldz-grid/
+  INSTALL-GRID.md
   homeworldz-grid[.exe]
   bootstrap-grid[.exe]
   configure-library[.exe]
