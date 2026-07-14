@@ -454,4 +454,5 @@ on 2026-07-14. Firestorm changed Prim3 from Wood to Metal in the Object tab;
 the region decoded standard `ObjectMaterial`, required Jim Tarber's ownership
 and modify permission, stored the canonical material code `0x01`, and returned
 an authoritative object update. Closing and reopening Edit retained Metal.
-Persistence across a complete restart remains to be confirmed.
+After a complete service and viewer restart, Prim3's Material field still
+reported Metal.
