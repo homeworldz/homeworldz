@@ -1587,6 +1587,60 @@ int main() {
                                           << created_entities.size() << "}" << std::endl;
                             }
                         }
+                        const auto object_material =
+                            homeworldz::viewer::decode_object_material(packet->payload);
+                        if (object_material && object_material->agent_id == identity->agent_id &&
+                            object_material->session_id == identity->session_id) {
+                            constexpr std::uint8_t last_supported_material = 0x07;
+                            std::unordered_map<homeworldz::scene::EntityId, std::uint8_t> originals;
+                            std::unordered_set<homeworldz::scene::EntityId> requested_entities;
+                            const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
+                            for (const auto& update : object_material->objects) {
+                                auto* entity = scene.find(update.local_id);
+                                if (!entity) continue;
+                                requested_entities.insert(entity->id);
+                                if (update.material > last_supported_material ||
+                                    entity->owner_id != user_id ||
+                                    (entity->owner_permissions & homeworldz::scene::permission_modify) == 0 ||
+                                    entity->material == update.material)
+                                    continue;
+                                originals.try_emplace(entity->id, entity->material);
+                                entity->material = update.material;
+                            }
+                            bool persisted = false;
+                            if (!originals.empty()) {
+                                try {
+                                    storage->save_snapshot(scene);
+                                    persisted = true;
+                                } catch (const std::exception& error) {
+                                    for (const auto& [entity_id, original] : originals) {
+                                        if (auto* entity = scene.find(entity_id)) entity->material = original;
+                                    }
+                                    std::cout << "{\"level\":\"error\",\"message\":\"primitive material persistence failed\",\"error\":"
+                                              << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+                                }
+                            }
+                            const auto region_handle =
+                                (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
+                                static_cast<std::uint32_t>(region_grid_y * 256);
+                            for (const auto entity_id : requested_entities) {
+                                const auto* entity = scene.find(entity_id);
+                                if (!entity) continue;
+                                for (const auto& [recipient_endpoint, recipient] : avatars) {
+                                    const auto object = static_object_from_entity(*entity, recipient.user_id);
+                                    if (!object) continue;
+                                    if (const auto sent = circuits.send(recipient_endpoint,
+                                            homeworldz::viewer::encode_static_object_update(
+                                                region_handle, *object), true, now, true))
+                                        static_cast<void>(send_udp(
+                                            viewer_server, recipient_endpoint, *sent));
+                                }
+                            }
+                            if (persisted) {
+                                std::cout << "{\"level\":\"info\",\"message\":\"primitive materials updated\",\"count\":"
+                                          << originals.size() << "}" << std::endl;
+                            }
+                        }
                         const auto object_add = homeworldz::viewer::decode_object_add(packet->payload);
                         if (object_add && object_add->agent_id == identity->agent_id &&
                             object_add->session_id == identity->session_id) {

@@ -60,6 +60,8 @@ constexpr std::array<std::byte, 4> object_permissions_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x69}};
 constexpr std::array<std::byte, 4> object_duplicate_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x5a}};
+constexpr std::array<std::byte, 4> object_material_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x61}};
 constexpr std::array<std::byte, 2> request_object_properties_family_id{
     std::byte{0xff}, std::byte{0x05}};
 constexpr std::array<std::byte, 4> uuid_name_request_id{
@@ -885,6 +887,26 @@ std::optional<ObjectDuplicate> decode_object_duplicate(std::span<const std::byte
     result.local_ids.reserve(count);
     for (std::size_t index = 0; index < count; ++index)
         result.local_ids.push_back(read_le_u32(payload, header_size + index * sizeof(std::uint32_t)));
+    return result;
+}
+
+std::optional<ObjectMaterial> decode_object_material(std::span<const std::byte> payload) {
+    constexpr std::size_t header_size = 37;
+    constexpr std::size_t block_size = 5;
+    if (payload.size() < header_size ||
+        !std::equal(object_material_id.begin(), object_material_id.end(), payload.begin()))
+        return std::nullopt;
+    ObjectMaterial result;
+    std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
+    const auto count = std::to_integer<std::size_t>(payload[36]);
+    if (count == 0 || payload.size() != header_size + count * block_size) return std::nullopt;
+    result.objects.reserve(count);
+    for (std::size_t index = 0; index < count; ++index) {
+        const auto offset = header_size + index * block_size;
+        result.objects.push_back({
+            read_le_u32(payload, offset), std::to_integer<std::uint8_t>(payload[offset + 4])});
+    }
     return result;
 }
 

@@ -271,6 +271,15 @@ bool message_codecs() {
         {std::byte{0x02}, std::byte{}, std::byte{}, std::byte{}, std::byte{1},
          std::byte{0x78}, std::byte{0x56}, std::byte{0x34}, std::byte{0x12}});
     const auto object_duplicate = decode_object_duplicate(object_duplicate_payload);
+    auto object_material_payload = bytes({0xff, 0xff, 0x00, 0x61});
+    object_material_payload.insert(
+        object_material_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
+    object_material_payload.insert(
+        object_material_payload.end(), expected.session_id.begin(), expected.session_id.end());
+    object_material_payload.insert(object_material_payload.end(),
+        {std::byte{1}, std::byte{0x78}, std::byte{0x56}, std::byte{0x34},
+         std::byte{0x12}, std::byte{0x01}});
+    const auto object_material = decode_object_material(object_material_payload);
     auto family_payload = bytes({0xff, 0x05});
     family_payload.insert(family_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
     family_payload.insert(family_payload.end(), expected.session_id.begin(), expected.session_id.end());
@@ -400,6 +409,11 @@ bool message_codecs() {
            object_duplicate->offset[1] == 2.0F && object_duplicate->offset[2] == 3.0F &&
            object_duplicate->duplicate_flags == 0x00000002 &&
            object_duplicate->local_ids == std::vector<std::uint32_t>{0x12345678} &&
+           object_material && object_material->agent_id == expected.agent_id &&
+           object_material->session_id == expected.session_id &&
+           object_material->objects.size() == 1 &&
+           object_material->objects[0].local_id == 0x12345678 &&
+           object_material->objects[0].material == 0x01 &&
            family && family->request_flags == 0x01020304 && family->object_id == expected.agent_id &&
            encoded_properties.size() > 180 && encoded_properties[0] == std::byte{0xff} &&
            encoded_properties[1] == std::byte{0x09} && encoded_properties[2] == std::byte{1} &&
