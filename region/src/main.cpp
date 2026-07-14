@@ -1113,9 +1113,12 @@ int main() {
                             if (supported_box && valid_scale && valid_position && object_add->material <= 7) {
                                 object_id = homeworldz::viewer::random_uuid();
                                 const auto owner_id = homeworldz::viewer::format_uuid(identity->agent_id);
+                                const homeworldz::scene::Vector3 ray_end{
+                                    object_add->ray_end[0], object_add->ray_end[1], object_add->ray_end[2]};
+                                const auto surface_height = object_add->bypass_raycast ?
+                                    ground_height(terrain_heightmap, ray_end) : ray_end.z;
                                 const homeworldz::scene::Vector3 position{
-                                    object_add->ray_end[0], object_add->ray_end[1],
-                                    object_add->ray_end[2] + object_add->scale[2] * 0.5};
+                                    ray_end.x, ray_end.y, surface_height + object_add->scale[2] * 0.5};
                                 entity_id = scene.create("Primitive", position);
                                 if (auto* entity = scene.find(entity_id)) {
                                     entity->object_id = object_id;
