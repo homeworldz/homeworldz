@@ -181,6 +181,61 @@ func TestAISCreateAndRenameInventoryFolder(t *testing.T) {
 	}
 }
 
+func TestAISFetchInventoryFolderChildrenAndCurrentLinks(t *testing.T) {
+	identities := newMemoryIdentityStore()
+	user, err := identities.CreateUser(context.Background(), "inventory.ais.read", "development-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := identities.CreateSession(context.Background(), "inventory.ais.read", "development-password", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.AssignViewerDestination(context.Background(), session.ID, 123456,
+		"30000000-0000-4000-8000-000000000001"); err != nil {
+		t.Fatal(err)
+	}
+	inventories := &memoryInventoryStore{folders: make(map[string][]inventory.Folder)}
+	folders, _ := inventories.EnsureSystemFolders(context.Background(), user.ID)
+	for _, item := range inventory.DefaultWearables(user.ID) {
+		if _, err := inventories.EnsureItem(context.Background(), item); err != nil {
+			t.Fatal(err)
+		}
+	}
+	handler := New(checker{}, "test", Options{Identity: identities, Inventory: inventories})
+	base := "/caps/inventory/ais/" + session.ID
+	bodyPartsID := inventory.SystemFolderID(user.ID, 13)
+	request := httptest.NewRequest(http.MethodGet, base+"/category/"+bodyPartsID+"/children?depth=0", nil)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	for _, expected := range []string{
+		"<key>category_id</key><uuid>" + bodyPartsID + "</uuid>",
+		"<key>items</key><map>", "<string>Default Shape</string>", "<string>Default Eyes</string>",
+	} {
+		if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), expected) {
+			t.Fatalf("status = %d, AIS children response lacks %q: %s", response.Code, expected, response.Body.String())
+		}
+	}
+	currentRequest := httptest.NewRequest(http.MethodGet, base+"/category/current/links", nil)
+	currentResponse := httptest.NewRecorder()
+	handler.ServeHTTP(currentResponse, currentRequest)
+	if currentResponse.Code != http.StatusOK ||
+		!strings.Contains(currentResponse.Body.String(), "<key>links</key><map>") ||
+		!strings.Contains(currentResponse.Body.String(), "<key>linked_id</key><uuid>") ||
+		!strings.Contains(currentResponse.Body.String(), "<string>Default Pants</string>") {
+		t.Fatalf("status = %d, AIS current links response = %s", currentResponse.Code, currentResponse.Body.String())
+	}
+	if len(folders) == 0 {
+		t.Fatal("system folders were not created")
+	}
+	orphansRequest := httptest.NewRequest(http.MethodGet, base+"/orphans", nil)
+	orphansResponse := httptest.NewRecorder()
+	handler.ServeHTTP(orphansResponse, orphansRequest)
+	if orphansResponse.Code != http.StatusOK || !strings.Contains(orphansResponse.Body.String(), "<key>items</key><map></map>") {
+		t.Fatalf("status = %d, AIS orphans response = %s", orphansResponse.Code, orphansResponse.Body.String())
+	}
+}
+
 func TestInventoryItemXML(t *testing.T) {
 	item := inventory.Item{ID: "40000000-0000-4000-8000-000000000001",
 		OwnerUserID: "20000000-0000-4000-8000-000000000001",

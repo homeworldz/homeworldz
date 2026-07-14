@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"io"
 	"net/http"
 	"strings"
 
@@ -18,7 +19,7 @@ func (a *API) inventoryAISCapability(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/caps/inventory/ais/"), "/")
-	if len(parts) != 3 || !validUUID(parts[0]) || parts[1] != "category" || !validUUID(parts[2]) {
+	if len(parts) < 2 || !validUUID(parts[0]) {
 		writeLLSDError(w, http.StatusNotFound, "AIS inventory capability was not found")
 		return
 	}
@@ -32,6 +33,26 @@ func (a *API) inventoryAISCapability(w http.ResponseWriter, r *http.Request) {
 		writeLLSDError(w, http.StatusServiceUnavailable, "session validation failed")
 		return
 	}
+	if r.Method == http.MethodGet {
+		switch {
+		case len(parts) == 4 && parts[1] == "category" && validUUID(parts[2]) && parts[3] == "children":
+			a.fetchAISInventoryFolder(w, r, session.UserID, parts[2], false)
+			return
+		case len(parts) == 4 && parts[1] == "category" && parts[2] == "current" && parts[3] == "links":
+			a.fetchAISInventoryFolder(w, r, session.UserID, inventory.SystemFolderID(session.UserID, 46), true)
+			return
+		case len(parts) == 2 && parts[1] == "orphans":
+			writeAISEmptyOrphans(w)
+			return
+		default:
+			writeLLSDError(w, http.StatusNotFound, "AIS inventory resource was not found")
+			return
+		}
+	}
+	if len(parts) != 3 || parts[1] != "category" || !validUUID(parts[2]) {
+		writeLLSDError(w, http.StatusNotFound, "AIS inventory capability was not found")
+		return
+	}
 	switch r.Method {
 	case http.MethodPost:
 		a.createAISInventoryFolder(w, r, session.UserID, parts[2])
@@ -41,6 +62,93 @@ func (a *API) inventoryAISCapability(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Allow", "POST, PATCH")
 		writeLLSDError(w, http.StatusMethodNotAllowed, "only POST and PATCH are supported")
 	}
+}
+
+func (a *API) fetchAISInventoryFolder(w http.ResponseWriter, r *http.Request, userID, folderID string, linksOnly bool) {
+	folders, err := a.inventory.ListFolders(r.Context(), userID)
+	if err != nil {
+		writeLLSDError(w, http.StatusServiceUnavailable, "AIS inventory folders could not be loaded")
+		return
+	}
+	items, err := a.inventory.ListItems(r.Context(), userID)
+	if err != nil {
+		writeLLSDError(w, http.StatusServiceUnavailable, "AIS inventory items could not be loaded")
+		return
+	}
+	var requested inventory.Folder
+	for _, folder := range folders {
+		if folder.ID == folderID {
+			requested = folder
+			break
+		}
+	}
+	if requested.ID == "" {
+		writeLLSDError(w, http.StatusNotFound, "AIS inventory folder was not found")
+		return
+	}
+	var categories, ordinaryItems, links strings.Builder
+	if !linksOnly {
+		for _, folder := range folders {
+			if folder.ParentID == requested.ID {
+				categories.WriteString("<key>" + html.EscapeString(folder.ID) + "</key>")
+				categories.WriteString(inventoryAISFolderXML(folder, userID))
+			}
+		}
+	}
+	for _, item := range items {
+		if item.FolderID != requested.ID {
+			continue
+		}
+		if item.AssetType == 24 {
+			links.WriteString("<key>" + html.EscapeString(item.ID) + "</key>")
+			links.WriteString(inventoryAISItemXML(item, true))
+		} else if !linksOnly {
+			ordinaryItems.WriteString("<key>" + html.EscapeString(item.ID) + "</key>")
+			ordinaryItems.WriteString(inventoryAISItemXML(item, false))
+		}
+	}
+	w.Header().Set("Content-Type", "application/llsd+xml; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.WriteString(w, "<?xml version=\"1.0\"?><llsd><map>"+
+		"<key>category_id</key><uuid>"+html.EscapeString(requested.ID)+"</uuid>"+
+		"<key>folder_id</key><uuid>"+html.EscapeString(requested.ID)+"</uuid>"+
+		"<key>agent_id</key><uuid>"+html.EscapeString(userID)+"</uuid>"+
+		"<key>parent_id</key><uuid>"+html.EscapeString(requested.ParentID)+"</uuid>"+
+		"<key>type_default</key><integer>"+fmt.Sprint(requested.TypeDefault)+"</integer>"+
+		"<key>name</key><string>"+html.EscapeString(requested.Name)+"</string>"+
+		"<key>version</key><integer>"+fmt.Sprint(requested.Version)+"</integer>"+
+		"<key>_embedded</key><map>"+
+		"<key>categories</key><map>"+categories.String()+"</map>"+
+		"<key>items</key><map>"+ordinaryItems.String()+"</map>"+
+		"<key>links</key><map>"+links.String()+"</map>"+
+		"</map></map></llsd>")
+}
+
+func inventoryAISFolderXML(folder inventory.Folder, userID string) string {
+	return fmt.Sprintf("<map><key>category_id</key><uuid>%s</uuid><key>folder_id</key><uuid>%s</uuid>"+
+		"<key>agent_id</key><uuid>%s</uuid><key>parent_id</key><uuid>%s</uuid>"+
+		"<key>type_default</key><integer>%d</integer><key>name</key><string>%s</string>"+
+		"<key>version</key><integer>%d</integer></map>",
+		html.EscapeString(folder.ID), html.EscapeString(folder.ID), html.EscapeString(userID),
+		html.EscapeString(folder.ParentID), folder.TypeDefault, html.EscapeString(folder.Name), folder.Version)
+}
+
+func inventoryAISItemXML(item inventory.Item, link bool) string {
+	content := inventoryItemXML(item)
+	if link {
+		asset := "<key>asset_id</key><uuid>" + html.EscapeString(item.AssetID) + "</uuid>"
+		content = strings.Replace(content, asset,
+			"<key>linked_id</key><uuid>"+html.EscapeString(item.AssetID)+"</uuid>"+asset, 1)
+	}
+	return content
+}
+
+func writeAISEmptyOrphans(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/llsd+xml; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.WriteString(w, "<?xml version=\"1.0\"?><llsd><map><key>_embedded</key><map>"+
+		"<key>categories</key><map></map><key>items</key><map></map>"+
+		"<key>links</key><map></map></map></map></llsd>")
 }
 
 func (a *API) createAISInventoryFolder(w http.ResponseWriter, r *http.Request, userID, parentID string) {
