@@ -152,13 +152,13 @@ in `config/smoke-test.ini`:
 
 ```ini
 [user]
-first_name = Smoke
-last_name = User
+first_name = Jim
+last_name = Tarber
 password = your-local-test-password
 ```
 
 When the file or password is absent, the launcher prompts for a password. It
-creates the default `smoke.user` account or
+creates the configured `jim.tarber` smoke-test account or
 validates the supplied password when that account already exists, then launches
 the installed OpenSim-enabled Firestorm with the HomeWorldz login URI. Service
 logs are written beneath ignored `var/smoke-test/`, and the services stop when
