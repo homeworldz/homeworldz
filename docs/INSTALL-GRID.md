@@ -2,8 +2,9 @@
 
 This guide is for a **grid operator**: the person running central login,
 identity, inventory, presence, and region-registration services. If you only
-own a region connected to somebody else's grid, use [INSTALL-REGION.md](INSTALL-REGION.md)
-instead. Region owners do not need the grid's PostgreSQL credentials.
+own a region connected to somebody else's grid, use the `INSTALL-REGION.md`
+included in the region package instead. Region owners do not need the grid's
+PostgreSQL credentials.
 
 Development snapshots can now be assembled as release ZIPs. Public release
 publication and an installer remain future work.

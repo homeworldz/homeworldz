@@ -2,8 +2,8 @@
 
 This guide is for a **region owner** connecting a region to an existing
 HomeWorldz grid. You do not need PostgreSQL, its credentials, or access to the
-grid database. If you operate the central grid too, complete
-[INSTALL-GRID.md](INSTALL-GRID.md) first.
+grid database. If you operate the central grid too, complete the
+`INSTALL-GRID.md` included in the grid package first.
 
 Development snapshots can now be assembled as release ZIPs. Public release
 publication and an installer remain future work.

@@ -8,8 +8,9 @@ settings, or private configuration.
 The grid package contains the grid service, database bootstrap and Library
 configuration programs, PostgreSQL migrations, the example grid configuration,
 and `INSTALL-GRID.md`. The region package contains the native region service,
-its adjacent runtime DLLs, static region assets, the example region
-configuration, and `INSTALL-REGION.md`.
+its adjacent dependency DLLs, app-local Microsoft Visual C++ runtime DLLs,
+static region assets, the example region configuration, and
+`INSTALL-REGION.md`.
 
 On a Windows x64 development host with the region already built, run:
 

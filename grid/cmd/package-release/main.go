@@ -103,6 +103,11 @@ func run(ctx context.Context, opts options) error {
 	for _, dll := range siblingDLLs(regionExecutable) {
 		regionEntries = append(regionEntries, archiveEntry{dll, filepath.Base(dll)})
 	}
+	runtimeEntries, err := visualCRuntimeEntries(ctx)
+	if err != nil {
+		return err
+	}
+	regionEntries = append(regionEntries, runtimeEntries...)
 	regionEntries, err = appendTree(regionEntries, filepath.Join(root, "assets", "region"), "assets/region", nil)
 	if err != nil {
 		return err
@@ -199,6 +204,49 @@ func siblingDLLs(executable string) []string {
 	paths, _ := filepath.Glob(filepath.Join(filepath.Dir(executable), "*.dll"))
 	sort.Strings(paths)
 	return paths
+}
+
+func visualCRuntimeEntries(ctx context.Context) ([]archiveEntry, error) {
+	programFiles := os.Getenv("ProgramFiles(x86)")
+	if programFiles == "" {
+		return nil, errors.New("ProgramFiles(x86) is unavailable; cannot locate the Visual C++ runtime")
+	}
+	vswhere := filepath.Join(programFiles, "Microsoft Visual Studio", "Installer", "vswhere.exe")
+	command := exec.CommandContext(ctx, vswhere, "-latest", "-products", "*", "-property", "installationPath")
+	output, err := command.Output()
+	if err != nil {
+		return nil, fmt.Errorf("locate Visual Studio runtime: %w", err)
+	}
+	installation := strings.TrimSpace(string(output))
+	if installation == "" {
+		return nil, errors.New("Visual Studio installation was not found; cannot package its C++ runtime")
+	}
+	return visualCRuntimeEntriesUnder(installation)
+}
+
+func visualCRuntimeEntriesUnder(installation string) ([]archiveEntry, error) {
+	directories, err := filepath.Glob(filepath.Join(
+		installation, "VC", "Redist", "MSVC", "*", "x64", "Microsoft.VC*.CRT"))
+	if err != nil {
+		return nil, fmt.Errorf("locate Visual C++ runtime directories: %w", err)
+	}
+	sort.Sort(sort.Reverse(sort.StringSlice(directories)))
+	required := []string{"msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll"}
+	for _, directory := range directories {
+		entries := make([]archiveEntry, 0, len(required))
+		for _, name := range required {
+			path := filepath.Join(directory, name)
+			if info, statErr := os.Stat(path); statErr != nil || info.IsDir() {
+				entries = nil
+				break
+			}
+			entries = append(entries, archiveEntry{path, name})
+		}
+		if entries != nil {
+			return entries, nil
+		}
+	}
+	return nil, errors.New("complete x64 Visual C++ redistributable runtime was not found")
 }
 
 func appendTree(entries []archiveEntry, sourceRoot, archiveRoot string, include func(string) bool) ([]archiveEntry, error) {
