@@ -111,7 +111,7 @@ func (a *API) fetchAISInventoryItem(w http.ResponseWriter, r *http.Request, user
 }
 
 func (a *API) libraryAISCapability(w http.ResponseWriter, r *http.Request) {
-	if a.identity == nil {
+	if a.identity == nil || a.inventory == nil {
 		writeLLSDError(w, http.StatusServiceUnavailable, "inventory library is unavailable")
 		return
 	}
@@ -130,22 +130,124 @@ func (a *API) libraryAISCapability(w http.ResponseWriter, r *http.Request) {
 		writeLLSDError(w, http.StatusServiceUnavailable, "session validation failed")
 		return
 	}
-	if r.Method != http.MethodGet {
-		w.Header().Set("Allow", http.MethodGet)
-		writeLLSDError(w, http.StatusMethodNotAllowed, "the inventory library is read-only")
-		return
-	}
 	switch {
+	case r.Method == "COPY" && len(parts) == 3 && parts[1] == "category" && validUUID(parts[2]):
+		a.copyAISLibraryCategory(w, r, session.UserID, parts[2])
+	case len(parts) == 3 && parts[1] == "category" && validUUID(parts[2]):
+		w.Header().Set("Allow", "COPY")
+		writeLLSDError(w, http.StatusMethodNotAllowed, "only AIS library category copying is supported")
 	case len(parts) == 4 && parts[1] == "category" && validUUID(parts[2]) && parts[3] == "children":
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", http.MethodGet)
+			writeLLSDError(w, http.StatusMethodNotAllowed, "this inventory library resource is read-only")
+			return
+		}
 		writeAISInventoryFolder(w, r, inventory.LibraryOwnerID, parts[2],
 			inventory.LibraryFolders(), inventory.LibraryItems(), false)
 	case len(parts) == 3 && parts[1] == "item" && validUUID(parts[2]):
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", http.MethodGet)
+			writeLLSDError(w, http.StatusMethodNotAllowed, "this inventory library resource is read-only")
+			return
+		}
 		writeAISLibraryItem(w, parts[2])
 	case len(parts) == 2 && parts[1] == "orphans":
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", http.MethodGet)
+			writeLLSDError(w, http.StatusMethodNotAllowed, "this inventory library resource is read-only")
+			return
+		}
 		writeAISEmptyOrphans(w)
 	default:
 		writeLLSDError(w, http.StatusNotFound, "AIS library resource was not found")
 	}
+}
+
+func (a *API) copyAISLibraryCategory(w http.ResponseWriter, r *http.Request, userID, sourceID string) {
+	destinationID := strings.TrimSpace(r.Header.Get("Destination"))
+	if !validUUID(destinationID) || destinationID == nullInventoryFolderID {
+		writeLLSDError(w, http.StatusBadRequest, "AIS library copy destination is invalid")
+		return
+	}
+	var source inventory.Folder
+	for _, folder := range inventory.LibraryFolders() {
+		if folder.ID == sourceID {
+			source = folder
+			break
+		}
+	}
+	if source.ID == "" {
+		writeLLSDError(w, http.StatusNotFound, "AIS library category was not found")
+		return
+	}
+	folderID, err := identifier.NewUUID()
+	if err != nil {
+		writeLLSDError(w, http.StatusServiceUnavailable, "inventory folder ID could not be allocated")
+		return
+	}
+	createdFolder, err := a.inventory.CreateFolder(r.Context(), inventory.Folder{
+		ID: folderID, OwnerUserID: userID, ParentID: destinationID,
+		Name: source.Name, TypeDefault: -1,
+	})
+	if writeAISFolderError(w, err) {
+		return
+	}
+	items := make([]inventory.Item, 0, 16)
+	for _, sourceItem := range inventory.LibraryItems() {
+		if sourceItem.FolderID != sourceID {
+			continue
+		}
+		itemID, err := identifier.NewUUID()
+		if err != nil {
+			writeLLSDError(w, http.StatusServiceUnavailable, "inventory item ID could not be allocated")
+			return
+		}
+		items = append(items, inventory.Item{
+			ID: itemID, OwnerUserID: userID, CreatorUserID: sourceItem.CreatorUserID,
+			FolderID: folderID, AssetID: sourceItem.AssetID, AssetType: sourceItem.AssetType,
+			InventoryType: sourceItem.InventoryType, Name: sourceItem.Name,
+			Description: sourceItem.Description, Flags: sourceItem.Flags,
+			BasePermissions: sourceItem.BasePermissions, CurrentPermissions: sourceItem.CurrentPermissions,
+			EveryonePermissions: sourceItem.EveryonePermissions, NextPermissions: sourceItem.NextPermissions,
+			SaleType: sourceItem.SaleType, SalePrice: sourceItem.SalePrice,
+		})
+	}
+	if len(items) > 0 {
+		items, err = a.inventory.CreateItems(r.Context(), items)
+		if writeAISItemError(w, err) {
+			return
+		}
+	}
+	versions, err := a.inventoryFolderVersions(r.Context(), userID, destinationID, folderID)
+	if err != nil {
+		writeLLSDError(w, http.StatusServiceUnavailable, "AIS inventory folder version could not be loaded")
+		return
+	}
+	createdFolder.Version = versions[folderID]
+	writeAISLibraryCategoryCopy(w, createdFolder, items, versions)
+}
+
+func writeAISLibraryCategoryCopy(w http.ResponseWriter, folder inventory.Folder, items []inventory.Item,
+	versions map[string]int64) {
+	var itemIDs, embeddedItems strings.Builder
+	for _, item := range items {
+		itemIDs.WriteString("<uuid>" + html.EscapeString(item.ID) + "</uuid>")
+		embeddedItems.WriteString("<key>" + html.EscapeString(item.ID) + "</key>")
+		embeddedItems.WriteString(inventoryAISItemXML(item, false))
+	}
+	w.Header().Set("Content-Type", "application/llsd+xml; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = fmt.Fprintf(w, "<?xml version=\"1.0\"?><llsd><map>"+
+		"<key>category_id</key><uuid>%s</uuid><key>parent_id</key><uuid>%s</uuid>"+
+		"<key>agent_id</key><uuid>%s</uuid><key>type_default</key><integer>%d</integer>"+
+		"<key>name</key><string>%s</string><key>version</key><integer>%d</integer>"+
+		"<key>_created_categories</key><array><uuid>%s</uuid></array>"+
+		"<key>_created_items</key><array>%s</array>%s"+
+		"<key>_embedded</key><map><key>categories</key><map></map>"+
+		"<key>items</key><map>%s</map><key>links</key><map></map></map></map></llsd>",
+		html.EscapeString(folder.ID), html.EscapeString(folder.ParentID),
+		html.EscapeString(folder.OwnerUserID), folder.TypeDefault, html.EscapeString(folder.Name), folder.Version,
+		html.EscapeString(folder.ID), itemIDs.String(), inventoryFolderVersionsXML(versions), embeddedItems.String())
 }
 
 func writeAISLibraryItem(w http.ResponseWriter, itemID string) {

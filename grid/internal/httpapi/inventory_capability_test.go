@@ -519,9 +519,41 @@ func TestAISLibraryIsReadableAndRejectsMutations(t *testing.T) {
 		base+"/category/"+inventory.LibraryDefaultAvatarID, strings.NewReader("<llsd><map></map></llsd>"))
 	mutationResponse := httptest.NewRecorder()
 	handler.ServeHTTP(mutationResponse, mutation)
-	if mutationResponse.Code != http.StatusMethodNotAllowed || mutationResponse.Header().Get("Allow") != http.MethodGet {
+	if mutationResponse.Code != http.StatusMethodNotAllowed || mutationResponse.Header().Get("Allow") != "COPY" {
 		t.Fatalf("library mutation status = %d, Allow = %q, body = %s",
 			mutationResponse.Code, mutationResponse.Header().Get("Allow"), mutationResponse.Body.String())
+	}
+	destinationID := inventory.SystemFolderID(user.ID, 5)
+	copyRequest := httptest.NewRequest("COPY",
+		base+"/category/"+inventory.LibraryDefaultAvatarID+"?tid=30000000-0000-4000-8000-000000000077,depth=0", nil)
+	copyRequest.Header.Set("Destination", destinationID)
+	copyResponse := httptest.NewRecorder()
+	handler.ServeHTTP(copyResponse, copyRequest)
+	if copyResponse.Code != http.StatusOK ||
+		!strings.Contains(copyResponse.Body.String(), "<key>category_id</key><uuid>") ||
+		!strings.Contains(copyResponse.Body.String(), "<key>parent_id</key><uuid>"+destinationID+"</uuid>") ||
+		!strings.Contains(copyResponse.Body.String(), "<key>_created_items</key><array>") ||
+		!strings.Contains(copyResponse.Body.String(), "<string>Default Shirt</string>") {
+		t.Fatalf("status = %d, AIS library category copy = %s", copyResponse.Code, copyResponse.Body.String())
+	}
+	items, err := store.ListItems(context.Background(), user.ID)
+	if err != nil || len(items) != 7 {
+		t.Fatalf("copied personal inventory items = %#v, err = %v", items, err)
+	}
+	var copiedFolderID string
+	for _, folder := range store.folders[user.ID] {
+		if folder.ParentID == destinationID && folder.Name == "Default Avatar" {
+			copiedFolderID = folder.ID
+		}
+	}
+	if copiedFolderID == "" {
+		t.Fatal("copied Default Avatar folder was not created")
+	}
+	for _, item := range items[1:] {
+		if item.FolderID != copiedFolderID || item.OwnerUserID != user.ID ||
+			item.CreatorUserID != inventory.LibraryOwnerID {
+			t.Fatalf("copied library item = %#v", item)
+		}
 	}
 }
 
