@@ -334,3 +334,12 @@ personal wearables immediately showed as worn, the shirt and pants rendered,
 and Current Outfit showed six valid links. Copying the Library outfit again
 intentionally creates another personal folder; duplicate folders observed
 during development reflected multiple explicit test attempts.
+
+The copied-outfit persistence and cleanup checks passed in the same acceptance
+session. After a clean viewer restart, all six wearables remained linked in
+Current Outfit and rendered correctly. Firestorm moves personal folders to
+Trash with legacy UDP `MoveInventoryFolder` even when AIS v3 is available;
+the region's compatibility adapter forwarded two inactive `Default Avatar`
+folder moves to the authoritative grid inventory service. Both moves returned
+success, and a subsequent clean login showed only the active copy in Clothing
+and both inactive copies in Trash without disturbing the worn outfit.
