@@ -126,7 +126,9 @@ original asset UUID and creator UUID, and moving an item updates both source
 and destination folder versions. The shared Library remains read-only through
 both its dedicated capability and the compatibility reads exposed through the
 personal AIS endpoint. Folder creation and rename use the same AIS-first model;
-legacy viewer mutations are not a second source of inventory truth.
+legacy viewer mutations are not a second source of inventory truth. AIS batch
+link creation is atomic and supports viewer-managed Current Outfit replacement
+without having the grid reapply the default outfit to established avatars.
 
 ## Ordinary Texture Upload
 
@@ -304,8 +306,10 @@ the subsequent capability response was accepted and the preview button showed
 The first personal AIS item rename passed on 2026-07-14. While logged in as
 `HomeWorldz Library`, Firestorm renamed the uploaded `terrain-island5` texture
 to `Terrain Island 5`; both viewer PATCH requests returned success and the
-stored item immediately reported the new name. Persistence across a fresh
-viewer login remains to be confirmed.
+stored item immediately reported the new name. A subsequent clean viewer login
+showed `Terrain Island 5`, and Firestorm opened the texture successfully. A
+second rename from `terrain-paw` to `Terrain Paw` was also accepted immediately;
+its persistence across the next clean login remains to be confirmed.
 
 The packaged login-logo update passed on 2026-07-14. After rebuilding and
 restarting the grid, Firestorm's login screen displayed the swapped-color

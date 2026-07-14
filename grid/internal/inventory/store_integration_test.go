@@ -89,6 +89,20 @@ func TestPostgresSystemFolderLifecycle(t *testing.T) {
 	if _, err := store.CreateItem(ctx, uploaded); !errors.Is(err, ErrItemConflict) {
 		t.Fatalf("duplicate uploaded item error = %v", err)
 	}
+	linkOneID, _ := identifier.NewUUID()
+	linkTwoID, _ := identifier.NewUUID()
+	currentOutfitID := SystemFolderID(userID, 46)
+	links, err := store.CreateItems(ctx, []Item{
+		{ID: linkOneID, OwnerUserID: userID, CreatorUserID: userID, FolderID: currentOutfitID,
+			AssetID: itemID, AssetType: 24, InventoryType: 18, Name: "Integration Shape",
+			BasePermissions: 0x7fffffff, CurrentPermissions: 0x7fffffff},
+		{ID: linkTwoID, OwnerUserID: userID, CreatorUserID: userID, FolderID: currentOutfitID,
+			AssetID: uploadedItemID, AssetType: 24, InventoryType: 0, Name: "Integration Texture",
+			BasePermissions: 0x7fffffff, CurrentPermissions: 0x7fffffff},
+	})
+	if err != nil || len(links) != 2 || links[0].CreatedAt.IsZero() || links[1].CreatedAt.IsZero() {
+		t.Fatalf("create inventory links = %#v, error = %v", links, err)
+	}
 	uploaded.Name = "Renamed Uploaded Texture"
 	uploaded.Description = "AIS integration update"
 	uploaded.FolderID = custom.ID
@@ -98,7 +112,7 @@ func TestPostgresSystemFolderLifecycle(t *testing.T) {
 		t.Fatalf("updated uploaded item = %#v, error = %v", updated, err)
 	}
 	items, err := store.ListItems(ctx, userID)
-	if err != nil || len(items) != 2 {
+	if err != nil || len(items) != 4 {
 		t.Fatalf("inventory items = %#v, error = %v", items, err)
 	}
 	found := map[string]bool{}

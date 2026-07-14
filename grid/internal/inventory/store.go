@@ -59,6 +59,7 @@ type Store interface {
 	UpdateFolder(context.Context, Folder) (Folder, error)
 	ListFolders(context.Context, string) ([]Folder, error)
 	CreateItem(context.Context, Item) (Item, error)
+	CreateItems(context.Context, []Item) ([]Item, error)
 	UpdateItem(context.Context, Item) (Item, error)
 	DeleteItem(context.Context, string, string) (Item, error)
 	EnsureItem(context.Context, Item) (bool, error)
@@ -387,6 +388,69 @@ func (s *PostgresStore) CreateItem(ctx context.Context, item Item) (Item, error)
 		return Item{}, fmt.Errorf("commit inventory item creation: %w", err)
 	}
 	return item, nil
+}
+
+func (s *PostgresStore) CreateItems(ctx context.Context, items []Item) ([]Item, error) {
+	if len(items) == 0 || len(items) > 256 {
+		return nil, ErrInvalidItem
+	}
+	ownerID := items[0].OwnerUserID
+	folderID := items[0].FolderID
+	seen := make(map[string]bool, len(items))
+	for index := range items {
+		items[index].Name = strings.TrimSpace(items[index].Name)
+		item := items[index]
+		if item.ID == "" || item.OwnerUserID == "" || item.CreatorUserID == "" ||
+			item.OwnerUserID != ownerID || item.FolderID == "" || item.FolderID != folderID ||
+			item.AssetID == "" || len(item.Name) == 0 || len(item.Name) > 255 ||
+			len(item.Description) > 1024 || item.AssetType < 0 || item.AssetType > 127 ||
+			item.InventoryType < 0 || item.InventoryType > 127 || item.SaleType < 0 ||
+			item.SaleType > 3 || item.SalePrice < 0 || seen[item.ID] {
+			return nil, ErrInvalidItem
+		}
+		seen[item.ID] = true
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("begin inventory item batch creation: %w", err)
+	}
+	defer tx.Rollback()
+	var folderVersion int64
+	if err := tx.QueryRowContext(ctx, `SELECT version FROM inventory_folders
+		WHERE id = $1 AND owner_user_id = $2 FOR UPDATE`, folderID, ownerID).
+		Scan(&folderVersion); errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrItemFolderNotFound
+	} else if err != nil {
+		return nil, fmt.Errorf("find inventory item batch folder: %w", err)
+	}
+	for index := range items {
+		item := &items[index]
+		err := tx.QueryRowContext(ctx, `INSERT INTO inventory_items
+			(id, owner_user_id, creator_user_id, folder_id, asset_id, asset_type, inventory_type,
+			 name, description, flags, base_permissions, current_permissions, everyone_permissions,
+			 next_permissions, sale_type, sale_price)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+			ON CONFLICT (id) DO NOTHING RETURNING created_at`, item.ID, item.OwnerUserID,
+			item.CreatorUserID, item.FolderID, item.AssetID, item.AssetType, item.InventoryType,
+			item.Name, item.Description, item.Flags, item.BasePermissions, item.CurrentPermissions,
+			item.EveryonePermissions, item.NextPermissions, item.SaleType, item.SalePrice).
+			Scan(&item.CreatedAt)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrItemConflict
+		}
+		if err != nil {
+			return nil, fmt.Errorf("create inventory item batch member: %w", err)
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE inventory_folders
+		SET version = version + $3, updated_at = now()
+		WHERE id = $1 AND owner_user_id = $2`, folderID, ownerID, len(items)); err != nil {
+		return nil, fmt.Errorf("update inventory item batch folder version: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit inventory item batch creation: %w", err)
+	}
+	return items, nil
 }
 
 func (s *PostgresStore) UpdateItem(ctx context.Context, item Item) (Item, error) {

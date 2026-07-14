@@ -99,6 +99,39 @@ func (s *memoryInventoryStore) CreateItem(_ context.Context, item inventory.Item
 	return item, nil
 }
 
+func (s *memoryInventoryStore) CreateItems(_ context.Context, items []inventory.Item) ([]inventory.Item, error) {
+	if len(items) == 0 || len(items) > 256 {
+		return nil, inventory.ErrInvalidItem
+	}
+	ownerID, folderID := items[0].OwnerUserID, items[0].FolderID
+	folderIndex := -1
+	for index, folder := range s.folders[ownerID] {
+		if folder.ID == folderID {
+			folderIndex = index
+			break
+		}
+	}
+	if folderIndex < 0 {
+		return nil, inventory.ErrItemFolderNotFound
+	}
+	seen := make(map[string]bool, len(items))
+	for _, item := range items {
+		if item.OwnerUserID != ownerID || item.FolderID != folderID || item.ID == "" ||
+			item.CreatorUserID == "" || item.AssetID == "" || item.Name == "" || seen[item.ID] {
+			return nil, inventory.ErrInvalidItem
+		}
+		seen[item.ID] = true
+		for _, existing := range s.items[item.OwnerUserID] {
+			if existing.ID == item.ID {
+				return nil, inventory.ErrItemConflict
+			}
+		}
+	}
+	s.items[ownerID] = append(s.items[ownerID], items...)
+	s.folders[ownerID][folderIndex].Version += int64(len(items))
+	return items, nil
+}
+
 func (s *memoryInventoryStore) UpdateItem(_ context.Context, item inventory.Item) (inventory.Item, error) {
 	for itemIndex, existing := range s.items[item.OwnerUserID] {
 		if existing.ID != item.ID {
