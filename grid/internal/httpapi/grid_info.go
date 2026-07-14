@@ -1,9 +1,13 @@
 package httpapi
 
 import (
+	_ "embed"
 	"encoding/xml"
 	"net/http"
 )
+
+//go:embed assets/homeworldz.svg
+var homeworldzLogo []byte
 
 type viewerGridInfo struct {
 	XMLName  xml.Name `xml:"gridinfo"`
@@ -35,7 +39,25 @@ func (a *API) gridInfo(w http.ResponseWriter, _ *http.Request) {
 
 func (a *API) welcome(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("<!doctype html><html><head><title>HomeWorldz</title></head>" +
-		"<body><h1>HomeWorldz</h1><p>Welcome to the HomeWorldz development grid.</p></body></html>"))
+	_, _ = w.Write([]byte(`<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HomeWorldz</title>
+<style>
+html,body{height:100%;margin:0}body{display:grid;place-items:center;background:#071923;color:#eaf7fb;font:16px system-ui,sans-serif;text-align:center}.panel{padding:2rem}.logo{display:block;width:min(80vw,28rem);height:auto;margin:0 auto 1.5rem}p{color:#b8d6df}
+</style>
+</head>
+<body><main class="panel"><img class="logo" src="/assets/homeworldz.svg" alt="HomeWorldz"><p>Welcome to the HomeWorldz development grid.</p></main></body>
+</html>`))
+}
+
+func (a *API) logo(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "image/svg+xml; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(homeworldzLogo)
 }

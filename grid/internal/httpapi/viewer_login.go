@@ -138,9 +138,13 @@ func inventorySkeleton(folders []inventory.Folder) (string, []rpcOutputValue) {
 }
 
 func (a *API) viewerLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		a.welcome(w, r)
+		return
+	}
 	if r.Method != http.MethodPost {
-		w.Header().Set("Allow", http.MethodPost)
-		writeViewerLogin(w, loginFailure("method", "Only POST is supported."))
+		w.Header().Set("Allow", "GET, POST")
+		writeViewerLogin(w, loginFailure("method", "Only GET and POST are supported."))
 		return
 	}
 	if a.identity == nil || a.regions == nil {

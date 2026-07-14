@@ -31,7 +31,28 @@ func TestViewerWelcomePage(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/welcome", nil)
 	response := httptest.NewRecorder()
 	New(nil, "test", Options{}).ServeHTTP(response, request)
-	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "HomeWorldz") {
+	if response.Code != http.StatusOK || response.Header().Get("Content-Type") != "text/html; charset=utf-8" ||
+		!strings.Contains(response.Body.String(), `src="/assets/homeworldz.svg"`) {
 		t.Fatalf("unexpected welcome response: %d %q", response.Code, response.Body.String())
+	}
+}
+
+func TestViewerLoginGETShowsWelcomePage(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/login", nil)
+	response := httptest.NewRecorder()
+	New(nil, "test", Options{}).ServeHTTP(response, request)
+	if response.Code != http.StatusOK || response.Header().Get("Content-Type") != "text/html; charset=utf-8" ||
+		!strings.Contains(response.Body.String(), `src="/assets/homeworldz.svg"`) {
+		t.Fatalf("unexpected login page response: %d %q", response.Code, response.Body.String())
+	}
+}
+
+func TestViewerLogo(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/assets/homeworldz.svg", nil)
+	response := httptest.NewRecorder()
+	New(nil, "test", Options{}).ServeHTTP(response, request)
+	if response.Code != http.StatusOK || response.Header().Get("Content-Type") != "image/svg+xml; charset=utf-8" ||
+		!strings.Contains(response.Body.String(), "<svg") {
+		t.Fatalf("unexpected logo response: %d %q", response.Code, response.Body.String())
 	}
 }
