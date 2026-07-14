@@ -358,3 +358,11 @@ and forwarded the move to the authoritative grid inventory service, which
 returned success. On a clean login the texture remained in Trash and was absent
 from Textures; Jim Tarber's clothing, Current Outfit links, and rendered avatar
 were unchanged.
+
+The complete personal-item Trash lifecycle passed in the same session.
+Firestorm restored the texture from Trash to Textures through another
+authoritative `MoveInventoryItem`, moved it back to Trash, and then emptied
+Trash through AIS v3. The purge returned success and a direct AIS lookup of the
+item returned `404`. After a clean login both Trash and Textures remained free
+of the purged item, while clothing, Current Outfit, and avatar rendering stayed
+correct.
