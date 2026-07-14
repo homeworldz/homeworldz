@@ -398,6 +398,8 @@ bool message_codecs() {
            derez->destination == 6 && derez->destination_id == expected.agent_id &&
            derez->transaction_id == expected.session_id && derez->packet_count == 1 &&
            derez->packet_number == 0 && derez->local_ids == std::vector<std::uint32_t>(killed_ids.begin(), killed_ids.end()) &&
+           valid_derez_batch(1, 0) && valid_derez_batch(1, 1) &&
+           !valid_derez_batch(0, 0) && !valid_derez_batch(1, 2) &&
            rez && rez->agent_id == expected.agent_id && rez->session_id == expected.session_id &&
            rez->item_id == expected.agent_id && rez->bypass_raycast == 1 &&
            rez->ray_start[0] == 120.0F && rez->ray_end[1] == 131.0F &&

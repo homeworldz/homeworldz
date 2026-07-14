@@ -714,6 +714,10 @@ std::optional<DeRezObject> decode_derez_object(std::span<const std::byte> payloa
     return result;
 }
 
+bool valid_derez_batch(std::uint8_t packet_count, std::uint8_t packet_number) {
+    return packet_count > 0 && packet_number <= packet_count;
+}
+
 std::optional<RezObject> decode_rez_object(std::span<const std::byte> payload) {
     constexpr std::size_t minimum_size = 144;
     if (payload.size() < minimum_size ||

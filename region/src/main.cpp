@@ -1747,8 +1747,9 @@ int main() {
                             std::vector<std::uint32_t> removed_ids;
                             std::size_t inventory_items_created = 0;
                             if ((derez->destination == derez_take_inventory ||
-                                 derez->destination == derez_trash) && derez->packet_count > 0 &&
-                                derez->packet_number < derez->packet_count) {
+                                 derez->destination == derez_trash) &&
+                                homeworldz::viewer::valid_derez_batch(
+                                    derez->packet_count, derez->packet_number)) {
                                 for (const auto local_id : derez->local_ids) {
                                     const auto* entity = scene.find(local_id);
                                     if (!entity || entity->object_id.empty() || entity->owner_id != user_id)

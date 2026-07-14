@@ -344,6 +344,7 @@ std::optional<MoveInventoryFolder> decode_move_inventory_folder(std::span<const 
 std::optional<MoveInventoryItem> decode_move_inventory_item(std::span<const std::byte> payload);
 std::optional<ObjectAdd> decode_object_add(std::span<const std::byte> payload);
 std::optional<DeRezObject> decode_derez_object(std::span<const std::byte> payload);
+bool valid_derez_batch(std::uint8_t packet_count, std::uint8_t packet_number);
 std::optional<RezObject> decode_rez_object(std::span<const std::byte> payload);
 std::vector<std::byte> encode_kill_object(std::span<const std::uint32_t> local_ids);
 std::optional<ObjectSelect> decode_object_select(std::span<const std::byte> payload);
