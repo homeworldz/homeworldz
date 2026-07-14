@@ -467,3 +467,12 @@ from the authoritative scene snapshot, and immediately showed `Prim2` in
 Firestorm's Objects folder.
 After a complete service and viewer restart, only the original Prim2 remained
 in the scene and the taken Prim2 remained in Jim Tarber's Objects folder.
+
+Viewer inventory-object rez passed its live-session acceptance on 2026-07-14.
+Jim dragged the taken Prim2 from his Objects folder onto terrain. The region
+loaded the authoritative grid item and its `homeworldz-object-v1` asset,
+created a new scene object UUID and local ID at the requested surface, retained
+the `0.5 x 0.5 x 0.5` scale and Wood material (`0x03`), retained Jim Tarber as
+both creator and owner, applied the inventory permission masks, and left the
+copyable source item in Objects. Jim renamed the rezzed clone to `Prim2b`, and
+the new name reached the authoritative scene snapshot.
