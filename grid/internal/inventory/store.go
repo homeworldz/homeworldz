@@ -15,9 +15,12 @@ import (
 const zeroUUID = "00000000-0000-0000-0000-000000000000"
 
 var (
-	ErrFolderConflict = errors.New("inventory folder already exists")
-	ErrFolderNotFound = errors.New("inventory parent folder not found")
-	ErrInvalidFolder  = errors.New("inventory folder is invalid")
+	ErrFolderConflict     = errors.New("inventory folder already exists")
+	ErrFolderNotFound     = errors.New("inventory parent folder not found")
+	ErrInvalidFolder      = errors.New("inventory folder is invalid")
+	ErrItemConflict       = errors.New("inventory item already exists")
+	ErrItemFolderNotFound = errors.New("inventory item folder not found")
+	ErrInvalidItem        = errors.New("inventory item is invalid")
 )
 
 type Folder struct {
@@ -54,6 +57,7 @@ type Store interface {
 	CreateFolder(context.Context, Folder) (Folder, error)
 	UpdateFolder(context.Context, Folder) (Folder, error)
 	ListFolders(context.Context, string) ([]Folder, error)
+	CreateItem(context.Context, Item) (Item, error)
 	EnsureItem(context.Context, Item) (bool, error)
 	ListItems(context.Context, string) ([]Item, error)
 }
@@ -324,6 +328,62 @@ func (s *PostgresStore) EnsureItem(ctx context.Context, item Item) (bool, error)
 		return false, fmt.Errorf("commit inventory item: %w", err)
 	}
 	return count != 0, nil
+}
+
+func (s *PostgresStore) CreateItem(ctx context.Context, item Item) (Item, error) {
+	item.Name = strings.TrimSpace(item.Name)
+	if item.ID == "" || item.OwnerUserID == "" || item.CreatorUserID == "" ||
+		item.FolderID == "" || item.AssetID == "" || len(item.Name) == 0 ||
+		len(item.Name) > 255 || len(item.Description) > 1024 || item.AssetType < 0 ||
+		item.AssetType > 127 || item.InventoryType < 0 || item.InventoryType > 127 ||
+		item.SaleType < 0 || item.SaleType > 3 || item.SalePrice < 0 {
+		return Item{}, ErrInvalidItem
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Item{}, fmt.Errorf("begin inventory item creation: %w", err)
+	}
+	defer tx.Rollback()
+	var folderVersion int64
+	if err := tx.QueryRowContext(ctx, `SELECT version FROM inventory_folders
+		WHERE id = $1 AND owner_user_id = $2 FOR UPDATE`, item.FolderID, item.OwnerUserID).
+		Scan(&folderVersion); errors.Is(err, sql.ErrNoRows) {
+		return Item{}, ErrItemFolderNotFound
+	} else if err != nil {
+		return Item{}, fmt.Errorf("find inventory item folder: %w", err)
+	}
+	result, err := tx.ExecContext(ctx, `INSERT INTO inventory_items
+		(id, owner_user_id, creator_user_id, folder_id, asset_id, asset_type, inventory_type,
+		 name, description, flags, base_permissions, current_permissions, everyone_permissions,
+		 next_permissions, sale_type, sale_price)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+		ON CONFLICT (id) DO NOTHING`, item.ID, item.OwnerUserID, item.CreatorUserID,
+		item.FolderID, item.AssetID, item.AssetType, item.InventoryType, item.Name,
+		item.Description, item.Flags, item.BasePermissions, item.CurrentPermissions,
+		item.EveryonePermissions, item.NextPermissions, item.SaleType, item.SalePrice)
+	if err != nil {
+		return Item{}, fmt.Errorf("create inventory item: %w", err)
+	}
+	created, err := result.RowsAffected()
+	if err != nil {
+		return Item{}, fmt.Errorf("count created inventory item: %w", err)
+	}
+	if created == 0 {
+		return Item{}, ErrItemConflict
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE inventory_folders
+		SET version = version + 1, updated_at = now()
+		WHERE id = $1 AND owner_user_id = $2`, item.FolderID, item.OwnerUserID); err != nil {
+		return Item{}, fmt.Errorf("update inventory item folder version: %w", err)
+	}
+	if err := tx.QueryRowContext(ctx, `SELECT created_at FROM inventory_items
+		WHERE id = $1 AND owner_user_id = $2`, item.ID, item.OwnerUserID).Scan(&item.CreatedAt); err != nil {
+		return Item{}, fmt.Errorf("read created inventory item: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return Item{}, fmt.Errorf("commit inventory item creation: %w", err)
+	}
+	return item, nil
 }
 
 func (s *PostgresStore) ListItems(ctx context.Context, userID string) ([]Item, error) {

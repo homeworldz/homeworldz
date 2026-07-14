@@ -76,8 +76,28 @@ func TestPostgresSystemFolderLifecycle(t *testing.T) {
 	if updated, err := store.EnsureItem(ctx, item); err != nil || !updated {
 		t.Fatalf("changed ensure item updated = %v, error = %v", updated, err)
 	}
+	uploadedItemID, _ := identifier.NewUUID()
+	uploadedAssetID, _ := identifier.NewUUID()
+	uploaded := Item{ID: uploadedItemID, OwnerUserID: userID, CreatorUserID: userID,
+		FolderID: SystemFolderID(userID, 0), AssetID: uploadedAssetID,
+		AssetType: 0, InventoryType: 0, Name: "Uploaded Texture",
+		BasePermissions: 0x7fffffff, CurrentPermissions: 0x7fffffff,
+		NextPermissions: 0x7fffffff}
+	if created, err := store.CreateItem(ctx, uploaded); err != nil || created.CreatedAt.IsZero() {
+		t.Fatalf("create uploaded item = %#v, error = %v", created, err)
+	}
+	if _, err := store.CreateItem(ctx, uploaded); !errors.Is(err, ErrItemConflict) {
+		t.Fatalf("duplicate uploaded item error = %v", err)
+	}
 	items, err := store.ListItems(ctx, userID)
-	if err != nil || len(items) != 1 || items[0].AssetID != replacementAssetID {
+	if err != nil || len(items) != 2 {
 		t.Fatalf("inventory items = %#v, error = %v", items, err)
+	}
+	found := map[string]bool{}
+	for _, listed := range items {
+		found[listed.AssetID] = true
+	}
+	if !found[uploadedAssetID] || !found[replacementAssetID] {
+		t.Fatalf("inventory assets = %#v", found)
 	}
 }

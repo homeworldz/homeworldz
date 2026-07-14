@@ -15,7 +15,15 @@ func (a *API) inventoryByUser(w http.ResponseWriter, r *http.Request) {
 	}
 	path := strings.TrimPrefix(r.URL.Path, "/api/v1/inventory/")
 	userID, suffix, found := strings.Cut(path, "/")
-	if !found || !validUUID(userID) || suffix != "folders" {
+	if !found || !validUUID(userID) {
+		a.notFound(w, r)
+		return
+	}
+	if suffix == "items" {
+		a.inventoryItemsByUser(w, r, userID)
+		return
+	}
+	if suffix != "folders" {
 		a.notFound(w, r)
 		return
 	}
@@ -64,5 +72,44 @@ func (a *API) inventoryByUser(w http.ResponseWriter, r *http.Request) {
 	default:
 		w.Header().Set("Allow", "GET, POST")
 		writeJSON(w, http.StatusMethodNotAllowed, Error{Code: "method_not_allowed", Message: "only GET and POST are supported"})
+	}
+}
+
+func (a *API) inventoryItemsByUser(w http.ResponseWriter, r *http.Request, userID string) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		writeJSON(w, http.StatusMethodNotAllowed, Error{Code: "method_not_allowed", Message: "only POST is supported"})
+		return
+	}
+	var request CreateInventoryItemRequest
+	if !decodeJSON(w, r, &request) {
+		return
+	}
+	if !validUUID(request.ID) || !validUUID(request.CreatorUserID) ||
+		request.CreatorUserID != userID || !validUUID(request.FolderID) ||
+		!validUUID(request.AssetID) || request.AssetType != 0 || request.InventoryType != 0 {
+		writeJSON(w, http.StatusBadRequest, Error{Code: "invalid_inventory_item", Message: "texture inventory item is invalid"})
+		return
+	}
+	const fullPermissions = uint32(0x7fffffff)
+	item, err := a.inventory.CreateItem(r.Context(), inventory.Item{
+		ID: request.ID, OwnerUserID: userID, CreatorUserID: request.CreatorUserID,
+		FolderID: request.FolderID, AssetID: request.AssetID, AssetType: request.AssetType,
+		InventoryType: request.InventoryType, Name: request.Name, Description: request.Description,
+		BasePermissions: fullPermissions, CurrentPermissions: fullPermissions,
+		EveryonePermissions: request.EveryonePermissions, NextPermissions: request.NextPermissions,
+	})
+	switch {
+	case errors.Is(err, inventory.ErrInvalidItem):
+		writeJSON(w, http.StatusBadRequest, Error{Code: "invalid_inventory_item", Message: "texture inventory item is invalid"})
+	case errors.Is(err, inventory.ErrItemFolderNotFound):
+		writeJSON(w, http.StatusNotFound, Error{Code: "inventory_folder_not_found", Message: "inventory item folder was not found"})
+	case errors.Is(err, inventory.ErrItemConflict):
+		writeJSON(w, http.StatusConflict, Error{Code: "inventory_item_exists", Message: "inventory item already exists"})
+	case err != nil:
+		writeJSON(w, http.StatusInternalServerError, Error{Code: "inventory_store_error", Message: "inventory item could not be created"})
+	default:
+		w.Header().Set("Location", "/api/v1/inventory/"+userID+"/items/"+item.ID)
+		writeJSON(w, http.StatusCreated, item)
 	}
 }

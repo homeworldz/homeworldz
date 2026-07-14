@@ -72,3 +72,16 @@ type CreateInventoryFolderRequest struct {
 	Name        string `json:"name"`
 	TypeDefault int    `json:"typeDefault"`
 }
+
+type CreateInventoryItemRequest struct {
+	ID                  string `json:"id"`
+	CreatorUserID       string `json:"creatorUserId"`
+	FolderID            string `json:"folderId"`
+	AssetID             string `json:"assetId"`
+	AssetType           int    `json:"assetType"`
+	InventoryType       int    `json:"inventoryType"`
+	Name                string `json:"name"`
+	Description         string `json:"description"`
+	EveryonePermissions uint32 `json:"everyonePermissions"`
+	NextPermissions     uint32 `json:"nextPermissions"`
+}

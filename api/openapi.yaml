@@ -399,6 +399,41 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/inventory/{userId}/items:
+    parameters:
+      - $ref: "#/components/parameters/RequestId"
+      - $ref: "#/components/parameters/UserId"
+    post:
+      operationId: createInventoryItem
+      summary: Create texture inventory metadata after a region asset upload
+      security:
+        - ServiceToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateInventoryItemRequest" }
+      responses:
+        "201":
+          description: Inventory item created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryItem" }
+        "400":
+          description: Invalid inventory item
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Inventory folder was not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: Inventory item already exists
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 components:
   parameters:
     RequestId:
@@ -561,6 +596,46 @@ components:
         parentId: { type: string, format: uuid }
         name: { type: string, minLength: 1, maxLength: 255 }
         typeDefault: { type: integer, minimum: -1, maximum: -1 }
+    CreateInventoryItemRequest:
+      type: object
+      additionalProperties: false
+      required: [id, creatorUserId, folderId, assetId, assetType, inventoryType,
+        name, description, everyonePermissions, nextPermissions]
+      properties:
+        id: { type: string, format: uuid }
+        creatorUserId: { type: string, format: uuid }
+        folderId: { type: string, format: uuid }
+        assetId: { type: string, format: uuid }
+        assetType: { type: integer, minimum: 0, maximum: 0 }
+        inventoryType: { type: integer, minimum: 0, maximum: 0 }
+        name: { type: string, minLength: 1, maxLength: 255 }
+        description: { type: string, maxLength: 1024 }
+        everyonePermissions: { type: integer, format: int64, minimum: 0, maximum: 4294967295 }
+        nextPermissions: { type: integer, format: int64, minimum: 0, maximum: 4294967295 }
+    InventoryItem:
+      type: object
+      required: [id, ownerUserId, creatorUserId, folderId, assetId, assetType,
+        inventoryType, name, description, flags, basePermissions,
+        currentPermissions, everyonePermissions, nextPermissions, saleType,
+        salePrice, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        ownerUserId: { type: string, format: uuid }
+        creatorUserId: { type: string, format: uuid }
+        folderId: { type: string, format: uuid }
+        assetId: { type: string, format: uuid }
+        assetType: { type: integer, minimum: 0, maximum: 127 }
+        inventoryType: { type: integer, minimum: 0, maximum: 127 }
+        name: { type: string, minLength: 1, maxLength: 255 }
+        description: { type: string, maxLength: 1024 }
+        flags: { type: integer, format: int64, minimum: 0, maximum: 4294967295 }
+        basePermissions: { type: integer, format: int64, minimum: 0, maximum: 4294967295 }
+        currentPermissions: { type: integer, format: int64, minimum: 0, maximum: 4294967295 }
+        everyonePermissions: { type: integer, format: int64, minimum: 0, maximum: 4294967295 }
+        nextPermissions: { type: integer, format: int64, minimum: 0, maximum: 4294967295 }
+        saleType: { type: integer, minimum: 0, maximum: 3 }
+        salePrice: { type: integer, minimum: 0 }
+        createdAt: { type: string, format: date-time }
     InventoryFolderList:
       type: object
       required: [folders]

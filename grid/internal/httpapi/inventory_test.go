@@ -76,6 +76,29 @@ func (s *memoryInventoryStore) EnsureItem(_ context.Context, item inventory.Item
 	return true, nil
 }
 
+func (s *memoryInventoryStore) CreateItem(_ context.Context, item inventory.Item) (inventory.Item, error) {
+	if s.items == nil {
+		s.items = make(map[string][]inventory.Item)
+	}
+	folderFound := false
+	for index := range s.folders[item.OwnerUserID] {
+		if s.folders[item.OwnerUserID][index].ID == item.FolderID {
+			s.folders[item.OwnerUserID][index].Version++
+			folderFound = true
+		}
+	}
+	if !folderFound {
+		return inventory.Item{}, inventory.ErrItemFolderNotFound
+	}
+	for _, existing := range s.items[item.OwnerUserID] {
+		if existing.ID == item.ID {
+			return inventory.Item{}, inventory.ErrItemConflict
+		}
+	}
+	s.items[item.OwnerUserID] = append(s.items[item.OwnerUserID], item)
+	return item, nil
+}
+
 func (s *memoryInventoryStore) ListItems(_ context.Context, userID string) ([]inventory.Item, error) {
 	return s.items[userID], nil
 }
@@ -105,4 +128,26 @@ func TestInventoryFoldersEndpoint(t *testing.T) {
 		"/api/v1/inventory/"+userID+"/folders",
 		`{"id":"`+folderID+`","parentId":"`+inventory.SystemFolderID(userID, 8)+`","name":"Projects","typeDefault":-1}`,
 		http.StatusConflict)
+}
+
+func TestCreateTextureInventoryItemEndpoint(t *testing.T) {
+	const userID = "20000000-0000-4000-8000-000000000001"
+	store := &memoryInventoryStore{folders: make(map[string][]inventory.Folder)}
+	_, _ = store.EnsureSystemFolders(context.Background(), userID)
+	handler := New(checker{}, "test", Options{ServiceToken: "secret", Inventory: store})
+	folderID := inventory.SystemFolderID(userID, 0)
+	body := `{"id":"40000000-0000-4000-8000-000000000010",` +
+		`"creatorUserId":"` + userID + `","folderId":"` + folderID + `",` +
+		`"assetId":"50000000-0000-4000-8000-000000000010","assetType":0,` +
+		`"inventoryType":0,"name":"Uploaded Terrain","description":"Library source",` +
+		`"everyonePermissions":0,"nextPermissions":2147483647}`
+	created := requestRegion[inventory.Item](t, handler, http.MethodPost,
+		"/api/v1/inventory/"+userID+"/items", body, http.StatusCreated)
+	if created.OwnerUserID != userID || created.CreatorUserID != userID ||
+		created.FolderID != folderID || created.AssetType != 0 || created.InventoryType != 0 ||
+		created.BasePermissions != 0x7fffffff || created.CurrentPermissions != 0x7fffffff {
+		t.Fatalf("created inventory item = %#v", created)
+	}
+	requestRegion[Error](t, handler, http.MethodPost,
+		"/api/v1/inventory/"+userID+"/items", body, http.StatusConflict)
 }
