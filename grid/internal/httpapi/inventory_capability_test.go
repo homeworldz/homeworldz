@@ -314,6 +314,21 @@ func TestAISCreateInventoryLinks(t *testing.T) {
 			t.Fatalf("created link %d = %#v, response = %s", index, link, response.Body.String())
 		}
 	}
+	linkUpdateBody := `<?xml version="1.0"?><llsd><map>` +
+		`<key>desc</key><string>@400</string></map></llsd>`
+	linkUpdateRequest := httptest.NewRequest(http.MethodPatch,
+		"/caps/inventory/ais/"+session.ID+"/item/"+links[1].ID,
+		strings.NewReader(linkUpdateBody))
+	linkUpdateResponse := httptest.NewRecorder()
+	New(checker{}, "test", Options{Identity: identities, Inventory: inventories}).
+		ServeHTTP(linkUpdateResponse, linkUpdateRequest)
+	itemsAfterUpdate, _ := inventories.ListItems(context.Background(), user.ID)
+	if linkUpdateResponse.Code != http.StatusOK || itemsAfterUpdate[3].Description != "@400" ||
+		!strings.Contains(linkUpdateResponse.Body.String(),
+			"<key>linked_id</key><uuid>"+sources[1].ID+"</uuid>") {
+		t.Fatalf("link update status = %d, response = %s, items = %#v",
+			linkUpdateResponse.Code, linkUpdateResponse.Body.String(), itemsAfterUpdate)
+	}
 
 	invalidBody := strings.Replace(body, sources[1].ID,
 		"40000000-0000-4000-8000-000000000099", 1)

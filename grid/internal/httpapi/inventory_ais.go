@@ -691,7 +691,8 @@ func (a *API) updateAISInventoryItem(w http.ResponseWriter, r *http.Request, use
 	}
 	w.Header().Set("Content-Type", "application/llsd+xml; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	_, _ = io.WriteString(w, "<?xml version=\"1.0\"?><llsd>"+inventoryItemXML(item)+"</llsd>")
+	_, _ = io.WriteString(w, "<?xml version=\"1.0\"?><llsd>"+
+		inventoryAISItemXML(item, item.AssetType == 24)+"</llsd>")
 }
 
 func (a *API) deleteAISInventoryItem(w http.ResponseWriter, r *http.Request, userID, itemID string) {
