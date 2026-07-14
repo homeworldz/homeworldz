@@ -245,6 +245,49 @@ func TestAISFetchInventoryFolderChildrenAndCurrentLinks(t *testing.T) {
 	}
 }
 
+func TestAISLibraryIsReadableAndRejectsMutations(t *testing.T) {
+	identities := newMemoryIdentityStore()
+	_, err := identities.CreateUser(context.Background(), "inventory.library", "development-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := identities.CreateSession(context.Background(), "inventory.library", "development-password", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.AssignViewerDestination(context.Background(), session.ID, 123456,
+		"30000000-0000-4000-8000-000000000001"); err != nil {
+		t.Fatal(err)
+	}
+	handler := New(checker{}, "test", Options{Identity: identities})
+	base := "/caps/inventory/library/" + session.ID
+	request := httptest.NewRequest(http.MethodGet,
+		base+"/category/"+inventory.LibraryRootID+"/children?depth=50", nil)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	for _, expected := range []string{
+		"<key>agent_id</key><uuid>" + inventory.LibraryOwnerID + "</uuid>",
+		"<string>Library</string>", "<string>Clothing</string>", "<string>Body Parts</string>",
+		"<string>Initial Outfits</string>", "<string>Default Avatar</string>",
+		"<string>Default Shape</string>", "<string>Default Skin</string>",
+		"<string>Default Hair</string>", "<string>Default Eyes</string>",
+		"<string>Default Shirt</string>", "<string>Default Pants</string>",
+	} {
+		if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), expected) {
+			t.Fatalf("status = %d, AIS library response lacks %q: %s",
+				response.Code, expected, response.Body.String())
+		}
+	}
+	mutation := httptest.NewRequest(http.MethodPatch,
+		base+"/category/"+inventory.LibraryDefaultAvatarID, strings.NewReader("<llsd><map></map></llsd>"))
+	mutationResponse := httptest.NewRecorder()
+	handler.ServeHTTP(mutationResponse, mutation)
+	if mutationResponse.Code != http.StatusMethodNotAllowed || mutationResponse.Header().Get("Allow") != http.MethodGet {
+		t.Fatalf("library mutation status = %d, Allow = %q, body = %s",
+			mutationResponse.Code, mutationResponse.Header().Get("Allow"), mutationResponse.Body.String())
+	}
+}
+
 func TestInventoryItemXML(t *testing.T) {
 	item := inventory.Item{ID: "40000000-0000-4000-8000-000000000001",
 		OwnerUserID: "20000000-0000-4000-8000-000000000001",

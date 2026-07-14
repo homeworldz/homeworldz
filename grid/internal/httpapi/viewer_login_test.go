@@ -102,6 +102,27 @@ func TestViewerLoginResolvesNamedRegion(t *testing.T) {
 			t.Fatalf("inventory folder %d parent = %q, want %q", index, parent, rootID)
 		}
 	}
+	libraryRoots := fields["inventory-lib-root"].Array.Values
+	libraryOwners := fields["inventory-lib-owner"].Array.Values
+	librarySkeleton := fields["inventory-skel-lib"].Array.Values
+	if len(libraryRoots) != 1 || libraryRoots[0].fields()["folder_id"].text() != inventory.LibraryRootID ||
+		len(libraryOwners) != 1 || libraryOwners[0].fields()["agent_id"].text() != inventory.LibraryOwnerID ||
+		len(librarySkeleton) != len(inventory.LibraryFolders()) {
+		t.Fatalf("inventory library login data missing: %#v", fields)
+	}
+	libraryNames := make(map[string]bool)
+	for _, value := range librarySkeleton {
+		name := value.fields()["name"].text()
+		libraryNames[name] = true
+		if strings.Contains(name, "HomeWorldz") || strings.HasPrefix(name, "My ") {
+			t.Fatalf("branded or personal library folder name = %q", name)
+		}
+	}
+	for _, name := range []string{"Library", "Clothing", "Body Parts", "Initial Outfits", "Default Avatar"} {
+		if !libraryNames[name] {
+			t.Fatalf("inventory library lacks %q: %#v", name, librarySkeleton)
+		}
+	}
 	items, err := inventories.ListItems(context.Background(), fields["agent_id"].text())
 	if err != nil || len(items) != 12 {
 		t.Fatalf("default inventory items = %#v, error = %v", items, err)

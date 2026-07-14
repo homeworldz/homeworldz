@@ -65,6 +65,42 @@ func (a *API) inventoryAISCapability(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (a *API) libraryAISCapability(w http.ResponseWriter, r *http.Request) {
+	if a.identity == nil {
+		writeLLSDError(w, http.StatusServiceUnavailable, "inventory library is unavailable")
+		return
+	}
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/caps/inventory/library/"), "/")
+	if len(parts) < 2 || !validUUID(parts[0]) {
+		writeLLSDError(w, http.StatusNotFound, "AIS library capability was not found")
+		return
+	}
+	session, err := a.identity.ValidateSession(r.Context(), parts[0])
+	if errors.Is(err, identity.ErrSessionNotFound) ||
+		(err == nil && (session.ViewerCircuitCode == 0 || session.DestinationRegionID == "")) {
+		writeLLSDError(w, http.StatusNotFound, "AIS library capability expired")
+		return
+	}
+	if err != nil {
+		writeLLSDError(w, http.StatusServiceUnavailable, "session validation failed")
+		return
+	}
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		writeLLSDError(w, http.StatusMethodNotAllowed, "the inventory library is read-only")
+		return
+	}
+	switch {
+	case len(parts) == 4 && parts[1] == "category" && validUUID(parts[2]) && parts[3] == "children":
+		writeAISInventoryFolder(w, r, inventory.LibraryOwnerID, parts[2],
+			inventory.LibraryFolders(), inventory.LibraryItems(), false)
+	case len(parts) == 2 && parts[1] == "orphans":
+		writeAISEmptyOrphans(w)
+	default:
+		writeLLSDError(w, http.StatusNotFound, "AIS library resource was not found")
+	}
+}
+
 func (a *API) fetchAISInventoryFolder(w http.ResponseWriter, r *http.Request, userID, folderID string, linksOnly bool) {
 	folders, err := a.inventory.ListFolders(r.Context(), userID)
 	if err != nil {
@@ -76,6 +112,11 @@ func (a *API) fetchAISInventoryFolder(w http.ResponseWriter, r *http.Request, us
 		writeLLSDError(w, http.StatusServiceUnavailable, "AIS inventory items could not be loaded")
 		return
 	}
+	writeAISInventoryFolder(w, r, userID, folderID, folders, items, linksOnly)
+}
+
+func writeAISInventoryFolder(w http.ResponseWriter, r *http.Request, userID, folderID string,
+	folders []inventory.Folder, items []inventory.Item, linksOnly bool) {
 	var requested inventory.Folder
 	for _, folder := range folders {
 		if folder.ID == folderID {

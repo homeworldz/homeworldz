@@ -236,8 +236,9 @@ func (a *API) viewerLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	rootID, skeleton := inventorySkeleton(folders)
 	root := rpcStructValue(rpcField("folder_id", rpcString(rootID)))
-	libraryRoot := rpcStructValue(rpcField("folder_id", rpcString("00000000-0000-0000-0000-000000000001")))
-	libraryOwner := rpcStructValue(rpcField("agent_id", rpcString("00000000-0000-0000-0000-000000000002")))
+	libraryRoot := rpcStructValue(rpcField("folder_id", rpcString(inventory.LibraryRootID)))
+	libraryOwner := rpcStructValue(rpcField("agent_id", rpcString(inventory.LibraryOwnerID)))
+	_, librarySkeleton := inventorySkeleton(inventory.LibraryFolders())
 	response := rpcStructValue(
 		rpcField("login", rpcString("true")), rpcField("message", rpcString("Welcome to HomeWorldz")),
 		rpcField("agent_id", rpcString(session.UserID)), rpcField("session_id", rpcString(session.ID)),
@@ -252,7 +253,7 @@ func (a *API) viewerLogin(w http.ResponseWriter, r *http.Request) {
 		rpcField("seconds_since_epoch", rpcInt(int(time.Now().Unix()))),
 		rpcField("inventory-root", rpcArrayValue(root)), rpcField("inventory-skeleton", rpcArrayValue(skeleton...)),
 		rpcField("inventory-lib-root", rpcArrayValue(libraryRoot)), rpcField("inventory-lib-owner", rpcArrayValue(libraryOwner)),
-		rpcField("inventory-skel-lib", rpcArrayValue()), rpcField("login-flags", rpcArrayValue()),
+		rpcField("inventory-skel-lib", rpcArrayValue(librarySkeleton...)), rpcField("login-flags", rpcArrayValue()),
 		rpcField("gestures", rpcArrayValue()), rpcField("buddy-list", rpcArrayValue()),
 	)
 	writeViewerLogin(w, response)

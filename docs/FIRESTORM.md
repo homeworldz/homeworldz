@@ -62,7 +62,7 @@ The login endpoint returns a successful viewer login envelope with at least:
 - startup text/time: `message` and `seconds_since_epoch`;
 - inventory shapes: one `inventory-root` entry, one `inventory-lib-root` entry,
   one `inventory-lib-owner` entry, plus array-valued `inventory-skeleton` and
-  `inventory-skel-lib` (initially allowed to be empty);
+  `inventory-skel-lib`;
 - array-valued `login-flags`, `gestures`, and `buddy-list` (initially allowed to
   be empty where Firestorm tolerates it).
 
@@ -88,6 +88,18 @@ The minimum observable flow is:
    `AgentMovementComplete` and begins required event/object delivery.
 8. The smoke test passes when the viewer leaves the startup screen, renders the
    destination region, and can move the avatar and use nearby chat.
+
+## System Library
+
+HomeWorldz presents a grid-owned, read-only inventory root named `Library`.
+Its initial viewer-facing structure follows the familiar Second Life layout:
+`Library / Clothing / Initial Outfits / Default Avatar`, with a standard
+top-level `Body Parts` category. The default-avatar folder contains the same
+shape, skin, hair, eyes, shirt, and pants used to clothe a newly created user.
+
+Firestorm reads this shared catalog through the separate `LibraryAPIv3`
+capability. Library data is not copied into personal inventory and never
+changes an existing outfit merely because the viewer reads it.
 
 Each region registers its viewer UDP port with the grid. Login advertises that
 stored port, while `HOMEWORLDZ_VIEWER_PORT` controls the matching region
