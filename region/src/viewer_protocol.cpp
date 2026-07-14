@@ -65,6 +65,175 @@ private:
     unsigned used_{};
 };
 
+void write_ll_bits(BitWriter& output, std::uint32_t value, unsigned count) {
+    while (count >= 8) {
+        output.write_byte(static_cast<std::uint8_t>(value));
+        value >>= 8;
+        count -= 8;
+    }
+    if (count != 0) output.write(value, count);
+}
+
+struct TerrainPatchHeader {
+    float dc_offset{};
+    int range{};
+    std::uint8_t quant_wbits{136};
+    std::uint16_t patch_id{};
+};
+
+// Terrain compression follows OpenMetaverse TerrainCompressor's compatible
+// DCT, quantization, zig-zag, and bit-packing algorithm. See the retained BSD
+// notice in docs/third-party/openmetaverse-terrain.md.
+
+const std::array<float, 256>& terrain_cosines() {
+    static const auto table = [] {
+        std::array<float, 256> result{};
+        constexpr float pi = 3.14159265358979323846F;
+        for (int u = 0; u < 16; ++u)
+            for (int n = 0; n < 16; ++n)
+                result[u * 16 + n] = std::cos((2.0F * n + 1.0F) * u * pi * 0.5F / 16.0F);
+        return result;
+    }();
+    return table;
+}
+
+const std::array<int, 256>& terrain_copy_matrix() {
+    static const auto table = [] {
+        std::array<int, 256> result{};
+        bool diagonal = false;
+        bool right = true;
+        int x = 0;
+        int y = 0;
+        int count = 0;
+        while (x < 16 && y < 16) {
+            result[y * 16 + x] = count++;
+            if (!diagonal) {
+                if (right) {
+                    if (x < 15) ++x; else ++y;
+                    right = false;
+                } else {
+                    if (y < 15) ++y; else ++x;
+                    right = true;
+                }
+                diagonal = true;
+            } else if (right) {
+                ++x;
+                --y;
+                if (x == 15 || y == 0) diagonal = false;
+            } else {
+                --x;
+                ++y;
+                if (y == 15 || x == 0) diagonal = false;
+            }
+        }
+        return result;
+    }();
+    return table;
+}
+
+std::array<int, 256> compress_terrain_patch(std::span<const float> heightmap,
+                                            std::uint8_t patch_x, std::uint8_t patch_y,
+                                            TerrainPatchHeader& header) {
+    float minimum = std::numeric_limits<float>::max();
+    float maximum = std::numeric_limits<float>::lowest();
+    for (int y = patch_y * 16; y < (patch_y + 1) * 16; ++y) {
+        for (int x = patch_x * 16; x < (patch_x + 1) * 16; ++x) {
+            const auto value = heightmap[static_cast<std::size_t>(y) * 256 + x];
+            minimum = std::min(minimum, value);
+            maximum = std::max(maximum, value);
+        }
+    }
+    header.dc_offset = minimum;
+    header.range = static_cast<int>(maximum - minimum + 1.0F);
+    header.patch_id = static_cast<std::uint16_t>((patch_x << 5) | patch_y);
+
+    const auto premultiply = 1024.0F / static_cast<float>(header.range);
+    const auto subtract = 512.0F + header.dc_offset * premultiply;
+    std::array<float, 256> block{};
+    std::size_t index = 0;
+    for (int y = patch_y * 16; y < (patch_y + 1) * 16; ++y)
+        for (int x = patch_x * 16; x < (patch_x + 1) * 16; ++x)
+            block[index++] = heightmap[static_cast<std::size_t>(y) * 256 + x] * premultiply - subtract;
+
+    constexpr float inverse_sqrt_two = 0.7071067811865475244F;
+    const auto& cosine = terrain_cosines();
+    std::array<float, 256> intermediate{};
+    for (int line = 0; line < 16; ++line) {
+        const auto offset = line * 16;
+        float total = 0.0F;
+        for (int n = 0; n < 16; ++n) total += block[offset + n];
+        intermediate[offset] = inverse_sqrt_two * total;
+        for (int u = 1; u < 16; ++u) {
+            total = 0.0F;
+            for (int n = 0; n < 16; ++n)
+                total += block[offset + n] * cosine[u * 16 + n];
+            intermediate[offset + u] = total;
+        }
+    }
+
+    const auto& copy = terrain_copy_matrix();
+    std::array<int, 256> compressed{};
+    for (int column = 0; column < 16; ++column) {
+        float total = 0.0F;
+        for (int n = 0; n < 16; ++n) total += intermediate[n * 16 + column];
+        compressed[copy[column]] = static_cast<int>(inverse_sqrt_two * total * 0.125F /
+                                                     (1.0F + 2.0F * column));
+        for (int u = 1; u < 16; ++u) {
+            total = 0.0F;
+            for (int n = 0; n < 16; ++n)
+                total += intermediate[n * 16 + column] * cosine[u * 16 + n];
+            compressed[copy[u * 16 + column]] = static_cast<int>(total * 0.125F /
+                                                                  (1.0F + 2.0F * (u + column)));
+        }
+    }
+    return compressed;
+}
+
+unsigned write_terrain_patch_header(BitWriter& output, TerrainPatchHeader header,
+                                    const std::array<int, 256>& coefficients) {
+    unsigned word_bits = ((header.quant_wbits & 0x0f) + 2) >> 1;
+    const auto maximum_bits = static_cast<unsigned>((header.quant_wbits & 0x0f) + 7);
+    for (auto value : coefficients) {
+        auto magnitude = static_cast<unsigned>(value < 0 ? -static_cast<std::int64_t>(value) : value);
+        for (auto bit = maximum_bits; bit > word_bits; --bit) {
+            if ((magnitude & (1U << bit)) != 0) {
+                word_bits = bit;
+                break;
+            }
+        }
+    }
+    ++word_bits;
+    word_bits = std::clamp(word_bits, 2U, 17U);
+    header.quant_wbits = static_cast<std::uint8_t>((header.quant_wbits & 0xf0) | (word_bits - 2));
+    output.write_byte(header.quant_wbits);
+    std::uint32_t offset_bits{};
+    std::memcpy(&offset_bits, &header.dc_offset, sizeof(offset_bits));
+    write_ll_bits(output, offset_bits, 32);
+    write_ll_bits(output, static_cast<std::uint32_t>(header.range), 16);
+    write_ll_bits(output, header.patch_id, 10);
+    return word_bits;
+}
+
+void write_terrain_coefficients(BitWriter& output, const std::array<int, 256>& coefficients,
+                                unsigned word_bits) {
+    for (std::size_t index = 0; index < coefficients.size(); ++index) {
+        auto value = coefficients[index];
+        if (value == 0) {
+            if (std::all_of(coefficients.begin() + static_cast<std::ptrdiff_t>(index), coefficients.end(),
+                            [](int remaining) { return remaining == 0; })) {
+                output.write(2, 2);
+                return;
+            }
+            output.write(0, 1);
+            continue;
+        }
+        output.write(value < 0 ? 7 : 6, 3);
+        auto magnitude = static_cast<std::uint32_t>(value < 0 ? -static_cast<std::int64_t>(value) : value);
+        magnitude = std::min(magnitude, (1U << word_bits) - 1U);
+        write_ll_bits(output, magnitude, word_bits);
+    }
+}
+
 std::uint32_t read_be_u32(std::span<const std::byte> data, std::size_t offset) {
     return (std::to_integer<std::uint32_t>(data[offset]) << 24) |
            (std::to_integer<std::uint32_t>(data[offset + 1]) << 16) |
@@ -259,7 +428,8 @@ std::vector<std::byte> encode_region_handshake(const RegionHandshake& message) {
     append_f32(output, 1.0F); // billable factor
     Uuid zero{};
     append_uuid(output, zero); // cache ID
-    for (int index = 0; index < 8; ++index) append_uuid(output, zero); // terrain textures
+    for (const auto& texture : message.terrain_textures) append_uuid(output, texture); // terrain base
+    for (const auto& texture : message.terrain_textures) append_uuid(output, texture); // terrain detail
     for (const float value : {10.F, 10.F, 10.F, 10.F, 60.F, 60.F, 60.F, 60.F}) append_f32(output, value);
     append_uuid(output, message.region_id);
     append_le_u32(output, 0); // CPU class
@@ -574,6 +744,34 @@ std::vector<std::byte> encode_flat_terrain(std::span<const TerrainPatch> patches
     const auto encoded = bits.finish();
     if (encoded.size() > 65535) return {};
     std::vector<std::byte> output{std::byte{11}, std::byte{0x4c}}; // LayerData, land
+    const auto size = static_cast<std::uint16_t>(encoded.size());
+    output.push_back(static_cast<std::byte>(size));
+    output.push_back(static_cast<std::byte>(size >> 8));
+    output.insert(output.end(), encoded.begin(), encoded.end());
+    return output;
+}
+
+std::vector<std::byte> encode_terrain(std::span<const TerrainPatch> patches,
+                                      std::span<const float> heightmap) {
+    if (patches.empty() || patches.size() > 32 || heightmap.size() != 256 * 256 ||
+        !std::all_of(heightmap.begin(), heightmap.end(), [](float height) { return std::isfinite(height); }))
+        return {};
+    BitWriter bits;
+    bits.write_byte(0x08);
+    bits.write_byte(0x01); // stride 264, little endian
+    bits.write_byte(16);
+    bits.write_byte(0x4c); // 16x16 land layer
+    for (const auto patch : patches) {
+        if (patch.x >= 16 || patch.y >= 16) return {};
+        TerrainPatchHeader header;
+        const auto coefficients = compress_terrain_patch(heightmap, patch.x, patch.y, header);
+        const auto word_bits = write_terrain_patch_header(bits, header, coefficients);
+        write_terrain_coefficients(bits, coefficients, word_bits);
+    }
+    bits.write_byte(97);
+    const auto encoded = bits.finish();
+    if (encoded.size() > 65535) return {};
+    std::vector<std::byte> output{std::byte{11}, std::byte{0x4c}};
     const auto size = static_cast<std::uint16_t>(encoded.size());
     output.push_back(static_cast<std::byte>(size));
     output.push_back(static_cast<std::byte>(size >> 8));

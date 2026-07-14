@@ -7,7 +7,10 @@
 #include <cstdlib>
 #include <deque>
 #include <exception>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <span>
@@ -80,6 +83,51 @@ std::string environment_value(const char* name, std::string fallback = {}) {
     if (const char* value = std::getenv(name)) return value;
 #endif
     return fallback;
+}
+
+std::optional<std::array<float, 256 * 256>> load_raw_heightmap(const std::filesystem::path& path) {
+    std::ifstream input(path, std::ios::binary | std::ios::ate);
+    if (!input || input.tellg() != 256 * 256) return std::nullopt;
+    input.seekg(0);
+    std::array<unsigned char, 256 * 256> source{};
+    input.read(reinterpret_cast<char*>(source.data()), source.size());
+    if (!input) return std::nullopt;
+    std::array<float, 256 * 256> result{};
+    std::transform(source.begin(), source.end(), result.begin(),
+                   [](unsigned char height) { return static_cast<float>(height); });
+    return result;
+}
+
+homeworldz::scene::Vector3 default_spawn(
+    const std::optional<std::array<float, 256 * 256>>& heightmap) {
+    if (!heightmap) return {128.0, 128.0, 25.0};
+    std::size_t selected_x = 128;
+    std::size_t selected_y = 128;
+    std::size_t selected_distance = (std::numeric_limits<std::size_t>::max)();
+    for (std::size_t y = 16; y < 240; ++y) {
+        for (std::size_t x = 16; x < 240; ++x) {
+            const auto height = (*heightmap)[y * 256 + x];
+            if (height < 24.0F) continue;
+            const auto dx = static_cast<std::int64_t>(x) - 128;
+            const auto dy = static_cast<std::int64_t>(y) - 128;
+            const auto distance = static_cast<std::size_t>(dx * dx + dy * dy);
+            if (distance < selected_distance) {
+                selected_x = x;
+                selected_y = y;
+                selected_distance = distance;
+            }
+        }
+    }
+    const auto height = (*heightmap)[selected_y * 256 + selected_x];
+    return {static_cast<double>(selected_x), static_cast<double>(selected_y), height + 1.0};
+}
+
+double ground_height(const std::optional<std::array<float, 256 * 256>>& heightmap,
+                     const homeworldz::scene::Vector3& position) {
+    if (!heightmap) return 25.0;
+    const auto x = std::clamp(static_cast<int>(position.x), 0, 255);
+    const auto y = std::clamp(static_cast<int>(position.y), 0, 255);
+    return (*heightmap)[static_cast<std::size_t>(y) * 256 + x];
 }
 
 int environment_int(const char* name, int fallback, int minimum, int maximum) {
@@ -256,6 +304,15 @@ int main() {
         "HOMEWORLDZ_REGION_PUBLIC_ENDPOINT", "http://localhost:" + std::to_string(configured_port()));
     const auto grid_public_endpoint = environment_value(
         "HOMEWORLDZ_GRID_PUBLIC_URL", environment_value("HOMEWORLDZ_GRID_URL", "http://localhost:42000"));
+    const auto terrain_heightmap = load_raw_heightmap(environment_value(
+        "HOMEWORLDZ_REGION_TERRAIN_PATH", "assets/region/terrain/default-heightmap.raw"));
+    if (terrain_heightmap) {
+        std::cout << "{\"level\":\"info\",\"message\":\"default terrain heightmap loaded\"}" << std::endl;
+    } else {
+        std::cout << "{\"level\":\"warning\",\"message\":\"default terrain heightmap unavailable; using flat terrain\"}"
+                  << std::endl;
+    }
+    const auto initial_spawn = default_spawn(terrain_heightmap);
     std::unique_ptr<homeworldz::grid::RegistrationLifecycle> registration;
     std::unique_ptr<homeworldz::grid::Client> viewer_grid;
     std::unique_ptr<homeworldz::grid::ViewerSessionCache> viewer_sessions;
@@ -547,6 +604,14 @@ int main() {
                             handshake.name = region_name;
                             handshake.region_id = *region_id;
                             handshake.owner_id = identity->agent_id;
+                            constexpr std::array<std::string_view, 4> terrain_texture_ids{
+                                "b8d3965a-ad78-bf43-699b-bff8eca6c975",
+                                "abb783e6-3e93-26c0-248a-247666855da3",
+                                "179cdabd-398a-9b6b-1391-4dc333ba321f",
+                                "beb169c7-11ea-fff2-efe5-0f24dc881df2"};
+                            for (std::size_t index = 0; index < terrain_texture_ids.size(); ++index)
+                                if (const auto texture = homeworldz::viewer::parse_uuid(terrain_texture_ids[index]))
+                                    handshake.terrain_textures[index] = *texture;
                             if (const auto response = circuits.send(endpoint,
                                     homeworldz::viewer::encode_region_handshake(handshake), true, now, true)) {
                                 const auto sent = send_udp(viewer_server, endpoint, *response);
@@ -718,11 +783,13 @@ int main() {
                                     }
                                 }
                                 for (const auto duplicate : duplicates) scene.remove(duplicate);
-                                if (entity == 0) entity = scene.create(name, {128.0, 128.0, 25.0});
+                                if (entity == 0) entity = scene.create(name, initial_spawn);
                                 const auto* persisted = scene.find(entity);
-                                const auto spawn = persisted ? persisted->position : homeworldz::scene::Vector3{128.0, 128.0, 25.0};
+                                const auto spawn = persisted ? persisted->position : initial_spawn;
+                                response.position = {static_cast<float>(spawn.x), static_cast<float>(spawn.y),
+                                                     static_cast<float>(spawn.z)};
                                 avatars.emplace(endpoint, LiveAvatar{
-                                    homeworldz::viewer::AvatarController{spawn}, entity, name,
+                                    homeworldz::viewer::AvatarController{spawn, ground_height(terrain_heightmap, spawn)}, entity, name,
                                     now + std::chrono::seconds(5), now + std::chrono::seconds(30), 0});
                                 if (viewer_grid && registration)
                                     static_cast<void>(viewer_grid->update_presence(name, registration->region_id()));
@@ -744,14 +811,19 @@ int main() {
                             for (std::uint8_t y = 0; y < 16; ++y) {
                                 std::array<homeworldz::viewer::TerrainPatch, 16> row{};
                                 for (std::uint8_t x = 0; x < 16; ++x) row[x] = {x, y};
-                                if (const auto terrain = circuits.send(endpoint,
-                                        homeworldz::viewer::encode_flat_terrain(row, 25.0F), true, now))
+                                const auto terrain_payload = terrain_heightmap ?
+                                    homeworldz::viewer::encode_terrain(row, *terrain_heightmap) :
+                                    homeworldz::viewer::encode_flat_terrain(row, 25.0F);
+                                if (const auto terrain = circuits.send(endpoint, terrain_payload, true, now))
                                     static_cast<void>(send_udp(viewer_server, endpoint, *terrain));
                             }
                             homeworldz::viewer::StaticObject welcome_prim;
                             if (const auto id = homeworldz::viewer::parse_uuid(
                                     "00000000-0000-4000-8000-000000000001"))
                                 welcome_prim.id = *id;
+                            welcome_prim.position = {static_cast<float>(initial_spawn.x + 4.0),
+                                                     static_cast<float>(initial_spawn.y),
+                                                     static_cast<float>(initial_spawn.z + 1.0)};
                             if (const auto object = circuits.send(endpoint,
                                     homeworldz::viewer::encode_static_object_update(
                                         response.region_handle, welcome_prim), true, now, true))

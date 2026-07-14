@@ -90,6 +90,7 @@ struct RegionHandshake {
     Uuid region_id{};
     Uuid owner_id{};
     float water_height{20.0F};
+    std::array<Uuid, 4> terrain_textures{};
 };
 
 struct AgentMovementComplete : AgentMessage {
@@ -167,6 +168,8 @@ std::optional<AgentUpdate> decode_agent_update(std::span<const std::byte> payloa
 std::optional<ChatFromViewer> decode_chat_from_viewer(std::span<const std::byte> payload);
 std::vector<std::byte> encode_chat_from_simulator(const ChatFromSimulator& message);
 std::vector<std::byte> encode_flat_terrain(std::span<const TerrainPatch> patches, float height);
+std::vector<std::byte> encode_terrain(std::span<const TerrainPatch> patches,
+                                      std::span<const float> heightmap);
 std::vector<std::byte> encode_static_object_update(std::uint64_t region_handle,
                                                    const StaticObject& object);
 std::vector<std::byte> encode_avatar_object_update(std::uint64_t region_handle, std::uint32_t local_id,

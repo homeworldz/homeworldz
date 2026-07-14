@@ -259,11 +259,18 @@ bool flat_terrain_codec() {
     if (terrain.size() < 20 || terrain[0] != std::byte{11} || terrain[1] != std::byte{0x4c}) return false;
     const auto length = std::to_integer<unsigned>(terrain[2]) |
                         (std::to_integer<unsigned>(terrain[3]) << 8);
-    return length + 4 == terrain.size() && terrain[4] == std::byte{8} && terrain[5] == std::byte{1} &&
+    if (!(length + 4 == terrain.size() && terrain[4] == std::byte{8} && terrain[5] == std::byte{1} &&
            terrain[6] == std::byte{16} && terrain[7] == std::byte{0x4c} && terrain[8] == std::byte{0x84} &&
            terrain[9] == std::byte{} && terrain[10] == std::byte{} && terrain[11] == std::byte{0xc4} &&
            terrain[12] == std::byte{0x41} && terrain[13] == std::byte{1} && terrain[14] == std::byte{} &&
-           terrain[15] == std::byte{0x20} && terrain[16] == std::byte{0x28};
+           terrain[15] == std::byte{0x20} && terrain[16] == std::byte{0x28})) return false;
+    std::array<float, 256 * 256> heightmap{};
+    for (std::size_t y = 0; y < 256; ++y)
+        for (std::size_t x = 0; x < 256; ++x)
+            heightmap[y * 256 + x] = 10.0F + static_cast<float>(x + y) / 16.0F;
+    const auto shaped = encode_terrain(patches, heightmap);
+    return shaped.size() > terrain.size() && shaped[0] == std::byte{11} && shaped[1] == std::byte{0x4c} &&
+           encode_terrain(patches, std::span<const float>(heightmap.data(), 100)).empty();
 }
 
 bool static_object_codec() {
