@@ -401,3 +401,11 @@ authoritative scene snapshot and created a `Primitive` object item in Jim's
 Trash. A clean restart subsequently passed: the deleted upper box remained
 absent, the `Primitive` item remained in Trash, and Firestorm again resolved
 both Creator and Owner as `Jim Tarber`.
+
+Viewer primitive transform and name editing passed its live-session acceptance
+on 2026-07-14. Firestorm moved a box to `202, 144, 23`, resized it to
+`1 x 2 x 3` metres, and renamed it from `Primitive` to `Prim1`. The region
+decoded the standard `MultipleObjectUpdate` and `ObjectName` messages, checked
+Jim Tarber's ownership and modify mask, persisted all three values, and sent
+authoritative state back to the viewer. Closing and reopening Firestorm's Edit
+panel retained `Prim1`; clean-restart persistence remains to be confirmed.
