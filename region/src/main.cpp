@@ -1734,8 +1734,15 @@ int main() {
                             derez->session_id == identity->session_id) {
                             constexpr std::uint8_t derez_take_inventory = 0x04;
                             constexpr std::uint8_t derez_trash = 0x06;
+                            constexpr int objects_folder_type = 6;
                             const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
-                            const auto destination_id = homeworldz::viewer::format_uuid(derez->destination_id);
+                            auto destination_id = homeworldz::viewer::format_uuid(derez->destination_id);
+                            if (derez->destination == derez_take_inventory &&
+                                destination_id == "00000000-0000-0000-0000-000000000000" && viewer_grid) {
+                                if (const auto objects_folder = viewer_grid->find_system_inventory_folder(
+                                        user_id, objects_folder_type))
+                                    destination_id = *objects_folder;
+                            }
                             std::vector<std::uint32_t> removed_ids;
                             std::size_t inventory_items_created = 0;
                             if ((derez->destination == derez_take_inventory ||
@@ -1768,7 +1775,7 @@ int main() {
                                     item.item_id = *homeworldz::viewer::parse_uuid(item_id);
                                     item.creator_id = *homeworldz::viewer::parse_uuid(entity->creator_id);
                                     item.owner_id = identity->agent_id;
-                                    item.folder_id = derez->destination_id;
+                                    item.folder_id = *homeworldz::viewer::parse_uuid(destination_id);
                                     item.asset_id = *homeworldz::viewer::parse_uuid(asset_id);
                                     item.asset_type = 6;
                                     item.inventory_type = 6;

@@ -219,6 +219,17 @@ bool Client::move_inventory_item(std::string_view user_id, std::string_view item
         "/items/" + std::string(item_id), body).status_code == 200;
 }
 
+std::optional<std::string> Client::find_system_inventory_folder(std::string_view user_id,
+                                                                 int folder_type) {
+    const auto response = transport_->send(
+        "GET", "/api/v1/inventory/" + std::string(user_id) +
+                   "/system-folders/" + std::to_string(folder_type), {});
+    if (response.status_code != 200) return std::nullopt;
+    const auto folder_id = json_field(response.body, "id");
+    if (folder_id.empty()) return std::nullopt;
+    return folder_id;
+}
+
 bool Client::create_texture_inventory_item(std::string_view user_id, const TextureInventoryItem& item) {
     const auto body = "{\"id\":" + api::json_string(item.item_id) +
                       ",\"creatorUserId\":" + api::json_string(item.creator_id) +

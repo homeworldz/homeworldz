@@ -287,6 +287,13 @@ func TestInventoryFoldersEndpoint(t *testing.T) {
 	if len(result.Folders) != 21 || result.Folders[0].TypeDefault != 8 {
 		t.Fatalf("inventory folders = %#v", result.Folders)
 	}
+	objects := requestRegion[inventory.Folder](t, handler, http.MethodGet,
+		"/api/v1/inventory/"+userID+"/system-folders/6", "", http.StatusOK)
+	if objects.ID != inventory.SystemFolderID(userID, 6) || objects.TypeDefault != 6 || objects.Name != "Objects" {
+		t.Fatalf("objects system folder = %#v", objects)
+	}
+	requestRegion[Error](t, handler, http.MethodGet,
+		"/api/v1/inventory/"+userID+"/system-folders/99", "", http.StatusNotFound)
 	requestRegion[Error](t, handler, http.MethodGet,
 		"/api/v1/inventory/not-a-uuid/folders", "", http.StatusNotFound)
 	const folderID = "40000000-0000-4000-8000-000000000001"

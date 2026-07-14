@@ -25,6 +25,8 @@ public:
         if (method == "DELETE") return {204, {}};
         if (method == "GET" && path.starts_with("/api/v1/users/"))
             return {200, R"({"id":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","username":"jim.tarber","createdAt":"2026-07-14T00:00:00Z"})"};
+        if (method == "GET" && path.find("/system-folders/") != std::string_view::npos)
+            return {200, R"({"id":"22222222-2222-4222-8222-222222222222","ownerUserId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","parentId":"eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee","name":"Objects","typeDefault":6,"version":1})"};
         if (method == "GET") return {200, R"({"id":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","userId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","expiresAt":"2026-07-14T00:00:00Z","viewerCircuitCode":123456,"destinationRegionId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"})"};
         return {500, {}};
     }
@@ -93,6 +95,11 @@ int main() {
         transport->requests.back().body.find(
             R"("folderId":"ffffffff-ffff-4fff-8fff-ffffffffffff")") == std::string::npos ||
         transport->requests.back().body.find(R"("name":"Renamed Texture")") == std::string::npos)
+        return 1;
+    const auto objects_folder = client.find_system_inventory_folder(session->agent_id, 6);
+    if (!objects_folder || *objects_folder != "22222222-2222-4222-8222-222222222222" ||
+        transport->requests.back().method != "GET" ||
+        transport->requests.back().path != "/api/v1/inventory/" + session->agent_id + "/system-folders/6")
         return 1;
     const homeworldz::grid::TextureInventoryItem texture{
         "11111111-1111-4111-8111-111111111111", session->agent_id,

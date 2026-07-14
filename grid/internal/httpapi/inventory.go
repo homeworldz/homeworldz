@@ -3,6 +3,7 @@ package httpapi
 import (
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/homeworldz/homeworldz/grid/internal/identifier"
@@ -26,6 +27,16 @@ func (a *API) inventoryByUser(w http.ResponseWriter, r *http.Request) {
 	}
 	if suffix == "copy-library-item" {
 		a.copyLibraryInventoryItem(w, r, userID)
+		return
+	}
+	if strings.HasPrefix(suffix, "system-folders/") {
+		folderTypeText := strings.TrimPrefix(suffix, "system-folders/")
+		folderType, err := strconv.Atoi(folderTypeText)
+		if err != nil || strings.Contains(folderTypeText, "/") {
+			a.notFound(w, r)
+			return
+		}
+		a.inventorySystemFolderByUser(w, r, userID, folderType)
 		return
 	}
 	if strings.HasPrefix(suffix, "folders/") {
@@ -96,6 +107,26 @@ func (a *API) inventoryByUser(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Allow", "GET, POST")
 		writeJSON(w, http.StatusMethodNotAllowed, Error{Code: "method_not_allowed", Message: "only GET and POST are supported"})
 	}
+}
+
+func (a *API) inventorySystemFolderByUser(w http.ResponseWriter, r *http.Request, userID string, folderType int) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		writeJSON(w, http.StatusMethodNotAllowed, Error{Code: "method_not_allowed", Message: "only GET is supported"})
+		return
+	}
+	folders, err := a.inventory.ListFolders(r.Context(), userID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, Error{Code: "inventory_store_error", Message: "inventory folder could not be loaded"})
+		return
+	}
+	for _, folder := range folders {
+		if folder.TypeDefault == folderType && folder.ID == inventory.SystemFolderID(userID, folderType) {
+			writeJSON(w, http.StatusOK, folder)
+			return
+		}
+	}
+	writeJSON(w, http.StatusNotFound, Error{Code: "inventory_system_folder_not_found", Message: "inventory system folder was not found"})
 }
 
 func (a *API) inventoryItemByUser(w http.ResponseWriter, r *http.Request, userID, itemID string) {
