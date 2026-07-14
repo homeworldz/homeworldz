@@ -232,7 +232,10 @@ func TestAISRenameMoveAndDeleteInventoryItem(t *testing.T) {
 		items[0].Name != "Terrain Island 5" || items[0].Description != "Heightmap source" ||
 		items[0].FolderID != projectsFolderID || items[0].AssetID != assetID ||
 		items[0].CreatorUserID != user.ID ||
-		!strings.Contains(updateResponse.Body.String(), "<key>item_id</key><uuid>"+itemID) {
+		!strings.Contains(updateResponse.Body.String(), "<key>item_id</key><uuid>"+itemID) ||
+		!strings.Contains(updateResponse.Body.String(), "<key>_updated_category_versions</key><map>") ||
+		!strings.Contains(updateResponse.Body.String(), "<key>"+textureFolderID+"</key><integer>") ||
+		!strings.Contains(updateResponse.Body.String(), "<key>"+projectsFolderID+"</key><integer>") {
 		t.Fatalf("status = %d, response = %s, items = %#v",
 			updateResponse.Code, updateResponse.Body.String(), items)
 	}
@@ -242,7 +245,9 @@ func TestAISRenameMoveAndDeleteInventoryItem(t *testing.T) {
 	items, _ = inventories.ListItems(context.Background(), user.ID)
 	if deleteResponse.Code != http.StatusOK || len(items) != 0 ||
 		!strings.Contains(deleteResponse.Body.String(),
-			"<key>_removed_items</key><array><uuid>"+itemID+"</uuid>") {
+			"<key>_removed_items</key><array><uuid>"+itemID+"</uuid>") ||
+		!strings.Contains(deleteResponse.Body.String(),
+			"<key>"+projectsFolderID+"</key><integer>") {
 		t.Fatalf("status = %d, response = %s, items = %#v",
 			deleteResponse.Code, deleteResponse.Body.String(), items)
 	}
@@ -300,6 +305,8 @@ func TestAISCreateInventoryLinks(t *testing.T) {
 	items, _ := inventories.ListItems(context.Background(), user.ID)
 	if response.Code != http.StatusOK || len(items) != 4 ||
 		!strings.Contains(response.Body.String(), "<key>_created_items</key><array>") ||
+		!strings.Contains(response.Body.String(), "<key>_updated_category_versions</key><map>"+
+			"<key>"+currentOutfitID+"</key><integer>3</integer></map>") ||
 		!strings.Contains(response.Body.String(), "<key>links</key><map>") {
 		t.Fatalf("status = %d, response = %s, items = %#v", response.Code, response.Body.String(), items)
 	}
@@ -341,7 +348,9 @@ func TestAISCreateInventoryLinks(t *testing.T) {
 	itemsAfterUpdate, _ := inventories.ListItems(context.Background(), user.ID)
 	if linkUpdateResponse.Code != http.StatusOK || itemsAfterUpdate[3].Description != "@400" ||
 		!strings.Contains(linkUpdateResponse.Body.String(),
-			"<key>linked_id</key><uuid>"+sources[1].ID+"</uuid>") {
+			"<key>linked_id</key><uuid>"+sources[1].ID+"</uuid>") ||
+		!strings.Contains(linkUpdateResponse.Body.String(),
+			"<key>"+currentOutfitID+"</key><integer>4</integer>") {
 		t.Fatalf("link update status = %d, response = %s, items = %#v",
 			linkUpdateResponse.Code, linkUpdateResponse.Body.String(), itemsAfterUpdate)
 	}

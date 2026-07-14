@@ -2,12 +2,14 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/xml"
 	"errors"
 	"fmt"
 	"html"
 	"io"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -488,10 +490,15 @@ func (a *API) createAISInventoryLinks(w http.ResponseWriter, r *http.Request, us
 	if writeAISItemError(w, err) {
 		return
 	}
-	writeAISLinkCreation(w, created)
+	versions, err := a.inventoryFolderVersions(r.Context(), userID, parentID)
+	if err != nil {
+		writeLLSDError(w, http.StatusServiceUnavailable, "AIS inventory folder version could not be loaded")
+		return
+	}
+	writeAISLinkCreation(w, created, versions)
 }
 
-func writeAISLinkCreation(w http.ResponseWriter, items []inventory.Item) {
+func writeAISLinkCreation(w http.ResponseWriter, items []inventory.Item, versions map[string]int64) {
 	var created, embedded strings.Builder
 	for _, item := range items {
 		created.WriteString("<uuid>" + html.EscapeString(item.ID) + "</uuid>")
@@ -502,6 +509,7 @@ func writeAISLinkCreation(w http.ResponseWriter, items []inventory.Item) {
 	w.WriteHeader(http.StatusOK)
 	_, _ = io.WriteString(w, "<?xml version=\"1.0\"?><llsd><map>"+
 		"<key>_created_items</key><array>"+created.String()+"</array>"+
+		inventoryFolderVersionsXML(versions)+
 		"<key>_embedded</key><map><key>categories</key><map></map>"+
 		"<key>items</key><map></map><key>links</key><map>"+embedded.String()+
 		"</map></map></map></llsd>")
@@ -685,6 +693,7 @@ func (a *API) updateAISInventoryItem(w http.ResponseWriter, r *http.Request, use
 		writeLLSDError(w, http.StatusNotFound, "AIS inventory item was not found")
 		return
 	}
+	existingFolderID := item.FolderID
 	if seen["name"] {
 		item.Name = request.Name
 	}
@@ -698,18 +707,70 @@ func (a *API) updateAISInventoryItem(w http.ResponseWriter, r *http.Request, use
 	if writeAISItemError(w, err) {
 		return
 	}
+	versions, err := a.inventoryFolderVersions(r.Context(), userID, existingFolderID, item.FolderID)
+	if err != nil {
+		writeLLSDError(w, http.StatusServiceUnavailable, "AIS inventory folder version could not be loaded")
+		return
+	}
 	w.Header().Set("Content-Type", "application/llsd+xml; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	_, _ = io.WriteString(w, "<?xml version=\"1.0\"?><llsd>"+
-		inventoryAISItemXML(item, item.AssetType == 24)+"</llsd>")
+	content := strings.TrimSuffix(inventoryAISItemXML(item, item.AssetType == 24), "</map>")
+	_, _ = io.WriteString(w, "<?xml version=\"1.0\"?><llsd>"+content+
+		inventoryFolderVersionsXML(versions)+"</map></llsd>")
 }
 
 func (a *API) deleteAISInventoryItem(w http.ResponseWriter, r *http.Request, userID, itemID string) {
-	_, err := a.inventory.DeleteItem(r.Context(), userID, itemID)
+	item, err := a.inventory.DeleteItem(r.Context(), userID, itemID)
 	if writeAISItemError(w, err) {
 		return
 	}
-	writeAISUUIDArray(w, "_removed_items", itemID)
+	versions, err := a.inventoryFolderVersions(r.Context(), userID, item.FolderID)
+	if err != nil {
+		writeLLSDError(w, http.StatusServiceUnavailable, "AIS inventory folder version could not be loaded")
+		return
+	}
+	w.Header().Set("Content-Type", "application/llsd+xml; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.WriteString(w, "<?xml version=\"1.0\"?><llsd><map>"+
+		"<key>_removed_items</key><array><uuid>"+html.EscapeString(itemID)+"</uuid></array>"+
+		inventoryFolderVersionsXML(versions)+"</map></llsd>")
+}
+
+func (a *API) inventoryFolderVersions(ctx context.Context, userID string, folderIDs ...string) (map[string]int64, error) {
+	folders, err := a.inventory.ListFolders(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	wanted := make(map[string]bool, len(folderIDs))
+	for _, id := range folderIDs {
+		wanted[id] = true
+	}
+	versions := make(map[string]int64, len(wanted))
+	for _, folder := range folders {
+		if wanted[folder.ID] {
+			versions[folder.ID] = folder.Version
+		}
+	}
+	if len(versions) != len(wanted) {
+		return nil, inventory.ErrFolderNotFound
+	}
+	return versions, nil
+}
+
+func inventoryFolderVersionsXML(versions map[string]int64) string {
+	ids := make([]string, 0, len(versions))
+	for id := range versions {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	var content strings.Builder
+	content.WriteString("<key>_updated_category_versions</key><map>")
+	for _, id := range ids {
+		content.WriteString("<key>" + html.EscapeString(id) + "</key><integer>" +
+			strconv.FormatInt(versions[id], 10) + "</integer>")
+	}
+	content.WriteString("</map>")
+	return content.String()
 }
 
 func writeAISItemError(w http.ResponseWriter, err error) bool {
