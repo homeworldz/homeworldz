@@ -76,6 +76,18 @@ interactive credentials to `HomeWorldz Library`, run:
 go run ./grid/cmd/configure-library
 ```
 
+Terrain heightmap images use the OpenSimulator/Halcyon convention and must be
+lossless PNG files with dimensions matching the target region. Convert a 1x1
+terrain image to the region service's current raw format with:
+
+```cmd
+go run ./grid/cmd/convert-terrain-image -input terrain.png -output terrain.raw
+```
+
+The importer flips image rows into terrain coordinates and maps HSL lightness
+to the 0-to-128-metre range. JPEG terrain input is intentionally rejected
+because compression artifacts become height spikes.
+
 On Windows with Visual Studio, install the pinned vcpkg dependencies and build
 the region service with:
 

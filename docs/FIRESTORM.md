@@ -89,7 +89,7 @@ The minimum observable flow is:
 8. The smoke test passes when the viewer leaves the startup screen, renders the
    destination region, and can move the avatar and use nearby chat.
 
-The region loads `assets/region/terrain/default-heightmap.raw` as its initial
+The region loads `assets/region/terrain/plateau-square.raw` as its initial
 256-by-256 metre terrain and advertises the four matching Library terrain
 textures in `RegionHandshake`. `HOMEWORLDZ_REGION_TERRAIN_PATH` may select a
 different raw heightmap; invalid or missing input falls back to flat terrain.

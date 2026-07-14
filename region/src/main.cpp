@@ -305,7 +305,7 @@ int main() {
     const auto grid_public_endpoint = environment_value(
         "HOMEWORLDZ_GRID_PUBLIC_URL", environment_value("HOMEWORLDZ_GRID_URL", "http://localhost:42000"));
     const auto terrain_heightmap = load_raw_heightmap(environment_value(
-        "HOMEWORLDZ_REGION_TERRAIN_PATH", "assets/region/terrain/default-heightmap.raw"));
+        "HOMEWORLDZ_REGION_TERRAIN_PATH", "assets/region/terrain/plateau-square.raw"));
     if (terrain_heightmap) {
         std::cout << "{\"level\":\"info\",\"message\":\"default terrain heightmap loaded\"}" << std::endl;
     } else {

@@ -63,6 +63,9 @@ than runtime dependencies.
   root, folders, items, bundled-asset provenance, and AIS v3 fetch support;
   expose legacy reads only when their compatibility value justifies the cost.
 - [ ] Asset upload, authorization, replication, and federation lookup.
+- [x] Match OpenSimulator/Halcyon lossless PNG terrain-image semantics,
+  including exact region dimensions, north/south row conversion, and HSL
+  lightness mapped to the 0-to-128-metre height range; reject JPEG terrain.
 - [ ] Object rez, edit, take, delete, permissions, and persistence.
 - [ ] Script runtime boundary and implementation selection.
 - [ ] Teleport and cross-region avatar/object handoff.
