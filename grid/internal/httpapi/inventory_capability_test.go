@@ -125,6 +125,60 @@ func TestCreateInventoryFolderCapability(t *testing.T) {
 	}
 }
 
+func TestAISCreateAndRenameInventoryFolder(t *testing.T) {
+	identities := newMemoryIdentityStore()
+	user, err := identities.CreateUser(context.Background(), "inventory.ais", "development-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := identities.CreateSession(context.Background(), "inventory.ais", "development-password", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.AssignViewerDestination(context.Background(), session.ID, 123456,
+		"30000000-0000-4000-8000-000000000001"); err != nil {
+		t.Fatal(err)
+	}
+	inventories := &memoryInventoryStore{folders: make(map[string][]inventory.Folder)}
+	folders, _ := inventories.EnsureSystemFolders(context.Background(), user.ID)
+	handler := New(checker{}, "test", Options{Identity: identities, Inventory: inventories})
+	base := "/caps/inventory/ais/" + session.ID
+	createBody := `<?xml version="1.0"?><llsd><map><key>categories</key><array><map>` +
+		`<key>folder_id</key><uuid>` + nullInventoryFolderID + `</uuid>` +
+		`<key>parent_id</key><uuid>` + folders[0].ID + `</uuid>` +
+		`<key>type</key><integer>-1</integer><key>name</key><string>New Folder</string>` +
+		`</map></array></map></llsd>`
+	createRequest := httptest.NewRequest(http.MethodPost, base+"/category/"+folders[0].ID+"?tid="+session.ID,
+		bytes.NewBufferString(createBody))
+	createResponse := httptest.NewRecorder()
+	handler.ServeHTTP(createResponse, createRequest)
+	stored, _ := inventories.ListFolders(context.Background(), user.ID)
+	if createResponse.Code != http.StatusOK || len(stored) != len(folders)+1 {
+		t.Fatalf("status = %d, response = %s, folders = %#v", createResponse.Code, createResponse.Body.String(), stored)
+	}
+	created := stored[len(stored)-1]
+	if created.Name != "New Folder" || !strings.Contains(createResponse.Body.String(),
+		"<key>_created_categories</key><array><uuid>"+created.ID+"</uuid>") {
+		t.Fatalf("created folder = %#v, response = %s", created, createResponse.Body.String())
+	}
+	updateBody := `<?xml version="1.0"?><llsd><map>` +
+		`<key>item_id</key><uuid>` + created.ID + `</uuid>` +
+		`<key>parent_id</key><uuid>` + created.ParentID + `</uuid>` +
+		`<key>type</key><integer>-1</integer><key>name</key><string>Projects</string>` +
+		`</map></llsd>`
+	updateRequest := httptest.NewRequest(http.MethodPatch, base+"/category/"+created.ID,
+		bytes.NewBufferString(updateBody))
+	updateResponse := httptest.NewRecorder()
+	handler.ServeHTTP(updateResponse, updateRequest)
+	stored, _ = inventories.ListFolders(context.Background(), user.ID)
+	if updateResponse.Code != http.StatusOK || stored[len(stored)-1].Name != "Projects" ||
+		!strings.Contains(updateResponse.Body.String(),
+			"<key>_updated_categories</key><array><uuid>"+created.ID+"</uuid>") {
+		t.Fatalf("status = %d, response = %s, folder = %#v",
+			updateResponse.Code, updateResponse.Body.String(), stored[len(stored)-1])
+	}
+}
+
 func TestInventoryItemXML(t *testing.T) {
 	item := inventory.Item{ID: "40000000-0000-4000-8000-000000000001",
 		OwnerUserID: "20000000-0000-4000-8000-000000000001",

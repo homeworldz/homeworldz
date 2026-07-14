@@ -55,13 +55,17 @@ when the server internals differ.
 
 ### AIS-first viewer inventory
 
-HomeWorldz treats Second Life AIS v3 as the primary viewer-facing inventory
-mutation protocol. Legacy inventory capabilities and UDP messages may remain
+HomeWorldz requires Second Life AIS v3 for supported viewer-facing inventory
+mutation workflows. Legacy inventory capabilities and UDP messages may remain
 as compatibility shims for OpenSimulator, Halcyon, Firestorm, and other
-viewers, but new mutation workflows are not required to implement a legacy
-path before their AIS path. All adapters use the same grid-owned inventory
-model rather than creating separate legacy and AIS stores. See
+viewers, but feature completion does not require a parallel legacy path. All
+adapters use the same grid-owned inventory model rather than creating separate
+legacy and AIS stores. See
 [`ADR 0018`](docs/adr/0018-ais-first-viewer-inventory.md).
+
+Read-only legacy inventory browsing is a stretch compatibility goal for older
+viewers. It is best effort, may remain incomplete, and does not imply support
+for legacy mutation workflows or a commitment to any particular older viewer.
 
 ## Maintenance rule
 

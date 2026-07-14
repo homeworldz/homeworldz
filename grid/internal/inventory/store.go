@@ -52,6 +52,7 @@ type Item struct {
 type Store interface {
 	EnsureSystemFolders(context.Context, string) ([]Folder, error)
 	CreateFolder(context.Context, Folder) (Folder, error)
+	UpdateFolder(context.Context, Folder) (Folder, error)
 	ListFolders(context.Context, string) ([]Folder, error)
 	EnsureItem(context.Context, Item) (bool, error)
 	ListItems(context.Context, string) ([]Item, error)
@@ -204,6 +205,44 @@ func (s *PostgresStore) CreateFolder(ctx context.Context, folder Folder) (Folder
 		return Folder{}, fmt.Errorf("commit inventory folder creation: %w", err)
 	}
 	folder.Version = 1
+	return folder, nil
+}
+
+func (s *PostgresStore) UpdateFolder(ctx context.Context, folder Folder) (Folder, error) {
+	folder.Name = strings.TrimSpace(folder.Name)
+	if folder.ID == "" || folder.OwnerUserID == "" || folder.ParentID == "" ||
+		len(folder.Name) == 0 || len(folder.Name) > 255 || folder.TypeDefault != -1 {
+		return Folder{}, ErrInvalidFolder
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Folder{}, fmt.Errorf("begin inventory folder update: %w", err)
+	}
+	defer tx.Rollback()
+	var existing Folder
+	if err := tx.QueryRowContext(ctx, `SELECT id, owner_user_id, parent_id, name, type_default, version
+		FROM inventory_folders WHERE id = $1 AND owner_user_id = $2 FOR UPDATE`,
+		folder.ID, folder.OwnerUserID).Scan(&existing.ID, &existing.OwnerUserID, &existing.ParentID,
+		&existing.Name, &existing.TypeDefault, &existing.Version); errors.Is(err, sql.ErrNoRows) {
+		return Folder{}, ErrFolderNotFound
+	} else if err != nil {
+		return Folder{}, fmt.Errorf("find inventory folder for update: %w", err)
+	}
+	if existing.TypeDefault != -1 || existing.ParentID != folder.ParentID {
+		return Folder{}, ErrInvalidFolder
+	}
+	if existing.Name == folder.Name {
+		return existing, nil
+	}
+	if err := tx.QueryRowContext(ctx, `UPDATE inventory_folders
+		SET name = $3, version = version + 1, updated_at = now()
+		WHERE id = $1 AND owner_user_id = $2 RETURNING version`,
+		folder.ID, folder.OwnerUserID, folder.Name).Scan(&folder.Version); err != nil {
+		return Folder{}, fmt.Errorf("update inventory folder: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return Folder{}, fmt.Errorf("commit inventory folder update: %w", err)
+	}
 	return folder, nil
 }
 

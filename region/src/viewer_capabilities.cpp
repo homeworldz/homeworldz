@@ -33,6 +33,8 @@ std::string seed_capability_xml(std::string_view public_endpoint, std::string_vi
     const auto inventory_items_url = xml_escape(grid_base + "/caps/inventory/items/" + std::string(session_id));
     const auto create_inventory_folder_url =
         xml_escape(grid_base + "/caps/inventory/create-folder/" + std::string(session_id));
+    const auto inventory_ais_url =
+        xml_escape(grid_base + "/caps/inventory/ais/" + std::string(session_id));
     return "<?xml version=\"1.0\"?><llsd><map><key>EventQueueGet</key><uri>" + event_url +
            "</uri><key>GetTexture</key><uri>" + texture_url +
            "</uri><key>ViewerAsset</key><uri>" + asset_url +
@@ -41,6 +43,7 @@ std::string seed_capability_xml(std::string_view public_endpoint, std::string_vi
            "</uri><key>FetchInventoryDescendents2</key><uri>" + inventory_url +
            "</uri><key>FetchInventory2</key><uri>" + inventory_items_url +
            "</uri><key>CreateInventoryCategory</key><uri>" + create_inventory_folder_url +
+           "</uri><key>InventoryAPIv3</key><uri>" + inventory_ais_url +
            "</uri></map></llsd>";
 }
 

@@ -292,6 +292,10 @@ func (a *API) createInventoryFolderCapability(w http.ResponseWriter, r *http.Req
 }
 
 func parseCreateInventoryFolderRequest(reader io.Reader) (createInventoryFolderCapabilityRequest, error) {
+	return parseInventoryFolderMutationRequest(reader, "folder_id")
+}
+
+func parseInventoryFolderMutationRequest(reader io.Reader, idKey string) (createInventoryFolderCapabilityRequest, error) {
 	decoder := xml.NewDecoder(reader)
 	var request createInventoryFolderCapabilityRequest
 	var key string
@@ -335,7 +339,7 @@ func parseCreateInventoryFolderRequest(reader io.Reader) (createInventoryFolderC
 		}
 		value = strings.TrimSpace(value)
 		switch key {
-		case "folder_id":
+		case idKey:
 			request.ID = value
 		case "parent_id":
 			request.ParentID = value
@@ -353,7 +357,7 @@ func parseCreateInventoryFolderRequest(reader io.Reader) (createInventoryFolderC
 		seen[key] = true
 		key = ""
 	}
-	if !sawLLSD || !seen["folder_id"] || !seen["parent_id"] || !seen["name"] || !seen["type"] {
+	if !sawLLSD || !seen[idKey] || !seen["parent_id"] || !seen["name"] || !seen["type"] {
 		return request, errors.New("inventory folder request is incomplete")
 	}
 	return request, nil

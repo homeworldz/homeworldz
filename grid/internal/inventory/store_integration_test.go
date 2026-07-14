@@ -55,6 +55,11 @@ func TestPostgresSystemFolderLifecycle(t *testing.T) {
 	if _, err := store.CreateFolder(ctx, custom); !errors.Is(err, ErrFolderConflict) {
 		t.Fatalf("duplicate custom folder error = %v", err)
 	}
+	custom.Name = "Renamed Integration Projects"
+	custom, err = store.UpdateFolder(ctx, custom)
+	if err != nil || custom.Version != 2 || custom.Name != "Renamed Integration Projects" {
+		t.Fatalf("update custom folder = %#v, error = %v", custom, err)
+	}
 	itemID, _ := identifier.NewUUID()
 	assetID, _ := identifier.NewUUID()
 	item := Item{ID: itemID, OwnerUserID: userID, CreatorUserID: userID,

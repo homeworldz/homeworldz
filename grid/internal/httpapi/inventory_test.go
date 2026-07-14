@@ -44,6 +44,21 @@ func (s *memoryInventoryStore) CreateFolder(_ context.Context, folder inventory.
 	return folder, nil
 }
 
+func (s *memoryInventoryStore) UpdateFolder(_ context.Context, folder inventory.Folder) (inventory.Folder, error) {
+	for index, existing := range s.folders[folder.OwnerUserID] {
+		if existing.ID != folder.ID {
+			continue
+		}
+		if existing.TypeDefault != -1 || existing.ParentID != folder.ParentID || folder.TypeDefault != -1 {
+			return inventory.Folder{}, inventory.ErrInvalidFolder
+		}
+		folder.Version = existing.Version + 1
+		s.folders[folder.OwnerUserID][index] = folder
+		return folder, nil
+	}
+	return inventory.Folder{}, inventory.ErrFolderNotFound
+}
+
 func (s *memoryInventoryStore) EnsureItem(_ context.Context, item inventory.Item) (bool, error) {
 	if s.items == nil {
 		s.items = make(map[string][]inventory.Item)
