@@ -288,4 +288,5 @@ creator provenance. The initial button showed `OS$-1` because the region had
 not yet answered `EconomyDataRequest`; the subsequent zero-price economy
 response was accepted and changed the button to `OS$0`. Firestorm obtains the
 currency symbol separately from the region's `SimulatorFeatures` capability;
-the new `C$` symbol requires viewer confirmation.
+the subsequent capability response was accepted and the preview button showed
+`Upload (C$0)`.
