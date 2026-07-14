@@ -97,7 +97,10 @@ func run(ctx context.Context, opts options) error {
 	}
 	gridExecutable := filepath.Join(root, "build", "windows-vcpkg", "grid", "homeworldz-grid.exe")
 	regionExecutable := filepath.Join(root, "build", "windows-vcpkg", "region", "Debug", "homeworldz-region.exe")
-	for _, executable := range []string{gridExecutable, regionExecutable} {
+	if err := buildGrid(ctx, root, gridExecutable); err != nil {
+		return err
+	}
+	for _, executable := range []string{regionExecutable} {
 		if info, err := os.Stat(executable); err != nil || info.IsDir() {
 			return fmt.Errorf("required executable %q was not found; build the grid and run scripts\\build-region.ps1 -Test first", executable)
 		}
@@ -199,6 +202,19 @@ func run(ctx context.Context, opts options) error {
 	}
 	if err := waitForViewer(ctx, viewer, opts.firestormPath); err != nil {
 		return fmt.Errorf("Firestorm exited: %w", err)
+	}
+	return nil
+}
+
+func buildGrid(ctx context.Context, root, executable string) error {
+	if err := os.MkdirAll(filepath.Dir(executable), 0o755); err != nil {
+		return fmt.Errorf("create grid build directory: %w", err)
+	}
+	command := exec.CommandContext(ctx, "go", "build", "-o", executable, "./grid/cmd/grid")
+	command.Dir = root
+	output, err := command.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("build grid executable: %w: %s", err, strings.TrimSpace(string(output)))
 	}
 	return nil
 }
