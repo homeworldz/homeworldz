@@ -311,6 +311,16 @@ showed `Terrain Island 5`, and Firestorm opened the texture successfully. A
 second rename from `terrain-paw` to `Terrain Paw` was also accepted immediately;
 its persistence across the next clean login remains to be confirmed.
 
+AIS Current Outfit link creation passed on 2026-07-14. An earlier incomplete
+outfit replacement had left the `HomeWorldz Library` account's Current Outfit
+empty while its four body parts and two clothing items remained intact. After
+adding atomic AIS link creation and compatibility handling for legacy null
+creator metadata, Firestorm successfully wore all six personal items. Each
+Current Outfit POST returned success, the cloud cleared, and the baked avatar
+appeared without a manual viewer rebake. This recovery was explicitly initiated
+by the avatar; the grid did not reapply defaults automatically to an established
+account.
+
 The packaged login-logo update passed on 2026-07-14. After rebuilding and
 restarting the grid, Firestorm's login screen displayed the swapped-color
 HomeWorldz SVG. An automated test also requires the grid's embedded SVG to
