@@ -622,7 +622,7 @@ std::optional<MoveInventoryItem> decode_move_inventory_item(std::span<const std:
         std::copy_n(payload.begin() + offset, 16, move.item_id.begin());
         std::copy_n(payload.begin() + offset + 16, 16, move.folder_id.begin());
         const auto name_size = std::to_integer<std::size_t>(payload[offset + 32]);
-        if (name_size == 0 || payload.size() < offset + fixed_block_size + name_size)
+        if (payload.size() < offset + fixed_block_size + name_size)
             return std::nullopt;
         move.new_name.assign(
             reinterpret_cast<const char*>(payload.data() + offset + fixed_block_size), name_size);

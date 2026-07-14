@@ -151,7 +151,6 @@ bool message_codecs() {
     move_item_payload.push_back(std::byte{2});
     move_item_payload.insert(move_item_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
     move_item_payload.insert(move_item_payload.end(), expected.session_id.begin(), expected.session_id.end());
-    move_item_payload.push_back(std::byte{1});
     move_item_payload.push_back(std::byte{});
     move_item_payload.insert(move_item_payload.end(), expected.session_id.begin(), expected.session_id.end());
     move_item_payload.insert(move_item_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
