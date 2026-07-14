@@ -427,3 +427,14 @@ checked ownership and modify permission, persisted the value, and returned it
 through `ObjectProperties`. Closing and reopening Edit retained the canonical
 description. A complete service and viewer restart retained `Tall rotated box`
 in Prim1's Edit panel.
+
+Viewer primitive permission editing passed its live-session and persistence
+acceptance on 2026-07-14. Firestorm enabled Anyone Move on Prim1 and removed
+Copy from its next-owner permissions. The region accepted the standard
+`ObjectPermissions` changes only for Jim Tarber as owner, stored the masks as
+hexadecimal semantics (`Everyone = 0x00080000`, `Next owner = 0x00086000`),
+and returned authoritative object properties. Firestorm consequently kept
+Transfer enabled but unavailable for editing: a no-copy object must remain
+transferable under the fair-use rule. After a complete service and viewer
+restart, Anyone Move remained enabled, next-owner Copy remained disabled, and
+next-owner Transfer remained enabled and greyed out.
