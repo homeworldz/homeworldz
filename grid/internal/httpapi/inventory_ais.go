@@ -62,6 +62,15 @@ func (a *API) inventoryAISCapability(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if len(parts) == 4 && parts[1] == "category" && validUUID(parts[2]) && parts[3] == "links" {
+		if r.Method != http.MethodPut {
+			w.Header().Set("Allow", http.MethodPut)
+			writeLLSDError(w, http.StatusMethodNotAllowed, "only PUT is supported")
+			return
+		}
+		a.slamAISInventoryLinks(w, r, session.UserID, parts[2])
+		return
+	}
 	if len(parts) != 3 || !validUUID(parts[2]) {
 		writeLLSDError(w, http.StatusNotFound, "AIS inventory capability was not found")
 		return
@@ -439,6 +448,7 @@ type aisInventoryLink struct {
 	LinkedID      string
 	AssetType     int
 	InventoryType int
+	HasInvType    bool
 	Name          string
 	Description   string
 }
@@ -465,7 +475,7 @@ func decodeAISInventoryLinks(reader io.Reader) ([]aisInventoryLink, bool, error)
 					return nil, false, err
 				}
 			case "array":
-				if sawLLSD && strings.TrimSpace(key) == "links" {
+				if sawLLSD && (strings.TrimSpace(key) == "links" || strings.TrimSpace(key) == "") {
 					links, err := decodeAISInventoryLinkArray(decoder)
 					return links, true, err
 				}
@@ -496,9 +506,6 @@ func decodeAISInventoryLinkArray(decoder *xml.Decoder) ([]aisInventoryLink, erro
 			}
 		case xml.EndElement:
 			if value.Name.Local == "array" {
-				if len(links) == 0 {
-					return nil, errors.New("AIS inventory link batch is empty")
-				}
 				return links, nil
 			}
 		}
@@ -541,6 +548,7 @@ func decodeAISInventoryLinkMap(decoder *xml.Decoder) (aisInventoryLink, error) {
 				link.AssetType, err = strconv.Atoi(field)
 			case "inv_type":
 				link.InventoryType, err = strconv.Atoi(field)
+				link.HasInvType = err == nil
 			case "name":
 				link.Name = field
 			case "desc":
@@ -556,7 +564,7 @@ func decodeAISInventoryLinkMap(decoder *xml.Decoder) (aisInventoryLink, error) {
 			key = ""
 		case xml.EndElement:
 			if value.Name.Local == "map" {
-				if !seen["linked_id"] || !seen["type"] || !seen["inv_type"] || !seen["name"] {
+				if !seen["linked_id"] || !seen["type"] || !seen["name"] {
 					return link, errors.New("AIS inventory link omits a required field")
 				}
 				return link, nil
@@ -567,6 +575,10 @@ func decodeAISInventoryLinkMap(decoder *xml.Decoder) (aisInventoryLink, error) {
 
 func (a *API) createAISInventoryLinks(w http.ResponseWriter, r *http.Request, userID, parentID string,
 	requests []aisInventoryLink) {
+	if len(requests) == 0 {
+		writeLLSDError(w, http.StatusBadRequest, "AIS inventory link batch is empty")
+		return
+	}
 	folders, err := a.inventory.ListFolders(r.Context(), userID)
 	if err != nil {
 		writeLLSDError(w, http.StatusServiceUnavailable, "AIS inventory folder could not be loaded")
@@ -601,7 +613,7 @@ func (a *API) createAISInventoryLinks(w http.ResponseWriter, r *http.Request, us
 			return
 		}
 		if !validUUID(request.LinkedID) || request.AssetType != 24 ||
-			request.InventoryType != source.InventoryType || request.Name == "" ||
+			(request.HasInvType && request.InventoryType != source.InventoryType) || request.Name == "" ||
 			len(request.Name) > 255 || len(request.Description) > 1024 || seenSources[request.LinkedID] {
 			writeLLSDError(w, http.StatusBadRequest, "invalid AIS inventory link request")
 			return
@@ -634,6 +646,115 @@ func (a *API) createAISInventoryLinks(w http.ResponseWriter, r *http.Request, us
 		return
 	}
 	writeAISLinkCreation(w, created, versions)
+}
+
+func (a *API) slamAISInventoryLinks(w http.ResponseWriter, r *http.Request, userID, folderID string) {
+	requests, found, err := decodeAISInventoryLinks(http.MaxBytesReader(w, r.Body, 256*1024))
+	if err != nil || !found || len(requests) > 256 {
+		writeLLSDError(w, http.StatusBadRequest, "invalid AIS folder links replacement")
+		return
+	}
+	folders, err := a.inventory.ListFolders(r.Context(), userID)
+	if err != nil {
+		writeLLSDError(w, http.StatusServiceUnavailable, "AIS inventory folder could not be loaded")
+		return
+	}
+	folderFound := false
+	for _, folder := range folders {
+		if folder.ID == folderID {
+			folderFound = true
+			break
+		}
+	}
+	if !folderFound {
+		writeLLSDError(w, http.StatusNotFound, "AIS inventory folder was not found")
+		return
+	}
+	existing, err := a.inventory.ListItems(r.Context(), userID)
+	if err != nil {
+		writeLLSDError(w, http.StatusServiceUnavailable, "AIS inventory items could not be loaded")
+		return
+	}
+	sources := make(map[string]inventory.Item, len(existing))
+	for _, item := range existing {
+		sources[item.ID] = item
+	}
+	created := make([]inventory.Item, 0, len(requests))
+	seenSources := make(map[string]bool, len(requests))
+	for _, request := range requests {
+		source, ok := sources[request.LinkedID]
+		if !ok {
+			writeLLSDError(w, http.StatusNotFound, "AIS inventory link source was not found")
+			return
+		}
+		if request.AssetType != 24 || request.Name == "" || len(request.Name) > 255 ||
+			len(request.Description) > 1024 || seenSources[request.LinkedID] {
+			writeLLSDError(w, http.StatusBadRequest, "invalid AIS folder links replacement")
+			return
+		}
+		seenSources[request.LinkedID] = true
+		itemID, err := identifier.NewUUID()
+		if err != nil {
+			writeLLSDError(w, http.StatusServiceUnavailable, "inventory link ID could not be allocated")
+			return
+		}
+		creatorID := source.CreatorUserID
+		if creatorID == "" || creatorID == nullInventoryFolderID {
+			creatorID = userID
+		}
+		created = append(created, inventory.Item{
+			ID: itemID, OwnerUserID: userID, CreatorUserID: creatorID, FolderID: folderID,
+			AssetID: source.ID, AssetType: 24, InventoryType: source.InventoryType,
+			Name: request.Name, Description: request.Description, Flags: source.Flags,
+			BasePermissions: source.BasePermissions, CurrentPermissions: source.CurrentPermissions,
+			EveryonePermissions: source.EveryonePermissions, NextPermissions: source.NextPermissions,
+		})
+	}
+	removed := make([]string, 0, 16)
+	for _, item := range existing {
+		if item.FolderID != folderID || (item.AssetType != 24 && item.AssetType != 25) {
+			continue
+		}
+		if _, err := a.inventory.DeleteItem(r.Context(), userID, item.ID); err != nil {
+			writeLLSDError(w, http.StatusServiceUnavailable, "AIS existing inventory links could not be removed")
+			return
+		}
+		removed = append(removed, item.ID)
+	}
+	if len(created) > 0 {
+		created, err = a.inventory.CreateItems(r.Context(), created)
+		if writeAISItemError(w, err) {
+			return
+		}
+	}
+	versions, err := a.inventoryFolderVersions(r.Context(), userID, folderID)
+	if err != nil {
+		writeLLSDError(w, http.StatusServiceUnavailable, "AIS inventory folder version could not be loaded")
+		return
+	}
+	writeAISLinksReplacement(w, created, removed, versions)
+}
+
+func writeAISLinksReplacement(w http.ResponseWriter, created []inventory.Item, removed []string,
+	versions map[string]int64) {
+	var createdIDs, removedIDs, embedded strings.Builder
+	for _, item := range created {
+		createdIDs.WriteString("<uuid>" + html.EscapeString(item.ID) + "</uuid>")
+		embedded.WriteString("<key>" + html.EscapeString(item.ID) + "</key>")
+		embedded.WriteString(inventoryAISItemXML(item, true))
+	}
+	for _, id := range removed {
+		removedIDs.WriteString("<uuid>" + html.EscapeString(id) + "</uuid>")
+	}
+	w.Header().Set("Content-Type", "application/llsd+xml; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.WriteString(w, "<?xml version=\"1.0\"?><llsd><map>"+
+		"<key>_created_items</key><array>"+createdIDs.String()+"</array>"+
+		"<key>_removed_items</key><array>"+removedIDs.String()+"</array>"+
+		inventoryFolderVersionsXML(versions)+
+		"<key>_embedded</key><map><key>categories</key><map></map>"+
+		"<key>items</key><map></map><key>links</key><map>"+embedded.String()+
+		"</map></map></map></llsd>")
 }
 
 func writeAISLinkCreation(w http.ResponseWriter, items []inventory.Item, versions map[string]int64) {

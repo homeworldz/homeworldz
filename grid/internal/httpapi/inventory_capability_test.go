@@ -367,6 +367,31 @@ func TestAISCreateInventoryLinks(t *testing.T) {
 		t.Fatalf("invalid status = %d, response = %s, items = %#v",
 			invalidResponse.Code, invalidResponse.Body.String(), itemsAfterInvalid)
 	}
+	oldLinkIDs := []string{links[0].ID, links[1].ID}
+	slamBody := `<?xml version="1.0"?><llsd><array>` +
+		`<map><key>linked_id</key><uuid>` + sources[1].ID + `</uuid>` +
+		`<key>type</key><integer>24</integer><key>name</key><string>Default Shirt</string>` +
+		`<key>desc</key><string>Replacement</string></map></array></llsd>`
+	slamRequest := httptest.NewRequest(http.MethodPut,
+		"/caps/inventory/ais/"+session.ID+"/category/"+currentOutfitID+"/links?tid="+session.ID,
+		strings.NewReader(slamBody))
+	slamResponse := httptest.NewRecorder()
+	New(checker{}, "test", Options{Identity: identities, Inventory: inventories}).ServeHTTP(slamResponse, slamRequest)
+	itemsAfterSlam, _ := inventories.ListItems(context.Background(), user.ID)
+	if slamResponse.Code != http.StatusOK || len(itemsAfterSlam) != 3 ||
+		!strings.Contains(slamResponse.Body.String(), "<key>_removed_items</key><array>") ||
+		!strings.Contains(slamResponse.Body.String(), "<uuid>"+oldLinkIDs[0]+"</uuid>") ||
+		!strings.Contains(slamResponse.Body.String(), "<uuid>"+oldLinkIDs[1]+"</uuid>") ||
+		!strings.Contains(slamResponse.Body.String(), "<key>"+currentOutfitID+"</key><integer>7</integer>") {
+		t.Fatalf("slam status = %d, response = %s, items = %#v",
+			slamResponse.Code, slamResponse.Body.String(), itemsAfterSlam)
+	}
+	replacement := itemsAfterSlam[2]
+	if replacement.FolderID != currentOutfitID || replacement.AssetID != sources[1].ID ||
+		replacement.AssetType != 24 || replacement.InventoryType != sources[1].InventoryType ||
+		replacement.Description != "Replacement" {
+		t.Fatalf("replacement COF link = %#v", replacement)
+	}
 }
 
 func TestAISFetchInventoryFolderChildrenAndCurrentLinks(t *testing.T) {
