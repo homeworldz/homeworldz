@@ -1103,23 +1103,46 @@ int main() {
                                 [](float value) { return value >= 0.01F && value <= 64.0F; });
                             const bool supported_box = object_add->pcode == 9 &&
                                 object_add->path_curve == 16 && (object_add->profile_curve & 0x0f) == 1;
-                            const bool valid_position = object_add->ray_end[0] >= 0.0F &&
-                                object_add->ray_end[0] <= 256.0F && object_add->ray_end[1] >= 0.0F &&
-                                object_add->ray_end[1] <= 256.0F && object_add->ray_end[2] >= -64.0F &&
-                                object_add->ray_end[2] <= 4096.0F;
+                            std::optional<homeworldz::scene::Vector3> placement;
+                            if (valid_scale && object_add->bypass_raycast) {
+                                const homeworldz::scene::Vector3 ray_end{
+                                    object_add->ray_end[0], object_add->ray_end[1], object_add->ray_end[2]};
+                                placement = homeworldz::scene::Vector3{
+                                    ray_end.x, ray_end.y,
+                                    ground_height(terrain_heightmap, ray_end) + object_add->scale[2] * 0.5};
+                            } else if (valid_scale) {
+                                const auto target_id = homeworldz::viewer::format_uuid(object_add->ray_target_id);
+                                const homeworldz::scene::Entity* target = nullptr;
+                                for (const auto& [candidate_id, candidate] : scene.entities()) {
+                                    static_cast<void>(candidate_id);
+                                    if (candidate.object_id == target_id) {
+                                        target = &candidate;
+                                        break;
+                                    }
+                                }
+                                if (target) {
+                                    const auto intersection = homeworldz::scene::intersect_box(
+                                        {object_add->ray_start[0], object_add->ray_start[1], object_add->ray_start[2]},
+                                        {object_add->ray_end[0], object_add->ray_end[1], object_add->ray_end[2]},
+                                        target->position, target->scale);
+                                    if (intersection) {
+                                        placement = homeworldz::scene::Vector3{
+                                            intersection->position.x + intersection->normal.x * object_add->scale[0] * 0.5,
+                                            intersection->position.y + intersection->normal.y * object_add->scale[1] * 0.5,
+                                            intersection->position.z + intersection->normal.z * object_add->scale[2] * 0.5};
+                                    }
+                                }
+                            }
+                            const bool valid_position = placement && placement->x >= 0.0 && placement->x <= 256.0 &&
+                                placement->y >= 0.0 && placement->y <= 256.0 &&
+                                placement->z >= -64.0 && placement->z <= 4096.0;
                             bool created = false;
                             std::string object_id;
                             homeworldz::scene::EntityId entity_id{};
-                            if (supported_box && valid_scale && valid_position && object_add->material <= 7) {
+                            if (supported_box && valid_position && object_add->material <= 7) {
                                 object_id = homeworldz::viewer::random_uuid();
                                 const auto owner_id = homeworldz::viewer::format_uuid(identity->agent_id);
-                                const homeworldz::scene::Vector3 ray_end{
-                                    object_add->ray_end[0], object_add->ray_end[1], object_add->ray_end[2]};
-                                const auto surface_height = object_add->bypass_raycast ?
-                                    ground_height(terrain_heightmap, ray_end) : ray_end.z;
-                                const homeworldz::scene::Vector3 position{
-                                    ray_end.x, ray_end.y, surface_height + object_add->scale[2] * 0.5};
-                                entity_id = scene.create("Primitive", position);
+                                entity_id = scene.create("Primitive", *placement);
                                 if (auto* entity = scene.find(entity_id)) {
                                     entity->object_id = object_id;
                                     entity->owner_id = owner_id;

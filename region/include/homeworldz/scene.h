@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -25,6 +26,14 @@ struct Entity {
     Vector3 scale{1.0, 1.0, 1.0};
     std::uint8_t material{3};
 };
+
+struct RayIntersection {
+    Vector3 position;
+    Vector3 normal;
+};
+
+std::optional<RayIntersection> intersect_box(
+    Vector3 ray_start, Vector3 ray_end, Vector3 center, Vector3 scale);
 
 class Scene {
 public:

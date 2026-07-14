@@ -16,6 +16,15 @@ bool near(double value, double expected) {
 } // namespace
 
 int main() {
+    const auto top = homeworldz::scene::intersect_box(
+        {0.0, 0.0, 5.0}, {0.0, 0.0, -5.0}, {0.0, 0.0, 1.0}, {2.0, 2.0, 2.0});
+    const auto side = homeworldz::scene::intersect_box(
+        {5.0, 0.0, 1.0}, {-5.0, 0.0, 1.0}, {0.0, 0.0, 1.0}, {2.0, 2.0, 2.0});
+    if (!top || !near(top->position.z, 2.0) || top->normal.z != 1.0 ||
+        !side || !near(side->position.x, 1.0) || side->normal.x != 1.0 ||
+        homeworldz::scene::intersect_box(
+            {5.0, 5.0, 5.0}, {4.0, 4.0, 4.0}, {0.0, 0.0, 0.0}, {1.0, 1.0, 1.0}))
+        return 1;
     homeworldz::scene::Scene scene;
     const auto id = scene.create("moving object", {1.0, 2.0, 3.0}, {4.0, -2.0, 1.0});
     if (scene.size() != 1 || scene.revision() != 1) return 1;
