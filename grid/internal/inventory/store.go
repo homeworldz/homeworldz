@@ -78,25 +78,32 @@ func deterministicUUID(seed string) string {
 func DefaultWearables(userID string) []Item {
 	const fullPermissions = uint32(0x7fffffff)
 	bodyPartsID := SystemFolderID(userID, 13)
+	clothingID := SystemFolderID(userID, 5)
 	currentOutfitID := SystemFolderID(userID, 46)
 	definitions := []struct {
-		name         string
-		wearableType uint32
-		assetID      string
+		name          string
+		wearableType  uint32
+		assetID       string
+		assetType     int
+		inventoryType int
+		folderID      string
 	}{
-		{"Default Shape", 0, "66c41e39-38f9-f75a-024e-585989bfab73"},
-		{"Default Skin", 1, "77c41e39-38f9-f75a-024e-585989bbabbb"},
-		{"Default Hair", 2, "d342e6c0-b9d2-11dc-95ff-0800200c9a66"},
-		{"Default Eyes", 3, "4bb6fa4d-1cd2-498a-a84c-95c1a0e745a7"},
+		{"Default Shape", 0, "66c41e39-38f9-f75a-024e-585989bfab73", 13, 18, bodyPartsID},
+		{"Default Skin", 1, "77c41e39-38f9-f75a-024e-585989bbabbb", 13, 18, bodyPartsID},
+		{"Default Hair", 2, "d342e6c0-b9d2-11dc-95ff-0800200c9a66", 13, 18, bodyPartsID},
+		{"Default Eyes", 3, "4bb6fa4d-1cd2-498a-a84c-95c1a0e745a7", 13, 18, bodyPartsID},
+		{"Default Shirt", 4, "00000000-38f9-1111-024e-222222111110", 5, 18, clothingID},
+		{"Default Pants", 5, "00000000-38f9-1111-024e-222222111120", 5, 18, clothingID},
 	}
 	items := make([]Item, 0, len(definitions)*2)
 	for _, definition := range definitions {
 		itemID := deterministicUUID(userID + "\x00homeworldz-default-wearable-item\x00" +
 			strconv.FormatUint(uint64(definition.wearableType), 10))
 		items = append(items, Item{
-			ID: itemID, OwnerUserID: userID, FolderID: bodyPartsID,
+			ID: itemID, OwnerUserID: userID, FolderID: definition.folderID,
 			AssetID:   definition.assetID,
-			AssetType: 13, InventoryType: 18, Name: definition.name, Flags: definition.wearableType,
+			AssetType: definition.assetType, InventoryType: definition.inventoryType,
+			Name: definition.name, Flags: definition.wearableType,
 			BasePermissions: fullPermissions, CurrentPermissions: fullPermissions,
 			NextPermissions: fullPermissions,
 		})
@@ -110,6 +117,20 @@ func DefaultWearables(userID string) []Item {
 		})
 	}
 	return items
+}
+
+// DefaultOutfitInitialized distinguishes an established avatar from an account
+// that has never received its initial outfit. The deterministic shape item is
+// created with the outfit and remains in the user's Body Parts folder when the
+// user later changes what is worn.
+func DefaultOutfitInitialized(userID string, items []Item) bool {
+	markerID := deterministicUUID(userID + "\x00homeworldz-default-wearable-item\x000")
+	for _, item := range items {
+		if item.ID == markerID && item.OwnerUserID == userID {
+			return true
+		}
+	}
+	return false
 }
 
 func SystemFolders(userID string) []Folder {

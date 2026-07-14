@@ -431,7 +431,8 @@ std::size_t RegionStorage::import_asset_directory(const std::filesystem::path& d
     std::size_t imported = 0;
     for (const auto& entry : std::filesystem::recursive_directory_iterator(directory)) {
         if (!entry.is_regular_file() ||
-            (entry.path().extension() != ".j2c" && entry.path().extension() != ".bodypart")) continue;
+            (entry.path().extension() != ".j2c" && entry.path().extension() != ".bodypart" &&
+             entry.path().extension() != ".clothing")) continue;
         std::ifstream input(entry.path(), std::ios::binary | std::ios::ate);
         if (!input) throw std::runtime_error("asset source file could not be opened");
         const auto length = static_cast<std::streamsize>(input.tellg());

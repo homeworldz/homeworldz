@@ -1,9 +1,10 @@
 # Bundled region assets
 
-`default-avatar/` contains the four base body-part assets and five source
-textures needed to render HomeWorldz's initial system outfit. They were copied
-without content changes from the Halcyon simulator asset set and renamed to
-their viewer UUIDs so the region can import them deterministically.
+`default-avatar/` contains the four base body-part assets, a shirt and pants,
+and five source textures needed to render HomeWorldz's initial system outfit.
+They were derived from the Halcyon simulator asset set without changing their
+wearable parameters and named by viewer UUID so the region can import them
+deterministically.
 
 The Halcyon source is distributed under the 3-clause BSD license. The texture
 set's provenance notice says that some included textures derive from Second
@@ -12,4 +13,3 @@ Creative Commons Attribution-ShareAlike 3.0. The upstream notices are retained
 in `HALCYON-ASSET-LICENSES.txt`.
 
 Source: <https://github.com/HalcyonGrid/halcyon>
-

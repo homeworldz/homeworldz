@@ -29,22 +29,38 @@ func TestDefaultWearablesAreStableAndLinkedFromCurrentOutfit(t *testing.T) {
 	const userID = "11111111-2222-4333-8444-555555555555"
 	first := DefaultWearables(userID)
 	second := DefaultWearables(userID)
-	if len(first) != 8 || len(second) != len(first) {
-		t.Fatalf("default wearable count = %d, want 8", len(first))
+	if len(first) != 12 || len(second) != len(first) {
+		t.Fatalf("default wearable count = %d, want 12", len(first))
 	}
 	bodyPartsID := SystemFolderID(userID, 13)
+	clothingID := SystemFolderID(userID, 5)
 	currentOutfitID := SystemFolderID(userID, 46)
 	wantAssets := []string{
 		"66c41e39-38f9-f75a-024e-585989bfab73", "77c41e39-38f9-f75a-024e-585989bbabbb",
 		"d342e6c0-b9d2-11dc-95ff-0800200c9a66", "4bb6fa4d-1cd2-498a-a84c-95c1a0e745a7",
+		"00000000-38f9-1111-024e-222222111110", "00000000-38f9-1111-024e-222222111120",
 	}
 	for index := 0; index < len(first); index += 2 {
 		item, link := first[index], first[index+1]
-		if item != second[index] || link != second[index+1] || item.FolderID != bodyPartsID ||
-			item.AssetType != 13 || item.InventoryType != 18 || link.FolderID != currentOutfitID ||
+		wantFolderID, wantAssetType := bodyPartsID, 13
+		if index >= 8 {
+			wantFolderID, wantAssetType = clothingID, 5
+		}
+		if item != second[index] || link != second[index+1] || item.FolderID != wantFolderID ||
+			item.AssetType != wantAssetType || item.InventoryType != 18 || link.FolderID != currentOutfitID ||
 			link.AssetType != 24 || link.InventoryType != 18 || link.AssetID != item.ID ||
 			item.AssetID != wantAssets[index/2] || item.Flags != uint32(index/2) || link.Flags != item.Flags {
 			t.Fatalf("invalid default wearable pair %d: item=%#v link=%#v", index/2, item, link)
 		}
+	}
+}
+
+func TestDefaultOutfitInitializedUsesStableShapeMarker(t *testing.T) {
+	const userID = "11111111-2222-4333-8444-555555555555"
+	items := DefaultWearables(userID)
+	if DefaultOutfitInitialized(userID, nil) ||
+		DefaultOutfitInitialized("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", items) ||
+		!DefaultOutfitInitialized(userID, items[:1]) {
+		t.Fatal("default outfit initialization marker was not recognized correctly")
 	}
 }

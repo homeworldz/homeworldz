@@ -103,7 +103,7 @@ func TestViewerLoginResolvesNamedRegion(t *testing.T) {
 		}
 	}
 	items, err := inventories.ListItems(context.Background(), fields["agent_id"].text())
-	if err != nil || len(items) != 8 {
+	if err != nil || len(items) != 12 {
 		t.Fatalf("default inventory items = %#v, error = %v", items, err)
 	}
 	for _, required := range []string{"0", "1", "5", "6", "7", "10", "13", "15", "16", "20", "21"} {

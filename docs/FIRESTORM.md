@@ -117,9 +117,11 @@ the immutable SHA-256 blob store with hash verification, and returned as
 `image/x-j2c`; absent or corrupt mappings return `404`.
 
 The grid supplies the system inventory skeleton, item metadata, four required
-default body parts, and Current Outfit Folder links. The region imports the
-bundled Halcyon-compatible wearable and source-texture assets and serves them
-through `ViewerAsset`.
+default body parts, a default shirt and pants, and Current Outfit Folder links.
+The region imports the bundled Halcyon-compatible wearable and source-texture
+assets and serves them through `ViewerAsset`. The complete default outfit is
+seeded only when an account has no established initial outfit; later deployment
+changes do not add clothing or alter the COF of existing avatars.
 
 For an uncached outfit, the region answers `AgentCachedTexture` with explicit
 misses. Firestorm locally composites the five legacy bakes and uploads them
