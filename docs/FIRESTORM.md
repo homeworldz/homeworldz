@@ -480,3 +480,14 @@ After a complete service and viewer restart, both Prim2 and Prim2b remained in
 the scene; Prim2b retained its name, size, Wood material, creator, and owner;
 the source Prim2 item remained in Objects. Prim3 independently remained the
 only test prim whose material was Metal.
+
+The modified-permission Take/rez round-trip passed its live-session acceptance
+on 2026-07-14. Taking Prim1 created an Objects item with current-owner
+permissions `0x0009e000`, Anyone Move `0x00080000`, and next-owner permissions
+`0x00086000` (Copy disabled, Transfer enabled). Rezzing that item retained the
+copyable source item and restored Prim1's `1 x 2 x 3` size, 45-degree rotation,
+Wood material, creator, owner, and permission masks. This test exposed two
+edge cases that were corrected: Firestorm numbers Take batches as `0 of 1` but
+Delete batches as `1 of 1`, and the inventory round-trip initially discarded
+the scene description. After the fixes, deleting the intermediate Prim1 moved
+it to Trash and rezzing the original Objects item restored `Tall rotated box`.
