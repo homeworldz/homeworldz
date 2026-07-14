@@ -235,3 +235,8 @@ and all six default wearable items. This Firestorm build requested the Library
 folder UUIDs through `InventoryAPIv3`; HomeWorldz returned the shared catalog
 without copying it into Demo Avatar's personal inventory or changing the worn
 outfit.
+
+The terrain-texture extension passed in the same Firestorm version on
+2026-07-14. The viewer showed all four entries beneath
+`Library / Textures / Terrain` and opened the bundled JPEG2000 asset for visual
+inspection without a missing-asset or decode error.
