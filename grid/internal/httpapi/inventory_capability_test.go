@@ -345,7 +345,8 @@ func TestAISFetchInventoryFolderChildrenAndCurrentLinks(t *testing.T) {
 	}
 	inventories := &memoryInventoryStore{folders: make(map[string][]inventory.Folder)}
 	folders, _ := inventories.EnsureSystemFolders(context.Background(), user.ID)
-	for _, item := range inventory.DefaultWearables(user.ID) {
+	wearables := inventory.DefaultWearables(user.ID)
+	for _, item := range wearables {
 		if _, err := inventories.EnsureItem(context.Background(), item); err != nil {
 			t.Fatal(err)
 		}
@@ -379,6 +380,8 @@ func TestAISFetchInventoryFolderChildrenAndCurrentLinks(t *testing.T) {
 	if currentResponse.Code != http.StatusOK ||
 		!strings.Contains(currentResponse.Body.String(), "<key>links</key><map>") ||
 		!strings.Contains(currentResponse.Body.String(), "<key>linked_id</key><uuid>") ||
+		!strings.Contains(currentResponse.Body.String(),
+			"<key>_embedded</key><map><key>item</key><map><key>item_id</key><uuid>"+wearables[0].ID+"</uuid>") ||
 		!strings.Contains(currentResponse.Body.String(), "<string>Default Pants</string>") {
 		t.Fatalf("status = %d, AIS current links response = %s", currentResponse.Code, currentResponse.Body.String())
 	}

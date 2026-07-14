@@ -184,6 +184,10 @@ func inventoryAISFolderXML(folder inventory.Folder, userID string) string {
 func inventoryAISEmbeddedXML(folderID, userID string, folders []inventory.Folder, items []inventory.Item,
 	depth int, linksOnly bool) string {
 	var categories, ordinaryItems, links strings.Builder
+	itemsByID := make(map[string]inventory.Item, len(items))
+	for _, item := range items {
+		itemsByID[item.ID] = item
+	}
 	if !linksOnly {
 		for _, folder := range folders {
 			if folder.ParentID != folderID {
@@ -204,7 +208,8 @@ func inventoryAISEmbeddedXML(folderID, userID string, folders []inventory.Folder
 		}
 		if item.AssetType == 24 {
 			links.WriteString("<key>" + html.EscapeString(item.ID) + "</key>")
-			links.WriteString(inventoryAISItemXML(item, true))
+			source, found := itemsByID[item.AssetID]
+			links.WriteString(inventoryAISLinkXML(item, source, found))
 		} else if !linksOnly {
 			ordinaryItems.WriteString("<key>" + html.EscapeString(item.ID) + "</key>")
 			ordinaryItems.WriteString(inventoryAISItemXML(item, false))
@@ -214,6 +219,15 @@ func inventoryAISEmbeddedXML(folderID, userID string, folders []inventory.Folder
 		"<key>categories</key><map>" + categories.String() + "</map>" +
 		"<key>items</key><map>" + ordinaryItems.String() + "</map>" +
 		"<key>links</key><map>" + links.String() + "</map></map>"
+}
+
+func inventoryAISLinkXML(link inventory.Item, source inventory.Item, sourceFound bool) string {
+	content := inventoryAISItemXML(link, true)
+	if !sourceFound {
+		return content
+	}
+	return strings.TrimSuffix(content, "</map>") +
+		"<key>_embedded</key><map><key>item</key>" + inventoryItemXML(source) + "</map></map>"
 }
 
 func inventoryAISItemXML(item inventory.Item, link bool) string {
