@@ -368,6 +368,11 @@ func TestCreateObjectInventoryItemEndpoint(t *testing.T) {
 		created.BasePermissions != 0x0009e000 || created.NextPermissions != 0x0008e000 {
 		t.Fatalf("created object inventory item = %#v", created)
 	}
+	fetched := requestRegion[inventory.Item](t, handler, http.MethodGet,
+		"/api/v1/inventory/"+userID+"/items/"+created.ID, "", http.StatusOK)
+	if fetched.ID != created.ID || fetched.AssetID != created.AssetID || fetched.CreatorUserID != creatorID {
+		t.Fatalf("fetched object inventory item = %#v", fetched)
+	}
 }
 
 func TestCopyLibraryInventoryItemEndpoint(t *testing.T) {

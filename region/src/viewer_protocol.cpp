@@ -48,6 +48,8 @@ constexpr std::array<std::byte, 4> move_inventory_item_id{
 constexpr std::array<std::byte, 2> object_add_id{std::byte{0xff}, std::byte{0x01}};
 constexpr std::array<std::byte, 4> derez_object_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x23}};
+constexpr std::array<std::byte, 4> rez_object_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x25}};
 constexpr std::array<std::byte, 4> object_select_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x6e}};
 constexpr std::array<std::byte, 2> multiple_object_update_id{
@@ -709,6 +711,33 @@ std::optional<DeRezObject> decode_derez_object(std::span<const std::byte> payloa
     result.local_ids.reserve(count);
     for (std::size_t index = 0; index < count; ++index)
         result.local_ids.push_back(read_le_u32(payload, header_size + index * sizeof(std::uint32_t)));
+    return result;
+}
+
+std::optional<RezObject> decode_rez_object(std::span<const std::byte> payload) {
+    constexpr std::size_t minimum_size = 144;
+    if (payload.size() < minimum_size ||
+        !std::equal(rez_object_id.begin(), rez_object_id.end(), payload.begin()))
+        return std::nullopt;
+    RezObject result;
+    std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
+    std::copy_n(payload.begin() + 36, 16, result.group_id.begin());
+    std::copy_n(payload.begin() + 52, 16, result.from_task_id.begin());
+    result.bypass_raycast = std::to_integer<std::uint8_t>(payload[68]);
+    for (std::size_t axis = 0; axis < 3; ++axis) {
+        result.ray_start[axis] = read_f32(payload, 69 + axis * sizeof(float));
+        result.ray_end[axis] = read_f32(payload, 81 + axis * sizeof(float));
+    }
+    std::copy_n(payload.begin() + 93, 16, result.ray_target_id.begin());
+    result.ray_end_is_intersection = payload[109] != std::byte{};
+    result.rez_selected = payload[110] != std::byte{};
+    result.remove_item = payload[111] != std::byte{};
+    std::copy_n(payload.begin() + 128, 16, result.item_id.begin());
+    const auto finite = [](const auto& values) {
+        return std::all_of(values.begin(), values.end(), [](float value) { return std::isfinite(value); });
+    };
+    if (!finite(result.ray_start) || !finite(result.ray_end)) return std::nullopt;
     return result;
 }
 

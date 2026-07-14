@@ -434,6 +434,48 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/inventory/{userId}/items/{itemId}:
+    parameters:
+      - $ref: "#/components/parameters/RequestId"
+      - $ref: "#/components/parameters/UserId"
+      - $ref: "#/components/parameters/ItemId"
+    get:
+      operationId: getInventoryItem
+      summary: Load one authoritative inventory item
+      security:
+        - ServiceToken: []
+      responses:
+        "200":
+          description: Inventory item
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryItem" }
+        "404":
+          description: Inventory item was not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/inventory/{userId}/system-folders/{folderType}:
+    parameters:
+      - $ref: "#/components/parameters/RequestId"
+      - $ref: "#/components/parameters/UserId"
+      - $ref: "#/components/parameters/FolderType"
+    get:
+      operationId: getInventorySystemFolder
+      summary: Resolve one standard inventory folder by type
+      security:
+        - ServiceToken: []
+      responses:
+        "200":
+          description: Inventory system folder
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryFolder" }
+        "404":
+          description: Inventory system folder was not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 components:
   parameters:
     RequestId:
@@ -466,6 +508,19 @@ components:
       schema:
         type: string
         format: uuid
+    ItemId:
+      name: itemId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    FolderType:
+      name: folderType
+      in: path
+      required: true
+      schema:
+        type: integer
   headers:
     RequestId:
       required: true

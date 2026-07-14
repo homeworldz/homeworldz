@@ -201,6 +201,24 @@ bool message_codecs() {
                                                std::byte{0x04}, std::byte{0x03},
                                                std::byte{0x02}, std::byte{0x01}});
     const auto derez = decode_derez_object(derez_payload);
+    std::vector<std::byte> rez_payload(144);
+    rez_payload[0] = std::byte{0xff};
+    rez_payload[1] = std::byte{0xff};
+    rez_payload[2] = std::byte{0x01};
+    rez_payload[3] = std::byte{0x25};
+    std::copy(expected.agent_id.begin(), expected.agent_id.end(), rez_payload.begin() + 4);
+    std::copy(expected.session_id.begin(), expected.session_id.end(), rez_payload.begin() + 20);
+    rez_payload[68] = std::byte{1};
+    write_f32(rez_payload, 69, 120.0F);
+    write_f32(rez_payload, 73, 121.0F);
+    write_f32(rez_payload, 77, 30.0F);
+    write_f32(rez_payload, 81, 130.0F);
+    write_f32(rez_payload, 85, 131.0F);
+    write_f32(rez_payload, 89, 22.0F);
+    rez_payload[109] = std::byte{1};
+    rez_payload[110] = std::byte{1};
+    std::copy(expected.agent_id.begin(), expected.agent_id.end(), rez_payload.begin() + 128);
+    const auto rez = decode_rez_object(rez_payload);
     const std::array<std::uint32_t, 2> killed_ids{0x12345678, 0x01020304};
     const auto killed = encode_kill_object(killed_ids);
     auto select_payload = bytes({0xff, 0xff, 0x00, 0x6e});
@@ -380,6 +398,10 @@ bool message_codecs() {
            derez->destination == 6 && derez->destination_id == expected.agent_id &&
            derez->transaction_id == expected.session_id && derez->packet_count == 1 &&
            derez->packet_number == 0 && derez->local_ids == std::vector<std::uint32_t>(killed_ids.begin(), killed_ids.end()) &&
+           rez && rez->agent_id == expected.agent_id && rez->session_id == expected.session_id &&
+           rez->item_id == expected.agent_id && rez->bypass_raycast == 1 &&
+           rez->ray_start[0] == 120.0F && rez->ray_end[1] == 131.0F &&
+           rez->ray_end_is_intersection && rez->rez_selected && !rez->remove_item &&
            killed == bytes({0x10, 2, 0x78, 0x56, 0x34, 0x12, 0x04, 0x03, 0x02, 0x01}) &&
            selected && selected->agent_id == expected.agent_id && selected->session_id == expected.session_id &&
            selected->local_ids == std::vector<std::uint32_t>{0x12345678} &&

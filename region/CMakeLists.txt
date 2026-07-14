@@ -3,6 +3,7 @@ add_library(homeworldz-region-core
   src/api_models.cpp
   src/grid_client.cpp
   src/http_response.cpp
+  src/object_asset.cpp
   src/physics_scenarios.cpp
   src/region_config.cpp
   src/region_storage.cpp
@@ -44,6 +45,10 @@ add_test(NAME region-scene COMMAND homeworldz-scene-tests)
 add_executable(homeworldz-grid-client-tests tests/grid_client_test.cpp)
 target_link_libraries(homeworldz-grid-client-tests PRIVATE homeworldz-region-core)
 add_test(NAME region-grid-client COMMAND homeworldz-grid-client-tests)
+
+add_executable(homeworldz-object-asset-tests tests/object_asset_test.cpp)
+target_link_libraries(homeworldz-object-asset-tests PRIVATE homeworldz-region-core)
+add_test(NAME region-object-asset COMMAND homeworldz-object-asset-tests)
 
 add_executable(homeworldz-region-config-tests tests/region_config_test.cpp)
 target_link_libraries(homeworldz-region-config-tests PRIVATE homeworldz-region-core)

@@ -104,6 +104,8 @@ public:
                                std::string_view parent_id);
     bool move_inventory_item(std::string_view user_id, std::string_view item_id,
                              std::string_view folder_id, std::string_view new_name);
+    std::optional<InventoryItem> find_inventory_item(std::string_view user_id,
+                                                     std::string_view item_id);
     std::optional<std::string> find_system_inventory_folder(std::string_view user_id,
                                                             int folder_type);
     bool create_texture_inventory_item(std::string_view user_id, const TextureInventoryItem& item);

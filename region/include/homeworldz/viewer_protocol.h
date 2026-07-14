@@ -108,6 +108,19 @@ struct DeRezObject : AgentMessage {
     std::vector<std::uint32_t> local_ids;
 };
 
+struct RezObject : AgentMessage {
+    Uuid group_id{};
+    Uuid from_task_id{};
+    std::uint8_t bypass_raycast{};
+    std::array<float, 3> ray_start{};
+    std::array<float, 3> ray_end{};
+    Uuid ray_target_id{};
+    bool ray_end_is_intersection{};
+    bool rez_selected{};
+    bool remove_item{};
+    Uuid item_id{};
+};
+
 struct ObjectSelect : AgentMessage {
     std::vector<std::uint32_t> local_ids;
 };
@@ -331,6 +344,7 @@ std::optional<MoveInventoryFolder> decode_move_inventory_folder(std::span<const 
 std::optional<MoveInventoryItem> decode_move_inventory_item(std::span<const std::byte> payload);
 std::optional<ObjectAdd> decode_object_add(std::span<const std::byte> payload);
 std::optional<DeRezObject> decode_derez_object(std::span<const std::byte> payload);
+std::optional<RezObject> decode_rez_object(std::span<const std::byte> payload);
 std::vector<std::byte> encode_kill_object(std::span<const std::uint32_t> local_ids);
 std::optional<ObjectSelect> decode_object_select(std::span<const std::byte> payload);
 std::optional<MultipleObjectUpdate> decode_multiple_object_update(std::span<const std::byte> payload);

@@ -27,6 +27,9 @@ public:
             return {200, R"({"id":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","username":"jim.tarber","createdAt":"2026-07-14T00:00:00Z"})"};
         if (method == "GET" && path.find("/system-folders/") != std::string_view::npos)
             return {200, R"({"id":"22222222-2222-4222-8222-222222222222","ownerUserId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","parentId":"eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee","name":"Objects","typeDefault":6,"version":1})"};
+        if (method == "GET" && path.find("/inventory/") != std::string_view::npos &&
+            path.find("/items/") != std::string_view::npos)
+            return {200, R"({"id":"44444444-4444-4444-8444-444444444444","ownerUserId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","creatorUserId":"77777777-7777-4777-8777-777777777777","folderId":"55555555-5555-4555-8555-555555555555","assetId":"66666666-6666-4666-8666-666666666666","assetType":6,"inventoryType":6,"name":"Prim2","description":"","flags":0,"basePermissions":647168,"currentPermissions":647168,"everyonePermissions":0,"nextPermissions":581632,"saleType":0,"salePrice":0})"};
         if (method == "GET") return {200, R"({"id":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","userId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","expiresAt":"2026-07-14T00:00:00Z","viewerCircuitCode":123456,"destinationRegionId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"})"};
         return {500, {}};
     }
@@ -100,6 +103,13 @@ int main() {
     if (!objects_folder || *objects_folder != "22222222-2222-4222-8222-222222222222" ||
         transport->requests.back().method != "GET" ||
         transport->requests.back().path != "/api/v1/inventory/" + session->agent_id + "/system-folders/6")
+        return 1;
+    const auto found_object = client.find_inventory_item(
+        session->agent_id, "44444444-4444-4444-8444-444444444444");
+    if (!found_object || found_object->name != "Prim2" || found_object->asset_type != 6 ||
+        found_object->asset_id != "66666666-6666-4666-8666-666666666666" ||
+        transport->requests.back().path != "/api/v1/inventory/" + session->agent_id +
+            "/items/44444444-4444-4444-8444-444444444444")
         return 1;
     const homeworldz::grid::TextureInventoryItem texture{
         "11111111-1111-4111-8111-111111111111", session->agent_id,

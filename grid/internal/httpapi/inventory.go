@@ -130,17 +130,9 @@ func (a *API) inventorySystemFolderByUser(w http.ResponseWriter, r *http.Request
 }
 
 func (a *API) inventoryItemByUser(w http.ResponseWriter, r *http.Request, userID, itemID string) {
-	if r.Method != http.MethodPut {
-		w.Header().Set("Allow", http.MethodPut)
-		writeJSON(w, http.StatusMethodNotAllowed, Error{Code: "method_not_allowed", Message: "only PUT is supported"})
-		return
-	}
-	var request MoveInventoryItemRequest
-	if !decodeJSON(w, r, &request) {
-		return
-	}
-	if !validUUID(request.FolderID) || len(request.Name) > 255 {
-		writeJSON(w, http.StatusBadRequest, Error{Code: "invalid_inventory_item_move", Message: "inventory item move is invalid"})
+	if r.Method != http.MethodGet && r.Method != http.MethodPut {
+		w.Header().Set("Allow", "GET, PUT")
+		writeJSON(w, http.StatusMethodNotAllowed, Error{Code: "method_not_allowed", Message: "only GET and PUT are supported"})
 		return
 	}
 	items, err := a.inventory.ListItems(r.Context(), userID)
@@ -157,6 +149,18 @@ func (a *API) inventoryItemByUser(w http.ResponseWriter, r *http.Request, userID
 	}
 	if item.ID == "" {
 		writeJSON(w, http.StatusNotFound, Error{Code: "inventory_item_not_found", Message: "inventory item was not found"})
+		return
+	}
+	if r.Method == http.MethodGet {
+		writeJSON(w, http.StatusOK, item)
+		return
+	}
+	var request MoveInventoryItemRequest
+	if !decodeJSON(w, r, &request) {
+		return
+	}
+	if !validUUID(request.FolderID) || len(request.Name) > 255 {
+		writeJSON(w, http.StatusBadRequest, Error{Code: "invalid_inventory_item_move", Message: "inventory item move is invalid"})
 		return
 	}
 	item.FolderID = request.FolderID

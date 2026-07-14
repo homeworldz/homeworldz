@@ -26,6 +26,7 @@
 #include "homeworldz/avatar_controller.h"
 #include "homeworldz/grid_client.h"
 #include "homeworldz/http_response.h"
+#include "homeworldz/object_asset.h"
 #include "homeworldz/region_config.h"
 #include "homeworldz/region_storage.h"
 #include "homeworldz/scene.h"
@@ -1826,6 +1827,113 @@ int main() {
                                       << inventory_items_created << ",\"requested\":" << derez->local_ids.size()
                                       << ",\"destination\":" << static_cast<unsigned>(derez->destination) << "}"
                                       << std::endl;
+                        }
+                        const auto rez = homeworldz::viewer::decode_rez_object(packet->payload);
+                        if (rez && rez->agent_id == identity->agent_id &&
+                            rez->session_id == identity->session_id) {
+                            const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
+                            const auto item_id = homeworldz::viewer::format_uuid(rez->item_id);
+                            bool created = false;
+                            std::string object_id;
+                            homeworldz::scene::EntityId entity_id{};
+                            try {
+                                const auto item = viewer_grid
+                                    ? viewer_grid->find_inventory_item(user_id, item_id) : std::nullopt;
+                                if (item && item->asset_type == 6 && item->inventory_type == 6 &&
+                                    (!rez->remove_item ||
+                                     (item->current_permissions & homeworldz::scene::permission_copy) != 0)) {
+                                    const auto content = storage->read_asset(item->asset_id);
+                                    const auto asset = homeworldz::asset::parse_object_asset(content);
+                                    std::optional<homeworldz::scene::Vector3> placement;
+                                    if (asset && rez->bypass_raycast) {
+                                        const homeworldz::scene::Vector3 ray_end{
+                                            rez->ray_end[0], rez->ray_end[1], rez->ray_end[2]};
+                                        placement = homeworldz::scene::Vector3{
+                                            ray_end.x, ray_end.y,
+                                            ground_height(terrain_heightmap, ray_end) + asset->scale.z * 0.5};
+                                    } else if (asset) {
+                                        const auto target_id = homeworldz::viewer::format_uuid(rez->ray_target_id);
+                                        const homeworldz::scene::Entity* target = nullptr;
+                                        for (const auto& [candidate_id, candidate] : scene.entities()) {
+                                            static_cast<void>(candidate_id);
+                                            if (candidate.object_id == target_id) {
+                                                target = &candidate;
+                                                break;
+                                            }
+                                        }
+                                        if (target) {
+                                            const auto intersection = homeworldz::scene::intersect_box(
+                                                {rez->ray_start[0], rez->ray_start[1], rez->ray_start[2]},
+                                                {rez->ray_end[0], rez->ray_end[1], rez->ray_end[2]},
+                                                target->position, target->scale);
+                                            if (intersection) {
+                                                placement = homeworldz::scene::Vector3{
+                                                    intersection->position.x + intersection->normal.x * asset->scale.x * 0.5,
+                                                    intersection->position.y + intersection->normal.y * asset->scale.y * 0.5,
+                                                    intersection->position.z + intersection->normal.z * asset->scale.z * 0.5};
+                                            }
+                                        } else {
+                                            const homeworldz::scene::Vector3 ray_end{
+                                                rez->ray_end[0], rez->ray_end[1], rez->ray_end[2]};
+                                            placement = homeworldz::scene::Vector3{
+                                                ray_end.x, ray_end.y,
+                                                ground_height(terrain_heightmap, ray_end) + asset->scale.z * 0.5};
+                                        }
+                                    }
+                                    const bool valid_position = placement &&
+                                        placement->x >= 0.0 && placement->x <= 256.0 &&
+                                        placement->y >= 0.0 && placement->y <= 256.0 &&
+                                        placement->z >= -64.0 && placement->z <= 4096.0;
+                                    if (asset && valid_position) {
+                                        object_id = homeworldz::viewer::random_uuid();
+                                        entity_id = scene.create(item->name, *placement);
+                                        if (auto* entity = scene.find(entity_id)) {
+                                            entity->object_id = object_id;
+                                            entity->owner_id = user_id;
+                                            entity->creator_id = item->creator_id;
+                                            entity->scale = asset->scale;
+                                            entity->rotation = asset->rotation;
+                                            entity->material = asset->material;
+                                            entity->description = item->description;
+                                            entity->base_permissions = item->base_permissions;
+                                            entity->owner_permissions = item->current_permissions;
+                                            entity->everyone_permissions = item->everyone_permissions;
+                                            entity->next_owner_permissions = item->next_permissions;
+                                            entity->creation_date = static_cast<std::uint64_t>(
+                                                std::chrono::duration_cast<std::chrono::seconds>(
+                                                    std::chrono::system_clock::now().time_since_epoch()).count());
+                                            storage->save_snapshot(scene);
+                                            created = true;
+                                        }
+                                    }
+                                }
+                            } catch (const std::exception& error) {
+                                if (entity_id != 0) scene.remove(entity_id);
+                                std::cout << "{\"level\":\"error\",\"message\":\"primitive rez failed\",\"error\":"
+                                          << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+                            }
+                            if (created) {
+                                const auto* entity = scene.find(entity_id);
+                                if (entity) {
+                                    const auto region_handle =
+                                        (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
+                                        static_cast<std::uint32_t>(region_grid_y * 256);
+                                    for (const auto& [recipient_endpoint, recipient] : avatars) {
+                                        const auto object = static_object_from_entity(*entity, recipient.user_id);
+                                        if (!object) continue;
+                                        if (const auto outgoing = circuits.send(
+                                                recipient_endpoint,
+                                                homeworldz::viewer::encode_static_object_update(
+                                                    region_handle, *object), true, now, true))
+                                            static_cast<void>(send_udp(viewer_server, recipient_endpoint, *outgoing));
+                                    }
+                                }
+                            }
+                            std::cout << "{\"level\":" << (created ? "\"info\"" : "\"warn\"")
+                                      << ",\"message\":\"primitive inventory rez "
+                                      << (created ? "completed" : "rejected") << "\",\"itemId\":"
+                                      << homeworldz::api::json_string(item_id) << ",\"objectId\":"
+                                      << homeworldz::api::json_string(object_id) << "}" << std::endl;
                         }
                         const auto update = homeworldz::viewer::decode_agent_update(packet->payload);
                         const auto avatar = avatars.find(endpoint);
