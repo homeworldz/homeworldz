@@ -126,6 +126,7 @@ int main() {
     passed &= contains(seed, "<key>EventQueueGet</key><uri>http://region.example:42001/caps/event/session-id</uri>");
     passed &= contains(seed, "<key>GetTexture</key><uri>http://region.example:42001/caps/texture/session-id</uri>");
     passed &= contains(seed, "<key>ViewerAsset</key><uri>http://region.example:42001/caps/assets/session-id</uri>");
+    passed &= contains(seed, "<key>SimulatorFeatures</key><uri>http://region.example:42001/caps/simulator-features/session-id</uri>");
     passed &= contains(seed, "<key>EnvironmentSettings</key><uri>http://region.example:42001/caps/environment/session-id</uri>");
     passed &= contains(seed, "<key>UploadBakedTexture</key><uri>http://region.example:42001/caps/upload-baked/session-id</uri>");
     passed &= contains(seed, "<key>NewFileAgentInventory</key><uri>http://region.example:42001/caps/upload-file/session-id</uri>");
@@ -141,6 +142,9 @@ int main() {
     passed &= contains(event, "<string>EstablishAgentCommunication</string>");
     passed &= contains(event, "<key>id</key><integer>7</integer>");
     passed &= contains(event, "session&amp;amp;id");
+    const auto simulator_features = homeworldz::viewer::simulator_features_xml();
+    passed &= contains(simulator_features,
+                       "<key>OpenSimExtras</key><map><key>currency</key><string>C$</string>");
     const auto environment = homeworldz::viewer::environment_settings_xml(
         "11111111-2222-4333-8444-555555555555");
     passed &= contains(environment, "<key>messageID</key><uuid>00000000-0000-0000-0000-000000000000</uuid>");

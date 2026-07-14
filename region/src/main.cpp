@@ -497,8 +497,14 @@ int main() {
                     if (texture) session_id = texture->first;
                     const auto viewer_asset = viewer_asset_request(response.path);
                     if (viewer_asset) session_id = viewer_asset->first;
-                    std::string environment_session;
+                    std::string simulator_features_session;
                     if (!seed && !event_queue && !texture && !viewer_asset)
+                        simulator_features_session =
+                            capability_session(response.path, "/caps/simulator-features/");
+                    const bool simulator_features = !simulator_features_session.empty();
+                    if (simulator_features) session_id = simulator_features_session;
+                    std::string environment_session;
+                    if (!seed && !event_queue && !texture && !viewer_asset && !simulator_features)
                         environment_session = capability_session(response.path, "/caps/environment/");
                     const bool environment_settings = !environment_session.empty();
                     if (environment_settings) session_id = environment_session;
@@ -514,12 +520,13 @@ int main() {
                     if (file_upload) session_id = file_upload_session;
                     const auto file_upload_data = file_upload_data_request(response.path);
                     if (file_upload_data) session_id = file_upload_data->first;
-                    if (seed || event_queue || texture || viewer_asset || environment_settings ||
+                    if (seed || event_queue || texture || viewer_asset || simulator_features || environment_settings ||
                         baked_upload || baked_upload_data || file_upload || file_upload_data) {
                         bool authorized = false;
                         std::string authorized_agent_id;
                         std::optional<homeworldz::grid::ViewerSession> authorized_session;
-                        const auto expected_method = texture || viewer_asset || environment_settings ? "GET" : "POST";
+                        const auto expected_method =
+                            texture || viewer_asset || simulator_features || environment_settings ? "GET" : "POST";
                         if (response.method == expected_method && registration && viewer_sessions) {
                             authorized_session = viewer_sessions->validate(session_id);
                             authorized = authorized_session &&
@@ -570,6 +577,10 @@ int main() {
                                     homeworldz::api::to_json(homeworldz::api::Error{
                                         "asset_not_found", "viewer asset was not found"}));
                             }
+                        } else if (authorized && simulator_features) {
+                            response = homeworldz::http::response_for_content(
+                                request, 200, "application/llsd+xml",
+                                homeworldz::viewer::simulator_features_xml());
                         } else if (authorized && environment_settings && registration) {
                             response = homeworldz::http::response_for_content(
                                 request, 200, "application/llsd+xml",

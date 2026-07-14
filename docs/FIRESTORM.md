@@ -127,7 +127,9 @@ HomeWorldz validates the active viewer session and JPEG2000 signature, records
 the authenticated uploader UUID as asset creator provenance, and asks the Grid
 to create a texture inventory item in the requested folder owned by that same
 user. The completion response contains distinct new asset and inventory-item
-UUIDs. Upload cost is zero in the local development grid. Sounds, animations,
+UUIDs. Texture upload cost is always zero. The UDP economy response advertises
+that zero price, while `SimulatorFeatures.OpenSimExtras.currency` identifies
+the grid's viewer-facing currency as credits (`C$`). Sounds, animations,
 snapshots, mesh, objects, and bulk or variable-price uploads remain outside
 this first slice.
 
@@ -284,4 +286,6 @@ distinct asset and inventory-item UUIDs, and recorded the stable Library UUID
 `00000000-0000-0000-0000-000000000002` as both authenticated uploader and
 creator provenance. The initial button showed `OS$-1` because the region had
 not yet answered `EconomyDataRequest`; the subsequent zero-price economy
-response requires viewer confirmation.
+response was accepted and changed the button to `OS$0`. Firestorm obtains the
+currency symbol separately from the region's `SimulatorFeatures` capability;
+the new `C$` symbol requires viewer confirmation.

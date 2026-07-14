@@ -42,6 +42,14 @@ central or pluggable legacy asset-service boundaries commonly used by
 OpenSimulator and Halcyon, and it does not attempt to reproduce Second Life's
 private backend layout.
 
+### Free texture uploads
+
+HomeWorldz does not charge users to upload textures. Regions advertise a zero
+upload price through the viewer economy protocol and identify the grid's
+currency as credits (`C$`) for viewer interfaces that insist on displaying a
+currency beside zero. Credits may support other features later, but texture
+upload pricing is not reserved as an economy mechanism.
+
 ### Internal service boundaries
 
 HomeWorldz uses a C++20 region server, Go grid services, HTTP/JSON internal

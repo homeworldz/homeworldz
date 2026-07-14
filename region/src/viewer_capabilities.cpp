@@ -83,6 +83,8 @@ std::string seed_capability_xml(std::string_view public_endpoint, std::string_vi
     const auto event_url = xml_escape(base + "/caps/event/" + std::string(session_id));
     const auto texture_url = xml_escape(base + "/caps/texture/" + std::string(session_id));
     const auto asset_url = xml_escape(base + "/caps/assets/" + std::string(session_id));
+    const auto simulator_features_url =
+        xml_escape(base + "/caps/simulator-features/" + std::string(session_id));
     const auto environment_url = xml_escape(base + "/caps/environment/" + std::string(session_id));
     const auto baked_upload_url = xml_escape(base + "/caps/upload-baked/" + std::string(session_id));
     const auto file_upload_url = xml_escape(base + "/caps/upload-file/" + std::string(session_id));
@@ -99,6 +101,7 @@ std::string seed_capability_xml(std::string_view public_endpoint, std::string_vi
     return "<?xml version=\"1.0\"?><llsd><map><key>EventQueueGet</key><uri>" + event_url +
            "</uri><key>GetTexture</key><uri>" + texture_url +
            "</uri><key>ViewerAsset</key><uri>" + asset_url +
+           "</uri><key>SimulatorFeatures</key><uri>" + simulator_features_url +
            "</uri><key>EnvironmentSettings</key><uri>" + environment_url +
            "</uri><key>UploadBakedTexture</key><uri>" + baked_upload_url +
            "</uri><key>NewFileAgentInventory</key><uri>" + file_upload_url +
@@ -121,6 +124,12 @@ std::string event_queue_xml(std::uint64_t id, const std::optional<EstablishAgent
     }
     return "<?xml version=\"1.0\"?><llsd><map><key>events</key>" + events +
            "<key>id</key><integer>" + std::to_string(id) + "</integer></map></llsd>";
+}
+
+std::string simulator_features_xml(std::string_view currency) {
+    return "<?xml version=\"1.0\"?><llsd><map><key>OpenSimExtras</key><map>"
+           "<key>currency</key><string>" + xml_escape(currency) +
+           "</string></map></map></llsd>";
 }
 
 std::string environment_settings_xml(std::string_view region_id) {
