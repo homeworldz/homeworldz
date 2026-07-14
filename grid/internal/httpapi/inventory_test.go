@@ -242,6 +242,13 @@ func TestInventoryFoldersEndpoint(t *testing.T) {
 		"/api/v1/inventory/"+userID+"/folders",
 		`{"id":"`+folderID+`","parentId":"`+inventory.SystemFolderID(userID, 8)+`","name":"Projects","typeDefault":-1}`,
 		http.StatusConflict)
+	moved := requestRegion[inventory.Folder](t, handler, http.MethodPut,
+		"/api/v1/inventory/"+userID+"/folders/"+folderID,
+		`{"parentId":"`+inventory.SystemFolderID(userID, 14)+`"}`,
+		http.StatusOK)
+	if moved.ParentID != inventory.SystemFolderID(userID, 14) || moved.Name != "Projects" {
+		t.Fatalf("moved inventory folder = %#v", moved)
+	}
 }
 
 func TestCreateTextureInventoryItemEndpoint(t *testing.T) {

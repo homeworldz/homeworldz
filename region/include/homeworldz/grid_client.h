@@ -81,6 +81,8 @@ public:
     bool revoke_viewer_session(std::string_view session_id);
     bool create_inventory_folder(std::string_view user_id, std::string_view folder_id,
                                  std::string_view parent_id, std::string_view name, int type_default);
+    bool move_inventory_folder(std::string_view user_id, std::string_view folder_id,
+                               std::string_view parent_id);
     bool create_texture_inventory_item(std::string_view user_id, const TextureInventoryItem& item);
     std::optional<InventoryItem> copy_library_item(std::string_view user_id,
                                                    std::string_view source_item_id,

@@ -41,6 +41,8 @@ constexpr std::array<std::byte, 4> copy_inventory_item_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x0d}};
 constexpr std::array<std::byte, 4> update_create_inventory_item_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x0b}};
+constexpr std::array<std::byte, 4> move_inventory_folder_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x13}};
 constexpr std::array<std::byte, 4> economy_data_request_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x18}};
 constexpr std::array<std::byte, 4> economy_data_id{
@@ -572,6 +574,29 @@ std::optional<CopyInventoryItem> decode_copy_inventory_item(std::span<const std:
     result.new_name.assign(reinterpret_cast<const char*>(payload.data() + fixed_size), name_size);
     while (!result.new_name.empty() && result.new_name.back() == '\0') result.new_name.pop_back();
     if (result.new_name.find('\0') != std::string::npos) return std::nullopt;
+    return result;
+}
+
+std::optional<MoveInventoryFolder> decode_move_inventory_folder(std::span<const std::byte> payload) {
+    constexpr std::size_t header_size = 38;
+    constexpr std::size_t block_size = 32;
+    if (payload.size() < header_size ||
+        !std::equal(move_inventory_folder_id.begin(), move_inventory_folder_id.end(), payload.begin()))
+        return std::nullopt;
+    const auto count = std::to_integer<std::size_t>(payload[37]);
+    if (count == 0 || payload.size() != header_size + count * block_size) return std::nullopt;
+    MoveInventoryFolder result;
+    std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
+    result.stamp = payload[36] != std::byte{};
+    result.folders.reserve(count);
+    for (std::size_t index = 0; index < count; ++index) {
+        const auto offset = header_size + index * block_size;
+        InventoryFolderMove move;
+        std::copy_n(payload.begin() + offset, 16, move.folder_id.begin());
+        std::copy_n(payload.begin() + offset + 16, 16, move.parent_id.begin());
+        result.folders.push_back(move);
+    }
     return result;
 }
 

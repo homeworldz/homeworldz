@@ -60,6 +60,16 @@ struct CopyInventoryItem : AgentMessage {
     std::string new_name;
 };
 
+struct InventoryFolderMove {
+    Uuid folder_id{};
+    Uuid parent_id{};
+};
+
+struct MoveInventoryFolder : AgentMessage {
+    bool stamp{};
+    std::vector<InventoryFolderMove> folders;
+};
+
 struct InventoryItem {
     Uuid item_id{};
     Uuid creator_id{};
@@ -190,6 +200,7 @@ std::vector<std::byte> encode_economy_data(std::int32_t price_upload = 0,
 std::optional<AgentMessage> decode_logout_request(std::span<const std::byte> payload);
 std::optional<CreateInventoryFolder> decode_create_inventory_folder(std::span<const std::byte> payload);
 std::optional<CopyInventoryItem> decode_copy_inventory_item(std::span<const std::byte> payload);
+std::optional<MoveInventoryFolder> decode_move_inventory_folder(std::span<const std::byte> payload);
 std::vector<std::byte> encode_update_create_inventory_item(const AgentMessage& message,
                                                            std::uint32_t callback_id,
                                                            const InventoryItem& item);

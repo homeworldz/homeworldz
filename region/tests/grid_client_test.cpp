@@ -70,6 +70,15 @@ int main() {
         transport->requests.back().path != "/api/v1/inventory/" + session->agent_id + "/folders" ||
         transport->requests.back().body.find(R"("name":"Projects")") == std::string::npos ||
         transport->requests.back().body.find(R"("typeDefault":-1)") == std::string::npos) return 1;
+    if (!client.move_inventory_folder(session->agent_id,
+            "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            "ffffffff-ffff-4fff-8fff-ffffffffffff") ||
+        transport->requests.back().method != "PUT" ||
+        transport->requests.back().path != "/api/v1/inventory/" + session->agent_id +
+            "/folders/dddddddd-dddd-4ddd-8ddd-dddddddddddd" ||
+        transport->requests.back().body.find(
+            R"("parentId":"ffffffff-ffff-4fff-8fff-ffffffffffff")") == std::string::npos)
+        return 1;
     const homeworldz::grid::TextureInventoryItem texture{
         "11111111-1111-4111-8111-111111111111", session->agent_id,
         "22222222-2222-4222-8222-222222222222", "33333333-3333-4333-8333-333333333333",

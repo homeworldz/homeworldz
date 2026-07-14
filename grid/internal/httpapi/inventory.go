@@ -28,6 +28,15 @@ func (a *API) inventoryByUser(w http.ResponseWriter, r *http.Request) {
 		a.copyLibraryInventoryItem(w, r, userID)
 		return
 	}
+	if strings.HasPrefix(suffix, "folders/") {
+		folderID := strings.TrimPrefix(suffix, "folders/")
+		if !validUUID(folderID) || strings.Contains(folderID, "/") {
+			a.notFound(w, r)
+			return
+		}
+		a.inventoryFolderByUser(w, r, userID, folderID)
+		return
+	}
 	if suffix != "folders" {
 		a.notFound(w, r)
 		return
@@ -77,6 +86,50 @@ func (a *API) inventoryByUser(w http.ResponseWriter, r *http.Request) {
 	default:
 		w.Header().Set("Allow", "GET, POST")
 		writeJSON(w, http.StatusMethodNotAllowed, Error{Code: "method_not_allowed", Message: "only GET and POST are supported"})
+	}
+}
+
+func (a *API) inventoryFolderByUser(w http.ResponseWriter, r *http.Request, userID, folderID string) {
+	if r.Method != http.MethodPut {
+		w.Header().Set("Allow", http.MethodPut)
+		writeJSON(w, http.StatusMethodNotAllowed, Error{Code: "method_not_allowed", Message: "only PUT is supported"})
+		return
+	}
+	var request MoveInventoryFolderRequest
+	if !decodeJSON(w, r, &request) {
+		return
+	}
+	if !validUUID(request.ParentID) {
+		writeJSON(w, http.StatusBadRequest, Error{Code: "invalid_inventory_folder_move", Message: "inventory folder destination is invalid"})
+		return
+	}
+	folders, err := a.inventory.ListFolders(r.Context(), userID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, Error{Code: "inventory_store_error", Message: "inventory folder could not be loaded"})
+		return
+	}
+	var folder inventory.Folder
+	for _, existing := range folders {
+		if existing.ID == folderID {
+			folder = existing
+			break
+		}
+	}
+	if folder.ID == "" {
+		writeJSON(w, http.StatusNotFound, Error{Code: "inventory_folder_not_found", Message: "inventory folder was not found"})
+		return
+	}
+	folder.ParentID = request.ParentID
+	folder, err = a.inventory.UpdateFolder(r.Context(), folder)
+	switch {
+	case errors.Is(err, inventory.ErrInvalidFolder):
+		writeJSON(w, http.StatusBadRequest, Error{Code: "invalid_inventory_folder_move", Message: "inventory folder move is invalid"})
+	case errors.Is(err, inventory.ErrFolderNotFound):
+		writeJSON(w, http.StatusNotFound, Error{Code: "inventory_folder_not_found", Message: "inventory folder or destination was not found"})
+	case err != nil:
+		writeJSON(w, http.StatusInternalServerError, Error{Code: "inventory_store_error", Message: "inventory folder could not be moved"})
+	default:
+		writeJSON(w, http.StatusOK, folder)
 	}
 }
 

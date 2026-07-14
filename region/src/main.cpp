@@ -791,6 +791,30 @@ int main() {
                                       << (created ? "completed" : "rejected") << "\",\"folderId\":"
                                       << homeworldz::api::json_string(folder_id) << "}" << std::endl;
                         }
+                        const auto move_folders =
+                            homeworldz::viewer::decode_move_inventory_folder(packet->payload);
+                        if (move_folders && move_folders->agent_id == identity->agent_id &&
+                            move_folders->session_id == identity->session_id) {
+                            const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
+                            std::size_t moved = 0;
+                            for (const auto& move : move_folders->folders) {
+                                const auto folder_id = homeworldz::viewer::format_uuid(move.folder_id);
+                                const auto parent_id = homeworldz::viewer::format_uuid(move.parent_id);
+                                try {
+                                    if (viewer_grid && viewer_grid->move_inventory_folder(
+                                            user_id, folder_id, parent_id))
+                                        ++moved;
+                                } catch (const std::exception& error) {
+                                    std::cout << "{\"level\":\"error\",\"message\":\"inventory folder move failed\",\"error\":"
+                                              << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+                                }
+                            }
+                            std::cout << "{\"level\":"
+                                      << (moved == move_folders->folders.size() ? "\"info\"" : "\"warn\"")
+                                      << ",\"message\":\"inventory folder move batch processed\",\"moved\":"
+                                      << moved << ",\"requested\":" << move_folders->folders.size() << "}"
+                                      << std::endl;
+                        }
                         const auto copy_item =
                             homeworldz::viewer::decode_copy_inventory_item(packet->payload);
                         if (copy_item && copy_item->agent_id == identity->agent_id &&
