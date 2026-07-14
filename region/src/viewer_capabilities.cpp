@@ -1,5 +1,7 @@
 #include "homeworldz/viewer_capabilities.h"
 
+#include "homeworldz/sha256.h"
+
 namespace homeworldz::viewer {
 namespace {
 std::string xml_escape(std::string_view value) {
@@ -24,6 +26,7 @@ std::string seed_capability_xml(std::string_view public_endpoint, std::string_vi
     const auto texture_url = xml_escape(base + "/caps/texture/" + std::string(session_id));
     const auto asset_url = xml_escape(base + "/caps/assets/" + std::string(session_id));
     const auto environment_url = xml_escape(base + "/caps/environment/" + std::string(session_id));
+    const auto baked_upload_url = xml_escape(base + "/caps/upload-baked/" + std::string(session_id));
     auto grid_base = std::string(grid_public_endpoint);
     while (!grid_base.empty() && grid_base.back() == '/') grid_base.pop_back();
     const auto inventory_url = xml_escape(grid_base + "/caps/inventory/descendents/" + std::string(session_id));
@@ -32,6 +35,7 @@ std::string seed_capability_xml(std::string_view public_endpoint, std::string_vi
            "</uri><key>GetTexture</key><uri>" + texture_url +
            "</uri><key>ViewerAsset</key><uri>" + asset_url +
            "</uri><key>EnvironmentSettings</key><uri>" + environment_url +
+           "</uri><key>UploadBakedTexture</key><uri>" + baked_upload_url +
            "</uri><key>FetchInventoryDescendents2</key><uri>" + inventory_url +
            "</uri><key>FetchInventory2</key><uri>" + inventory_items_url + "</uri></map></llsd>";
 }
@@ -60,6 +64,24 @@ std::string environment_settings_xml(std::string_view region_id) {
            "</map></map>"
            "<map><key>blurMultiplier</key><real>0.04</real></map>"
            "</array></llsd>";
+}
+
+std::string baked_texture_upload_xml(std::string_view uploader) {
+    return "<?xml version=\"1.0\"?><llsd><map><key>state</key><string>upload</string>"
+           "<key>uploader</key><uri>" + xml_escape(uploader) + "</uri></map></llsd>";
+}
+
+std::string baked_texture_complete_xml(std::string_view asset_id) {
+    return "<?xml version=\"1.0\"?><llsd><map><key>state</key><string>complete</string>"
+           "<key>new_asset</key><uuid>" + xml_escape(asset_id) + "</uuid></map></llsd>";
+}
+
+std::string baked_texture_asset_id(std::span<const std::byte> content) {
+    auto digest = crypto::sha256_hex(content);
+    digest[12] = '4';
+    digest[16] = '8';
+    return digest.substr(0, 8) + '-' + digest.substr(8, 4) + '-' + digest.substr(12, 4) + '-' +
+           digest.substr(16, 4) + '-' + digest.substr(20, 12);
 }
 
 } // namespace homeworldz::viewer

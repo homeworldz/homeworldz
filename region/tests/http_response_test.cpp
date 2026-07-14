@@ -2,6 +2,7 @@
 #include "homeworldz/http_response.h"
 #include "homeworldz/viewer_capabilities.h"
 
+#include <array>
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -126,6 +127,7 @@ int main() {
     passed &= contains(seed, "<key>GetTexture</key><uri>http://region.example:42001/caps/texture/session-id</uri>");
     passed &= contains(seed, "<key>ViewerAsset</key><uri>http://region.example:42001/caps/assets/session-id</uri>");
     passed &= contains(seed, "<key>EnvironmentSettings</key><uri>http://region.example:42001/caps/environment/session-id</uri>");
+    passed &= contains(seed, "<key>UploadBakedTexture</key><uri>http://region.example:42001/caps/upload-baked/session-id</uri>");
     passed &= contains(seed, "<key>FetchInventoryDescendents2</key><uri>http://grid.example:42000/caps/inventory/descendents/session-id</uri>");
     passed &= contains(seed, "<key>FetchInventory2</key><uri>http://grid.example:42000/caps/inventory/items/session-id</uri>");
     const auto event = homeworldz::viewer::event_queue_xml(7,
@@ -142,6 +144,16 @@ int main() {
     passed &= contains(environment, "<real>0</real><string>HomeWorldz Default</string>");
     passed &= contains(environment, "<key>gamma</key>");
     passed &= contains(environment, "<key>blurMultiplier</key><real>0.04</real>");
+    const auto upload = homeworldz::viewer::baked_texture_upload_xml(
+        "http://region.example:42001/caps/upload-baked-data/session&amp;id/7");
+    passed &= contains(upload, "<key>state</key><string>upload</string>");
+    passed &= contains(upload, "session&amp;amp;id/7");
+    const std::array baked_content{std::byte{1}, std::byte{2}, std::byte{3}};
+    const auto baked_id = homeworldz::viewer::baked_texture_asset_id(baked_content);
+    passed &= baked_id.size() == 36 && baked_id[14] == '4' && baked_id[19] == '8';
+    const auto complete = homeworldz::viewer::baked_texture_complete_xml(baked_id);
+    passed &= contains(complete, "<key>state</key><string>complete</string>");
+    passed &= contains(complete, "<key>new_asset</key><uuid>" + baked_id + "</uuid>");
 
     const auto unsafe_id = homeworldz::http::response_for(
         "GET /ping HTTP/1.1\r\nX-Request-ID: unsafe value\r\n\r\n");

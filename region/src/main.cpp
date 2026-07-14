@@ -205,6 +205,22 @@ std::optional<std::pair<std::string, std::string>> viewer_asset_request(std::str
     return std::pair{std::string(session), std::string(asset)};
 }
 
+std::optional<std::pair<std::string, std::string>> baked_upload_data_request(std::string_view path) {
+    constexpr std::string_view prefix = "/caps/upload-baked-data/";
+    if (!path.starts_with(prefix)) return std::nullopt;
+    const auto separator = path.find('/', prefix.size());
+    if (separator == std::string_view::npos) return std::nullopt;
+    const auto session = path.substr(prefix.size(), separator - prefix.size());
+    const auto token = path.substr(separator + 1);
+    if (session.empty() || token.empty() || token.find('/') != std::string_view::npos) return std::nullopt;
+    return std::pair{std::string(session), std::string(token)};
+}
+
+std::string_view http_request_body(std::string_view request) {
+    const auto separator = request.find("\r\n\r\n");
+    return separator == std::string_view::npos ? std::string_view{} : request.substr(separator + 4);
+}
+
 std::string simulator_endpoint(std::string_view public_endpoint, int viewer_port) {
     auto authority = public_endpoint;
     const auto scheme = authority.find("://");
@@ -387,7 +403,14 @@ int main() {
                         environment_session = capability_session(response.path, "/caps/environment/");
                     const bool environment_settings = !environment_session.empty();
                     if (environment_settings) session_id = environment_session;
-                    if (seed || event_queue || texture || viewer_asset || environment_settings) {
+                    const auto baked_upload_session =
+                        capability_session(response.path, "/caps/upload-baked/");
+                    const bool baked_upload = !baked_upload_session.empty();
+                    if (baked_upload) session_id = baked_upload_session;
+                    const auto baked_upload_data = baked_upload_data_request(response.path);
+                    if (baked_upload_data) session_id = baked_upload_data->first;
+                    if (seed || event_queue || texture || viewer_asset || environment_settings ||
+                        baked_upload || baked_upload_data) {
                         bool authorized = false;
                         const auto expected_method = texture || viewer_asset || environment_settings ? "GET" : "POST";
                         if (response.method == expected_method && registration && viewer_grid) {
@@ -443,6 +466,32 @@ int main() {
                             response = homeworldz::http::response_for_content(
                                 request, 200, "application/llsd+xml",
                                 homeworldz::viewer::environment_settings_xml(registration->region_id()));
+                        } else if (authorized && baked_upload) {
+                            static std::atomic<std::uint64_t> upload_id{0};
+                            auto base = region_public_endpoint;
+                            while (!base.empty() && base.back() == '/') base.pop_back();
+                            const auto uploader = base + "/caps/upload-baked-data/" + session_id + '/' +
+                                                  std::to_string(++upload_id);
+                            response = homeworldz::http::response_for_content(
+                                request, 200, "application/llsd+xml",
+                                homeworldz::viewer::baked_texture_upload_xml(uploader));
+                        } else if (authorized && baked_upload_data) {
+                            const auto body = http_request_body(request);
+                            if (body.empty()) {
+                                response = homeworldz::http::response_for_content(
+                                    request, 400, "application/llsd+xml", "<llsd><undef/></llsd>");
+                            } else {
+                                const auto content = std::span(
+                                    reinterpret_cast<const std::byte*>(body.data()), body.size());
+                                const auto asset_id = homeworldz::viewer::baked_texture_asset_id(content);
+                                storage->store_asset(asset_id, content);
+                                response = homeworldz::http::response_for_content(
+                                    request, 200, "application/llsd+xml",
+                                    homeworldz::viewer::baked_texture_complete_xml(asset_id));
+                                std::cout << "{\"level\":\"info\",\"message\":\"baked texture stored\","
+                                             "\"assetId\":" << homeworldz::api::json_string(asset_id)
+                                          << ",\"bytes\":" << body.size() << "}" << std::endl;
+                            }
                         } else {
                             response = homeworldz::http::response_for_content(
                                 request, response.method == expected_method ? 404 : 405,
