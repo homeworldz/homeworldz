@@ -1,9 +1,11 @@
 package httpapi
 
 import (
+	"bytes"
 	"encoding/xml"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 )
@@ -54,5 +56,15 @@ func TestViewerLogo(t *testing.T) {
 	if response.Code != http.StatusOK || response.Header().Get("Content-Type") != "image/svg+xml; charset=utf-8" ||
 		!strings.Contains(response.Body.String(), "<svg") {
 		t.Fatalf("unexpected logo response: %d %q", response.Code, response.Body.String())
+	}
+}
+
+func TestEmbeddedViewerLogoMatchesProjectLogo(t *testing.T) {
+	projectLogo, err := os.ReadFile("../../../homeworldz.svg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(homeworldzLogo, projectLogo) {
+		t.Fatal("embedded viewer logo differs from the project logo")
 	}
 }
