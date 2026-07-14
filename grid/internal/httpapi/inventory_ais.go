@@ -68,14 +68,36 @@ func (a *API) createAISInventoryFolder(w http.ResponseWriter, r *http.Request, u
 }
 
 func (a *API) updateAISInventoryFolder(w http.ResponseWriter, r *http.Request, userID, folderID string) {
-	request, err := parseInventoryFolderMutationRequest(http.MaxBytesReader(w, r.Body, 64*1024), "item_id")
-	if err != nil || request.ID != folderID || !validUUID(request.ParentID) || request.Type != -1 {
+	request, seen, err := decodeInventoryFolderMutationRequest(http.MaxBytesReader(w, r.Body, 64*1024), "item_id")
+	if err != nil || !seen["name"] || (seen["item_id"] && request.ID != folderID) ||
+		(seen["parent_id"] && !validUUID(request.ParentID)) || (seen["type"] && request.Type != -1) {
 		writeLLSDError(w, http.StatusBadRequest, "invalid AIS inventory folder update")
 		return
 	}
+	folders, err := a.inventory.ListFolders(r.Context(), userID)
+	if err != nil {
+		writeLLSDError(w, http.StatusServiceUnavailable, "AIS inventory folder could not be loaded")
+		return
+	}
+	var existing inventory.Folder
+	for _, folder := range folders {
+		if folder.ID == folderID {
+			existing = folder
+			break
+		}
+	}
+	if existing.ID == "" {
+		writeLLSDError(w, http.StatusNotFound, "AIS inventory folder was not found")
+		return
+	}
+	if seen["parent_id"] && request.ParentID != existing.ParentID {
+		writeLLSDError(w, http.StatusBadRequest, "moving AIS inventory folders is not supported")
+		return
+	}
+	existing.Name = request.Name
 	folder, err := a.inventory.UpdateFolder(r.Context(), inventory.Folder{
-		ID: request.ID, OwnerUserID: userID, ParentID: request.ParentID,
-		Name: request.Name, TypeDefault: request.Type,
+		ID: existing.ID, OwnerUserID: userID, ParentID: existing.ParentID,
+		Name: existing.Name, TypeDefault: existing.TypeDefault,
 	})
 	if writeAISFolderError(w, err) {
 		return

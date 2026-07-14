@@ -296,6 +296,17 @@ func parseCreateInventoryFolderRequest(reader io.Reader) (createInventoryFolderC
 }
 
 func parseInventoryFolderMutationRequest(reader io.Reader, idKey string) (createInventoryFolderCapabilityRequest, error) {
+	request, seen, err := decodeInventoryFolderMutationRequest(reader, idKey)
+	if err != nil {
+		return request, err
+	}
+	if !seen[idKey] || !seen["parent_id"] || !seen["name"] || !seen["type"] {
+		return request, errors.New("inventory folder request is incomplete")
+	}
+	return request, nil
+}
+
+func decodeInventoryFolderMutationRequest(reader io.Reader, idKey string) (createInventoryFolderCapabilityRequest, map[string]bool, error) {
 	decoder := xml.NewDecoder(reader)
 	var request createInventoryFolderCapabilityRequest
 	var key string
@@ -307,7 +318,7 @@ func parseInventoryFolderMutationRequest(reader io.Reader, idKey string) (create
 			break
 		}
 		if err != nil {
-			return request, err
+			return request, seen, err
 		}
 		start, ok := token.(xml.StartElement)
 		if !ok {
@@ -319,15 +330,12 @@ func parseInventoryFolderMutationRequest(reader io.Reader, idKey string) (create
 		}
 		if start.Name.Local == "key" {
 			if err := decoder.DecodeElement(&key, &start); err != nil {
-				return request, err
+				return request, seen, err
 			}
 			continue
 		}
 		if key == "" {
 			continue
-		}
-		if seen[key] {
-			return request, errors.New("inventory folder request repeats a field")
 		}
 		var value string
 		if start.Name.Local != "uuid" && start.Name.Local != "string" && start.Name.Local != "integer" {
@@ -335,10 +343,17 @@ func parseInventoryFolderMutationRequest(reader io.Reader, idKey string) (create
 			continue
 		}
 		if err := decoder.DecodeElement(&value, &start); err != nil {
-			return request, err
+			return request, seen, err
 		}
 		value = strings.TrimSpace(value)
-		switch key {
+		normalizedKey := key
+		if key == "type_default" {
+			normalizedKey = "type"
+		}
+		if seen[normalizedKey] {
+			return request, seen, errors.New("inventory folder request repeats a field")
+		}
+		switch normalizedKey {
 		case idKey:
 			request.ID = value
 		case "parent_id":
@@ -348,19 +363,19 @@ func parseInventoryFolderMutationRequest(reader io.Reader, idKey string) (create
 		case "type":
 			request.Type, err = strconv.Atoi(value)
 			if err != nil {
-				return request, err
+				return request, seen, err
 			}
 		default:
 			key = ""
 			continue
 		}
-		seen[key] = true
+		seen[normalizedKey] = true
 		key = ""
 	}
-	if !sawLLSD || !seen[idKey] || !seen["parent_id"] || !seen["name"] || !seen["type"] {
-		return request, errors.New("inventory folder request is incomplete")
+	if !sawLLSD {
+		return request, seen, errors.New("inventory folder request is not LLSD")
 	}
-	return request, nil
+	return request, seen, nil
 }
 
 func inventoryItemXML(item inventory.Item) string {

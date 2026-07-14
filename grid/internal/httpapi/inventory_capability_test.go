@@ -108,7 +108,7 @@ func TestCreateInventoryFolderCapability(t *testing.T) {
 	body := `<?xml version="1.0"?><llsd><map>` +
 		`<key>folder_id</key><uuid>` + folderID + `</uuid>` +
 		`<key>parent_id</key><uuid>` + folders[0].ID + `</uuid>` +
-		`<key>type</key><integer>-1</integer><key>name</key><string>New Folder</string>` +
+		`<key>type_default</key><integer>-1</integer><key>name</key><string>New Folder</string>` +
 		`</map></llsd>`
 	r := httptest.NewRequest(http.MethodPost, "/caps/inventory/create-folder/"+session.ID,
 		bytes.NewBufferString(body))
@@ -161,11 +161,9 @@ func TestAISCreateAndRenameInventoryFolder(t *testing.T) {
 		"<key>_created_categories</key><array><uuid>"+created.ID+"</uuid>") {
 		t.Fatalf("created folder = %#v, response = %s", created, createResponse.Body.String())
 	}
+	// Firestorm sends category renames as a partial AIS update containing only the changed name.
 	updateBody := `<?xml version="1.0"?><llsd><map>` +
-		`<key>item_id</key><uuid>` + created.ID + `</uuid>` +
-		`<key>parent_id</key><uuid>` + created.ParentID + `</uuid>` +
-		`<key>type</key><integer>-1</integer><key>name</key><string>Projects</string>` +
-		`</map></llsd>`
+		`<key>name</key><string>Projects</string></map></llsd>`
 	updateRequest := httptest.NewRequest(http.MethodPatch, base+"/category/"+created.ID,
 		bytes.NewBufferString(updateBody))
 	updateResponse := httptest.NewRecorder()
