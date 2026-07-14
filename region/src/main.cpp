@@ -366,7 +366,9 @@ std::string object_asset_json(const homeworldz::scene::Entity& entity) {
         std::to_string(entity.scale.x) + ',' + std::to_string(entity.scale.y) + ',' +
         std::to_string(entity.scale.z) + "],\"rotation\":[" +
         std::to_string(entity.rotation.x) + ',' + std::to_string(entity.rotation.y) + ',' +
-        std::to_string(entity.rotation.z) + "],\"material\":" + std::to_string(entity.material) +
+        std::to_string(entity.rotation.z) + "],\"description\":" +
+        homeworldz::api::json_string(entity.description) +
+        ",\"material\":" + std::to_string(entity.material) +
         ",\"basePermissions\":" + std::to_string(entity.base_permissions) +
         ",\"ownerPermissions\":" + std::to_string(entity.owner_permissions) +
         ",\"groupPermissions\":" + std::to_string(entity.group_permissions) +
@@ -391,6 +393,7 @@ std::optional<homeworldz::viewer::ObjectProperties> object_properties_from_entit
     properties.next_owner_permissions = entity.next_owner_permissions;
     properties.creation_date = entity.creation_date;
     properties.name = entity.name;
+    properties.description = entity.description;
     return properties;
 }
 
@@ -1367,6 +1370,56 @@ int main() {
                             if (persisted) {
                                 std::cout << "{\"level\":\"info\",\"message\":\"primitive names updated\",\"count\":"
                                           << original_names.size() << "}" << std::endl;
+                            }
+                        }
+                        const auto object_description =
+                            homeworldz::viewer::decode_object_description(packet->payload);
+                        if (object_description && object_description->agent_id == identity->agent_id &&
+                            object_description->session_id == identity->session_id) {
+                            std::unordered_map<homeworldz::scene::EntityId, std::string> original_descriptions;
+                            std::unordered_set<homeworldz::scene::EntityId> requested_entities;
+                            const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
+                            for (const auto& update : object_description->objects) {
+                                auto* entity = scene.find(update.local_id);
+                                if (!entity) continue;
+                                requested_entities.insert(entity->id);
+                                if (entity->owner_id != user_id ||
+                                    (entity->owner_permissions & homeworldz::scene::permission_modify) == 0)
+                                    continue;
+                                original_descriptions.try_emplace(entity->id, entity->description);
+                                entity->description = update.description;
+                            }
+                            bool persisted = false;
+                            if (!original_descriptions.empty()) {
+                                try {
+                                    storage->save_snapshot(scene);
+                                    persisted = true;
+                                } catch (const std::exception& error) {
+                                    for (const auto& [entity_id, original_description] : original_descriptions) {
+                                        if (auto* entity = scene.find(entity_id))
+                                            entity->description = original_description;
+                                    }
+                                    std::cout << "{\"level\":\"error\",\"message\":\"primitive description persistence failed\",\"error\":"
+                                              << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+                                }
+                            }
+                            std::vector<homeworldz::viewer::ObjectProperties> properties;
+                            properties.reserve(requested_entities.size());
+                            for (const auto entity_id : requested_entities) {
+                                if (const auto* entity = scene.find(entity_id)) {
+                                    if (const auto current = object_properties_from_entity(*entity))
+                                        properties.push_back(*current);
+                                }
+                            }
+                            auto response = homeworldz::viewer::encode_object_properties(properties);
+                            if (!response.empty()) {
+                                if (const auto outgoing = circuits.send(
+                                        endpoint, std::move(response), true, now, true))
+                                    static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
+                            }
+                            if (persisted) {
+                                std::cout << "{\"level\":\"info\",\"message\":\"primitive descriptions updated\",\"count\":"
+                                          << original_descriptions.size() << "}" << std::endl;
                             }
                         }
                         const auto object_add = homeworldz::viewer::decode_object_add(packet->payload);

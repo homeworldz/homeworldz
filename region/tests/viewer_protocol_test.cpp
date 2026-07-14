@@ -232,6 +232,19 @@ bool message_codecs() {
     for (const char value : std::string("Prim1\0", 6))
         object_name_payload.push_back(static_cast<std::byte>(value));
     const auto object_name = decode_object_name(object_name_payload);
+    auto object_description_payload = bytes({0xff, 0xff, 0x00, 0x6c});
+    object_description_payload.insert(
+        object_description_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
+    object_description_payload.insert(
+        object_description_payload.end(), expected.session_id.begin(), expected.session_id.end());
+    const std::string object_description_text = "Tall rotated box";
+    object_description_payload.insert(object_description_payload.end(),
+        {std::byte{1}, std::byte{0x78}, std::byte{0x56}, std::byte{0x34}, std::byte{0x12},
+         static_cast<std::byte>(object_description_text.size() + 1)});
+    for (const char value : object_description_text)
+        object_description_payload.push_back(static_cast<std::byte>(value));
+    object_description_payload.push_back(std::byte{});
+    const auto object_description = decode_object_description(object_description_payload);
     auto family_payload = bytes({0xff, 0x05});
     family_payload.insert(family_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
     family_payload.insert(family_payload.end(), expected.session_id.begin(), expected.session_id.end());
@@ -344,6 +357,11 @@ bool message_codecs() {
            object_name && object_name->agent_id == expected.agent_id &&
            object_name->session_id == expected.session_id && object_name->objects.size() == 1 &&
            object_name->objects[0].local_id == 0x12345678 && object_name->objects[0].name == "Prim1" &&
+           object_description && object_description->agent_id == expected.agent_id &&
+           object_description->session_id == expected.session_id &&
+           object_description->objects.size() == 1 &&
+           object_description->objects[0].local_id == 0x12345678 &&
+           object_description->objects[0].description == object_description_text &&
            family && family->request_flags == 0x01020304 && family->object_id == expected.agent_id &&
            encoded_properties.size() > 180 && encoded_properties[0] == std::byte{0xff} &&
            encoded_properties[1] == std::byte{0x09} && encoded_properties[2] == std::byte{1} &&

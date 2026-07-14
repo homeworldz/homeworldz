@@ -29,6 +29,7 @@ int main() {
         primitive->creator_id = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
         primitive->scale = {0.5, 0.75, 1.25};
         primitive->rotation = {0.25, 0.5, 0.125};
+        primitive->description = "storage test primitive";
         primitive->material = 4;
         std::filesystem::create_directories(path);
         sqlite3* legacy_database = nullptr;
@@ -77,7 +78,8 @@ int main() {
                 restored_second->base_permissions != 0x0009e000 ||
                 restored_second->next_owner_permissions != 0x0008e000 ||
                 restored_second->scale.y != 0.75 || restored_second->rotation.x != 0.25 ||
-                restored_second->rotation.y != 0.5 || restored_second->material != 4 ||
+                restored_second->rotation.y != 0.5 ||
+                restored_second->description != "storage test primitive" || restored_second->material != 4 ||
                 restored.create("next") != 3) return 1;
 
             const std::array content{std::byte{0x00}, std::byte{0x7f}, std::byte{0xff}, std::byte{0x42}};

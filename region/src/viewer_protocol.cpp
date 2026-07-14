@@ -54,6 +54,8 @@ constexpr std::array<std::byte, 2> multiple_object_update_id{
     std::byte{0xff}, std::byte{0x02}};
 constexpr std::array<std::byte, 4> object_name_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x6b}};
+constexpr std::array<std::byte, 4> object_description_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x6c}};
 constexpr std::array<std::byte, 2> request_object_properties_family_id{
     std::byte{0xff}, std::byte{0x05}};
 constexpr std::array<std::byte, 4> uuid_name_request_id{
@@ -795,6 +797,36 @@ std::optional<ObjectName> decode_object_name(std::span<const std::byte> payload)
             payload[offset + encoded_size - 1] != std::byte{})
             return std::nullopt;
         update.name.assign(reinterpret_cast<const char*>(payload.data() + offset), encoded_size - 1);
+        offset += encoded_size;
+        result.objects.push_back(std::move(update));
+    }
+    if (offset != payload.size()) return std::nullopt;
+    return result;
+}
+
+std::optional<ObjectDescription> decode_object_description(std::span<const std::byte> payload) {
+    constexpr std::size_t header_size = 37;
+    if (payload.size() < header_size ||
+        !std::equal(object_description_id.begin(), object_description_id.end(), payload.begin()))
+        return std::nullopt;
+    ObjectDescription result;
+    std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
+    const auto count = std::to_integer<std::size_t>(payload[36]);
+    if (count == 0) return std::nullopt;
+    result.objects.reserve(count);
+    std::size_t offset = header_size;
+    for (std::size_t index = 0; index < count; ++index) {
+        if (offset + 5 > payload.size()) return std::nullopt;
+        ObjectDescriptionUpdate update;
+        update.local_id = read_le_u32(payload, offset);
+        const auto encoded_size = std::to_integer<std::size_t>(payload[offset + 4]);
+        offset += 5;
+        if (encoded_size == 0 || encoded_size > 128 || offset + encoded_size > payload.size() ||
+            payload[offset + encoded_size - 1] != std::byte{})
+            return std::nullopt;
+        update.description.assign(
+            reinterpret_cast<const char*>(payload.data() + offset), encoded_size - 1);
         offset += encoded_size;
         result.objects.push_back(std::move(update));
     }
