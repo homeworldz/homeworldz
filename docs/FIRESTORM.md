@@ -245,3 +245,8 @@ The terrain-texture extension passed in the same Firestorm version on
 2026-07-14. The viewer showed all four entries beneath
 `Library / Textures / Terrain` and opened the bundled JPEG2000 asset for visual
 inspection without a missing-asset or decode error.
+
+The shaped default terrain passed on 2026-07-14. Firestorm reconstructed the
+user-supplied 256-by-256 heightmap with the intended island/channel geometry,
+correct water separation, and visible blending among the four advertised
+terrain textures. No manual terrain or texture refresh was required.
