@@ -51,6 +51,17 @@ int main() {
     if (!session || session->agent_id != "cccccccc-cccc-4ccc-8ccc-cccccccccccc" ||
         session->circuit_code != 123456 || session->destination_region_id != "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" ||
         transport->requests.back().method != "GET") return 1;
+    homeworldz::grid::ViewerSessionCache cache(client, std::chrono::seconds(5));
+    const auto requests_before_cache = transport->requests.size();
+    const auto cached = cache.validate(session->session_id, started);
+    if (!cached || transport->requests.size() != requests_before_cache + 1) return 1;
+    if (!cache.validate(session->session_id, started + std::chrono::seconds(4)) ||
+        transport->requests.size() != requests_before_cache + 1) return 1;
+    if (!cache.validate(session->session_id, started + std::chrono::seconds(5)) ||
+        transport->requests.size() != requests_before_cache + 2) return 1;
+    cache.invalidate(session->session_id);
+    if (!cache.validate(session->session_id, started + std::chrono::seconds(6)) ||
+        transport->requests.size() != requests_before_cache + 3) return 1;
     if (!client.update_presence(session->agent_id, session->destination_region_id) ||
         transport->requests.back().method != "PUT" ||
         transport->requests.back().path != "/api/v1/presence/" + session->agent_id) return 1;

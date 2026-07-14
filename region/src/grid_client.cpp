@@ -174,6 +174,22 @@ bool Client::revoke_viewer_session(std::string_view session_id) {
     return status == 204 || status == 404;
 }
 
+std::optional<ViewerSession> ViewerSessionCache::validate(
+    std::string_view session_id, std::chrono::steady_clock::time_point now) {
+    const auto key = std::string(session_id);
+    if (const auto found = entries_.find(key); found != entries_.end()) {
+        if (now < found->second.expires_at) return found->second.session;
+        entries_.erase(found);
+    }
+    auto session = client_.validate_viewer_session(session_id);
+    if (session) entries_.insert_or_assign(key, Entry{*session, now + ttl_});
+    return session;
+}
+
+void ViewerSessionCache::invalidate(std::string_view session_id) {
+    entries_.erase(std::string(session_id));
+}
+
 bool Client::update_presence(std::string_view user_id, std::string_view region_id) {
     const auto body = "{\"regionId\":" + api::json_string(region_id) + '}';
     return transport_->send("PUT", "/api/v1/presence/" + std::string(user_id), body).status_code == 200;

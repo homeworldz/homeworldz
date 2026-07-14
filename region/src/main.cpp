@@ -258,6 +258,7 @@ int main() {
         "HOMEWORLDZ_GRID_PUBLIC_URL", environment_value("HOMEWORLDZ_GRID_URL", "http://localhost:42000"));
     std::unique_ptr<homeworldz::grid::RegistrationLifecycle> registration;
     std::unique_ptr<homeworldz::grid::Client> viewer_grid;
+    std::unique_ptr<homeworldz::grid::ViewerSessionCache> viewer_sessions;
     const auto service_token = environment_value("HOMEWORLDZ_GRID_SERVICE_TOKEN");
     if (!service_token.empty()) {
         try {
@@ -270,6 +271,7 @@ int main() {
                 environment_value("HOMEWORLDZ_GRID_URL", "http://localhost:42000"), service_token);
             homeworldz::grid::Client client(transport);
             viewer_grid = std::make_unique<homeworldz::grid::Client>(std::move(transport));
+            viewer_sessions = std::make_unique<homeworldz::grid::ViewerSessionCache>(*viewer_grid);
             registration = std::make_unique<homeworldz::grid::RegistrationLifecycle>(
                 std::move(client), std::move(settings));
             if (!registration->start(std::chrono::steady_clock::now())) {
@@ -355,10 +357,10 @@ int main() {
                       << "}" << std::endl;
             return false;
         };
-        if (!registration || !viewer_grid) return reject("region_not_registered");
+        if (!registration || !viewer_sessions) return reject("region_not_registered");
         std::optional<homeworldz::grid::ViewerSession> session;
         try {
-            session = viewer_grid->validate_viewer_session(homeworldz::viewer::format_uuid(request.session_id));
+            session = viewer_sessions->validate(homeworldz::viewer::format_uuid(request.session_id));
         } catch (const std::exception& error) {
             std::cout << "{\"level\":\"error\",\"message\":\"viewer session validation failed\",\"error\":"
                       << homeworldz::api::json_string(error.what()) << "}" << std::endl;
@@ -423,11 +425,13 @@ int main() {
                         baked_upload || baked_upload_data) {
                         bool authorized = false;
                         std::string authorized_agent_id;
+                        std::optional<homeworldz::grid::ViewerSession> authorized_session;
                         const auto expected_method = texture || viewer_asset || environment_settings ? "GET" : "POST";
-                        if (response.method == expected_method && registration && viewer_grid) {
-                            const auto session = viewer_grid->validate_viewer_session(session_id);
-                            authorized = session && session->destination_region_id == registration->region_id();
-                            if (authorized) authorized_agent_id = session->agent_id;
+                        if (response.method == expected_method && registration && viewer_sessions) {
+                            authorized_session = viewer_sessions->validate(session_id);
+                            authorized = authorized_session &&
+                                         authorized_session->destination_region_id == registration->region_id();
+                            if (authorized) authorized_agent_id = authorized_session->agent_id;
                         }
                         if (authorized && seed) {
                             response = homeworldz::http::response_for_content(
@@ -438,10 +442,9 @@ int main() {
                             static std::atomic<std::uint64_t> event_id{0};
                             std::optional<homeworldz::viewer::EstablishAgentCommunication> event;
                             if (established_events.insert(session_id).second) {
-                                const auto session = viewer_grid->validate_viewer_session(session_id);
-                                if (session) {
+                                if (authorized_session) {
                                     event = homeworldz::viewer::EstablishAgentCommunication{
-                                        session->agent_id,
+                                        authorized_session->agent_id,
                                         simulator_endpoint(region_public_endpoint, configured_viewer_port()),
                                         region_public_endpoint + "/caps/seed/" + session_id};
                                 }
@@ -581,6 +584,7 @@ int main() {
                                 static_cast<void>(viewer_grid->clear_presence(user_id));
                                 static_cast<void>(viewer_grid->revoke_viewer_session(session_id));
                             }
+                            if (viewer_sessions) viewer_sessions->invalidate(session_id);
                             avatars.erase(endpoint);
                             handshake_replies.erase(endpoint);
                             established_events.erase(session_id);

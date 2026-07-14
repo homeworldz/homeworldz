@@ -6,6 +6,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 
 namespace homeworldz::grid {
@@ -53,6 +54,26 @@ public:
 
 private:
     std::shared_ptr<Transport> transport_;
+};
+
+class ViewerSessionCache {
+public:
+    explicit ViewerSessionCache(Client& client,
+                                std::chrono::steady_clock::duration ttl = std::chrono::seconds(5))
+        : client_(client), ttl_(ttl) {}
+    std::optional<ViewerSession> validate(
+        std::string_view session_id,
+        std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now());
+    void invalidate(std::string_view session_id);
+
+private:
+    struct Entry {
+        ViewerSession session;
+        std::chrono::steady_clock::time_point expires_at;
+    };
+    Client& client_;
+    std::chrono::steady_clock::duration ttl_;
+    std::unordered_map<std::string, Entry> entries_;
 };
 
 class RegistrationLifecycle {
