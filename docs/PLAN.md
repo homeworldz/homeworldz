@@ -53,7 +53,12 @@ than runtime dependencies.
 
 ## Later Milestones
 
-- [ ] Inventory metadata and viewer inventory capabilities.
+- [x] Add inventory skeleton/item fetch capabilities and seed a valid default
+  body-parts outfit.
+- [x] Add automatic legacy avatar bake upload, UDP delivery, and persistent
+  wearable-hash cache lookup.
+- [ ] Add general inventory mutation, folder management, and non-system item
+  creation workflows.
 - [ ] Asset upload, authorization, replication, and federation lookup.
 - [ ] Object rez, edit, take, delete, permissions, and persistence.
 - [ ] Script runtime boundary and implementation selection.

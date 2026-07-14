@@ -116,6 +116,21 @@ UUIDs are validated, resolved through the region's SQLite mapping, read from
 the immutable SHA-256 blob store with hash verification, and returned as
 `image/x-j2c`; absent or corrupt mappings return `404`.
 
+The grid supplies the system inventory skeleton, item metadata, four required
+default body parts, and Current Outfit Folder links. The region imports the
+bundled Halcyon-compatible wearable and source-texture assets and serves them
+through `ViewerAsset`.
+
+For an uncached outfit, the region answers `AgentCachedTexture` with explicit
+misses. Firestorm locally composites the five legacy bakes and uploads them
+through the authenticated `UploadBakedTexture` capability. The region stores
+the JPEG2000 assets with the uploader's creator UUID and serves Firestorm's
+host-bake refetches through reliable, throttled UDP `ImageData` and
+`ImagePacket` transfers. The final `AgentSetAppearance` associates each
+wearable hash and texture index with its baked asset in persistent SQLite.
+Later logins return only exact hash/index matches; changed outfit inputs remain
+misses and trigger a new bake.
+
 The pinned viewer source constructs the request in
 [`lllogininstance.cpp`](https://github.com/FirestormViewer/phoenix-firestorm/blob/10bd3c9f930c76e1427ddd4ecece6cdf36b4406d/indra/newview/lllogininstance.cpp#L155),
 consumes the circuit response in
@@ -180,7 +195,10 @@ launcher run restored the scene and reconnected successfully; the avatar
 returned to its persisted position of approximately `(140.144, 142.803, 25)`.
 Repeated pre-fix avatar entities were consolidated to the one persisted entity.
 
-Default wearable assets remain deferred with the later inventory milestone, so
-the smoke avatar is a cloud and Firestorm may report missing shape, hair, eyes,
-skin, or per-user settings. These limitations do not block the transport,
-simulation, persistence, or reconnect acceptance covered by this milestone.
+The follow-on appearance acceptance passed on 2026-07-13. Firestorm fetched and
+wore the four required default body parts, automatically created and uploaded
+the five legacy baked textures without a manual rebake, refetched those bakes
+over simulator UDP, and rendered the avatar. A subsequent clean launcher run
+returned five server-side wearable-cache hits, zero misses, and made no baked
+upload requests. Firestorm displayed the avatar immediately and logout again
+cleared presence and revoked the viewer session normally.
