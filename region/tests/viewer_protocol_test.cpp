@@ -245,6 +245,16 @@ bool message_codecs() {
         object_description_payload.push_back(static_cast<std::byte>(value));
     object_description_payload.push_back(std::byte{});
     const auto object_description = decode_object_description(object_description_payload);
+    auto object_permissions_payload = bytes({0xff, 0xff, 0x00, 0x69});
+    object_permissions_payload.insert(
+        object_permissions_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
+    object_permissions_payload.insert(
+        object_permissions_payload.end(), expected.session_id.begin(), expected.session_id.end());
+    object_permissions_payload.insert(object_permissions_payload.end(),
+        {std::byte{}, std::byte{1}, std::byte{0x78}, std::byte{0x56},
+         std::byte{0x34}, std::byte{0x12}, std::byte{0x08}, std::byte{1},
+         std::byte{}, std::byte{}, std::byte{0x08}, std::byte{}});
+    const auto object_permissions = decode_object_permissions(object_permissions_payload);
     auto family_payload = bytes({0xff, 0x05});
     family_payload.insert(family_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
     family_payload.insert(family_payload.end(), expected.session_id.begin(), expected.session_id.end());
@@ -362,6 +372,12 @@ bool message_codecs() {
            object_description->objects.size() == 1 &&
            object_description->objects[0].local_id == 0x12345678 &&
            object_description->objects[0].description == object_description_text &&
+           object_permissions && object_permissions->agent_id == expected.agent_id &&
+           object_permissions->session_id == expected.session_id &&
+           !object_permissions->override_permissions && object_permissions->objects.size() == 1 &&
+           object_permissions->objects[0].local_id == 0x12345678 &&
+           object_permissions->objects[0].field == 0x08 && object_permissions->objects[0].set &&
+           object_permissions->objects[0].mask == 0x00080000 &&
            family && family->request_flags == 0x01020304 && family->object_id == expected.agent_id &&
            encoded_properties.size() > 180 && encoded_properties[0] == std::byte{0xff} &&
            encoded_properties[1] == std::byte{0x09} && encoded_properties[2] == std::byte{1} &&

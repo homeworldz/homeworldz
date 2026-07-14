@@ -142,6 +142,18 @@ struct ObjectDescription : AgentMessage {
     std::vector<ObjectDescriptionUpdate> objects;
 };
 
+struct ObjectPermissionUpdate {
+    std::uint32_t local_id{};
+    std::uint8_t field{};
+    bool set{};
+    std::uint32_t mask{};
+};
+
+struct ObjectPermissions : AgentMessage {
+    bool override_permissions{};
+    std::vector<ObjectPermissionUpdate> objects;
+};
+
 struct RequestObjectPropertiesFamily : AgentMessage {
     std::uint32_t request_flags{};
     Uuid object_id{};
@@ -308,6 +320,7 @@ std::optional<ObjectSelect> decode_object_select(std::span<const std::byte> payl
 std::optional<MultipleObjectUpdate> decode_multiple_object_update(std::span<const std::byte> payload);
 std::optional<ObjectName> decode_object_name(std::span<const std::byte> payload);
 std::optional<ObjectDescription> decode_object_description(std::span<const std::byte> payload);
+std::optional<ObjectPermissions> decode_object_permissions(std::span<const std::byte> payload);
 std::optional<RequestObjectPropertiesFamily> decode_request_object_properties_family(
     std::span<const std::byte> payload);
 std::vector<std::byte> encode_object_properties(std::span<const ObjectProperties> objects);

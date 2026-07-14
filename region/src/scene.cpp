@@ -9,6 +9,52 @@
 
 namespace homeworldz::scene {
 
+bool apply_permission_update(
+    Entity& entity, std::string_view agent_id, std::uint8_t field, bool set,
+    std::uint32_t mask) {
+    if (agent_id != entity.owner_id || mask == 0) return false;
+    const auto apply = [set, mask](std::uint32_t value) {
+        return set ? value | mask : value & ~mask;
+    };
+    switch (field) {
+    case permission_field_base:
+        return false; // Reserved for a future administrator override path.
+    case permission_field_owner:
+        if ((mask & ~(permission_move | permission_modify)) != 0) return false;
+        entity.owner_permissions = apply(entity.owner_permissions) & entity.base_permissions;
+        entity.owner_permissions |= permission_move;
+        entity.group_permissions &= entity.owner_permissions;
+        entity.everyone_permissions &= entity.owner_permissions;
+        break;
+    case permission_field_group:
+        if ((mask & ~(permission_modify | permission_move | permission_copy)) != 0) return false;
+        entity.group_permissions = apply(entity.group_permissions) & entity.owner_permissions;
+        break;
+    case permission_field_everyone:
+        if ((mask & ~(permission_move | permission_copy | permission_export)) != 0) return false;
+        if (set && (mask & permission_export) != 0 &&
+            (((entity.base_permissions & permission_export) == 0) ||
+             ((entity.owner_permissions & permission_export) == 0) ||
+             ((entity.next_owner_permissions & permission_all) != permission_all)))
+            return false;
+        entity.everyone_permissions = apply(entity.everyone_permissions) & entity.owner_permissions;
+        entity.everyone_permissions &= ~permission_modify;
+        break;
+    case permission_field_next_owner:
+        if ((mask & ~(permission_modify | permission_copy | permission_transfer)) != 0) return false;
+        entity.next_owner_permissions = apply(entity.next_owner_permissions) & entity.base_permissions;
+        if (entity.next_owner_permissions != 0) entity.next_owner_permissions |= permission_move;
+        if ((entity.next_owner_permissions & permission_copy) == 0)
+            entity.next_owner_permissions |= permission_transfer;
+        if ((entity.next_owner_permissions & permission_all) != permission_all)
+            entity.everyone_permissions &= ~permission_export;
+        break;
+    default:
+        return false;
+    }
+    return true;
+}
+
 std::optional<RayIntersection> intersect_box(
     Vector3 ray_start, Vector3 ray_end, Vector3 center, Vector3 scale) {
     const std::array start{ray_start.x, ray_start.y, ray_start.z};

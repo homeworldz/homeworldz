@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -18,6 +19,12 @@ constexpr std::uint32_t permission_move = 0x00080000;
 constexpr std::uint32_t permission_all = permission_transfer | permission_modify |
     permission_copy | permission_move;
 constexpr std::uint32_t permission_creator = permission_all | permission_export;
+
+constexpr std::uint8_t permission_field_base = 0x01;
+constexpr std::uint8_t permission_field_owner = 0x02;
+constexpr std::uint8_t permission_field_group = 0x04;
+constexpr std::uint8_t permission_field_everyone = 0x08;
+constexpr std::uint8_t permission_field_next_owner = 0x10;
 
 struct Vector3 {
     double x{};
@@ -49,6 +56,10 @@ struct RayIntersection {
     Vector3 position;
     Vector3 normal;
 };
+
+bool apply_permission_update(
+    Entity& entity, std::string_view agent_id, std::uint8_t field, bool set,
+    std::uint32_t mask);
 
 std::optional<RayIntersection> intersect_box(
     Vector3 ray_start, Vector3 ray_end, Vector3 center, Vector3 scale);

@@ -1422,6 +1422,93 @@ int main() {
                                           << original_descriptions.size() << "}" << std::endl;
                             }
                         }
+                        const auto object_permissions =
+                            homeworldz::viewer::decode_object_permissions(packet->payload);
+                        if (object_permissions && object_permissions->agent_id == identity->agent_id &&
+                            object_permissions->session_id == identity->session_id) {
+                            struct PermissionState {
+                                std::uint32_t owner;
+                                std::uint32_t group;
+                                std::uint32_t everyone;
+                                std::uint32_t next_owner;
+                            };
+                            std::unordered_map<homeworldz::scene::EntityId, PermissionState> originals;
+                            std::unordered_set<homeworldz::scene::EntityId> requested_entities;
+                            const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
+                            if (!object_permissions->override_permissions) {
+                                for (const auto& update : object_permissions->objects) {
+                                    auto* entity = scene.find(update.local_id);
+                                    if (!entity) continue;
+                                    requested_entities.insert(entity->id);
+                                    const PermissionState before{
+                                        entity->owner_permissions, entity->group_permissions,
+                                        entity->everyone_permissions, entity->next_owner_permissions};
+                                    if (!homeworldz::scene::apply_permission_update(
+                                            *entity, user_id, update.field, update.set, update.mask))
+                                        continue;
+                                    const PermissionState after{
+                                        entity->owner_permissions, entity->group_permissions,
+                                        entity->everyone_permissions, entity->next_owner_permissions};
+                                    if (before.owner != after.owner || before.group != after.group ||
+                                        before.everyone != after.everyone ||
+                                        before.next_owner != after.next_owner)
+                                        originals.try_emplace(entity->id, before);
+                                }
+                            }
+                            bool persisted = false;
+                            if (!originals.empty()) {
+                                try {
+                                    storage->save_snapshot(scene);
+                                    persisted = true;
+                                } catch (const std::exception& error) {
+                                    for (const auto& [entity_id, original] : originals) {
+                                        if (auto* entity = scene.find(entity_id)) {
+                                            entity->owner_permissions = original.owner;
+                                            entity->group_permissions = original.group;
+                                            entity->everyone_permissions = original.everyone;
+                                            entity->next_owner_permissions = original.next_owner;
+                                        }
+                                    }
+                                    std::cout << "{\"level\":\"error\",\"message\":\"primitive permission persistence failed\",\"error\":"
+                                              << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+                                }
+                            }
+                            std::vector<homeworldz::viewer::ObjectProperties> properties;
+                            properties.reserve(requested_entities.size());
+                            for (const auto entity_id : requested_entities) {
+                                if (const auto* entity = scene.find(entity_id)) {
+                                    if (const auto current = object_properties_from_entity(*entity))
+                                        properties.push_back(*current);
+                                }
+                            }
+                            auto response = homeworldz::viewer::encode_object_properties(properties);
+                            if (!response.empty()) {
+                                if (const auto outgoing = circuits.send(
+                                        endpoint, std::move(response), true, now, true))
+                                    static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
+                            }
+                            if (persisted) {
+                                const auto region_handle =
+                                    (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
+                                    static_cast<std::uint32_t>(region_grid_y * 256);
+                                for (const auto& [entity_id, original] : originals) {
+                                    static_cast<void>(original);
+                                    const auto* entity = scene.find(entity_id);
+                                    if (!entity) continue;
+                                    for (const auto& [recipient_endpoint, recipient] : avatars) {
+                                        const auto object = static_object_from_entity(*entity, recipient.user_id);
+                                        if (!object) continue;
+                                        if (const auto sent = circuits.send(recipient_endpoint,
+                                                homeworldz::viewer::encode_static_object_update(
+                                                    region_handle, *object), true, now, true))
+                                            static_cast<void>(send_udp(
+                                                viewer_server, recipient_endpoint, *sent));
+                                    }
+                                }
+                                std::cout << "{\"level\":\"info\",\"message\":\"primitive permissions updated\",\"count\":"
+                                          << originals.size() << "}" << std::endl;
+                            }
+                        }
                         const auto object_add = homeworldz::viewer::decode_object_add(packet->payload);
                         if (object_add && object_add->agent_id == identity->agent_id &&
                             object_add->session_id == identity->session_id) {

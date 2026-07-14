@@ -56,6 +56,8 @@ constexpr std::array<std::byte, 4> object_name_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x6b}};
 constexpr std::array<std::byte, 4> object_description_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x6c}};
+constexpr std::array<std::byte, 4> object_permissions_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x69}};
 constexpr std::array<std::byte, 2> request_object_properties_family_id{
     std::byte{0xff}, std::byte{0x05}};
 constexpr std::array<std::byte, 4> uuid_name_request_id{
@@ -831,6 +833,36 @@ std::optional<ObjectDescription> decode_object_description(std::span<const std::
         result.objects.push_back(std::move(update));
     }
     if (offset != payload.size()) return std::nullopt;
+    return result;
+}
+
+std::optional<ObjectPermissions> decode_object_permissions(std::span<const std::byte> payload) {
+    constexpr std::size_t header_size = 38;
+    constexpr std::size_t block_size = 10;
+    if (payload.size() < header_size ||
+        !std::equal(object_permissions_id.begin(), object_permissions_id.end(), payload.begin()))
+        return std::nullopt;
+    ObjectPermissions result;
+    std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
+    const auto override_value = std::to_integer<std::uint8_t>(payload[36]);
+    if (override_value > 1) return std::nullopt;
+    result.override_permissions = override_value != 0;
+    const auto count = std::to_integer<std::size_t>(payload[37]);
+    if (count == 0 || payload.size() != header_size + count * block_size) return std::nullopt;
+    result.objects.reserve(count);
+    std::size_t offset = header_size;
+    for (std::size_t index = 0; index < count; ++index) {
+        ObjectPermissionUpdate update;
+        update.local_id = read_le_u32(payload, offset);
+        update.field = std::to_integer<std::uint8_t>(payload[offset + 4]);
+        const auto set_value = std::to_integer<std::uint8_t>(payload[offset + 5]);
+        if (set_value > 1) return std::nullopt;
+        update.set = set_value != 0;
+        update.mask = read_le_u32(payload, offset + 6);
+        result.objects.push_back(update);
+        offset += block_size;
+    }
     return result;
 }
 

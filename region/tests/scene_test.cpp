@@ -47,5 +47,33 @@ int main() {
     if (scene.size() != 1 || scene.revision() != 42 || scene.simulation_steps() != 0 ||
         restored == nullptr || restored->name != "restored" || !near(restored->position.y, 8.0)) return 1;
     if (scene.create("after restore") != 8) return 1;
+
+    homeworldz::scene::Entity permissions;
+    permissions.owner_id = "owner";
+    if (!homeworldz::scene::apply_permission_update(
+            permissions, "owner", homeworldz::scene::permission_field_everyone, true,
+            homeworldz::scene::permission_move) ||
+        permissions.everyone_permissions != homeworldz::scene::permission_move)
+        return 1;
+    if (homeworldz::scene::apply_permission_update(
+            permissions, "intruder", homeworldz::scene::permission_field_everyone, true,
+            homeworldz::scene::permission_copy) ||
+        homeworldz::scene::apply_permission_update(
+            permissions, "owner", homeworldz::scene::permission_field_base, false,
+            homeworldz::scene::permission_modify))
+        return 1;
+    if (!homeworldz::scene::apply_permission_update(
+            permissions, "owner", homeworldz::scene::permission_field_next_owner, false,
+            homeworldz::scene::permission_copy) ||
+        (permissions.next_owner_permissions & homeworldz::scene::permission_copy) != 0 ||
+        (permissions.next_owner_permissions & homeworldz::scene::permission_transfer) == 0 ||
+        (permissions.next_owner_permissions & homeworldz::scene::permission_move) == 0)
+        return 1;
+    if (!homeworldz::scene::apply_permission_update(
+            permissions, "owner", homeworldz::scene::permission_field_owner, false,
+            homeworldz::scene::permission_modify | homeworldz::scene::permission_move) ||
+        (permissions.owner_permissions & homeworldz::scene::permission_move) == 0 ||
+        (permissions.owner_permissions & homeworldz::scene::permission_modify) != 0)
+        return 1;
     return 0;
 }
