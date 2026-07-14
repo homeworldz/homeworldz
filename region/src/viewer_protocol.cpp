@@ -35,6 +35,8 @@ constexpr std::array<std::byte, 4> agent_cached_texture_response_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x81}};
 constexpr std::array<std::byte, 4> agent_set_appearance_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x54}};
+constexpr std::array<std::byte, 4> create_inventory_folder_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x11}};
 
 class BitWriter {
 public:
@@ -320,6 +322,25 @@ std::optional<AgentMessage> decode_logout_request(std::span<const std::byte> pay
     AgentMessage result;
     std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
     std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
+    return result;
+}
+
+std::optional<CreateInventoryFolder> decode_create_inventory_folder(std::span<const std::byte> payload) {
+    constexpr std::size_t fixed_size = 70;
+    if (payload.size() < fixed_size ||
+        !std::equal(create_inventory_folder_id.begin(), create_inventory_folder_id.end(), payload.begin()))
+        return std::nullopt;
+    const auto name_size = std::to_integer<std::size_t>(payload[69]);
+    if (name_size == 0 || payload.size() != fixed_size + name_size) return std::nullopt;
+    CreateInventoryFolder result;
+    std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
+    std::copy_n(payload.begin() + 36, 16, result.folder_id.begin());
+    std::copy_n(payload.begin() + 52, 16, result.parent_id.begin());
+    result.type = static_cast<std::int8_t>(std::to_integer<std::uint8_t>(payload[68]));
+    result.name.assign(reinterpret_cast<const char*>(payload.data() + fixed_size), name_size);
+    while (!result.name.empty() && result.name.back() == '\0') result.name.pop_back();
+    if (result.name.empty() || result.name.find('\0') != std::string::npos) return std::nullopt;
     return result;
 }
 

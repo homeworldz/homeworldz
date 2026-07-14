@@ -62,6 +62,12 @@ int main() {
     cache.invalidate(session->session_id);
     if (!cache.validate(session->session_id, started + std::chrono::seconds(6)) ||
         transport->requests.size() != requests_before_cache + 3) return 1;
+    if (!client.create_inventory_folder(session->agent_id,
+            "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", "Projects", -1) ||
+        transport->requests.back().path != "/api/v1/inventory/" + session->agent_id + "/folders" ||
+        transport->requests.back().body.find(R"("name":"Projects")") == std::string::npos ||
+        transport->requests.back().body.find(R"("typeDefault":-1)") == std::string::npos) return 1;
     if (!client.update_presence(session->agent_id, session->destination_region_id) ||
         transport->requests.back().method != "PUT" ||
         transport->requests.back().path != "/api/v1/presence/" + session->agent_id) return 1;

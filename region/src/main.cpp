@@ -597,6 +597,27 @@ int main() {
                                       << homeworldz::api::json_string(session_id) << "}" << std::endl;
                             continue;
                         }
+                        const auto create_folder =
+                            homeworldz::viewer::decode_create_inventory_folder(packet->payload);
+                        if (create_folder && create_folder->agent_id == identity->agent_id &&
+                            create_folder->session_id == identity->session_id) {
+                            const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
+                            const auto folder_id = homeworldz::viewer::format_uuid(create_folder->folder_id);
+                            const auto parent_id = homeworldz::viewer::format_uuid(create_folder->parent_id);
+                            bool created = false;
+                            try {
+                                created = viewer_grid && viewer_grid->create_inventory_folder(
+                                    user_id, folder_id, parent_id, create_folder->name,
+                                    static_cast<int>(create_folder->type));
+                            } catch (const std::exception& error) {
+                                std::cout << "{\"level\":\"error\",\"message\":\"inventory folder creation failed\",\"error\":"
+                                          << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+                            }
+                            std::cout << "{\"level\":" << (created ? "\"info\"" : "\"warn\"")
+                                      << ",\"message\":\"inventory folder creation "
+                                      << (created ? "completed" : "rejected") << "\",\"folderId\":"
+                                      << homeworldz::api::json_string(folder_id) << "}" << std::endl;
+                        }
                         const auto handshake_reply = homeworldz::viewer::decode_region_handshake_reply(packet->payload);
                         if (handshake_reply && handshake_reply->agent_id == identity->agent_id &&
                             handshake_reply->session_id == identity->session_id) {

@@ -49,6 +49,8 @@ public:
     bool deregister(std::string_view region_id);
     std::optional<ViewerSession> validate_viewer_session(std::string_view session_id);
     bool revoke_viewer_session(std::string_view session_id);
+    bool create_inventory_folder(std::string_view user_id, std::string_view folder_id,
+                                 std::string_view parent_id, std::string_view name, int type_default);
     bool update_presence(std::string_view user_id, std::string_view region_id);
     bool clear_presence(std::string_view user_id);
 

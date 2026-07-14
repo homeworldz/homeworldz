@@ -96,6 +96,16 @@ bool message_codecs() {
     logout_payload.insert(logout_payload.end(), expected.session_id.begin(), expected.session_id.end());
     const auto logout = decode_logout_request(logout_payload);
     const auto logout_reply = logout ? encode_logout_reply(*logout) : std::vector<std::byte>{};
+    auto create_folder_payload = bytes({0xff, 0xff, 0x01, 0x11});
+    create_folder_payload.insert(create_folder_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
+    create_folder_payload.insert(create_folder_payload.end(), expected.session_id.begin(), expected.session_id.end());
+    create_folder_payload.insert(create_folder_payload.end(), expected.session_id.begin(), expected.session_id.end());
+    create_folder_payload.insert(create_folder_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
+    create_folder_payload.push_back(std::byte{0xff});
+    create_folder_payload.push_back(std::byte{9});
+    for (const char value : std::string("Projects\0", 9))
+        create_folder_payload.push_back(static_cast<std::byte>(value));
+    const auto create_folder = decode_create_inventory_folder(create_folder_payload);
     auto cached_payload = bytes({0xff, 0xff, 0x01, 0x80});
     cached_payload.insert(cached_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
     cached_payload.insert(cached_payload.end(), expected.session_id.begin(), expected.session_id.end());
@@ -134,6 +144,10 @@ bool message_codecs() {
     return ping == bytes({1, 7, 4, 3, 2, 1}) && ping_id && *ping_id == 7 &&
            !decode_start_ping_check(bytes({1, 7})) && encode_complete_ping_check(*ping_id) == bytes({2, 7}) &&
            logout && logout->agent_id == expected.agent_id && logout->session_id == expected.session_id &&
+           create_folder && create_folder->agent_id == expected.agent_id &&
+           create_folder->session_id == expected.session_id && create_folder->folder_id == expected.session_id &&
+           create_folder->parent_id == expected.agent_id && create_folder->type == -1 &&
+           create_folder->name == "Projects" &&
            logout_reply.size() == 53 && logout_reply[3] == std::byte{0xfd} && logout_reply[36] == std::byte{1} &&
            cached && cached->serial == 7 && cached->queries.size() == 2 &&
            cached->queries[0].texture_index == 8 && cached->queries[1].texture_index == 9 &&

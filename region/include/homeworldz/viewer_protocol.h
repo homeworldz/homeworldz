@@ -45,6 +45,13 @@ struct AgentMessage {
     Uuid session_id{};
 };
 
+struct CreateInventoryFolder : AgentMessage {
+    Uuid folder_id{};
+    Uuid parent_id{};
+    std::int8_t type{-1};
+    std::string name;
+};
+
 struct CachedTextureQuery {
     Uuid cache_id{};
     std::uint8_t texture_index{};
@@ -148,6 +155,7 @@ std::vector<std::byte> encode_start_ping_check(std::uint8_t ping_id, std::uint32
 std::optional<std::uint8_t> decode_start_ping_check(std::span<const std::byte> payload);
 std::vector<std::byte> encode_complete_ping_check(std::uint8_t ping_id);
 std::optional<AgentMessage> decode_logout_request(std::span<const std::byte> payload);
+std::optional<CreateInventoryFolder> decode_create_inventory_folder(std::span<const std::byte> payload);
 std::vector<std::byte> encode_logout_reply(const AgentMessage& message);
 std::optional<AgentCachedTexture> decode_agent_cached_texture(std::span<const std::byte> payload);
 std::vector<std::byte> encode_agent_cached_texture_response(const AgentCachedTexture& message);

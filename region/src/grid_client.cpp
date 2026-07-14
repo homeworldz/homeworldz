@@ -174,6 +174,17 @@ bool Client::revoke_viewer_session(std::string_view session_id) {
     return status == 204 || status == 404;
 }
 
+bool Client::create_inventory_folder(std::string_view user_id, std::string_view folder_id,
+                                     std::string_view parent_id, std::string_view name,
+                                     int type_default) {
+    const auto body = "{\"id\":" + api::json_string(folder_id) +
+                      ",\"parentId\":" + api::json_string(parent_id) +
+                      ",\"name\":" + api::json_string(name) +
+                      ",\"typeDefault\":" + std::to_string(type_default) + '}';
+    return transport_->send("POST", "/api/v1/inventory/" + std::string(user_id) + "/folders", body)
+               .status_code == 201;
+}
+
 std::optional<ViewerSession> ViewerSessionCache::validate(
     std::string_view session_id, std::chrono::steady_clock::time_point now) {
     const auto key = std::string(session_id);
