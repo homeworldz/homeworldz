@@ -420,3 +420,9 @@ authoritative object update, and Firestorm retained the visible rotation and
 numeric fields after closing and reopening Edit. After a complete service and
 viewer restart, the object remained named `Prim1`, visibly rotated, and the
 Edit fields again showed `0, 0, 45` degrees.
+
+Viewer primitive description editing passed its live-session acceptance on
+2026-07-14. Firestorm set Prim1's description to `Tall rotated box`; the region
+checked ownership and modify permission, persisted the value, and returned it
+through `ObjectProperties`. Closing and reopening Edit retained the canonical
+description. Clean-restart persistence remains to be confirmed.
