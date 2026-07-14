@@ -476,3 +476,7 @@ the `0.5 x 0.5 x 0.5` scale and Wood material (`0x03`), retained Jim Tarber as
 both creator and owner, applied the inventory permission masks, and left the
 copyable source item in Objects. Jim renamed the rezzed clone to `Prim2b`, and
 the new name reached the authoritative scene snapshot.
+After a complete service and viewer restart, both Prim2 and Prim2b remained in
+the scene; Prim2b retained its name, size, Wood material, creator, and owner;
+the source Prim2 item remained in Objects. Prim3 independently remained the
+only test prim whose material was Metal.
