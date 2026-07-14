@@ -99,6 +99,27 @@ int main() {
                 invalid_creator_rejected = true;
             }
             if (!invalid_creator_rejected) return 1;
+            bool conflicting_content_rejected = false;
+            try {
+                const std::array different{std::byte{0x01}};
+                storage.store_asset("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                                    "11111111-1111-4111-8111-111111111111", different);
+            } catch (const std::invalid_argument&) {
+                conflicting_content_rejected = true;
+            }
+            bool conflicting_creator_rejected = false;
+            try {
+                storage.store_asset("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                                    "22222222-2222-4222-8222-222222222222", content);
+            } catch (const std::invalid_argument&) {
+                conflicting_creator_rejected = true;
+            }
+            const auto repeated = storage.store_asset(
+                "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "11111111-1111-4111-8111-111111111111", content);
+            if (!conflicting_content_rejected || !conflicting_creator_rejected ||
+                repeated.sha256 != first_asset.sha256 || repeated.creator_id != first_asset.creator_id)
+                return 1;
             storage.store_baked_texture("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", 8,
                                         "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
             if (storage.find_baked_texture("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", 8) !=

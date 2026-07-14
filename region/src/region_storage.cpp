@@ -437,9 +437,16 @@ SnapshotMetadata RegionStorage::snapshot_metadata() const {
 
 AssetMetadata RegionStorage::store_asset(std::string viewer_id, std::string creator_id,
                                          std::span<const std::byte> content) {
+    if (!valid_uuid(viewer_id)) throw std::invalid_argument("asset viewer ID must be a UUID");
     if (!valid_uuid(creator_id)) throw std::invalid_argument("asset creator ID must be a UUID");
     AssetMetadata metadata{
         std::move(viewer_id), std::move(creator_id), crypto::sha256_hex(content), content.size()};
+    if (const auto existing = find_asset(metadata.viewer_id)) {
+        if (existing->creator_id != metadata.creator_id || existing->sha256 != metadata.sha256 ||
+            existing->size != metadata.size)
+            throw std::invalid_argument("asset viewer ID is already mapped to different content or provenance");
+        return *existing;
+    }
     const auto relative = std::filesystem::path("assets") / metadata.sha256.substr(0, 2) / metadata.sha256.substr(2);
     const auto target = data_path_ / relative;
     if (!std::filesystem::exists(target)) {
@@ -455,7 +462,7 @@ AssetMetadata RegionStorage::store_asset(std::string viewer_id, std::string crea
     }
     sqlite3_stmt* statement = nullptr;
     const char* sql = "INSERT INTO asset_mappings (viewer_id, creator_id, sha256, size) VALUES (?, ?, ?, ?) "
-                      "ON CONFLICT(viewer_id) DO UPDATE SET sha256=excluded.sha256, size=excluded.size";
+                      "ON CONFLICT(viewer_id) DO NOTHING";
     if (sqlite3_prepare_v2(database_, sql, -1, &statement, nullptr) != SQLITE_OK) {
         throw std::runtime_error(sqlite3_errmsg(database_));
     }
