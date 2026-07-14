@@ -64,6 +64,7 @@ type Store interface {
 	DeleteItem(context.Context, string, string) (Item, error)
 	EnsureItem(context.Context, Item) (bool, error)
 	ListItems(context.Context, string) ([]Item, error)
+	PurgeFolder(context.Context, string, string) ([]string, []string, Folder, error)
 }
 
 type PostgresStore struct{ db *sql.DB }
@@ -590,6 +591,86 @@ func (s *PostgresStore) DeleteItem(ctx context.Context, userID, itemID string) (
 		return Item{}, fmt.Errorf("commit inventory item deletion: %w", err)
 	}
 	return item, nil
+}
+
+func (s *PostgresStore) PurgeFolder(ctx context.Context, userID, folderID string) ([]string, []string, Folder, error) {
+	if userID == "" || folderID == "" {
+		return nil, nil, Folder{}, ErrInvalidFolder
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, nil, Folder{}, fmt.Errorf("begin inventory folder purge: %w", err)
+	}
+	defer tx.Rollback()
+	var folder Folder
+	if err := tx.QueryRowContext(ctx, `SELECT id, owner_user_id, COALESCE(parent_id::text, $3),
+		name, type_default, version FROM inventory_folders
+		WHERE id = $1 AND owner_user_id = $2 FOR UPDATE`, folderID, userID, zeroUUID).
+		Scan(&folder.ID, &folder.OwnerUserID, &folder.ParentID, &folder.Name,
+			&folder.TypeDefault, &folder.Version); errors.Is(err, sql.ErrNoRows) {
+		return nil, nil, Folder{}, ErrFolderNotFound
+	} else if err != nil {
+		return nil, nil, Folder{}, fmt.Errorf("find inventory folder to purge: %w", err)
+	}
+	rows, err := tx.QueryContext(ctx, `WITH RECURSIVE tree AS (
+		SELECT id FROM inventory_folders WHERE parent_id = $1 AND owner_user_id = $2
+		UNION ALL
+		SELECT child.id FROM inventory_folders child JOIN tree parent ON child.parent_id = parent.id
+		WHERE child.owner_user_id = $2)
+		SELECT 'folder', id FROM tree
+		UNION ALL
+		SELECT 'item', item.id FROM inventory_items item
+		WHERE item.owner_user_id = $2 AND (item.folder_id = $1 OR item.folder_id IN (SELECT id FROM tree))`,
+		folderID, userID)
+	if err != nil {
+		return nil, nil, Folder{}, fmt.Errorf("list inventory folder purge contents: %w", err)
+	}
+	var folderIDs, itemIDs []string
+	for rows.Next() {
+		var kind, id string
+		if err := rows.Scan(&kind, &id); err != nil {
+			rows.Close()
+			return nil, nil, Folder{}, fmt.Errorf("scan inventory folder purge contents: %w", err)
+		}
+		if kind == "folder" {
+			folderIDs = append(folderIDs, id)
+		} else {
+			itemIDs = append(itemIDs, id)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, nil, Folder{}, fmt.Errorf("iterate inventory folder purge contents: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, nil, Folder{}, fmt.Errorf("close inventory folder purge contents: %w", err)
+	}
+	var directCount int64
+	if err := tx.QueryRowContext(ctx, `SELECT
+		(SELECT count(*) FROM inventory_folders WHERE parent_id = $1 AND owner_user_id = $2) +
+		(SELECT count(*) FROM inventory_items WHERE folder_id = $1 AND owner_user_id = $2)`,
+		folderID, userID).Scan(&directCount); err != nil {
+		return nil, nil, Folder{}, fmt.Errorf("count direct inventory purge contents: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM inventory_items
+		WHERE folder_id = $1 AND owner_user_id = $2`, folderID, userID); err != nil {
+		return nil, nil, Folder{}, fmt.Errorf("delete direct inventory purge items: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM inventory_folders
+		WHERE parent_id = $1 AND owner_user_id = $2`, folderID, userID); err != nil {
+		return nil, nil, Folder{}, fmt.Errorf("delete inventory purge folders: %w", err)
+	}
+	if directCount > 0 {
+		if err := tx.QueryRowContext(ctx, `UPDATE inventory_folders SET version = version + $3,
+			updated_at = now() WHERE id = $1 AND owner_user_id = $2 RETURNING version`,
+			folderID, userID, directCount).Scan(&folder.Version); err != nil {
+			return nil, nil, Folder{}, fmt.Errorf("update purged inventory folder version: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, nil, Folder{}, fmt.Errorf("commit inventory folder purge: %w", err)
+	}
+	return folderIDs, itemIDs, folder, nil
 }
 
 func (s *PostgresStore) ListItems(ctx context.Context, userID string) ([]Item, error) {

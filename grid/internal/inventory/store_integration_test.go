@@ -134,4 +134,10 @@ func TestPostgresSystemFolderLifecycle(t *testing.T) {
 	if _, err := store.DeleteItem(ctx, userID, uploadedItemID); !errors.Is(err, ErrItemNotFound) {
 		t.Fatalf("delete missing uploaded item error = %v", err)
 	}
+	removedFolders, removedItems, trash, err := store.PurgeFolder(ctx, userID, SystemFolderID(userID, 14))
+	if err != nil || len(removedFolders) != 1 || removedFolders[0] != custom.ID ||
+		len(removedItems) != 1 || removedItems[0] != itemID || trash.TypeDefault != 14 {
+		t.Fatalf("purged trash folders = %#v, items = %#v, trash = %#v, error = %v",
+			removedFolders, removedItems, trash, err)
+	}
 }

@@ -62,6 +62,15 @@ func (a *API) inventoryAISCapability(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if len(parts) == 4 && parts[1] == "category" && validUUID(parts[2]) && parts[3] == "children" {
+		if r.Method != http.MethodDelete {
+			w.Header().Set("Allow", "GET, DELETE")
+			writeLLSDError(w, http.StatusMethodNotAllowed, "only GET and DELETE are supported")
+			return
+		}
+		a.purgeAISTrash(w, r, session.UserID, parts[2])
+		return
+	}
 	if len(parts) == 4 && parts[1] == "category" && validUUID(parts[2]) && parts[3] == "links" {
 		if r.Method != http.MethodPut {
 			w.Header().Set("Allow", http.MethodPut)
@@ -99,6 +108,36 @@ func (a *API) inventoryAISCapability(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeLLSDError(w, http.StatusNotFound, "AIS inventory resource was not found")
 	}
+}
+
+func (a *API) purgeAISTrash(w http.ResponseWriter, r *http.Request, userID, folderID string) {
+	if folderID != inventory.SystemFolderID(userID, 14) {
+		writeLLSDError(w, http.StatusForbidden, "only the Trash folder can be purged")
+		return
+	}
+	folderIDs, itemIDs, folder, err := a.inventory.PurgeFolder(r.Context(), userID, folderID)
+	if errors.Is(err, inventory.ErrFolderNotFound) {
+		writeLLSDError(w, http.StatusNotFound, "AIS Trash folder was not found")
+		return
+	}
+	if err != nil {
+		writeLLSDError(w, http.StatusServiceUnavailable, "AIS Trash could not be emptied")
+		return
+	}
+	var removedFolders, removedItems strings.Builder
+	for _, id := range folderIDs {
+		removedFolders.WriteString("<uuid>" + html.EscapeString(id) + "</uuid>")
+	}
+	for _, id := range itemIDs {
+		removedItems.WriteString("<uuid>" + html.EscapeString(id) + "</uuid>")
+	}
+	w.Header().Set("Content-Type", "application/llsd+xml; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.WriteString(w, "<?xml version=\"1.0\"?><llsd><map>"+
+		"<key>_categories_removed</key><array>"+removedFolders.String()+"</array>"+
+		"<key>_removed_items</key><array>"+removedItems.String()+"</array>"+
+		inventoryFolderVersionsXML(map[string]int64{folder.ID: folder.Version})+
+		"</map></llsd>")
 }
 
 func (a *API) fetchAISInventoryItem(w http.ResponseWriter, r *http.Request, userID, itemID string) {

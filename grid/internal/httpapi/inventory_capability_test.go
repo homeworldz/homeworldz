@@ -197,6 +197,35 @@ func TestAISCreateAndRenameInventoryFolder(t *testing.T) {
 		t.Fatalf("move status = %d, response = %s, folder = %#v",
 			moveResponse.Code, moveResponse.Body.String(), stored[len(stored)-1])
 	}
+	const childID = "30000000-0000-4000-8000-000000000061"
+	if _, err := inventories.CreateFolder(context.Background(), inventory.Folder{
+		ID: childID, OwnerUserID: user.ID, ParentID: created.ID, Name: "Nested", TypeDefault: -1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	const nestedItemID = "30000000-0000-4000-8000-000000000062"
+	if _, err := inventories.CreateItem(context.Background(), inventory.Item{
+		ID: nestedItemID, OwnerUserID: user.ID, CreatorUserID: user.ID, FolderID: childID,
+		AssetID: "30000000-0000-4000-8000-000000000063", AssetType: 0, InventoryType: 0,
+		Name: "Discarded Texture",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	purgeRequest := httptest.NewRequest(http.MethodDelete,
+		base+"/category/"+trashID+"/children", nil)
+	purgeResponse := httptest.NewRecorder()
+	handler.ServeHTTP(purgeResponse, purgeRequest)
+	stored, _ = inventories.ListFolders(context.Background(), user.ID)
+	remainingItems, _ := inventories.ListItems(context.Background(), user.ID)
+	if purgeResponse.Code != http.StatusOK || len(stored) != len(folders) || len(remainingItems) != 0 ||
+		!strings.Contains(purgeResponse.Body.String(), "<key>_categories_removed</key><array>") ||
+		!strings.Contains(purgeResponse.Body.String(), "<uuid>"+created.ID+"</uuid>") ||
+		!strings.Contains(purgeResponse.Body.String(), "<uuid>"+childID+"</uuid>") ||
+		!strings.Contains(purgeResponse.Body.String(), "<key>_removed_items</key><array><uuid>"+nestedItemID+"</uuid>") ||
+		!strings.Contains(purgeResponse.Body.String(), "<key>"+trashID+"</key><integer>3</integer>") {
+		t.Fatalf("purge status = %d, response = %s, folders = %#v, items = %#v",
+			purgeResponse.Code, purgeResponse.Body.String(), stored, remainingItems)
+	}
 }
 
 func TestAISRenameMoveAndDeleteInventoryItem(t *testing.T) {

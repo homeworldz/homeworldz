@@ -217,6 +217,65 @@ func (s *memoryInventoryStore) ListItems(_ context.Context, userID string) ([]in
 	return s.items[userID], nil
 }
 
+func (s *memoryInventoryStore) PurgeFolder(_ context.Context, userID, folderID string) ([]string, []string, inventory.Folder, error) {
+	folderIndex := -1
+	for index, folder := range s.folders[userID] {
+		if folder.ID == folderID {
+			folderIndex = index
+			break
+		}
+	}
+	if folderIndex < 0 {
+		return nil, nil, inventory.Folder{}, inventory.ErrFolderNotFound
+	}
+	removedFolders := make(map[string]bool)
+	for changed := true; changed; {
+		changed = false
+		for _, folder := range s.folders[userID] {
+			if (folder.ParentID == folderID || removedFolders[folder.ParentID]) && !removedFolders[folder.ID] {
+				removedFolders[folder.ID] = true
+				changed = true
+			}
+		}
+	}
+	folderIDs := make([]string, 0, len(removedFolders))
+	keptFolders := s.folders[userID][:0]
+	directCount := int64(0)
+	for _, folder := range s.folders[userID] {
+		if removedFolders[folder.ID] {
+			folderIDs = append(folderIDs, folder.ID)
+			if folder.ParentID == folderID {
+				directCount++
+			}
+			continue
+		}
+		keptFolders = append(keptFolders, folder)
+	}
+	s.folders[userID] = keptFolders
+	itemIDs := make([]string, 0, 16)
+	keptItems := s.items[userID][:0]
+	for _, item := range s.items[userID] {
+		if item.FolderID == folderID || removedFolders[item.FolderID] {
+			itemIDs = append(itemIDs, item.ID)
+			if item.FolderID == folderID {
+				directCount++
+			}
+			continue
+		}
+		keptItems = append(keptItems, item)
+	}
+	s.items[userID] = keptItems
+	var result inventory.Folder
+	for index := range s.folders[userID] {
+		if s.folders[userID][index].ID == folderID {
+			s.folders[userID][index].Version += directCount
+			result = s.folders[userID][index]
+			break
+		}
+	}
+	return folderIDs, itemIDs, result, nil
+}
+
 func TestInventoryFoldersEndpoint(t *testing.T) {
 	const userID = "20000000-0000-4000-8000-000000000001"
 	store := &memoryInventoryStore{folders: make(map[string][]inventory.Folder)}
