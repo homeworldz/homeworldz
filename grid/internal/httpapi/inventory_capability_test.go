@@ -171,7 +171,11 @@ func TestAISCreateAndRenameInventoryFolder(t *testing.T) {
 	stored, _ = inventories.ListFolders(context.Background(), user.ID)
 	if updateResponse.Code != http.StatusOK || stored[len(stored)-1].Name != "Projects" ||
 		!strings.Contains(updateResponse.Body.String(),
-			"<key>_updated_categories</key><array><uuid>"+created.ID+"</uuid>") {
+			"<key>_updated_categories</key><array><uuid>"+created.ID+"</uuid>") ||
+		!strings.Contains(updateResponse.Body.String(),
+			"<key>category_id</key><uuid>"+created.ID+"</uuid>") ||
+		!strings.Contains(updateResponse.Body.String(),
+			"<key>name</key><string>Projects</string>") {
 		t.Fatalf("status = %d, response = %s, folder = %#v",
 			updateResponse.Code, updateResponse.Body.String(), stored[len(stored)-1])
 	}

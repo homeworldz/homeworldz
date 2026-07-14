@@ -102,7 +102,7 @@ func (a *API) updateAISInventoryFolder(w http.ResponseWriter, r *http.Request, u
 	if writeAISFolderError(w, err) {
 		return
 	}
-	writeAISUUIDArray(w, "_updated_categories", folder.ID)
+	writeAISFolderUpdate(w, folder)
 }
 
 func writeAISFolderError(w http.ResponseWriter, err error) bool {
@@ -127,4 +127,17 @@ func writeAISUUIDArray(w http.ResponseWriter, key, id string) {
 	w.WriteHeader(http.StatusOK)
 	_, _ = fmt.Fprintf(w, "<?xml version=\"1.0\"?><llsd><map><key>%s</key>"+
 		"<array><uuid>%s</uuid></array></map></llsd>", html.EscapeString(key), html.EscapeString(id))
+}
+
+func writeAISFolderUpdate(w http.ResponseWriter, folder inventory.Folder) {
+	w.Header().Set("Content-Type", "application/llsd+xml; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = fmt.Fprintf(w, "<?xml version=\"1.0\"?><llsd><map>"+
+		"<key>_updated_categories</key><array><uuid>%s</uuid></array>"+
+		"<key>category_id</key><uuid>%s</uuid><key>parent_id</key><uuid>%s</uuid>"+
+		"<key>type_default</key><integer>%d</integer><key>name</key><string>%s</string>"+
+		"<key>version</key><integer>%d</integer></map></llsd>",
+		html.EscapeString(folder.ID), html.EscapeString(folder.ID),
+		html.EscapeString(folder.ParentID), folder.TypeDefault,
+		html.EscapeString(folder.Name), folder.Version)
 }
