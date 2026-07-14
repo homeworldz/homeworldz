@@ -268,10 +268,12 @@ func (a *API) inventoryItemsByUser(w http.ResponseWriter, r *http.Request, userI
 	if !decodeJSON(w, r, &request) {
 		return
 	}
+	validType := (request.AssetType == 0 && request.InventoryType == 0) ||
+		(request.AssetType == 6 && request.InventoryType == 6)
 	if !validUUID(request.ID) || !validUUID(request.CreatorUserID) ||
 		request.CreatorUserID != userID || !validUUID(request.FolderID) ||
-		!validUUID(request.AssetID) || request.AssetType != 0 || request.InventoryType != 0 {
-		writeJSON(w, http.StatusBadRequest, Error{Code: "invalid_inventory_item", Message: "texture inventory item is invalid"})
+		!validUUID(request.AssetID) || !validType {
+		writeJSON(w, http.StatusBadRequest, Error{Code: "invalid_inventory_item", Message: "inventory item is invalid"})
 		return
 	}
 	const fullPermissions = uint32(0x7fffffff)
@@ -284,7 +286,7 @@ func (a *API) inventoryItemsByUser(w http.ResponseWriter, r *http.Request, userI
 	})
 	switch {
 	case errors.Is(err, inventory.ErrInvalidItem):
-		writeJSON(w, http.StatusBadRequest, Error{Code: "invalid_inventory_item", Message: "texture inventory item is invalid"})
+		writeJSON(w, http.StatusBadRequest, Error{Code: "invalid_inventory_item", Message: "inventory item is invalid"})
 	case errors.Is(err, inventory.ErrItemFolderNotFound):
 		writeJSON(w, http.StatusNotFound, Error{Code: "inventory_folder_not_found", Message: "inventory item folder was not found"})
 	case errors.Is(err, inventory.ErrItemConflict):

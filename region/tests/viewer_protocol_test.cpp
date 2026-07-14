@@ -188,6 +188,21 @@ bool message_codecs() {
     write_f32(object_add_payload, 125, 0.75F);
     write_f32(object_add_payload, 129, 1.0F);
     const auto object_add = decode_object_add(object_add_payload);
+    auto derez_payload = bytes({0xff, 0xff, 0x01, 0x23});
+    derez_payload.insert(derez_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
+    derez_payload.insert(derez_payload.end(), expected.session_id.begin(), expected.session_id.end());
+    derez_payload.insert(derez_payload.end(), 16, std::byte{});
+    derez_payload.push_back(std::byte{6});
+    derez_payload.insert(derez_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
+    derez_payload.insert(derez_payload.end(), expected.session_id.begin(), expected.session_id.end());
+    derez_payload.insert(derez_payload.end(), {std::byte{1}, std::byte{1}, std::byte{2},
+                                               std::byte{0x78}, std::byte{0x56},
+                                               std::byte{0x34}, std::byte{0x12},
+                                               std::byte{0x04}, std::byte{0x03},
+                                               std::byte{0x02}, std::byte{0x01}});
+    const auto derez = decode_derez_object(derez_payload);
+    const std::array<std::uint32_t, 2> killed_ids{0x12345678, 0x01020304};
+    const auto killed = encode_kill_object(killed_ids);
     auto cached_payload = bytes({0xff, 0xff, 0x01, 0x80});
     cached_payload.insert(cached_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
     cached_payload.insert(cached_payload.end(), expected.session_id.begin(), expected.session_id.end());
@@ -260,6 +275,11 @@ bool message_codecs() {
            object_add->path_curve == 16 && object_add->profile_curve == 1 && object_add->bypass_raycast &&
            object_add->ray_start[2] == 30.0F && object_add->ray_end[0] == 132.0F &&
            object_add->scale[1] == 0.75F &&
+           derez && derez->agent_id == expected.agent_id && derez->session_id == expected.session_id &&
+           derez->destination == 6 && derez->destination_id == expected.agent_id &&
+           derez->transaction_id == expected.session_id && derez->packet_count == 1 &&
+           derez->packet_number == 1 && derez->local_ids == std::vector<std::uint32_t>(killed_ids.begin(), killed_ids.end()) &&
+           killed == bytes({0x10, 2, 0x78, 0x56, 0x34, 0x12, 0x04, 0x03, 0x02, 0x01}) &&
            logout_reply.size() == 53 && logout_reply[3] == std::byte{0xfd} && logout_reply[36] == std::byte{1} &&
            cached && cached->serial == 7 && cached->queries.size() == 2 &&
            cached->queries[0].texture_index == 8 && cached->queries[1].texture_index == 9 &&

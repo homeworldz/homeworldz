@@ -224,6 +224,19 @@ bool Client::create_texture_inventory_item(std::string_view user_id, const Textu
                .status_code == 201;
 }
 
+bool Client::create_object_inventory_item(std::string_view user_id, const ObjectInventoryItem& item) {
+    const auto body = "{\"id\":" + api::json_string(item.item_id) +
+                      ",\"creatorUserId\":" + api::json_string(item.creator_id) +
+                      ",\"folderId\":" + api::json_string(item.folder_id) +
+                      ",\"assetId\":" + api::json_string(item.asset_id) +
+                      ",\"assetType\":6,\"inventoryType\":6,\"name\":" + api::json_string(item.name) +
+                      ",\"description\":" + api::json_string(item.description) +
+                      ",\"everyonePermissions\":" + std::to_string(item.everyone_permissions) +
+                      ",\"nextPermissions\":" + std::to_string(item.next_permissions) + '}';
+    return transport_->send("POST", "/api/v1/inventory/" + std::string(user_id) + "/items", body)
+               .status_code == 201;
+}
+
 std::optional<InventoryItem> Client::copy_library_item(std::string_view user_id,
                                                        std::string_view source_item_id,
                                                        std::string_view destination_folder_id,

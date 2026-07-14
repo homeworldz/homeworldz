@@ -98,6 +98,16 @@ struct ObjectAdd : AgentMessage {
     std::uint8_t state{};
 };
 
+struct DeRezObject : AgentMessage {
+    Uuid group_id{};
+    std::uint8_t destination{};
+    Uuid destination_id{};
+    Uuid transaction_id{};
+    std::uint8_t packet_count{};
+    std::uint8_t packet_number{};
+    std::vector<std::uint32_t> local_ids;
+};
+
 struct InventoryItem {
     Uuid item_id{};
     Uuid creator_id{};
@@ -231,6 +241,8 @@ std::optional<CopyInventoryItem> decode_copy_inventory_item(std::span<const std:
 std::optional<MoveInventoryFolder> decode_move_inventory_folder(std::span<const std::byte> payload);
 std::optional<MoveInventoryItem> decode_move_inventory_item(std::span<const std::byte> payload);
 std::optional<ObjectAdd> decode_object_add(std::span<const std::byte> payload);
+std::optional<DeRezObject> decode_derez_object(std::span<const std::byte> payload);
+std::vector<std::byte> encode_kill_object(std::span<const std::uint32_t> local_ids);
 std::vector<std::byte> encode_update_create_inventory_item(const AgentMessage& message,
                                                            std::uint32_t callback_id,
                                                            const InventoryItem& item);

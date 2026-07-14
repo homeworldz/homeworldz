@@ -46,6 +46,8 @@ constexpr std::array<std::byte, 4> move_inventory_folder_id{
 constexpr std::array<std::byte, 4> move_inventory_item_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x0c}};
 constexpr std::array<std::byte, 2> object_add_id{std::byte{0xff}, std::byte{0x01}};
+constexpr std::array<std::byte, 4> derez_object_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x23}};
 constexpr std::array<std::byte, 4> economy_data_request_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x18}};
 constexpr std::array<std::byte, 4> economy_data_id{
@@ -665,6 +667,37 @@ std::optional<ObjectAdd> decode_object_add(std::span<const std::byte> payload) {
         !finite_vector(result.scale) || !finite_vector(result.rotation))
         return std::nullopt;
     return result;
+}
+
+std::optional<DeRezObject> decode_derez_object(std::span<const std::byte> payload) {
+    constexpr std::size_t header_size = 88;
+    if (payload.size() < header_size ||
+        !std::equal(derez_object_id.begin(), derez_object_id.end(), payload.begin()))
+        return std::nullopt;
+    const auto count = std::to_integer<std::size_t>(payload[87]);
+    if (count == 0 || payload.size() != header_size + count * sizeof(std::uint32_t))
+        return std::nullopt;
+    DeRezObject result;
+    std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
+    std::copy_n(payload.begin() + 36, 16, result.group_id.begin());
+    result.destination = std::to_integer<std::uint8_t>(payload[52]);
+    std::copy_n(payload.begin() + 53, 16, result.destination_id.begin());
+    std::copy_n(payload.begin() + 69, 16, result.transaction_id.begin());
+    result.packet_count = std::to_integer<std::uint8_t>(payload[85]);
+    result.packet_number = std::to_integer<std::uint8_t>(payload[86]);
+    result.local_ids.reserve(count);
+    for (std::size_t index = 0; index < count; ++index)
+        result.local_ids.push_back(read_le_u32(payload, header_size + index * sizeof(std::uint32_t)));
+    return result;
+}
+
+std::vector<std::byte> encode_kill_object(std::span<const std::uint32_t> local_ids) {
+    if (local_ids.empty() || local_ids.size() > 255) return {};
+    std::vector<std::byte> output{std::byte{0x10}, static_cast<std::byte>(local_ids.size())};
+    output.reserve(2 + local_ids.size() * sizeof(std::uint32_t));
+    for (const auto local_id : local_ids) append_le_u32(output, local_id);
+    return output;
 }
 
 std::vector<std::byte> encode_update_create_inventory_item(const AgentMessage& message,

@@ -52,6 +52,17 @@ struct TextureInventoryItem {
     std::uint32_t next_permissions{};
 };
 
+struct ObjectInventoryItem {
+    std::string item_id;
+    std::string creator_id;
+    std::string folder_id;
+    std::string asset_id;
+    std::string name;
+    std::string description;
+    std::uint32_t everyone_permissions{};
+    std::uint32_t next_permissions{};
+};
+
 struct InventoryItem {
     std::string item_id;
     std::string creator_id;
@@ -86,6 +97,7 @@ public:
     bool move_inventory_item(std::string_view user_id, std::string_view item_id,
                              std::string_view folder_id, std::string_view new_name);
     bool create_texture_inventory_item(std::string_view user_id, const TextureInventoryItem& item);
+    bool create_object_inventory_item(std::string_view user_id, const ObjectInventoryItem& item);
     std::optional<InventoryItem> copy_library_item(std::string_view user_id,
                                                    std::string_view source_item_id,
                                                    std::string_view destination_folder_id,

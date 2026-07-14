@@ -340,6 +340,25 @@ func TestCreateTextureInventoryItemEndpoint(t *testing.T) {
 	}
 }
 
+func TestCreateObjectInventoryItemEndpoint(t *testing.T) {
+	const userID = "20000000-0000-4000-8000-000000000001"
+	store := &memoryInventoryStore{folders: make(map[string][]inventory.Folder)}
+	_, _ = store.EnsureSystemFolders(context.Background(), userID)
+	handler := New(checker{}, "test", Options{ServiceToken: "secret", Inventory: store})
+	folderID := inventory.SystemFolderID(userID, 14)
+	body := `{"id":"40000000-0000-4000-8000-000000000011",` +
+		`"creatorUserId":"` + userID + `","folderId":"` + folderID + `",` +
+		`"assetId":"50000000-0000-4000-8000-000000000011","assetType":6,` +
+		`"inventoryType":6,"name":"Primitive","description":"",` +
+		`"everyonePermissions":0,"nextPermissions":2147483647}`
+	created := requestRegion[inventory.Item](t, handler, http.MethodPost,
+		"/api/v1/inventory/"+userID+"/items", body, http.StatusCreated)
+	if created.OwnerUserID != userID || created.CreatorUserID != userID ||
+		created.FolderID != folderID || created.AssetType != 6 || created.InventoryType != 6 {
+		t.Fatalf("created object inventory item = %#v", created)
+	}
+}
+
 func TestCopyLibraryInventoryItemEndpoint(t *testing.T) {
 	const userID = "20000000-0000-4000-8000-000000000001"
 	store := &memoryInventoryStore{folders: make(map[string][]inventory.Folder)}

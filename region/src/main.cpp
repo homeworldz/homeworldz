@@ -339,6 +339,14 @@ std::optional<homeworldz::viewer::StaticObject> static_object_from_entity(
                     static_cast<float>(entity.scale.z)};
     return object;
 }
+
+std::string object_asset_json(const homeworldz::scene::Entity& entity) {
+    return "{\"format\":\"homeworldz-object-v1\",\"creatorId\":" +
+        homeworldz::api::json_string(entity.owner_id) + ",\"name\":" +
+        homeworldz::api::json_string(entity.name) + ",\"scale\":[" +
+        std::to_string(entity.scale.x) + ',' + std::to_string(entity.scale.y) + ',' +
+        std::to_string(entity.scale.z) + "],\"material\":" + std::to_string(entity.material) + '}';
+}
 } // namespace
 
 int main() {
@@ -1178,6 +1186,91 @@ int main() {
                                       << ",\"message\":\"primitive creation "
                                       << (created ? "completed" : "rejected") << "\",\"objectId\":"
                                       << homeworldz::api::json_string(object_id) << "}" << std::endl;
+                        }
+                        const auto derez = homeworldz::viewer::decode_derez_object(packet->payload);
+                        if (derez && derez->agent_id == identity->agent_id &&
+                            derez->session_id == identity->session_id) {
+                            const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
+                            const auto destination_id = homeworldz::viewer::format_uuid(derez->destination_id);
+                            std::vector<std::uint32_t> removed_ids;
+                            std::size_t inventory_items_created = 0;
+                            if (derez->destination == 6 && derez->packet_count > 0 &&
+                                derez->packet_number > 0 && derez->packet_number <= derez->packet_count) {
+                                for (const auto local_id : derez->local_ids) {
+                                    const auto* entity = scene.find(local_id);
+                                    if (!entity || entity->object_id.empty() || entity->owner_id != user_id)
+                                        continue;
+                                    const auto asset_id = homeworldz::viewer::random_uuid();
+                                    const auto item_id = homeworldz::viewer::random_uuid();
+                                    const auto content_text = object_asset_json(*entity);
+                                    const auto content = std::span(
+                                        reinterpret_cast<const std::byte*>(content_text.data()), content_text.size());
+                                    bool item_created = false;
+                                    try {
+                                        storage->store_asset(asset_id, user_id, content);
+                                        item_created = viewer_grid && viewer_grid->create_object_inventory_item(
+                                            user_id, homeworldz::grid::ObjectInventoryItem{
+                                                item_id, user_id, destination_id, asset_id,
+                                                entity->name, "", 0, 0x7fffffff});
+                                    } catch (const std::exception& error) {
+                                        std::cout << "{\"level\":\"error\",\"message\":\"primitive derez inventory failed\",\"error\":"
+                                                  << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+                                    }
+                                    if (!item_created) continue;
+                                    homeworldz::viewer::InventoryItem item;
+                                    item.item_id = *homeworldz::viewer::parse_uuid(item_id);
+                                    item.creator_id = identity->agent_id;
+                                    item.owner_id = identity->agent_id;
+                                    item.folder_id = derez->destination_id;
+                                    item.asset_id = *homeworldz::viewer::parse_uuid(asset_id);
+                                    item.asset_type = 6;
+                                    item.inventory_type = 6;
+                                    item.name = entity->name;
+                                    item.base_permissions = 0x7fffffff;
+                                    item.current_permissions = 0x7fffffff;
+                                    item.next_permissions = 0x7fffffff;
+                                    item.creation_date = static_cast<std::int32_t>(
+                                        std::chrono::duration_cast<std::chrono::seconds>(
+                                            std::chrono::system_clock::now().time_since_epoch()).count());
+                                    const homeworldz::viewer::AgentMessage reply{
+                                        identity->agent_id, identity->session_id};
+                                    auto inventory_update = homeworldz::viewer::encode_update_create_inventory_item(
+                                        reply, 0, item);
+                                    if (const auto outgoing = circuits.send(
+                                            endpoint, std::move(inventory_update), true, now, true))
+                                        static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
+                                    if (scene.remove(local_id)) {
+                                        removed_ids.push_back(local_id);
+                                        ++inventory_items_created;
+                                    }
+                                }
+                            }
+                            bool persisted = removed_ids.empty();
+                            if (!removed_ids.empty()) {
+                                try {
+                                    storage->save_snapshot(scene);
+                                    persisted = true;
+                                } catch (const std::exception& error) {
+                                    std::cout << "{\"level\":\"error\",\"message\":\"primitive derez persistence failed\",\"error\":"
+                                              << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+                                }
+                            }
+                            if (persisted && !removed_ids.empty()) {
+                                const auto kill = homeworldz::viewer::encode_kill_object(removed_ids);
+                                for (const auto& [recipient_endpoint, recipient] : avatars) {
+                                    static_cast<void>(recipient);
+                                    if (const auto outgoing = circuits.send(
+                                            recipient_endpoint, kill, true, now))
+                                        static_cast<void>(send_udp(viewer_server, recipient_endpoint, *outgoing));
+                                }
+                            }
+                            std::cout << "{\"level\":"
+                                      << (persisted && removed_ids.size() == derez->local_ids.size() ? "\"info\"" : "\"warn\"")
+                                      << ",\"message\":\"primitive derez batch processed\",\"removed\":"
+                                      << removed_ids.size() << ",\"inventoryItemsCreated\":"
+                                      << inventory_items_created << ",\"requested\":" << derez->local_ids.size()
+                                      << ",\"destination\":" << static_cast<unsigned>(derez->destination) << "}"
+                                      << std::endl;
                         }
                         const auto update = homeworldz::viewer::decode_agent_update(packet->payload);
                         const auto avatar = avatars.find(endpoint);
