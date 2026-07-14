@@ -60,6 +60,11 @@ func TestPostgresSystemFolderLifecycle(t *testing.T) {
 	if err != nil || custom.Version != 2 || custom.Name != "Renamed Integration Projects" {
 		t.Fatalf("update custom folder = %#v, error = %v", custom, err)
 	}
+	custom.ParentID = SystemFolderID(userID, 14)
+	custom, err = store.UpdateFolder(ctx, custom)
+	if err != nil || custom.Version != 3 || custom.ParentID != SystemFolderID(userID, 14) {
+		t.Fatalf("move custom folder = %#v, error = %v", custom, err)
+	}
 	itemID, _ := identifier.NewUUID()
 	assetID, _ := identifier.NewUUID()
 	item := Item{ID: itemID, OwnerUserID: userID, CreatorUserID: userID,

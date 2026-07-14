@@ -257,17 +257,49 @@ func (s *PostgresStore) UpdateFolder(ctx context.Context, folder Folder) (Folder
 	} else if err != nil {
 		return Folder{}, fmt.Errorf("find inventory folder for update: %w", err)
 	}
-	if existing.TypeDefault != -1 || existing.ParentID != folder.ParentID {
+	if existing.TypeDefault != -1 {
 		return Folder{}, ErrInvalidFolder
 	}
-	if existing.Name == folder.Name {
+	parentChanged := existing.ParentID != folder.ParentID
+	if parentChanged {
+		var destinationVersion int64
+		if err := tx.QueryRowContext(ctx, `SELECT version FROM inventory_folders
+			WHERE id = $1 AND owner_user_id = $2 FOR UPDATE`, folder.ParentID, folder.OwnerUserID).
+			Scan(&destinationVersion); errors.Is(err, sql.ErrNoRows) {
+			return Folder{}, ErrFolderNotFound
+		} else if err != nil {
+			return Folder{}, fmt.Errorf("find inventory folder destination: %w", err)
+		}
+		var createsCycle bool
+		if err := tx.QueryRowContext(ctx, `WITH RECURSIVE descendants AS (
+			SELECT id FROM inventory_folders WHERE parent_id = $1 AND owner_user_id = $2
+			UNION ALL
+			SELECT child.id FROM inventory_folders child JOIN descendants parent ON child.parent_id = parent.id
+			WHERE child.owner_user_id = $2)
+			SELECT EXISTS (SELECT 1 FROM descendants WHERE id = $3)`, folder.ID, folder.OwnerUserID,
+			folder.ParentID).Scan(&createsCycle); err != nil {
+			return Folder{}, fmt.Errorf("check inventory folder move cycle: %w", err)
+		}
+		if createsCycle || folder.ParentID == folder.ID {
+			return Folder{}, ErrInvalidFolder
+		}
+	}
+	if existing.Name == folder.Name && !parentChanged {
 		return existing, nil
 	}
 	if err := tx.QueryRowContext(ctx, `UPDATE inventory_folders
-		SET name = $3, version = version + 1, updated_at = now()
+		SET parent_id = $3, name = $4, version = version + 1, updated_at = now()
 		WHERE id = $1 AND owner_user_id = $2 RETURNING version`,
-		folder.ID, folder.OwnerUserID, folder.Name).Scan(&folder.Version); err != nil {
+		folder.ID, folder.OwnerUserID, folder.ParentID, folder.Name).Scan(&folder.Version); err != nil {
 		return Folder{}, fmt.Errorf("update inventory folder: %w", err)
+	}
+	if parentChanged {
+		for _, parentID := range []string{existing.ParentID, folder.ParentID} {
+			if _, err := tx.ExecContext(ctx, `UPDATE inventory_folders SET version = version + 1,
+				updated_at = now() WHERE id = $1 AND owner_user_id = $2`, parentID, folder.OwnerUserID); err != nil {
+				return Folder{}, fmt.Errorf("update moved inventory folder parent version: %w", err)
+			}
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return Folder{}, fmt.Errorf("commit inventory folder update: %w", err)

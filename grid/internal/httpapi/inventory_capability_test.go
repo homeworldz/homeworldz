@@ -181,6 +181,22 @@ func TestAISCreateAndRenameInventoryFolder(t *testing.T) {
 		t.Fatalf("status = %d, response = %s, folder = %#v",
 			updateResponse.Code, updateResponse.Body.String(), stored[len(stored)-1])
 	}
+	trashID := inventory.SystemFolderID(user.ID, 14)
+	moveBody := `<?xml version="1.0"?><llsd><map>` +
+		`<key>parent_id</key><uuid>` + trashID + `</uuid></map></llsd>`
+	moveRequest := httptest.NewRequest(http.MethodPatch, base+"/category/"+created.ID,
+		bytes.NewBufferString(moveBody))
+	moveResponse := httptest.NewRecorder()
+	handler.ServeHTTP(moveResponse, moveRequest)
+	stored, _ = inventories.ListFolders(context.Background(), user.ID)
+	if moveResponse.Code != http.StatusOK || stored[len(stored)-1].ParentID != trashID ||
+		stored[len(stored)-1].Name != "Projects" ||
+		!strings.Contains(moveResponse.Body.String(), "<key>parent_id</key><uuid>"+trashID+"</uuid>") ||
+		!strings.Contains(moveResponse.Body.String(), "<key>"+folders[0].ID+"</key><integer>3</integer>") ||
+		!strings.Contains(moveResponse.Body.String(), "<key>"+trashID+"</key><integer>2</integer>") {
+		t.Fatalf("move status = %d, response = %s, folder = %#v",
+			moveResponse.Code, moveResponse.Body.String(), stored[len(stored)-1])
+	}
 }
 
 func TestAISRenameMoveAndDeleteInventoryItem(t *testing.T) {

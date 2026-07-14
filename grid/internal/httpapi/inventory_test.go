@@ -49,11 +49,44 @@ func (s *memoryInventoryStore) UpdateFolder(_ context.Context, folder inventory.
 		if existing.ID != folder.ID {
 			continue
 		}
-		if existing.TypeDefault != -1 || existing.ParentID != folder.ParentID || folder.TypeDefault != -1 {
+		if existing.TypeDefault != -1 || folder.TypeDefault != -1 || folder.ParentID == folder.ID {
 			return inventory.Folder{}, inventory.ErrInvalidFolder
+		}
+		destinationFound := existing.ParentID == folder.ParentID
+		if !destinationFound {
+			for _, candidate := range s.folders[folder.OwnerUserID] {
+				if candidate.ID == folder.ParentID {
+					destinationFound = true
+					break
+				}
+			}
+		}
+		if !destinationFound {
+			return inventory.Folder{}, inventory.ErrFolderNotFound
+		}
+		for parent := folder.ParentID; parent != "00000000-0000-0000-0000-000000000000"; {
+			if parent == folder.ID {
+				return inventory.Folder{}, inventory.ErrInvalidFolder
+			}
+			next := "00000000-0000-0000-0000-000000000000"
+			for _, candidate := range s.folders[folder.OwnerUserID] {
+				if candidate.ID == parent {
+					next = candidate.ParentID
+					break
+				}
+			}
+			parent = next
 		}
 		folder.Version = existing.Version + 1
 		s.folders[folder.OwnerUserID][index] = folder
+		if existing.ParentID != folder.ParentID {
+			for parentIndex := range s.folders[folder.OwnerUserID] {
+				parent := &s.folders[folder.OwnerUserID][parentIndex]
+				if parent.ID == existing.ParentID || parent.ID == folder.ParentID {
+					parent.Version++
+				}
+			}
+		}
 		return folder, nil
 	}
 	return inventory.Folder{}, inventory.ErrFolderNotFound

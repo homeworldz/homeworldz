@@ -776,7 +776,7 @@ func writeAISLinkCreation(w http.ResponseWriter, items []inventory.Item, version
 
 func (a *API) updateAISInventoryFolder(w http.ResponseWriter, r *http.Request, userID, folderID string) {
 	request, seen, err := decodeInventoryFolderMutationRequest(http.MaxBytesReader(w, r.Body, 64*1024), "item_id")
-	if err != nil || !seen["name"] || (seen["item_id"] && request.ID != folderID) ||
+	if err != nil || (!seen["name"] && !seen["parent_id"]) || (seen["item_id"] && request.ID != folderID) ||
 		(seen["parent_id"] && !validUUID(request.ParentID)) || (seen["type"] && request.Type != -1) {
 		writeLLSDError(w, http.StatusBadRequest, "invalid AIS inventory folder update")
 		return
@@ -797,11 +797,13 @@ func (a *API) updateAISInventoryFolder(w http.ResponseWriter, r *http.Request, u
 		writeLLSDError(w, http.StatusNotFound, "AIS inventory folder was not found")
 		return
 	}
-	if seen["parent_id"] && request.ParentID != existing.ParentID {
-		writeLLSDError(w, http.StatusBadRequest, "moving AIS inventory folders is not supported")
-		return
+	oldParentID := existing.ParentID
+	if seen["name"] {
+		existing.Name = request.Name
 	}
-	existing.Name = request.Name
+	if seen["parent_id"] {
+		existing.ParentID = request.ParentID
+	}
 	folder, err := a.inventory.UpdateFolder(r.Context(), inventory.Folder{
 		ID: existing.ID, OwnerUserID: userID, ParentID: existing.ParentID,
 		Name: existing.Name, TypeDefault: existing.TypeDefault,
@@ -809,7 +811,15 @@ func (a *API) updateAISInventoryFolder(w http.ResponseWriter, r *http.Request, u
 	if writeAISFolderError(w, err) {
 		return
 	}
-	writeAISFolderUpdate(w, folder)
+	versions := map[string]int64{}
+	if oldParentID != folder.ParentID {
+		versions, err = a.inventoryFolderVersions(r.Context(), userID, oldParentID, folder.ParentID)
+		if err != nil {
+			writeLLSDError(w, http.StatusServiceUnavailable, "AIS inventory folder versions could not be loaded")
+			return
+		}
+	}
+	writeAISFolderUpdate(w, folder, versions)
 }
 
 func writeAISFolderError(w http.ResponseWriter, err error) bool {
@@ -836,17 +846,17 @@ func writeAISUUIDArray(w http.ResponseWriter, key, id string) {
 		"<array><uuid>%s</uuid></array></map></llsd>", html.EscapeString(key), html.EscapeString(id))
 }
 
-func writeAISFolderUpdate(w http.ResponseWriter, folder inventory.Folder) {
+func writeAISFolderUpdate(w http.ResponseWriter, folder inventory.Folder, versions map[string]int64) {
 	w.Header().Set("Content-Type", "application/llsd+xml; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_, _ = fmt.Fprintf(w, "<?xml version=\"1.0\"?><llsd><map>"+
 		"<key>_updated_categories</key><array><uuid>%s</uuid></array>"+
 		"<key>category_id</key><uuid>%s</uuid><key>parent_id</key><uuid>%s</uuid>"+
 		"<key>type_default</key><integer>%d</integer><key>name</key><string>%s</string>"+
-		"<key>version</key><integer>%d</integer></map></llsd>",
+		"<key>version</key><integer>%d</integer>%s</map></llsd>",
 		html.EscapeString(folder.ID), html.EscapeString(folder.ID),
 		html.EscapeString(folder.ParentID), folder.TypeDefault,
-		html.EscapeString(folder.Name), folder.Version)
+		html.EscapeString(folder.Name), folder.Version, inventoryFolderVersionsXML(versions))
 }
 
 type aisInventoryItemMutation struct {
