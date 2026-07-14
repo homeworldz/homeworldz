@@ -32,7 +32,7 @@ func TestViewerWelcomePage(t *testing.T) {
 	response := httptest.NewRecorder()
 	New(nil, "test", Options{}).ServeHTTP(response, request)
 	if response.Code != http.StatusOK || response.Header().Get("Content-Type") != "text/html; charset=utf-8" ||
-		!strings.Contains(response.Body.String(), `src="/assets/homeworldz.svg"`) {
+		!strings.Contains(response.Body.String(), `src="data:image/svg+xml;base64,`) {
 		t.Fatalf("unexpected welcome response: %d %q", response.Code, response.Body.String())
 	}
 }
@@ -42,7 +42,7 @@ func TestViewerLoginGETShowsWelcomePage(t *testing.T) {
 	response := httptest.NewRecorder()
 	New(nil, "test", Options{}).ServeHTTP(response, request)
 	if response.Code != http.StatusOK || response.Header().Get("Content-Type") != "text/html; charset=utf-8" ||
-		!strings.Contains(response.Body.String(), `src="/assets/homeworldz.svg"`) {
+		!strings.Contains(response.Body.String(), `src="data:image/svg+xml;base64,`) {
 		t.Fatalf("unexpected login page response: %d %q", response.Code, response.Body.String())
 	}
 }
