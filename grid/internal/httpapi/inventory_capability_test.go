@@ -456,6 +456,23 @@ func TestAISLibraryIsReadableAndRejectsMutations(t *testing.T) {
 			folders: make(map[string][]inventory.Folder),
 		},
 	})
+	libraryItem := inventory.LibraryItems()[0]
+	itemRequest := httptest.NewRequest(http.MethodGet,
+		"/caps/inventory/library/"+session.ID+"/item/"+libraryItem.ID, nil)
+	itemResponse := httptest.NewRecorder()
+	handler.ServeHTTP(itemResponse, itemRequest)
+	if itemResponse.Code != http.StatusOK ||
+		!strings.Contains(itemResponse.Body.String(), "<key>item_id</key><uuid>"+libraryItem.ID+"</uuid>") ||
+		!strings.Contains(itemResponse.Body.String(), "<key>agent_id</key><uuid>"+inventory.LibraryOwnerID+"</uuid>") {
+		t.Fatalf("status = %d, AIS library item response = %s", itemResponse.Code, itemResponse.Body.String())
+	}
+	missingRequest := httptest.NewRequest(http.MethodGet,
+		"/caps/inventory/library/"+session.ID+"/item/30000000-0000-4000-8000-000000000099", nil)
+	missingResponse := httptest.NewRecorder()
+	handler.ServeHTTP(missingResponse, missingRequest)
+	if missingResponse.Code != http.StatusNotFound {
+		t.Fatalf("missing library item status = %d, response = %s", missingResponse.Code, missingResponse.Body.String())
+	}
 	expectedValues := []string{
 		"<key>agent_id</key><uuid>" + inventory.LibraryOwnerID + "</uuid>",
 		"<string>Library</string>", "<string>Clothing</string>", "<string>Body Parts</string>",

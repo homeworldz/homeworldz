@@ -118,11 +118,26 @@ func (a *API) libraryAISCapability(w http.ResponseWriter, r *http.Request) {
 	case len(parts) == 4 && parts[1] == "category" && validUUID(parts[2]) && parts[3] == "children":
 		writeAISInventoryFolder(w, r, inventory.LibraryOwnerID, parts[2],
 			inventory.LibraryFolders(), inventory.LibraryItems(), false)
+	case len(parts) == 3 && parts[1] == "item" && validUUID(parts[2]):
+		writeAISLibraryItem(w, parts[2])
 	case len(parts) == 2 && parts[1] == "orphans":
 		writeAISEmptyOrphans(w)
 	default:
 		writeLLSDError(w, http.StatusNotFound, "AIS library resource was not found")
 	}
+}
+
+func writeAISLibraryItem(w http.ResponseWriter, itemID string) {
+	for _, item := range inventory.LibraryItems() {
+		if item.ID != itemID {
+			continue
+		}
+		w.Header().Set("Content-Type", "application/llsd+xml; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, "<?xml version=\"1.0\"?><llsd>"+inventoryAISItemXML(item, false)+"</llsd>")
+		return
+	}
+	writeLLSDError(w, http.StatusNotFound, "AIS library item was not found")
 }
 
 func (a *API) fetchAISInventoryFolder(w http.ResponseWriter, r *http.Request, userID, folderID string, linksOnly bool) {
