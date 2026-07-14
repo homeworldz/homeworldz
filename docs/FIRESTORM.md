@@ -388,3 +388,15 @@ standard box on the upper face of the terrain-aligned box, preserving the
 clicked horizontal offset. The stored centres were 22.25 and 22.75 metres
 respectively for two 0.5-metre boxes, so their adjoining faces met exactly at
 22.5 metres without overlap or a gap.
+
+Initial object ownership, permissions, and delete-to-Trash acceptance passed
+on 2026-07-14. Scene snapshots retained Jim Tarber's UUID independently as
+both the original creator and current owner of his new boxes. Recipient-aware
+object update flags and standard object-property replies made Firestorm show
+the expected edit rights without its earlier non-owner confirmation warning.
+The grid-backed UUID-name reply resolved creator and owner UUID
+`169221cb-f2c9-48b3-a79d-c1d3e01d3723` to `Jim Tarber` in object details and
+the avatar profile. Deleting the upper stacked box removed it from the
+authoritative scene snapshot and created a `Primitive` object item in Jim's
+Trash. Persistence of both results across a clean restart remains the final
+acceptance check.
