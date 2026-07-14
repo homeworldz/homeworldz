@@ -398,5 +398,6 @@ The grid-backed UUID-name reply resolved creator and owner UUID
 `169221cb-f2c9-48b3-a79d-c1d3e01d3723` to `Jim Tarber` in object details and
 the avatar profile. Deleting the upper stacked box removed it from the
 authoritative scene snapshot and created a `Primitive` object item in Jim's
-Trash. Persistence of both results across a clean restart remains the final
-acceptance check.
+Trash. A clean restart subsequently passed: the deleted upper box remained
+absent, the `Primitive` item remained in Trash, and Firestorm again resolved
+both Creator and Owner as `Jim Tarber`.
