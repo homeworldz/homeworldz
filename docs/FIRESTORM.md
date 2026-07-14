@@ -257,8 +257,8 @@ north/south orientation but was not accepted as a default because rendered
 texture and lighting do not make a clean heightmap.
 
 The final default-terrain acceptance passed on 2026-07-14. Firestorm rendered
-the project-generated rounded-square plateau at the intended approximately
-250-by-250-metre above-water footprint, with water visible on every side and a
-calm 22-metre surface above the standard 20-metre waterline. This terrain is
-the development default; the bundled 200-metre round plateau remains an
-optional alternative.
+the project-generated square plateau at the intended approximately
+250-by-250-metre above-water footprint, with water visible on every side,
+slightly softened corners, and a calm 22-metre surface above the standard
+20-metre waterline. This large square terrain is the development default; the
+separate bundled 200-metre round plateau remains an optional alternative.

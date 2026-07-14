@@ -10,8 +10,9 @@ become terrain height spikes.
 `plateau-square.png` and `plateau-round.png` are deterministic, project-created
 256-by-256 grayscale heightmaps. Both have an 18-metre seabed, a smooth shore
 transition through the standard 20-metre waterline, and a calm 22-metre
-plateau. The default rounded-square shoreline is approximately 250 by 250
-metres. The alternate round shoreline is approximately 200 metres in diameter.
+plateau. The default square shoreline is approximately 250 by 250 metres, with
+slightly softened corners. The separate alternate round shoreline is
+approximately 200 metres in diameter.
 Their corresponding `.raw` files are the current region service's rounded
 eight-bit metre representation. Regenerate all four files with:
 
