@@ -368,6 +368,37 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/InventoryFolderList" }
+    post:
+      operationId: createInventoryFolder
+      summary: Create a user inventory folder
+      security:
+        - ServiceToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateInventoryFolderRequest" }
+      responses:
+        "201":
+          description: Inventory folder created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryFolder" }
+        "400":
+          description: Invalid inventory folder
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Parent inventory folder was not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: Inventory folder already exists
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 components:
   parameters:
     RequestId:
@@ -521,6 +552,15 @@ components:
         name: { type: string, minLength: 1, maxLength: 255 }
         typeDefault: { type: integer, minimum: -1, maximum: 127 }
         version: { type: integer, format: int64, minimum: 1 }
+    CreateInventoryFolderRequest:
+      type: object
+      additionalProperties: false
+      required: [id, parentId, name, typeDefault]
+      properties:
+        id: { type: string, format: uuid }
+        parentId: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 255 }
+        typeDefault: { type: integer, minimum: -1, maximum: -1 }
     InventoryFolderList:
       type: object
       required: [folders]

@@ -5,12 +5,20 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 )
 
 const zeroUUID = "00000000-0000-0000-0000-000000000000"
+
+var (
+	ErrFolderConflict = errors.New("inventory folder already exists")
+	ErrFolderNotFound = errors.New("inventory parent folder not found")
+	ErrInvalidFolder  = errors.New("inventory folder is invalid")
+)
 
 type Folder struct {
 	ID          string `json:"id"`
@@ -43,6 +51,7 @@ type Item struct {
 
 type Store interface {
 	EnsureSystemFolders(context.Context, string) ([]Folder, error)
+	CreateFolder(context.Context, Folder) (Folder, error)
 	ListFolders(context.Context, string) ([]Folder, error)
 	EnsureItem(context.Context, Item) (bool, error)
 	ListItems(context.Context, string) ([]Item, error)
@@ -151,6 +160,51 @@ func (s *PostgresStore) EnsureSystemFolders(ctx context.Context, userID string) 
 
 func (s *PostgresStore) ListFolders(ctx context.Context, userID string) ([]Folder, error) {
 	return listFolders(ctx, s.db, userID)
+}
+
+func (s *PostgresStore) CreateFolder(ctx context.Context, folder Folder) (Folder, error) {
+	folder.Name = strings.TrimSpace(folder.Name)
+	if folder.ID == "" || folder.OwnerUserID == "" || folder.ParentID == "" ||
+		folder.ParentID == zeroUUID || len(folder.Name) == 0 || len(folder.Name) > 255 ||
+		folder.TypeDefault != -1 {
+		return Folder{}, ErrInvalidFolder
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Folder{}, fmt.Errorf("begin inventory folder creation: %w", err)
+	}
+	defer tx.Rollback()
+	var parentVersion int64
+	if err := tx.QueryRowContext(ctx, `SELECT version FROM inventory_folders
+		WHERE id = $1 AND owner_user_id = $2 FOR UPDATE`, folder.ParentID, folder.OwnerUserID).Scan(&parentVersion); errors.Is(err, sql.ErrNoRows) {
+		return Folder{}, ErrFolderNotFound
+	} else if err != nil {
+		return Folder{}, fmt.Errorf("find inventory parent folder: %w", err)
+	}
+	result, err := tx.ExecContext(ctx, `INSERT INTO inventory_folders
+		(id, owner_user_id, parent_id, name, type_default, version)
+		VALUES ($1, $2, $3, $4, -1, 1) ON CONFLICT (id) DO NOTHING`,
+		folder.ID, folder.OwnerUserID, folder.ParentID, folder.Name)
+	if err != nil {
+		return Folder{}, fmt.Errorf("create inventory folder: %w", err)
+	}
+	created, err := result.RowsAffected()
+	if err != nil {
+		return Folder{}, fmt.Errorf("count created inventory folder: %w", err)
+	}
+	if created == 0 {
+		return Folder{}, ErrFolderConflict
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE inventory_folders
+		SET version = version + 1, updated_at = now() WHERE id = $1 AND owner_user_id = $2`,
+		folder.ParentID, folder.OwnerUserID); err != nil {
+		return Folder{}, fmt.Errorf("update inventory parent version: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return Folder{}, fmt.Errorf("commit inventory folder creation: %w", err)
+	}
+	folder.Version = 1
+	return folder, nil
 }
 
 func (s *PostgresStore) EnsureItem(ctx context.Context, item Item) (bool, error) {

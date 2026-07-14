@@ -65,3 +65,10 @@ type PresenceList struct {
 type InventoryFolderList struct {
 	Folders []inventory.Folder `json:"folders"`
 }
+
+type CreateInventoryFolderRequest struct {
+	ID          string `json:"id"`
+	ParentID    string `json:"parentId"`
+	Name        string `json:"name"`
+	TypeDefault int    `json:"typeDefault"`
+}

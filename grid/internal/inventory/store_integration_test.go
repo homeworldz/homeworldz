@@ -3,6 +3,7 @@ package inventory
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -45,10 +46,19 @@ func TestPostgresSystemFolderLifecycle(t *testing.T) {
 	if len(first) != 21 || len(second) != len(first) {
 		t.Fatalf("folder counts = %d, %d", len(first), len(second))
 	}
+	customFolderID, _ := identifier.NewUUID()
+	custom, err := store.CreateFolder(ctx, Folder{ID: customFolderID, OwnerUserID: userID,
+		ParentID: first[0].ID, Name: "Integration Projects", TypeDefault: -1})
+	if err != nil || custom.Version != 1 {
+		t.Fatalf("create custom folder = %#v, error = %v", custom, err)
+	}
+	if _, err := store.CreateFolder(ctx, custom); !errors.Is(err, ErrFolderConflict) {
+		t.Fatalf("duplicate custom folder error = %v", err)
+	}
 	itemID, _ := identifier.NewUUID()
 	assetID, _ := identifier.NewUUID()
 	item := Item{ID: itemID, OwnerUserID: userID, CreatorUserID: userID,
-		FolderID: first[8].ID, AssetID: assetID, AssetType: 13, InventoryType: 18,
+		FolderID: custom.ID, AssetID: assetID, AssetType: 13, InventoryType: 18,
 		Name: "Integration Shape", BasePermissions: 0x7fffffff, CurrentPermissions: 0x7fffffff}
 	if inserted, err := store.EnsureItem(ctx, item); err != nil || !inserted {
 		t.Fatalf("first ensure item inserted = %v, error = %v", inserted, err)

@@ -23,6 +23,27 @@ func (s *memoryInventoryStore) ListFolders(_ context.Context, userID string) ([]
 	return s.folders[userID], nil
 }
 
+func (s *memoryInventoryStore) CreateFolder(_ context.Context, folder inventory.Folder) (inventory.Folder, error) {
+	for _, existing := range s.folders[folder.OwnerUserID] {
+		if existing.ID == folder.ID {
+			return inventory.Folder{}, inventory.ErrFolderConflict
+		}
+	}
+	parentFound := false
+	for index := range s.folders[folder.OwnerUserID] {
+		if s.folders[folder.OwnerUserID][index].ID == folder.ParentID {
+			s.folders[folder.OwnerUserID][index].Version++
+			parentFound = true
+		}
+	}
+	if !parentFound {
+		return inventory.Folder{}, inventory.ErrFolderNotFound
+	}
+	folder.Version = 1
+	s.folders[folder.OwnerUserID] = append(s.folders[folder.OwnerUserID], folder)
+	return folder, nil
+}
+
 func (s *memoryInventoryStore) EnsureItem(_ context.Context, item inventory.Item) (bool, error) {
 	if s.items == nil {
 		s.items = make(map[string][]inventory.Item)
@@ -57,6 +78,16 @@ func TestInventoryFoldersEndpoint(t *testing.T) {
 	}
 	requestRegion[Error](t, handler, http.MethodGet,
 		"/api/v1/inventory/not-a-uuid/folders", "", http.StatusNotFound)
+	const folderID = "40000000-0000-4000-8000-000000000001"
+	created := requestRegion[inventory.Folder](t, handler, http.MethodPost,
+		"/api/v1/inventory/"+userID+"/folders",
+		`{"id":"`+folderID+`","parentId":"`+inventory.SystemFolderID(userID, 8)+`","name":"Projects","typeDefault":-1}`,
+		http.StatusCreated)
+	if created.ID != folderID || created.Name != "Projects" || created.Version != 1 {
+		t.Fatalf("created inventory folder = %#v", created)
+	}
 	requestRegion[Error](t, handler, http.MethodPost,
-		"/api/v1/inventory/"+userID+"/folders", "", http.StatusMethodNotAllowed)
+		"/api/v1/inventory/"+userID+"/folders",
+		`{"id":"`+folderID+`","parentId":"`+inventory.SystemFolderID(userID, 8)+`","name":"Projects","typeDefault":-1}`,
+		http.StatusConflict)
 }
