@@ -59,6 +59,8 @@ struct ObjectInventoryItem {
     std::string asset_id;
     std::string name;
     std::string description;
+    std::uint32_t base_permissions{};
+    std::uint32_t current_permissions{};
     std::uint32_t everyone_permissions{};
     std::uint32_t next_permissions{};
 };

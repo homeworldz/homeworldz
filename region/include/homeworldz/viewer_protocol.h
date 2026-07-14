@@ -108,6 +108,29 @@ struct DeRezObject : AgentMessage {
     std::vector<std::uint32_t> local_ids;
 };
 
+struct ObjectSelect : AgentMessage {
+    std::vector<std::uint32_t> local_ids;
+};
+
+struct RequestObjectPropertiesFamily : AgentMessage {
+    std::uint32_t request_flags{};
+    Uuid object_id{};
+};
+
+struct ObjectProperties {
+    Uuid object_id{};
+    Uuid creator_id{};
+    Uuid owner_id{};
+    std::uint32_t base_permissions{0x0009e000};
+    std::uint32_t owner_permissions{0x0009e000};
+    std::uint32_t group_permissions{};
+    std::uint32_t everyone_permissions{};
+    std::uint32_t next_owner_permissions{0x0008e000};
+    std::uint64_t creation_date{};
+    std::string name;
+    std::string description;
+};
+
 struct InventoryItem {
     Uuid item_id{};
     Uuid creator_id{};
@@ -216,6 +239,7 @@ struct StaticObject {
     std::uint32_t local_id{1};
     Uuid id{};
     Uuid owner_id{};
+    std::uint32_t update_flags{};
     std::uint8_t pcode{9};
     std::uint8_t material{3};
     std::array<float, 3> position{132.0F, 128.0F, 26.0F};
@@ -243,6 +267,12 @@ std::optional<MoveInventoryItem> decode_move_inventory_item(std::span<const std:
 std::optional<ObjectAdd> decode_object_add(std::span<const std::byte> payload);
 std::optional<DeRezObject> decode_derez_object(std::span<const std::byte> payload);
 std::vector<std::byte> encode_kill_object(std::span<const std::uint32_t> local_ids);
+std::optional<ObjectSelect> decode_object_select(std::span<const std::byte> payload);
+std::optional<RequestObjectPropertiesFamily> decode_request_object_properties_family(
+    std::span<const std::byte> payload);
+std::vector<std::byte> encode_object_properties(std::span<const ObjectProperties> objects);
+std::vector<std::byte> encode_object_properties_family(
+    std::uint32_t request_flags, const ObjectProperties& object);
 std::vector<std::byte> encode_update_create_inventory_item(const AgentMessage& message,
                                                            std::uint32_t callback_id,
                                                            const InventoryItem& item);

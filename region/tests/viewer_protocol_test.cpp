@@ -203,6 +203,28 @@ bool message_codecs() {
     const auto derez = decode_derez_object(derez_payload);
     const std::array<std::uint32_t, 2> killed_ids{0x12345678, 0x01020304};
     const auto killed = encode_kill_object(killed_ids);
+    auto select_payload = bytes({0xff, 0xff, 0x00, 0x6e});
+    select_payload.insert(select_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
+    select_payload.insert(select_payload.end(), expected.session_id.begin(), expected.session_id.end());
+    select_payload.insert(select_payload.end(), {std::byte{1}, std::byte{0x78}, std::byte{0x56},
+                                                  std::byte{0x34}, std::byte{0x12}});
+    const auto selected = decode_object_select(select_payload);
+    auto family_payload = bytes({0xff, 0x05});
+    family_payload.insert(family_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
+    family_payload.insert(family_payload.end(), expected.session_id.begin(), expected.session_id.end());
+    family_payload.insert(family_payload.end(), {std::byte{0x04}, std::byte{0x03},
+                                                  std::byte{0x02}, std::byte{0x01}});
+    family_payload.insert(family_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
+    const auto family = decode_request_object_properties_family(family_payload);
+    ObjectProperties properties;
+    properties.object_id = expected.agent_id;
+    properties.creator_id = expected.agent_id;
+    properties.owner_id = expected.session_id;
+    properties.creation_date = 123;
+    properties.name = "Primitive";
+    const std::array property_list{properties};
+    const auto encoded_properties = encode_object_properties(property_list);
+    const auto encoded_family = encode_object_properties_family(0x01020304, properties);
     auto cached_payload = bytes({0xff, 0xff, 0x01, 0x80});
     cached_payload.insert(cached_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
     cached_payload.insert(cached_payload.end(), expected.session_id.begin(), expected.session_id.end());
@@ -280,6 +302,16 @@ bool message_codecs() {
            derez->transaction_id == expected.session_id && derez->packet_count == 1 &&
            derez->packet_number == 1 && derez->local_ids == std::vector<std::uint32_t>(killed_ids.begin(), killed_ids.end()) &&
            killed == bytes({0x10, 2, 0x78, 0x56, 0x34, 0x12, 0x04, 0x03, 0x02, 0x01}) &&
+           selected && selected->agent_id == expected.agent_id && selected->session_id == expected.session_id &&
+           selected->local_ids == std::vector<std::uint32_t>{0x12345678} &&
+           family && family->request_flags == 0x01020304 && family->object_id == expected.agent_id &&
+           encoded_properties.size() > 180 && encoded_properties[0] == std::byte{0xff} &&
+           encoded_properties[1] == std::byte{0x09} && encoded_properties[2] == std::byte{1} &&
+           encoded_properties[75] == std::byte{0x00} && encoded_properties[76] == std::byte{0xe0} &&
+           encoded_properties[77] == std::byte{0x09} && encoded_properties[104] == std::byte{0x3f} &&
+           encoded_family.size() > 100 && encoded_family[1] == std::byte{0x0a} &&
+           encoded_family[2] == std::byte{0x04} && encoded_family[54] == std::byte{0x00} &&
+           encoded_family[55] == std::byte{0xe0} && encoded_family[56] == std::byte{0x09} &&
            logout_reply.size() == 53 && logout_reply[3] == std::byte{0xfd} && logout_reply[36] == std::byte{1} &&
            cached && cached->serial == 7 && cached->queries.size() == 2 &&
            cached->queries[0].texture_index == 8 && cached->queries[1].texture_index == 9 &&
@@ -408,9 +440,12 @@ bool flat_terrain_codec() {
 bool static_object_codec() {
     StaticObject object;
     object.id = *parse_uuid("12345678-1234-4234-8234-123456789abc");
+    object.update_flags = 0x1002013c;
     const auto encoded = encode_static_object_update(0x0102030405060708ULL, object);
     if (encoded.size() <= 220 || encoded[0] != std::byte{12} || encoded[1] != std::byte{8} ||
         encoded[8] != std::byte{1} || encoded[11] != std::byte{1} || encoded[37] != std::byte{9} ||
+        encoded[117] != std::byte{0x3c} || encoded[118] != std::byte{0x01} ||
+        encoded[119] != std::byte{0x02} || encoded[120] != std::byte{0x10} ||
         encoded[136] != std::byte{})
         return false;
     const auto agent = *parse_uuid("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");

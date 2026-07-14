@@ -322,7 +322,14 @@ std::string simulator_endpoint(std::string_view public_endpoint, int viewer_port
 }
 
 std::optional<homeworldz::viewer::StaticObject> static_object_from_entity(
-    const homeworldz::scene::Entity& entity) {
+    const homeworldz::scene::Entity& entity, std::string_view recipient_id) {
+    constexpr std::uint32_t object_modify = 0x00000004;
+    constexpr std::uint32_t object_copy = 0x00000008;
+    constexpr std::uint32_t object_any_owner = 0x00000010;
+    constexpr std::uint32_t object_you_owner = 0x00000020;
+    constexpr std::uint32_t object_move = 0x00000100;
+    constexpr std::uint32_t object_transfer = 0x00020000;
+    constexpr std::uint32_t object_owner_modify = 0x10000000;
     if (entity.object_id.empty() || entity.id > (std::numeric_limits<std::uint32_t>::max)())
         return std::nullopt;
     const auto object_id = homeworldz::viewer::parse_uuid(entity.object_id);
@@ -332,6 +339,14 @@ std::optional<homeworldz::viewer::StaticObject> static_object_from_entity(
     object.local_id = static_cast<std::uint32_t>(entity.id);
     object.id = *object_id;
     object.owner_id = *owner_id;
+    const bool is_owner = entity.owner_id == recipient_id;
+    const auto permissions = is_owner ? entity.owner_permissions : entity.everyone_permissions;
+    object.update_flags = object_any_owner;
+    if ((permissions & homeworldz::scene::permission_modify) != 0) object.update_flags |= object_modify;
+    if ((permissions & homeworldz::scene::permission_copy) != 0) object.update_flags |= object_copy;
+    if ((permissions & homeworldz::scene::permission_move) != 0) object.update_flags |= object_move;
+    if ((permissions & homeworldz::scene::permission_transfer) != 0) object.update_flags |= object_transfer;
+    if (is_owner) object.update_flags |= object_you_owner | object_owner_modify;
     object.material = entity.material;
     object.position = {static_cast<float>(entity.position.x), static_cast<float>(entity.position.y),
                        static_cast<float>(entity.position.z)};
@@ -342,10 +357,35 @@ std::optional<homeworldz::viewer::StaticObject> static_object_from_entity(
 
 std::string object_asset_json(const homeworldz::scene::Entity& entity) {
     return "{\"format\":\"homeworldz-object-v1\",\"creatorId\":" +
-        homeworldz::api::json_string(entity.owner_id) + ",\"name\":" +
+        homeworldz::api::json_string(entity.creator_id) + ",\"name\":" +
         homeworldz::api::json_string(entity.name) + ",\"scale\":[" +
         std::to_string(entity.scale.x) + ',' + std::to_string(entity.scale.y) + ',' +
-        std::to_string(entity.scale.z) + "],\"material\":" + std::to_string(entity.material) + '}';
+        std::to_string(entity.scale.z) + "],\"material\":" + std::to_string(entity.material) +
+        ",\"basePermissions\":" + std::to_string(entity.base_permissions) +
+        ",\"ownerPermissions\":" + std::to_string(entity.owner_permissions) +
+        ",\"groupPermissions\":" + std::to_string(entity.group_permissions) +
+        ",\"everyonePermissions\":" + std::to_string(entity.everyone_permissions) +
+        ",\"nextOwnerPermissions\":" + std::to_string(entity.next_owner_permissions) + '}';
+}
+
+std::optional<homeworldz::viewer::ObjectProperties> object_properties_from_entity(
+    const homeworldz::scene::Entity& entity) {
+    const auto object_id = homeworldz::viewer::parse_uuid(entity.object_id);
+    const auto creator_id = homeworldz::viewer::parse_uuid(entity.creator_id);
+    const auto owner_id = homeworldz::viewer::parse_uuid(entity.owner_id);
+    if (!object_id || !creator_id || !owner_id) return std::nullopt;
+    homeworldz::viewer::ObjectProperties properties;
+    properties.object_id = *object_id;
+    properties.creator_id = *creator_id;
+    properties.owner_id = *owner_id;
+    properties.base_permissions = entity.base_permissions;
+    properties.owner_permissions = entity.owner_permissions;
+    properties.group_permissions = entity.group_permissions;
+    properties.everyone_permissions = entity.everyone_permissions;
+    properties.next_owner_permissions = entity.next_owner_permissions;
+    properties.creation_date = entity.creation_date;
+    properties.name = entity.name;
+    return properties;
 }
 } // namespace
 
@@ -1095,12 +1135,49 @@ int main() {
                                 static_cast<void>(send_udp(viewer_server, endpoint, *object));
                             for (const auto& [entity_id, entity] : scene.entities()) {
                                 static_cast<void>(entity_id);
-                                const auto restored_object = static_object_from_entity(entity);
+                                const auto restored_object = static_object_from_entity(entity, live_avatar.user_id);
                                 if (!restored_object) continue;
                                 if (const auto object = circuits.send(endpoint,
                                         homeworldz::viewer::encode_static_object_update(
                                             response.region_handle, *restored_object), true, now, true))
                                     static_cast<void>(send_udp(viewer_server, endpoint, *object));
+                            }
+                        }
+                        const auto object_select = homeworldz::viewer::decode_object_select(packet->payload);
+                        if (object_select && object_select->agent_id == identity->agent_id &&
+                            object_select->session_id == identity->session_id) {
+                            std::vector<homeworldz::viewer::ObjectProperties> properties;
+                            properties.reserve(object_select->local_ids.size());
+                            for (const auto local_id : object_select->local_ids) {
+                                const auto* entity = scene.find(local_id);
+                                if (!entity) continue;
+                                if (const auto object = object_properties_from_entity(*entity))
+                                    properties.push_back(*object);
+                            }
+                            auto response = homeworldz::viewer::encode_object_properties(properties);
+                            if (!response.empty()) {
+                                if (const auto outgoing = circuits.send(
+                                        endpoint, std::move(response), true, now, true))
+                                    static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
+                            }
+                        }
+                        const auto family_request =
+                            homeworldz::viewer::decode_request_object_properties_family(packet->payload);
+                        if (family_request && family_request->agent_id == identity->agent_id &&
+                            family_request->session_id == identity->session_id) {
+                            const auto requested_id = homeworldz::viewer::format_uuid(family_request->object_id);
+                            for (const auto& [entity_id, entity] : scene.entities()) {
+                                static_cast<void>(entity_id);
+                                if (entity.object_id != requested_id) continue;
+                                const auto properties = object_properties_from_entity(entity);
+                                if (properties) {
+                                    auto response = homeworldz::viewer::encode_object_properties_family(
+                                        family_request->request_flags, *properties);
+                                    if (const auto outgoing = circuits.send(
+                                            endpoint, std::move(response), true, now, true))
+                                        static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
+                                }
+                                break;
                             }
                         }
                         const auto object_add = homeworldz::viewer::decode_object_add(packet->payload);
@@ -1154,8 +1231,12 @@ int main() {
                                 if (auto* entity = scene.find(entity_id)) {
                                     entity->object_id = object_id;
                                     entity->owner_id = owner_id;
+                                    entity->creator_id = owner_id;
                                     entity->scale = {object_add->scale[0], object_add->scale[1], object_add->scale[2]};
                                     entity->material = object_add->material;
+                                    entity->creation_date = static_cast<std::uint64_t>(
+                                        std::chrono::duration_cast<std::chrono::seconds>(
+                                            std::chrono::system_clock::now().time_since_epoch()).count());
                                     try {
                                         storage->save_snapshot(scene);
                                         created = true;
@@ -1168,13 +1249,13 @@ int main() {
                             }
                             if (created) {
                                 const auto* entity = scene.find(entity_id);
-                                const auto object = entity ? static_object_from_entity(*entity) : std::nullopt;
-                                if (object) {
+                                if (entity) {
                                     const auto region_handle =
                                         (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
                                         static_cast<std::uint32_t>(region_grid_y * 256);
                                     for (const auto& [recipient_endpoint, recipient] : avatars) {
-                                        static_cast<void>(recipient);
+                                        const auto object = static_object_from_entity(*entity, recipient.user_id);
+                                        if (!object) continue;
                                         if (const auto sent = circuits.send(recipient_endpoint,
                                                 homeworldz::viewer::encode_static_object_update(
                                                     region_handle, *object), true, now, true))
@@ -1207,11 +1288,13 @@ int main() {
                                         reinterpret_cast<const std::byte*>(content_text.data()), content_text.size());
                                     bool item_created = false;
                                     try {
-                                        storage->store_asset(asset_id, user_id, content);
+                                        storage->store_asset(asset_id, entity->creator_id, content);
                                         item_created = viewer_grid && viewer_grid->create_object_inventory_item(
                                             user_id, homeworldz::grid::ObjectInventoryItem{
-                                                item_id, user_id, destination_id, asset_id,
-                                                entity->name, "", 0, 0x7fffffff});
+                                                item_id, entity->creator_id, destination_id, asset_id,
+                                                entity->name, "", entity->base_permissions,
+                                                entity->owner_permissions, entity->everyone_permissions,
+                                                entity->next_owner_permissions});
                                     } catch (const std::exception& error) {
                                         std::cout << "{\"level\":\"error\",\"message\":\"primitive derez inventory failed\",\"error\":"
                                                   << homeworldz::api::json_string(error.what()) << "}" << std::endl;
@@ -1219,16 +1302,17 @@ int main() {
                                     if (!item_created) continue;
                                     homeworldz::viewer::InventoryItem item;
                                     item.item_id = *homeworldz::viewer::parse_uuid(item_id);
-                                    item.creator_id = identity->agent_id;
+                                    item.creator_id = *homeworldz::viewer::parse_uuid(entity->creator_id);
                                     item.owner_id = identity->agent_id;
                                     item.folder_id = derez->destination_id;
                                     item.asset_id = *homeworldz::viewer::parse_uuid(asset_id);
                                     item.asset_type = 6;
                                     item.inventory_type = 6;
                                     item.name = entity->name;
-                                    item.base_permissions = 0x7fffffff;
-                                    item.current_permissions = 0x7fffffff;
-                                    item.next_permissions = 0x7fffffff;
+                                    item.base_permissions = entity->base_permissions;
+                                    item.current_permissions = entity->owner_permissions;
+                                    item.everyone_permissions = entity->everyone_permissions;
+                                    item.next_permissions = entity->next_owner_permissions;
                                     item.creation_date = static_cast<std::int32_t>(
                                         std::chrono::duration_cast<std::chrono::seconds>(
                                             std::chrono::system_clock::now().time_since_epoch()).count());

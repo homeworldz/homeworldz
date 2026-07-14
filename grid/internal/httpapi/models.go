@@ -82,6 +82,8 @@ type CreateInventoryItemRequest struct {
 	InventoryType       int    `json:"inventoryType"`
 	Name                string `json:"name"`
 	Description         string `json:"description"`
+	BasePermissions     uint32 `json:"basePermissions"`
+	CurrentPermissions  uint32 `json:"currentPermissions"`
 	EveryonePermissions uint32 `json:"everyonePermissions"`
 	NextPermissions     uint32 `json:"nextPermissions"`
 }

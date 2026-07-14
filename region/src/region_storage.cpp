@@ -246,9 +246,42 @@ private:
         expect(":");
         const auto material = unsigned_integer();
         if (material > 255) fail("material is outside the supported range");
+        scene::Entity result{id, std::move(name), position, velocity, std::move(object_id),
+                             std::move(owner_id), scale, static_cast<std::uint8_t>(material)};
+        if (consume("}")) {
+            result.creator_id = result.owner_id;
+            return result;
+        }
+        expect(",");
+        expect_string("creatorId");
+        expect(":");
+        result.creator_id = string();
+        expect(",");
+        expect_string("basePermissions");
+        expect(":");
+        result.base_permissions = static_cast<std::uint32_t>(unsigned_integer());
+        expect(",");
+        expect_string("ownerPermissions");
+        expect(":");
+        result.owner_permissions = static_cast<std::uint32_t>(unsigned_integer());
+        expect(",");
+        expect_string("groupPermissions");
+        expect(":");
+        result.group_permissions = static_cast<std::uint32_t>(unsigned_integer());
+        expect(",");
+        expect_string("everyonePermissions");
+        expect(":");
+        result.everyone_permissions = static_cast<std::uint32_t>(unsigned_integer());
+        expect(",");
+        expect_string("nextOwnerPermissions");
+        expect(":");
+        result.next_owner_permissions = static_cast<std::uint32_t>(unsigned_integer());
+        expect(",");
+        expect_string("creationDate");
+        expect(":");
+        result.creation_date = unsigned_integer();
         expect("}");
-        return {id, std::move(name), position, velocity, std::move(object_id),
-                std::move(owner_id), scale, static_cast<std::uint8_t>(material)};
+        return result;
     }
 
     std::string_view input_;
@@ -279,7 +312,14 @@ std::string snapshot_json(const scene::Scene& scene) {
                 ",\"ownerId\":" + api::json_string(entity->owner_id) +
                 ",\"scale\":[" + std::to_string(entity->scale.x) + ',' +
                 std::to_string(entity->scale.y) + ',' + std::to_string(entity->scale.z) +
-                "],\"material\":" + std::to_string(entity->material) + '}';
+                "],\"material\":" + std::to_string(entity->material) +
+                ",\"creatorId\":" + api::json_string(entity->creator_id) +
+                ",\"basePermissions\":" + std::to_string(entity->base_permissions) +
+                ",\"ownerPermissions\":" + std::to_string(entity->owner_permissions) +
+                ",\"groupPermissions\":" + std::to_string(entity->group_permissions) +
+                ",\"everyonePermissions\":" + std::to_string(entity->everyone_permissions) +
+                ",\"nextOwnerPermissions\":" + std::to_string(entity->next_owner_permissions) +
+                ",\"creationDate\":" + std::to_string(entity->creation_date) + '}';
     }
     return json + "]}";
 }

@@ -26,6 +26,7 @@ int main() {
         if (primitive == nullptr) return 1;
         primitive->object_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
         primitive->owner_id = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+        primitive->creator_id = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
         primitive->scale = {0.5, 0.75, 1.25};
         primitive->material = 4;
         std::filesystem::create_directories(path);
@@ -71,6 +72,9 @@ int main() {
                 restored_second->name != "second \"line\"\n" ||
                 restored_second->object_id != primitive->object_id ||
                 restored_second->owner_id != primitive->owner_id ||
+                restored_second->creator_id != primitive->creator_id ||
+                restored_second->base_permissions != 0x0009e000 ||
+                restored_second->next_owner_permissions != 0x0008e000 ||
                 restored_second->scale.y != 0.75 || restored_second->material != 4 ||
                 restored.create("next") != 3) return 1;
 

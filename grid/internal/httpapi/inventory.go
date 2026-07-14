@@ -271,17 +271,16 @@ func (a *API) inventoryItemsByUser(w http.ResponseWriter, r *http.Request, userI
 	validType := (request.AssetType == 0 && request.InventoryType == 0) ||
 		(request.AssetType == 6 && request.InventoryType == 6)
 	if !validUUID(request.ID) || !validUUID(request.CreatorUserID) ||
-		request.CreatorUserID != userID || !validUUID(request.FolderID) ||
+		!validUUID(request.FolderID) ||
 		!validUUID(request.AssetID) || !validType {
 		writeJSON(w, http.StatusBadRequest, Error{Code: "invalid_inventory_item", Message: "inventory item is invalid"})
 		return
 	}
-	const fullPermissions = uint32(0x7fffffff)
 	item, err := a.inventory.CreateItem(r.Context(), inventory.Item{
 		ID: request.ID, OwnerUserID: userID, CreatorUserID: request.CreatorUserID,
 		FolderID: request.FolderID, AssetID: request.AssetID, AssetType: request.AssetType,
 		InventoryType: request.InventoryType, Name: request.Name, Description: request.Description,
-		BasePermissions: fullPermissions, CurrentPermissions: fullPermissions,
+		BasePermissions: request.BasePermissions, CurrentPermissions: request.CurrentPermissions,
 		EveryonePermissions: request.EveryonePermissions, NextPermissions: request.NextPermissions,
 	})
 	switch {

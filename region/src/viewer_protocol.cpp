@@ -48,6 +48,10 @@ constexpr std::array<std::byte, 4> move_inventory_item_id{
 constexpr std::array<std::byte, 2> object_add_id{std::byte{0xff}, std::byte{0x01}};
 constexpr std::array<std::byte, 4> derez_object_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x23}};
+constexpr std::array<std::byte, 4> object_select_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x6e}};
+constexpr std::array<std::byte, 2> request_object_properties_family_id{
+    std::byte{0xff}, std::byte{0x05}};
 constexpr std::array<std::byte, 4> economy_data_request_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x18}};
 constexpr std::array<std::byte, 4> economy_data_id{
@@ -700,6 +704,95 @@ std::vector<std::byte> encode_kill_object(std::span<const std::uint32_t> local_i
     return output;
 }
 
+std::optional<ObjectSelect> decode_object_select(std::span<const std::byte> payload) {
+    constexpr std::size_t header_size = 37;
+    if (payload.size() < header_size ||
+        !std::equal(object_select_id.begin(), object_select_id.end(), payload.begin()))
+        return std::nullopt;
+    const auto count = std::to_integer<std::size_t>(payload[36]);
+    if (count == 0 || payload.size() != header_size + count * sizeof(std::uint32_t))
+        return std::nullopt;
+    ObjectSelect result;
+    std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
+    result.local_ids.reserve(count);
+    for (std::size_t index = 0; index < count; ++index)
+        result.local_ids.push_back(read_le_u32(payload, header_size + index * sizeof(std::uint32_t)));
+    return result;
+}
+
+std::optional<RequestObjectPropertiesFamily> decode_request_object_properties_family(
+    std::span<const std::byte> payload) {
+    if (payload.size() != 54 ||
+        !std::equal(request_object_properties_family_id.begin(),
+                    request_object_properties_family_id.end(), payload.begin()))
+        return std::nullopt;
+    RequestObjectPropertiesFamily result;
+    std::copy_n(payload.begin() + 2, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 18, 16, result.session_id.begin());
+    result.request_flags = read_le_u32(payload, 34);
+    std::copy_n(payload.begin() + 38, 16, result.object_id.begin());
+    return result;
+}
+
+std::vector<std::byte> encode_object_properties(std::span<const ObjectProperties> objects) {
+    if (objects.empty() || objects.size() > 255) return {};
+    std::vector<std::byte> output{std::byte{0xff}, std::byte{0x09},
+                                  static_cast<std::byte>(objects.size())};
+    Uuid zero{};
+    for (const auto& object : objects) {
+        append_uuid(output, object.object_id);
+        append_uuid(output, object.creator_id);
+        append_uuid(output, object.owner_id);
+        append_uuid(output, zero); // group
+        append_le_u64(output, object.creation_date * 1000000); // protocol uses microseconds
+        append_le_u32(output, object.base_permissions);
+        append_le_u32(output, object.owner_permissions);
+        append_le_u32(output, object.group_permissions);
+        append_le_u32(output, object.everyone_permissions);
+        append_le_u32(output, object.next_owner_permissions);
+        append_le_u32(output, 0); // ownership cost
+        output.push_back(std::byte{}); // not for sale
+        append_le_u32(output, 0); // sale price
+        std::uint8_t aggregate_permissions = 0;
+        if ((object.owner_permissions & 0x00008000) != 0) aggregate_permissions |= 0x03; // copy
+        if ((object.owner_permissions & 0x00004000) != 0) aggregate_permissions |= 0x0c; // modify
+        if ((object.owner_permissions & 0x00002000) != 0) aggregate_permissions |= 0x30; // transfer
+        output.push_back(static_cast<std::byte>(aggregate_permissions));
+        output.insert(output.end(), 2, std::byte{}); // aggregate texture permissions
+        append_le_u32(output, 0); // category
+        append_le_u16(output, 0); // inventory serial
+        for (int index = 0; index < 3; ++index) append_uuid(output, zero); // inventory IDs
+        append_uuid(output, object.creator_id); // initial owner is also the last owner
+        if (!append_variable1(output, object.name) || !append_variable1(output, object.description) ||
+            !append_variable1(output, {}) || !append_variable1(output, {}) || !append_variable1(output, {}))
+            return {};
+    }
+    return output;
+}
+
+std::vector<std::byte> encode_object_properties_family(
+    std::uint32_t request_flags, const ObjectProperties& object) {
+    std::vector<std::byte> output{std::byte{0xff}, std::byte{0x0a}};
+    Uuid zero{};
+    append_le_u32(output, request_flags);
+    append_uuid(output, object.object_id);
+    append_uuid(output, object.owner_id);
+    append_uuid(output, zero); // group
+    append_le_u32(output, object.base_permissions);
+    append_le_u32(output, object.owner_permissions);
+    append_le_u32(output, object.group_permissions);
+    append_le_u32(output, object.everyone_permissions);
+    append_le_u32(output, object.next_owner_permissions);
+    append_le_u32(output, 0); // ownership cost
+    output.push_back(std::byte{}); // not for sale
+    append_le_u32(output, 0); // sale price
+    append_le_u32(output, 0); // category
+    append_uuid(output, object.creator_id); // initial owner is also the last owner
+    if (!append_variable1(output, object.name) || !append_variable1(output, object.description)) return {};
+    return output;
+}
+
 std::vector<std::byte> encode_update_create_inventory_item(const AgentMessage& message,
                                                            std::uint32_t callback_id,
                                                            const InventoryItem& item) {
@@ -1016,7 +1109,7 @@ std::vector<std::byte> encode_static_object_update(std::uint64_t region_handle, 
     for (int index = 0; index < 12; ++index) append_f32(transform, 0.0F); // velocity, acceleration, rotation, omega
     if (!append_binary(output, transform, 1)) return {};
     append_le_u32(output, 0); // parent
-    append_le_u32(output, 0); // update flags
+    append_le_u32(output, object.update_flags);
     output.push_back(std::byte{16}); // straight path
     output.push_back(std::byte{1}); // square profile
     append_le_u16(output, 0); append_le_u16(output, 0); // path begin/end

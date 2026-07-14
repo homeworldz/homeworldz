@@ -100,11 +100,14 @@ int main() {
         transport->requests.back().body.find(R"("name":"Terrain & Sky")") == std::string::npos ||
         transport->requests.back().body.find(R"("nextPermissions":2147483647)") == std::string::npos) return 1;
     const homeworldz::grid::ObjectInventoryItem object{
-        "44444444-4444-4444-8444-444444444444", session->agent_id,
+        "44444444-4444-4444-8444-444444444444", "77777777-7777-4777-8777-777777777777",
         "55555555-5555-4555-8555-555555555555", "66666666-6666-4666-8666-666666666666",
-        "Primitive", "", 0, 0x7fffffff};
+        "Primitive", "", 0x0009e000, 0x0009e000, 0, 0x0008e000};
     if (!client.create_object_inventory_item(session->agent_id, object) ||
         transport->requests.back().body.find(R"("assetType":6,"inventoryType":6)") == std::string::npos ||
+        transport->requests.back().body.find(
+            R"("creatorUserId":"77777777-7777-4777-8777-777777777777")") == std::string::npos ||
+        transport->requests.back().body.find(R"("basePermissions":647168)") == std::string::npos ||
         transport->requests.back().body.find(R"("name":"Primitive")") == std::string::npos) return 1;
     const auto copied = client.copy_library_item(
         session->agent_id, "d5e46210-b9d1-11dc-95ff-0800200c9a66",

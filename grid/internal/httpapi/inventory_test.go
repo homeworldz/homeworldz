@@ -320,12 +320,13 @@ func TestCreateTextureInventoryItemEndpoint(t *testing.T) {
 		`"creatorUserId":"` + userID + `","folderId":"` + folderID + `",` +
 		`"assetId":"50000000-0000-4000-8000-000000000010","assetType":0,` +
 		`"inventoryType":0,"name":"Uploaded Terrain","description":"Library source",` +
+		`"basePermissions":647168,"currentPermissions":647168,` +
 		`"everyonePermissions":0,"nextPermissions":2147483647}`
 	created := requestRegion[inventory.Item](t, handler, http.MethodPost,
 		"/api/v1/inventory/"+userID+"/items", body, http.StatusCreated)
 	if created.OwnerUserID != userID || created.CreatorUserID != userID ||
 		created.FolderID != folderID || created.AssetType != 0 || created.InventoryType != 0 ||
-		created.BasePermissions != 0x7fffffff || created.CurrentPermissions != 0x7fffffff {
+		created.BasePermissions != 0x0009e000 || created.CurrentPermissions != 0x0009e000 {
 		t.Fatalf("created inventory item = %#v", created)
 	}
 	requestRegion[Error](t, handler, http.MethodPost,
@@ -342,19 +343,22 @@ func TestCreateTextureInventoryItemEndpoint(t *testing.T) {
 
 func TestCreateObjectInventoryItemEndpoint(t *testing.T) {
 	const userID = "20000000-0000-4000-8000-000000000001"
+	const creatorID = "30000000-0000-4000-8000-000000000001"
 	store := &memoryInventoryStore{folders: make(map[string][]inventory.Folder)}
 	_, _ = store.EnsureSystemFolders(context.Background(), userID)
 	handler := New(checker{}, "test", Options{ServiceToken: "secret", Inventory: store})
 	folderID := inventory.SystemFolderID(userID, 14)
 	body := `{"id":"40000000-0000-4000-8000-000000000011",` +
-		`"creatorUserId":"` + userID + `","folderId":"` + folderID + `",` +
+		`"creatorUserId":"` + creatorID + `","folderId":"` + folderID + `",` +
 		`"assetId":"50000000-0000-4000-8000-000000000011","assetType":6,` +
 		`"inventoryType":6,"name":"Primitive","description":"",` +
-		`"everyonePermissions":0,"nextPermissions":2147483647}`
+		`"basePermissions":647168,"currentPermissions":647168,` +
+		`"everyonePermissions":0,"nextPermissions":581632}`
 	created := requestRegion[inventory.Item](t, handler, http.MethodPost,
 		"/api/v1/inventory/"+userID+"/items", body, http.StatusCreated)
-	if created.OwnerUserID != userID || created.CreatorUserID != userID ||
-		created.FolderID != folderID || created.AssetType != 6 || created.InventoryType != 6 {
+	if created.OwnerUserID != userID || created.CreatorUserID != creatorID ||
+		created.FolderID != folderID || created.AssetType != 6 || created.InventoryType != 6 ||
+		created.BasePermissions != 0x0009e000 || created.NextPermissions != 0x0008e000 {
 		t.Fatalf("created object inventory item = %#v", created)
 	}
 }

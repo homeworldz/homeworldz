@@ -10,6 +10,15 @@ namespace homeworldz::scene {
 
 using EntityId = std::uint64_t;
 
+constexpr std::uint32_t permission_transfer = 0x00002000;
+constexpr std::uint32_t permission_modify = 0x00004000;
+constexpr std::uint32_t permission_copy = 0x00008000;
+constexpr std::uint32_t permission_export = 0x00010000;
+constexpr std::uint32_t permission_move = 0x00080000;
+constexpr std::uint32_t permission_all = permission_transfer | permission_modify |
+    permission_copy | permission_move;
+constexpr std::uint32_t permission_creator = permission_all | permission_export;
+
 struct Vector3 {
     double x{};
     double y{};
@@ -25,6 +34,13 @@ struct Entity {
     std::string owner_id;
     Vector3 scale{1.0, 1.0, 1.0};
     std::uint8_t material{3};
+    std::string creator_id;
+    std::uint32_t base_permissions{permission_creator};
+    std::uint32_t owner_permissions{permission_creator};
+    std::uint32_t group_permissions{};
+    std::uint32_t everyone_permissions{};
+    std::uint32_t next_owner_permissions{permission_all};
+    std::uint64_t creation_date{};
 };
 
 struct RayIntersection {
