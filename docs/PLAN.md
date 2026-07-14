@@ -67,7 +67,7 @@ than runtime dependencies.
 - [x] Match OpenSimulator/Halcyon lossless PNG terrain-image semantics,
   including exact region dimensions, north/south row conversion, and HSL
   lightness mapped to the 0-to-128-metre height range; reject JPEG terrain.
-- [ ] Object rez, edit, take, delete, permissions, and persistence.
+- [x] Object rez, edit, take, delete, permissions, and persistence.
 - [ ] Script runtime boundary and implementation selection.
 - [ ] Teleport and cross-region avatar/object handoff.
 - [ ] Evaluate and implement exactly three OpenSimulator-compatible region

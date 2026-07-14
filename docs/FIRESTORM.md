@@ -491,3 +491,6 @@ edge cases that were corrected: Firestorm numbers Take batches as `0 of 1` but
 Delete batches as `1 of 1`, and the inventory round-trip initially discarded
 the scene description. After the fixes, deleting the intermediate Prim1 moved
 it to Trash and rezzing the original Objects item restored `Tall rotated box`.
+After a complete service and viewer restart, the rezzed Prim1 retained its
+description, size, rotation, Anyone Move and next-owner masks; its source item
+remained in Objects and the deleted intermediate item remained in Trash.
