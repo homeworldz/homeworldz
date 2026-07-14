@@ -425,4 +425,5 @@ Viewer primitive description editing passed its live-session acceptance on
 2026-07-14. Firestorm set Prim1's description to `Tall rotated box`; the region
 checked ownership and modify permission, persisted the value, and returned it
 through `ObjectProperties`. Closing and reopening Edit retained the canonical
-description. Clean-restart persistence remains to be confirmed.
+description. A complete service and viewer restart retained `Tall rotated box`
+in Prim1's Edit panel.
