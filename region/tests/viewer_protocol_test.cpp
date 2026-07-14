@@ -195,7 +195,7 @@ bool message_codecs() {
     derez_payload.push_back(std::byte{6});
     derez_payload.insert(derez_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
     derez_payload.insert(derez_payload.end(), expected.session_id.begin(), expected.session_id.end());
-    derez_payload.insert(derez_payload.end(), {std::byte{1}, std::byte{1}, std::byte{2},
+    derez_payload.insert(derez_payload.end(), {std::byte{1}, std::byte{0}, std::byte{2},
                                                std::byte{0x78}, std::byte{0x56},
                                                std::byte{0x34}, std::byte{0x12},
                                                std::byte{0x04}, std::byte{0x03},
@@ -379,7 +379,7 @@ bool message_codecs() {
            derez && derez->agent_id == expected.agent_id && derez->session_id == expected.session_id &&
            derez->destination == 6 && derez->destination_id == expected.agent_id &&
            derez->transaction_id == expected.session_id && derez->packet_count == 1 &&
-           derez->packet_number == 1 && derez->local_ids == std::vector<std::uint32_t>(killed_ids.begin(), killed_ids.end()) &&
+           derez->packet_number == 0 && derez->local_ids == std::vector<std::uint32_t>(killed_ids.begin(), killed_ids.end()) &&
            killed == bytes({0x10, 2, 0x78, 0x56, 0x34, 0x12, 0x04, 0x03, 0x02, 0x01}) &&
            selected && selected->agent_id == expected.agent_id && selected->session_id == expected.session_id &&
            selected->local_ids == std::vector<std::uint32_t>{0x12345678} &&

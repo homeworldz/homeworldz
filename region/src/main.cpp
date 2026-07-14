@@ -1747,7 +1747,7 @@ int main() {
                             std::size_t inventory_items_created = 0;
                             if ((derez->destination == derez_take_inventory ||
                                  derez->destination == derez_trash) && derez->packet_count > 0 &&
-                                derez->packet_number > 0 && derez->packet_number <= derez->packet_count) {
+                                derez->packet_number < derez->packet_count) {
                                 for (const auto local_id : derez->local_ids) {
                                     const auto* entity = scene.find(local_id);
                                     if (!entity || entity->object_id.empty() || entity->owner_id != user_id)
