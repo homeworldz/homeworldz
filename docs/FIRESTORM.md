@@ -325,3 +325,12 @@ The packaged login-logo update passed on 2026-07-14. After rebuilding and
 restarting the grid, Firestorm's login screen displayed the swapped-color
 HomeWorldz SVG. An automated test also requires the grid's embedded SVG to
 remain byte-for-byte identical to the project-root logo.
+
+The AIS v3 Library-outfit flow passed on 2026-07-14 with `Jim Tarber`.
+Firestorm copied `Library/Clothing/Initial Outfits/Default Avatar` into a new
+personal Clothing subfolder through `LibraryAPIv3` HTTP `COPY`, then replaced
+the Current Outfit through `InventoryAPIv3` HTTP `PUT .../links`. All six
+personal wearables immediately showed as worn, the shirt and pants rendered,
+and Current Outfit showed six valid links. Copying the Library outfit again
+intentionally creates another personal folder; duplicate folders observed
+during development reflected multiple explicit test attempts.

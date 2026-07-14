@@ -91,6 +91,12 @@ adapters use the same grid-owned inventory model rather than creating separate
 legacy and AIS stores. See
 [`ADR 0018`](adr/0018-ais-first-viewer-inventory.md).
 
+The implemented AIS v3 path includes copying a complete Library outfit into
+personal Inventory and replacing Current Outfit links in one viewer workflow.
+This is the supported way to adopt a Library outfit. Individual Library-item
+wear commands may still use viewer-specific legacy messages and are treated as
+compatibility behavior rather than the primary HomeWorldz inventory model.
+
 Read-only legacy inventory browsing is a stretch compatibility goal for older
 viewers. It is best effort, may remain incomplete, and does not imply support
 for legacy mutation workflows or a commitment to any particular older viewer.
