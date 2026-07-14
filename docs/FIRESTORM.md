@@ -438,3 +438,12 @@ Transfer enabled but unavailable for editing: a no-copy object must remain
 transferable under the fair-use rule. After a complete service and viewer
 restart, Anyone Move remained enabled, next-owner Copy remained disabled, and
 next-owner Transfer remained enabled and greyed out.
+
+Viewer primitive duplication passed its live-session acceptance on 2026-07-14.
+With Prim2 selected, Firestorm's `Ctrl+D` sent standard `ObjectDuplicate` and
+immediately displayed and selected one same-sized copy. The region assigned a
+new object UUID and local ID, placed the copy exactly `0.5` metres higher in X
+and Y, retained the source name and shape, retained Jim Tarber independently as
+creator and owner, inherited the source permission masks, and saved the copy in
+the authoritative scene snapshot. Persistence across a complete restart remains
+to be confirmed.
