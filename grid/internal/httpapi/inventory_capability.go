@@ -347,6 +347,9 @@ func decodeInventoryFolderMutationRequest(reader io.Reader, idKey string) (creat
 		}
 		value = strings.TrimSpace(value)
 		normalizedKey := key
+		if idKey == "folder_id" && key == "category_id" {
+			normalizedKey = idKey
+		}
 		if key == "type_default" {
 			normalizedKey = "type"
 		}

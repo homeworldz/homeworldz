@@ -143,10 +143,12 @@ func TestAISCreateAndRenameInventoryFolder(t *testing.T) {
 	folders, _ := inventories.EnsureSystemFolders(context.Background(), user.ID)
 	handler := New(checker{}, "test", Options{Identity: identities, Inventory: inventories})
 	base := "/caps/inventory/ais/" + session.ID
+	// Firestorm's AIS create-category representation uses category_id and
+	// type_default, unlike the legacy CreateInventoryCategory capability.
 	createBody := `<?xml version="1.0"?><llsd><map><key>categories</key><array><map>` +
-		`<key>folder_id</key><uuid>` + nullInventoryFolderID + `</uuid>` +
+		`<key>category_id</key><uuid>` + nullInventoryFolderID + `</uuid>` +
 		`<key>parent_id</key><uuid>` + folders[0].ID + `</uuid>` +
-		`<key>type</key><integer>-1</integer><key>name</key><string>New Folder</string>` +
+		`<key>type_default</key><integer>-1</integer><key>name</key><string>New Folder</string>` +
 		`</map></array></map></llsd>`
 	createRequest := httptest.NewRequest(http.MethodPost, base+"/category/"+folders[0].ID+"?tid="+session.ID,
 		bytes.NewBufferString(createBody))
