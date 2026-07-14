@@ -116,7 +116,9 @@ Without a service token, the region runs without grid registration.
 
 ## Documentation
 
-- [Feature differences](FEATURES.md)
+- [Feature differences](docs/FEATURES.md)
+- [Install a packaged grid](docs/INSTALL-GRID.md)
+- [Install a packaged region](docs/INSTALL-REGION.md)
 - [Implementation plan](docs/PLAN.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Physics evaluation](docs/PHYSICS.md)

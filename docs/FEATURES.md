@@ -3,8 +3,8 @@
 This document tracks major intentional differences between HomeWorldz and the
 Second Life, OpenSimulator, and Halcyon models. It is a design ledger, not a
 general implementation checklist. Missing compatibility work belongs in
-[`docs/PLAN.md`](docs/PLAN.md); protocol observations belong in
-[`docs/FIRESTORM.md`](docs/FIRESTORM.md).
+[`PLAN.md`](PLAN.md); protocol observations belong in
+[`FIRESTORM.md`](FIRESTORM.md).
 
 ## Implemented differences
 
@@ -89,7 +89,7 @@ as compatibility shims for OpenSimulator, Halcyon, Firestorm, and other
 viewers, but feature completion does not require a parallel legacy path. All
 adapters use the same grid-owned inventory model rather than creating separate
 legacy and AIS stores. See
-[`ADR 0018`](docs/adr/0018-ais-first-viewer-inventory.md).
+[`ADR 0018`](adr/0018-ais-first-viewer-inventory.md).
 
 Read-only legacy inventory browsing is a stretch compatibility goal for older
 viewers. It is best effort, may remain incomplete, and does not imply support
