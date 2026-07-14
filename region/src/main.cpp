@@ -1509,6 +1509,84 @@ int main() {
                                           << originals.size() << "}" << std::endl;
                             }
                         }
+                        const auto object_duplicate =
+                            homeworldz::viewer::decode_object_duplicate(packet->payload);
+                        if (object_duplicate && object_duplicate->agent_id == identity->agent_id &&
+                            object_duplicate->session_id == identity->session_id) {
+                            constexpr std::uint32_t create_selected = 0x00000002;
+                            const auto finite_offset = std::all_of(
+                                object_duplicate->offset.begin(), object_duplicate->offset.end(),
+                                [](float component) { return std::isfinite(component); });
+                            const auto supported_flags =
+                                (object_duplicate->duplicate_flags & ~create_selected) == 0;
+                            const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
+                            std::vector<homeworldz::scene::EntityId> created_entities;
+                            std::unordered_set<std::uint32_t> requested_ids;
+                            if (finite_offset && supported_flags) {
+                                for (const auto local_id : object_duplicate->local_ids) {
+                                    if (!requested_ids.insert(local_id).second) continue;
+                                    const auto* source = scene.find(local_id);
+                                    if (!source || source->owner_id != user_id ||
+                                        (source->owner_permissions & homeworldz::scene::permission_copy) == 0)
+                                        continue;
+                                    const auto source_copy = *source;
+                                    const homeworldz::scene::Vector3 position{
+                                        source_copy.position.x + object_duplicate->offset[0],
+                                        source_copy.position.y + object_duplicate->offset[1],
+                                        source_copy.position.z + object_duplicate->offset[2]};
+                                    if (position.x < 0.0 || position.x > 256.0 ||
+                                        position.y < 0.0 || position.y > 256.0 ||
+                                        position.z < -64.0 || position.z > 4096.0)
+                                        continue;
+                                    const auto entity_id = scene.create(source_copy.name, position);
+                                    auto* duplicate = scene.find(entity_id);
+                                    if (!duplicate) continue;
+                                    *duplicate = source_copy;
+                                    duplicate->id = entity_id;
+                                    duplicate->position = position;
+                                    duplicate->velocity = {};
+                                    duplicate->object_id = homeworldz::viewer::random_uuid();
+                                    duplicate->creation_date = static_cast<std::uint64_t>(
+                                        std::chrono::duration_cast<std::chrono::seconds>(
+                                            std::chrono::system_clock::now().time_since_epoch()).count());
+                                    created_entities.push_back(entity_id);
+                                }
+                            }
+                            bool persisted = false;
+                            if (!created_entities.empty()) {
+                                try {
+                                    storage->save_snapshot(scene);
+                                    persisted = true;
+                                } catch (const std::exception& error) {
+                                    for (const auto entity_id : created_entities) scene.remove(entity_id);
+                                    std::cout << "{\"level\":\"error\",\"message\":\"primitive duplication persistence failed\",\"error\":"
+                                              << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+                                }
+                            }
+                            if (persisted) {
+                                const auto region_handle =
+                                    (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
+                                    static_cast<std::uint32_t>(region_grid_y * 256);
+                                for (const auto entity_id : created_entities) {
+                                    const auto* entity = scene.find(entity_id);
+                                    if (!entity) continue;
+                                    for (const auto& [recipient_endpoint, recipient] : avatars) {
+                                        auto object = static_object_from_entity(*entity, recipient.user_id);
+                                        if (!object) continue;
+                                        if (recipient_endpoint == endpoint)
+                                            object->update_flags |=
+                                                object_duplicate->duplicate_flags & create_selected;
+                                        if (const auto sent = circuits.send(recipient_endpoint,
+                                                homeworldz::viewer::encode_static_object_update(
+                                                    region_handle, *object), true, now, true))
+                                            static_cast<void>(send_udp(
+                                                viewer_server, recipient_endpoint, *sent));
+                                    }
+                                }
+                                std::cout << "{\"level\":\"info\",\"message\":\"primitives duplicated\",\"count\":"
+                                          << created_entities.size() << "}" << std::endl;
+                            }
+                        }
                         const auto object_add = homeworldz::viewer::decode_object_add(packet->payload);
                         if (object_add && object_add->agent_id == identity->agent_id &&
                             object_add->session_id == identity->session_id) {

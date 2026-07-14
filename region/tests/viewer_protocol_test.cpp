@@ -255,6 +255,22 @@ bool message_codecs() {
          std::byte{0x34}, std::byte{0x12}, std::byte{0x08}, std::byte{1},
          std::byte{}, std::byte{}, std::byte{0x08}, std::byte{}});
     const auto object_permissions = decode_object_permissions(object_permissions_payload);
+    auto object_duplicate_payload = bytes({0xff, 0xff, 0x00, 0x5a});
+    object_duplicate_payload.insert(
+        object_duplicate_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
+    object_duplicate_payload.insert(
+        object_duplicate_payload.end(), expected.session_id.begin(), expected.session_id.end());
+    object_duplicate_payload.insert(
+        object_duplicate_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
+    const auto duplicate_vectors = object_duplicate_payload.size();
+    object_duplicate_payload.resize(duplicate_vectors + 12);
+    write_f32(object_duplicate_payload, duplicate_vectors, 1.0F);
+    write_f32(object_duplicate_payload, duplicate_vectors + 4, 2.0F);
+    write_f32(object_duplicate_payload, duplicate_vectors + 8, 3.0F);
+    object_duplicate_payload.insert(object_duplicate_payload.end(),
+        {std::byte{0x02}, std::byte{}, std::byte{}, std::byte{}, std::byte{1},
+         std::byte{0x78}, std::byte{0x56}, std::byte{0x34}, std::byte{0x12}});
+    const auto object_duplicate = decode_object_duplicate(object_duplicate_payload);
     auto family_payload = bytes({0xff, 0x05});
     family_payload.insert(family_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
     family_payload.insert(family_payload.end(), expected.session_id.begin(), expected.session_id.end());
@@ -378,6 +394,12 @@ bool message_codecs() {
            object_permissions->objects[0].local_id == 0x12345678 &&
            object_permissions->objects[0].field == 0x08 && object_permissions->objects[0].set &&
            object_permissions->objects[0].mask == 0x00080000 &&
+           object_duplicate && object_duplicate->agent_id == expected.agent_id &&
+           object_duplicate->session_id == expected.session_id &&
+           object_duplicate->group_id == expected.agent_id && object_duplicate->offset[0] == 1.0F &&
+           object_duplicate->offset[1] == 2.0F && object_duplicate->offset[2] == 3.0F &&
+           object_duplicate->duplicate_flags == 0x00000002 &&
+           object_duplicate->local_ids == std::vector<std::uint32_t>{0x12345678} &&
            family && family->request_flags == 0x01020304 && family->object_id == expected.agent_id &&
            encoded_properties.size() > 180 && encoded_properties[0] == std::byte{0xff} &&
            encoded_properties[1] == std::byte{0x09} && encoded_properties[2] == std::byte{1} &&
