@@ -456,3 +456,12 @@ and modify permission, stored the canonical material code `0x01`, and returned
 an authoritative object update. Closing and reopening Edit retained Metal.
 After a complete service and viewer restart, Prim3's Material field still
 reported Metal.
+
+Viewer primitive Take passed its live-session acceptance on 2026-07-14.
+Firestorm took the diagonally offset Prim2 copy with a one-packet, zero-based
+`DeRezObject` batch (`PacketNumber = 0`, `PacketCount = 1`). The region resolved
+Firestorm's null destination UUID to Jim Tarber's standard Objects folder,
+stored an object asset and inventory item with the scene object's creator,
+owner, permissions, name, and serialized state, removed exactly one object
+from the authoritative scene snapshot, and immediately showed `Prim2` in
+Firestorm's Objects folder.
