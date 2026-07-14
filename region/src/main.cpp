@@ -1732,11 +1732,14 @@ int main() {
                         const auto derez = homeworldz::viewer::decode_derez_object(packet->payload);
                         if (derez && derez->agent_id == identity->agent_id &&
                             derez->session_id == identity->session_id) {
+                            constexpr std::uint8_t derez_take_inventory = 0x04;
+                            constexpr std::uint8_t derez_trash = 0x06;
                             const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
                             const auto destination_id = homeworldz::viewer::format_uuid(derez->destination_id);
                             std::vector<std::uint32_t> removed_ids;
                             std::size_t inventory_items_created = 0;
-                            if (derez->destination == 6 && derez->packet_count > 0 &&
+                            if ((derez->destination == derez_take_inventory ||
+                                 derez->destination == derez_trash) && derez->packet_count > 0 &&
                                 derez->packet_number > 0 && derez->packet_number <= derez->packet_count) {
                                 for (const auto local_id : derez->local_ids) {
                                     const auto* entity = scene.find(local_id);
