@@ -55,6 +55,26 @@ int main() {
             if (!mapping || mapping->sha256 != first_asset.sha256) return 1;
             const auto loaded = storage.read_asset("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
             if (loaded.size() != content.size() || !std::equal(loaded.begin(), loaded.end(), content.begin())) return 1;
+            const auto source = path / "source" / "nested";
+            std::filesystem::create_directories(source);
+            {
+                std::ofstream output(source / "cccccccc-cccc-4ccc-8ccc-cccccccccccc.j2c", std::ios::binary);
+                output.write(reinterpret_cast<const char*>(content.data()), static_cast<std::streamsize>(content.size()));
+            }
+            {
+                std::ofstream output(source / "ignored.txt", std::ios::binary);
+                output << "ignored";
+            }
+            {
+                std::ofstream output(source / "dddddddd-dddd-4ddd-8ddd-dddddddddddd.bodypart", std::ios::binary);
+                output.write(reinterpret_cast<const char*>(content.data()), static_cast<std::streamsize>(content.size()));
+            }
+            if (storage.import_asset_directory(path / "missing") != 0 ||
+                storage.import_asset_directory(path / "source") != 2 ||
+                storage.read_asset("cccccccc-cccc-4ccc-8ccc-cccccccccccc") !=
+                    std::vector<std::byte>(content.begin(), content.end()) ||
+                storage.read_asset("dddddddd-dddd-4ddd-8ddd-dddddddddddd") !=
+                    std::vector<std::byte>(content.begin(), content.end())) return 1;
             const auto blob = path / "assets" / first_asset.sha256.substr(0, 2) / first_asset.sha256.substr(2);
             if (!std::filesystem::is_regular_file(blob)) return 1;
             {

@@ -1,0 +1,38 @@
+Halcyon software license
+========================
+
+Copyright (c) 2015, InWorldz Inc.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+* Redistributions of source code must retain the above copyright notice, this
+  list of conditions and the following disclaimer.
+* Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
+* Neither the name of halcyon nor the names of its contributors may be used to
+  endorse or promote products derived from this software without specific
+  prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES.
+
+Second Life Viewer Artwork notice from Halcyon's texture asset set
+=================================================================
+
+Copyright (C) 2008 Linden Research, Inc.
+
+Linden Research, Inc. licenses the Second Life viewer artwork and other works
+distributed with this notice under the Creative Commons
+Attribution-ShareAlike 3.0 License:
+https://creativecommons.org/licenses/by-sa/3.0/
+
+Linden Lab trademarks remain subject to Linden Lab's trademark policy. Copies
+or adaptations must include this notice and clearly identify changes. The
+files bundled here were renamed to viewer UUIDs; their binary content was not
+changed.

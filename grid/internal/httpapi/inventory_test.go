@@ -27,9 +27,13 @@ func (s *memoryInventoryStore) EnsureItem(_ context.Context, item inventory.Item
 	if s.items == nil {
 		s.items = make(map[string][]inventory.Item)
 	}
-	for _, existing := range s.items[item.OwnerUserID] {
+	for index, existing := range s.items[item.OwnerUserID] {
 		if existing.ID == item.ID {
-			return false, nil
+			if existing == item {
+				return false, nil
+			}
+			s.items[item.OwnerUserID][index] = item
+			return true, nil
 		}
 	}
 	s.items[item.OwnerUserID] = append(s.items[item.OwnerUserID], item)

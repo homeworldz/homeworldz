@@ -190,6 +190,21 @@ std::optional<std::pair<std::string, std::string>> texture_request(std::string_v
     return std::pair{std::string(session), std::string(texture)};
 }
 
+std::optional<std::pair<std::string, std::string>> viewer_asset_request(std::string_view path) {
+    constexpr std::string_view prefix = "/caps/assets/";
+    if (!path.starts_with(prefix)) return std::nullopt;
+    const auto separator = path.find("/?", prefix.size());
+    if (separator == std::string_view::npos) return std::nullopt;
+    const auto session = path.substr(prefix.size(), separator - prefix.size());
+    const auto query = path.substr(separator + 2);
+    const auto id_marker = query.find("_id=");
+    if (session.empty() || id_marker == std::string_view::npos || id_marker == 0 ||
+        query.find('&') != std::string_view::npos) return std::nullopt;
+    const auto asset = query.substr(id_marker + 4);
+    if (asset.empty()) return std::nullopt;
+    return std::pair{std::string(session), std::string(asset)};
+}
+
 std::string simulator_endpoint(std::string_view public_endpoint, int viewer_port) {
     auto authority = public_endpoint;
     const auto scheme = authority.find("://");
@@ -255,6 +270,12 @@ int main() {
     try {
         storage = std::make_unique<homeworldz::storage::RegionStorage>(
             environment_value("HOMEWORLDZ_REGION_DATA_PATH", "var/region"));
+        const auto imported_assets = storage->import_asset_directory(
+            environment_value("HOMEWORLDZ_REGION_ASSET_PATH", "assets/region"));
+        if (imported_assets != 0) {
+            std::cout << "{\"level\":\"info\",\"message\":\"region assets imported\",\"count\":"
+                      << imported_assets << "}" << std::endl;
+        }
         if (storage->load_snapshot(scene)) {
             std::cout << "{\"level\":\"info\",\"message\":\"scene snapshot restored\",\"revision\":"
                       << scene.revision() << ",\"entities\":" << scene.size() << "}" << std::endl;
@@ -359,14 +380,16 @@ int main() {
                     const bool event_queue = !seed && !session_id.empty();
                     const auto texture = texture_request(response.path);
                     if (texture) session_id = texture->first;
+                    const auto viewer_asset = viewer_asset_request(response.path);
+                    if (viewer_asset) session_id = viewer_asset->first;
                     std::string environment_session;
-                    if (!seed && !event_queue && !texture)
+                    if (!seed && !event_queue && !texture && !viewer_asset)
                         environment_session = capability_session(response.path, "/caps/environment/");
                     const bool environment_settings = !environment_session.empty();
                     if (environment_settings) session_id = environment_session;
-                    if (seed || event_queue || texture || environment_settings) {
+                    if (seed || event_queue || texture || viewer_asset || environment_settings) {
                         bool authorized = false;
-                        const auto expected_method = texture || environment_settings ? "GET" : "POST";
+                        const auto expected_method = texture || viewer_asset || environment_settings ? "GET" : "POST";
                         if (response.method == expected_method && registration && viewer_grid) {
                             const auto session = viewer_grid->validate_viewer_session(session_id);
                             authorized = session && session->destination_region_id == registration->region_id();
@@ -402,6 +425,19 @@ int main() {
                                     request, 404, "application/json",
                                     homeworldz::api::to_json(homeworldz::api::Error{
                                         "asset_not_found", "texture asset was not found"}));
+                            }
+                        } else if (authorized && viewer_asset &&
+                                   homeworldz::viewer::parse_uuid(viewer_asset->second)) {
+                            try {
+                                const auto asset = storage->read_asset(viewer_asset->second);
+                                response = homeworldz::http::response_for_content(
+                                    request, 200, "application/octet-stream",
+                                    std::string(reinterpret_cast<const char*>(asset.data()), asset.size()));
+                            } catch (const std::exception&) {
+                                response = homeworldz::http::response_for_content(
+                                    request, 404, "application/json",
+                                    homeworldz::api::to_json(homeworldz::api::Error{
+                                        "asset_not_found", "viewer asset was not found"}));
                             }
                         } else if (authorized && environment_settings && registration) {
                             response = homeworldz::http::response_for_content(

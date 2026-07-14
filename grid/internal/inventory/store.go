@@ -74,11 +74,10 @@ func DefaultWearables(userID string) []Item {
 		wearableType uint32
 		assetID      string
 	}{
-		// Firestorm 7.2.4 installs these valid starter body parts in its permanent asset cache.
-		{"Default Shape", 0, "0c5f60ae-1a54-1ee8-398d-7ed278552132"},
-		{"Default Skin", 1, "2d408f13-f437-e00e-8f6d-b0857580b034"},
-		{"Default Hair", 2, "aa9d6d53-2647-f731-97eb-e07a47febb57"},
-		{"Default Eyes", 3, "5725fae1-0087-ec20-a4a0-eaa82d5c121b"},
+		{"Default Shape", 0, "66c41e39-38f9-f75a-024e-585989bfab73"},
+		{"Default Skin", 1, "77c41e39-38f9-f75a-024e-585989bbabbb"},
+		{"Default Hair", 2, "d342e6c0-b9d2-11dc-95ff-0800200c9a66"},
+		{"Default Eyes", 3, "4bb6fa4d-1cd2-498a-a84c-95c1a0e745a7"},
 	}
 	items := make([]Item, 0, len(definitions)*2)
 	for _, definition := range definitions {
@@ -170,7 +169,27 @@ func (s *PostgresStore) EnsureItem(ctx context.Context, item Item) (bool, error)
 			 name, description, flags, base_permissions, current_permissions, everyone_permissions,
 			 next_permissions, sale_type, sale_price)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-		ON CONFLICT (id) DO NOTHING`, item.ID, item.OwnerUserID, creator, item.FolderID, item.AssetID,
+		ON CONFLICT (id) DO UPDATE SET
+			creator_user_id = EXCLUDED.creator_user_id, folder_id = EXCLUDED.folder_id,
+			asset_id = EXCLUDED.asset_id, asset_type = EXCLUDED.asset_type,
+			inventory_type = EXCLUDED.inventory_type, name = EXCLUDED.name,
+			description = EXCLUDED.description, flags = EXCLUDED.flags,
+			base_permissions = EXCLUDED.base_permissions,
+			current_permissions = EXCLUDED.current_permissions,
+			everyone_permissions = EXCLUDED.everyone_permissions,
+			next_permissions = EXCLUDED.next_permissions, sale_type = EXCLUDED.sale_type,
+			sale_price = EXCLUDED.sale_price, updated_at = now()
+		WHERE (inventory_items.creator_user_id, inventory_items.folder_id, inventory_items.asset_id,
+			inventory_items.asset_type, inventory_items.inventory_type, inventory_items.name,
+			inventory_items.description, inventory_items.flags, inventory_items.base_permissions,
+			inventory_items.current_permissions, inventory_items.everyone_permissions,
+			inventory_items.next_permissions, inventory_items.sale_type, inventory_items.sale_price)
+		IS DISTINCT FROM
+			(EXCLUDED.creator_user_id, EXCLUDED.folder_id, EXCLUDED.asset_id, EXCLUDED.asset_type,
+			 EXCLUDED.inventory_type, EXCLUDED.name, EXCLUDED.description, EXCLUDED.flags,
+			 EXCLUDED.base_permissions, EXCLUDED.current_permissions, EXCLUDED.everyone_permissions,
+			 EXCLUDED.next_permissions, EXCLUDED.sale_type, EXCLUDED.sale_price)`,
+		item.ID, item.OwnerUserID, creator, item.FolderID, item.AssetID,
 		item.AssetType, item.InventoryType, item.Name, item.Description, item.Flags, item.BasePermissions,
 		item.CurrentPermissions, item.EveryonePermissions, item.NextPermissions, item.SaleType, item.SalePrice)
 	if err != nil {

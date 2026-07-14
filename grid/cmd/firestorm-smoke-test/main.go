@@ -137,6 +137,7 @@ func run(ctx context.Context, opts options) error {
 		"HOMEWORLDZ_GRID_URL":               gridURL,
 		"HOMEWORLDZ_REGION_PUBLIC_ENDPOINT": regionURL,
 		"HOMEWORLDZ_REGION_DATA_PATH":       filepath.Join(root, "var", "region"),
+		"HOMEWORLDZ_REGION_ASSET_PATH":      filepath.Join(root, "assets", "region"),
 	})
 
 	grid, err := startChild(gridExecutable, root, environment,

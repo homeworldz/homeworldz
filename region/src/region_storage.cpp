@@ -352,6 +352,25 @@ AssetMetadata RegionStorage::store_asset(std::string viewer_id, std::span<const 
     return metadata;
 }
 
+std::size_t RegionStorage::import_asset_directory(const std::filesystem::path& directory) {
+    if (!std::filesystem::is_directory(directory)) return 0;
+    std::size_t imported = 0;
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(directory)) {
+        if (!entry.is_regular_file() ||
+            (entry.path().extension() != ".j2c" && entry.path().extension() != ".bodypart")) continue;
+        std::ifstream input(entry.path(), std::ios::binary | std::ios::ate);
+        if (!input) throw std::runtime_error("asset source file could not be opened");
+        const auto length = static_cast<std::streamsize>(input.tellg());
+        if (length <= 0) throw std::runtime_error("asset source file was empty");
+        input.seekg(0);
+        std::vector<std::byte> content(static_cast<std::size_t>(length));
+        input.read(reinterpret_cast<char*>(content.data()), length);
+        store_asset(entry.path().stem().string(), content);
+        ++imported;
+    }
+    return imported;
+}
+
 std::optional<AssetMetadata> RegionStorage::find_asset(std::string_view viewer_id) const {
     sqlite3_stmt* statement = nullptr;
     if (sqlite3_prepare_v2(database_, "SELECT viewer_id, sha256, size FROM asset_mappings WHERE viewer_id = ?", -1,

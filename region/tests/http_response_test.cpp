@@ -124,6 +124,7 @@ int main() {
         "http://region.example:42001/", "http://grid.example:42000/", "session-id");
     passed &= contains(seed, "<key>EventQueueGet</key><uri>http://region.example:42001/caps/event/session-id</uri>");
     passed &= contains(seed, "<key>GetTexture</key><uri>http://region.example:42001/caps/texture/session-id</uri>");
+    passed &= contains(seed, "<key>ViewerAsset</key><uri>http://region.example:42001/caps/assets/session-id</uri>");
     passed &= contains(seed, "<key>EnvironmentSettings</key><uri>http://region.example:42001/caps/environment/session-id</uri>");
     passed &= contains(seed, "<key>FetchInventoryDescendents2</key><uri>http://grid.example:42000/caps/inventory/descendents/session-id</uri>");
     passed &= contains(seed, "<key>FetchInventory2</key><uri>http://grid.example:42000/caps/inventory/items/session-id</uri>");

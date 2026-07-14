@@ -56,8 +56,13 @@ func TestPostgresSystemFolderLifecycle(t *testing.T) {
 	if inserted, err := store.EnsureItem(ctx, item); err != nil || inserted {
 		t.Fatalf("second ensure item inserted = %v, error = %v", inserted, err)
 	}
+	replacementAssetID, _ := identifier.NewUUID()
+	item.AssetID = replacementAssetID
+	if updated, err := store.EnsureItem(ctx, item); err != nil || !updated {
+		t.Fatalf("changed ensure item updated = %v, error = %v", updated, err)
+	}
 	items, err := store.ListItems(ctx, userID)
-	if err != nil || len(items) != 1 || items[0].AssetID != assetID {
+	if err != nil || len(items) != 1 || items[0].AssetID != replacementAssetID {
 		t.Fatalf("inventory items = %#v, error = %v", items, err)
 	}
 }

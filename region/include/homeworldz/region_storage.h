@@ -35,6 +35,7 @@ public:
     bool load_snapshot(scene::Scene& scene) const;
     SnapshotMetadata snapshot_metadata() const;
     AssetMetadata store_asset(std::string viewer_id, std::span<const std::byte> content);
+    std::size_t import_asset_directory(const std::filesystem::path& directory);
     std::optional<AssetMetadata> find_asset(std::string_view viewer_id) const;
     std::vector<std::byte> read_asset(std::string_view viewer_id) const;
 

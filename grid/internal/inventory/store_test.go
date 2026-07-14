@@ -35,8 +35,8 @@ func TestDefaultWearablesAreStableAndLinkedFromCurrentOutfit(t *testing.T) {
 	bodyPartsID := SystemFolderID(userID, 13)
 	currentOutfitID := SystemFolderID(userID, 46)
 	wantAssets := []string{
-		"0c5f60ae-1a54-1ee8-398d-7ed278552132", "2d408f13-f437-e00e-8f6d-b0857580b034",
-		"aa9d6d53-2647-f731-97eb-e07a47febb57", "5725fae1-0087-ec20-a4a0-eaa82d5c121b",
+		"66c41e39-38f9-f75a-024e-585989bfab73", "77c41e39-38f9-f75a-024e-585989bbabbb",
+		"d342e6c0-b9d2-11dc-95ff-0800200c9a66", "4bb6fa4d-1cd2-498a-a84c-95c1a0e745a7",
 	}
 	for index := 0; index < len(first); index += 2 {
 		item, link := first[index], first[index+1]
