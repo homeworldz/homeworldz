@@ -280,6 +280,11 @@ private:
         expect_string("creationDate");
         expect(":");
         result.creation_date = unsigned_integer();
+        if (consume("}")) return result;
+        expect(",");
+        expect_string("rotation");
+        expect(":");
+        result.rotation = vector();
         expect("}");
         return result;
     }
@@ -319,7 +324,9 @@ std::string snapshot_json(const scene::Scene& scene) {
                 ",\"groupPermissions\":" + std::to_string(entity->group_permissions) +
                 ",\"everyonePermissions\":" + std::to_string(entity->everyone_permissions) +
                 ",\"nextOwnerPermissions\":" + std::to_string(entity->next_owner_permissions) +
-                ",\"creationDate\":" + std::to_string(entity->creation_date) + '}';
+                ",\"creationDate\":" + std::to_string(entity->creation_date) +
+                ",\"rotation\":[" + std::to_string(entity->rotation.x) + ',' +
+                std::to_string(entity->rotation.y) + ',' + std::to_string(entity->rotation.z) + "]}";
     }
     return json + "]}";
 }

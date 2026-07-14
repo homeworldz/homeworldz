@@ -352,6 +352,8 @@ std::optional<homeworldz::viewer::StaticObject> static_object_from_entity(
     object.material = entity.material;
     object.position = {static_cast<float>(entity.position.x), static_cast<float>(entity.position.y),
                        static_cast<float>(entity.position.z)};
+    object.rotation = {static_cast<float>(entity.rotation.x), static_cast<float>(entity.rotation.y),
+                       static_cast<float>(entity.rotation.z)};
     object.scale = {static_cast<float>(entity.scale.x), static_cast<float>(entity.scale.y),
                     static_cast<float>(entity.scale.z)};
     return object;
@@ -362,7 +364,9 @@ std::string object_asset_json(const homeworldz::scene::Entity& entity) {
         homeworldz::api::json_string(entity.creator_id) + ",\"name\":" +
         homeworldz::api::json_string(entity.name) + ",\"scale\":[" +
         std::to_string(entity.scale.x) + ',' + std::to_string(entity.scale.y) + ',' +
-        std::to_string(entity.scale.z) + "],\"material\":" + std::to_string(entity.material) +
+        std::to_string(entity.scale.z) + "],\"rotation\":[" +
+        std::to_string(entity.rotation.x) + ',' + std::to_string(entity.rotation.y) + ',' +
+        std::to_string(entity.rotation.z) + "],\"material\":" + std::to_string(entity.material) +
         ",\"basePermissions\":" + std::to_string(entity.base_permissions) +
         ",\"ownerPermissions\":" + std::to_string(entity.owner_permissions) +
         ",\"groupPermissions\":" + std::to_string(entity.group_permissions) +
@@ -1232,8 +1236,11 @@ int main() {
                             homeworldz::viewer::decode_multiple_object_update(packet->payload);
                         if (transform_update && transform_update->agent_id == identity->agent_id &&
                             transform_update->session_id == identity->session_id) {
-                            using OriginalTransform =
-                                std::pair<homeworldz::scene::Vector3, homeworldz::scene::Vector3>;
+                            struct OriginalTransform {
+                                homeworldz::scene::Vector3 position;
+                                homeworldz::scene::Vector3 rotation;
+                                homeworldz::scene::Vector3 scale;
+                            };
                             std::unordered_map<homeworldz::scene::EntityId, OriginalTransform> originals;
                             std::unordered_set<homeworldz::scene::EntityId> requested_entities;
                             const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
@@ -1253,17 +1260,27 @@ int main() {
                                      (*update.position)[0] <= 256.0F && (*update.position)[1] >= 0.0F &&
                                      (*update.position)[1] <= 256.0F && (*update.position)[2] >= -64.0F &&
                                      (*update.position)[2] <= 4096.0F);
-                                const bool valid_rotation = !update.rotation || finite_vector(*update.rotation);
+                                const bool valid_rotation = !update.rotation ||
+                                    (finite_vector(*update.rotation) &&
+                                     std::all_of(update.rotation->begin(), update.rotation->end(),
+                                         [](float component) { return component >= -1.0F && component <= 1.0F; }) &&
+                                     ((*update.rotation)[0] * (*update.rotation)[0] +
+                                      (*update.rotation)[1] * (*update.rotation)[1] +
+                                      (*update.rotation)[2] * (*update.rotation)[2]) <= 1.001F);
                                 const bool valid_scale = !update.scale ||
                                     (finite_vector(*update.scale) &&
                                      std::all_of(update.scale->begin(), update.scale->end(),
                                          [](float component) { return component >= 0.01F && component <= 64.0F; }));
                                 if (!valid_position || !valid_rotation || !valid_scale) continue;
-                                if (!update.position && !update.scale) continue;
-                                originals.try_emplace(entity->id, entity->position, entity->scale);
+                                if (!update.position && !update.rotation && !update.scale) continue;
+                                originals.try_emplace(entity->id, OriginalTransform{
+                                    entity->position, entity->rotation, entity->scale});
                                 if (update.position)
                                     entity->position = {(*update.position)[0], (*update.position)[1],
                                                         (*update.position)[2]};
+                                if (update.rotation)
+                                    entity->rotation = {(*update.rotation)[0], (*update.rotation)[1],
+                                                        (*update.rotation)[2]};
                                 if (update.scale)
                                     entity->scale = {(*update.scale)[0], (*update.scale)[1], (*update.scale)[2]};
                             }
@@ -1275,8 +1292,9 @@ int main() {
                                 } catch (const std::exception& error) {
                                     for (const auto& [entity_id, original] : originals) {
                                         if (auto* entity = scene.find(entity_id)) {
-                                            entity->position = original.first;
-                                            entity->scale = original.second;
+                                            entity->position = original.position;
+                                            entity->rotation = original.rotation;
+                                            entity->scale = original.scale;
                                         }
                                     }
                                     std::cout << "{\"level\":\"error\",\"message\":\"primitive update persistence failed\",\"error\":"

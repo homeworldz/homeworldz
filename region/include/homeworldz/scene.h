@@ -41,6 +41,7 @@ struct Entity {
     std::uint32_t everyone_permissions{};
     std::uint32_t next_owner_permissions{permission_all};
     std::uint64_t creation_date{};
+    Vector3 rotation;
 };
 
 struct RayIntersection {

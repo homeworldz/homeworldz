@@ -485,9 +485,12 @@ bool static_object_codec() {
     StaticObject object;
     object.id = *parse_uuid("12345678-1234-4234-8234-123456789abc");
     object.update_flags = 0x1002013c;
+    object.rotation = {0.25F, 0.0F, 0.0F};
     const auto encoded = encode_static_object_update(0x0102030405060708ULL, object);
     if (encoded.size() <= 220 || encoded[0] != std::byte{12} || encoded[1] != std::byte{8} ||
         encoded[8] != std::byte{1} || encoded[11] != std::byte{1} || encoded[37] != std::byte{9} ||
+        encoded[89] != std::byte{0x00} || encoded[90] != std::byte{0x00} ||
+        encoded[91] != std::byte{0x80} || encoded[92] != std::byte{0x3e} ||
         encoded[117] != std::byte{0x3c} || encoded[118] != std::byte{0x01} ||
         encoded[119] != std::byte{0x02} || encoded[120] != std::byte{0x10} ||
         encoded[136] != std::byte{})

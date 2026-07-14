@@ -1212,7 +1212,9 @@ std::vector<std::byte> encode_static_object_update(std::uint64_t region_handle, 
     for (const auto value : object.scale) append_f32(output, value);
     std::vector<std::byte> transform;
     for (const auto value : object.position) append_f32(transform, value);
-    for (int index = 0; index < 12; ++index) append_f32(transform, 0.0F); // velocity, acceleration, rotation, omega
+    for (int index = 0; index < 6; ++index) append_f32(transform, 0.0F); // velocity, acceleration
+    for (const auto value : object.rotation) append_f32(transform, value);
+    for (int index = 0; index < 3; ++index) append_f32(transform, 0.0F); // angular velocity
     if (!append_binary(output, transform, 1)) return {};
     append_le_u32(output, 0); // parent
     append_le_u32(output, object.update_flags);

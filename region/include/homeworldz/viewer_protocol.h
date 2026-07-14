@@ -270,6 +270,7 @@ struct StaticObject {
     std::uint8_t pcode{9};
     std::uint8_t material{3};
     std::array<float, 3> position{132.0F, 128.0F, 26.0F};
+    std::array<float, 3> rotation{};
     std::array<float, 3> scale{2.0F, 2.0F, 2.0F};
 };
 
