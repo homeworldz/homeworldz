@@ -52,6 +52,10 @@ constexpr std::array<std::byte, 4> object_select_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x6e}};
 constexpr std::array<std::byte, 2> request_object_properties_family_id{
     std::byte{0xff}, std::byte{0x05}};
+constexpr std::array<std::byte, 4> uuid_name_request_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0xeb}};
+constexpr std::array<std::byte, 4> uuid_name_reply_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0xec}};
 constexpr std::array<std::byte, 4> economy_data_request_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x18}};
 constexpr std::array<std::byte, 4> economy_data_id{
@@ -790,6 +794,31 @@ std::vector<std::byte> encode_object_properties_family(
     append_le_u32(output, 0); // category
     append_uuid(output, object.creator_id); // initial owner is also the last owner
     if (!append_variable1(output, object.name) || !append_variable1(output, object.description)) return {};
+    return output;
+}
+
+std::optional<std::vector<Uuid>> decode_uuid_name_request(std::span<const std::byte> payload) {
+    constexpr std::size_t header_size = 5;
+    if (payload.size() < header_size ||
+        !std::equal(uuid_name_request_id.begin(), uuid_name_request_id.end(), payload.begin()))
+        return std::nullopt;
+    const auto count = std::to_integer<std::size_t>(payload[4]);
+    if (count == 0 || payload.size() != header_size + count * 16) return std::nullopt;
+    std::vector<Uuid> result(count);
+    for (std::size_t index = 0; index < count; ++index)
+        std::copy_n(payload.begin() + header_size + index * 16, 16, result[index].begin());
+    return result;
+}
+
+std::vector<std::byte> encode_uuid_name_reply(std::span<const UuidName> names) {
+    if (names.empty() || names.size() > 255) return {};
+    std::vector<std::byte> output(uuid_name_reply_id.begin(), uuid_name_reply_id.end());
+    output.push_back(static_cast<std::byte>(names.size()));
+    for (const auto& name : names) {
+        append_uuid(output, name.id);
+        if (!append_variable1(output, name.first_name) || !append_variable1(output, name.last_name))
+            return {};
+    }
     return output;
 }
 

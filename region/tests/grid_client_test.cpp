@@ -23,6 +23,8 @@ public:
         if (method == "POST") return {201, R"({"id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"})"};
         if (method == "PUT") return {200, R"({"id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"})"};
         if (method == "DELETE") return {204, {}};
+        if (method == "GET" && path.starts_with("/api/v1/users/"))
+            return {200, R"({"id":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","username":"jim.tarber","createdAt":"2026-07-14T00:00:00Z"})"};
         if (method == "GET") return {200, R"({"id":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","userId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","expiresAt":"2026-07-14T00:00:00Z","viewerCircuitCode":123456,"destinationRegionId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"})"};
         return {500, {}};
     }
@@ -53,6 +55,9 @@ int main() {
     if (!session || session->agent_id != "cccccccc-cccc-4ccc-8ccc-cccccccccccc" ||
         session->circuit_code != 123456 || session->destination_region_id != "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" ||
         transport->requests.back().method != "GET") return 1;
+    const auto user = client.find_user(session->agent_id);
+    if (!user || user->id != session->agent_id || user->username != "jim.tarber" ||
+        transport->requests.back().path != "/api/v1/users/" + session->agent_id) return 1;
     homeworldz::grid::ViewerSessionCache cache(client, std::chrono::seconds(5));
     const auto requests_before_cache = transport->requests.size();
     const auto cached = cache.validate(session->session_id, started);

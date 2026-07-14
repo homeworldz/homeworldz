@@ -225,6 +225,14 @@ bool message_codecs() {
     const std::array property_list{properties};
     const auto encoded_properties = encode_object_properties(property_list);
     const auto encoded_family = encode_object_properties_family(0x01020304, properties);
+    auto name_request_payload = bytes({0xff, 0xff, 0x00, 0xeb, 0x02});
+    name_request_payload.insert(name_request_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
+    name_request_payload.insert(name_request_payload.end(), expected.session_id.begin(), expected.session_id.end());
+    const auto name_request = decode_uuid_name_request(name_request_payload);
+    const std::array names{
+        UuidName{expected.agent_id, "Jim", "Tarber"},
+        UuidName{expected.session_id, "Demo", "Avatar"}};
+    const auto name_reply = encode_uuid_name_reply(names);
     auto cached_payload = bytes({0xff, 0xff, 0x01, 0x80});
     cached_payload.insert(cached_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
     cached_payload.insert(cached_payload.end(), expected.session_id.begin(), expected.session_id.end());
@@ -312,6 +320,10 @@ bool message_codecs() {
            encoded_family.size() > 100 && encoded_family[1] == std::byte{0x0a} &&
            encoded_family[2] == std::byte{0x04} && encoded_family[54] == std::byte{0x00} &&
            encoded_family[55] == std::byte{0xe0} && encoded_family[56] == std::byte{0x09} &&
+           name_request && name_request->size() == 2 && (*name_request)[0] == expected.agent_id &&
+           (*name_request)[1] == expected.session_id && name_reply.size() == 64 &&
+           name_reply[0] == std::byte{0xff} && name_reply[3] == std::byte{0xec} &&
+           name_reply[4] == std::byte{2} && name_reply[21] == std::byte{4} &&
            logout_reply.size() == 53 && logout_reply[3] == std::byte{0xfd} && logout_reply[36] == std::byte{1} &&
            cached && cached->serial == 7 && cached->queries.size() == 2 &&
            cached->queries[0].texture_index == 8 && cached->queries[1].texture_index == 9 &&

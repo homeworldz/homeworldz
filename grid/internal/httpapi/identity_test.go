@@ -45,6 +45,15 @@ func (s *memoryIdentityStore) CreateUser(_ context.Context, username, password s
 	return user, nil
 }
 
+func (s *memoryIdentityStore) FindUser(_ context.Context, id string) (identity.User, error) {
+	for _, stored := range s.users {
+		if stored.user.ID == id {
+			return stored.user, nil
+		}
+	}
+	return identity.User{}, identity.ErrUserNotFound
+}
+
 func (s *memoryIdentityStore) CreateSession(_ context.Context, username, password string, duration time.Duration) (identity.Session, error) {
 	stored, ok := s.users[username]
 	if !ok || stored.password != password {
@@ -103,6 +112,13 @@ func TestDevelopmentUserAndSessionLifecycle(t *testing.T) {
 	if user.Username != "test.user" {
 		t.Fatalf("normalized username = %q", user.Username)
 	}
+	found := requestRegion[identity.User](t, handler, http.MethodGet,
+		"/api/v1/users/"+user.ID, "", http.StatusOK)
+	if found != user {
+		t.Fatalf("found user = %#v", found)
+	}
+	requestRegion[Error](t, handler, http.MethodGet,
+		"/api/v1/users/10000000-0000-4000-8000-999999999999", "", http.StatusNotFound)
 	conflict := requestRegion[Error](t, handler, http.MethodPost, "/api/v1/users",
 		`{"username":"test.user","password":"development-password"}`, http.StatusConflict)
 	if conflict.Code != "username_in_use" {

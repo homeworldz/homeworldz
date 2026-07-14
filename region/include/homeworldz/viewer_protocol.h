@@ -117,6 +117,12 @@ struct RequestObjectPropertiesFamily : AgentMessage {
     Uuid object_id{};
 };
 
+struct UuidName {
+    Uuid id{};
+    std::string first_name;
+    std::string last_name;
+};
+
 struct ObjectProperties {
     Uuid object_id{};
     Uuid creator_id{};
@@ -273,6 +279,8 @@ std::optional<RequestObjectPropertiesFamily> decode_request_object_properties_fa
 std::vector<std::byte> encode_object_properties(std::span<const ObjectProperties> objects);
 std::vector<std::byte> encode_object_properties_family(
     std::uint32_t request_flags, const ObjectProperties& object);
+std::optional<std::vector<Uuid>> decode_uuid_name_request(std::span<const std::byte> payload);
+std::vector<std::byte> encode_uuid_name_reply(std::span<const UuidName> names);
 std::vector<std::byte> encode_update_create_inventory_item(const AgentMessage& message,
                                                            std::uint32_t callback_id,
                                                            const InventoryItem& item);

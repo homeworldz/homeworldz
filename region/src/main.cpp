@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <atomic>
 #include <charconv>
+#include <cctype>
 #include <csignal>
 #include <chrono>
 #include <cstdlib>
@@ -387,6 +388,20 @@ std::optional<homeworldz::viewer::ObjectProperties> object_properties_from_entit
     properties.name = entity.name;
     return properties;
 }
+
+std::pair<std::string, std::string> legacy_avatar_name(std::string_view username) {
+    const auto separator = username.find('.');
+    auto first = std::string(username.substr(0, separator));
+    auto last = separator == std::string_view::npos
+        ? std::string("Resident") : std::string(username.substr(separator + 1));
+    const auto capitalize = [](std::string& value) {
+        if (!value.empty())
+            value.front() = static_cast<char>(std::toupper(static_cast<unsigned char>(value.front())));
+    };
+    capitalize(first);
+    capitalize(last);
+    return {std::move(first), std::move(last)};
+}
 } // namespace
 
 int main() {
@@ -557,6 +572,7 @@ int main() {
     std::unordered_set<std::string> handshake_replies;
     std::unordered_set<std::string> established_events;
     std::unordered_map<std::string, LiveAvatar> avatars;
+    std::unordered_map<std::string, homeworldz::viewer::UuidName> resolved_avatar_names;
     std::unordered_map<std::string, std::deque<QueuedTexturePacket>> texture_packets;
     std::unordered_set<std::string> active_texture_transfers;
     std::unordered_map<std::string, PendingInventoryUpload> pending_inventory_uploads;
@@ -832,6 +848,37 @@ int main() {
                             if (const auto economy = circuits.send(endpoint,
                                     homeworldz::viewer::encode_economy_data(), true, now, true))
                                 static_cast<void>(send_udp(viewer_server, endpoint, *economy));
+                        }
+                        if (const auto requested_names =
+                                homeworldz::viewer::decode_uuid_name_request(packet->payload)) {
+                            std::vector<homeworldz::viewer::UuidName> names;
+                            names.reserve(requested_names->size());
+                            for (const auto& requested_id : *requested_names) {
+                                const auto user_id = homeworldz::viewer::format_uuid(requested_id);
+                                if (const auto found = resolved_avatar_names.find(user_id);
+                                    found != resolved_avatar_names.end()) {
+                                    names.push_back(found->second);
+                                    continue;
+                                }
+                                try {
+                                    const auto user = viewer_grid ? viewer_grid->find_user(user_id) : std::nullopt;
+                                    if (!user) continue;
+                                    auto [first, last] = legacy_avatar_name(user->username);
+                                    homeworldz::viewer::UuidName name{
+                                        requested_id, std::move(first), std::move(last)};
+                                    resolved_avatar_names.emplace(user_id, name);
+                                    names.push_back(std::move(name));
+                                } catch (const std::exception& error) {
+                                    std::cout << "{\"level\":\"error\",\"message\":\"avatar name lookup failed\",\"error\":"
+                                              << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+                                }
+                            }
+                            auto response = homeworldz::viewer::encode_uuid_name_reply(names);
+                            if (!response.empty()) {
+                                if (const auto outgoing = circuits.send(
+                                        endpoint, std::move(response), true, now))
+                                    static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
+                            }
                         }
                         const auto logout = homeworldz::viewer::decode_logout_request(packet->payload);
                         if (logout && logout->agent_id == identity->agent_id &&

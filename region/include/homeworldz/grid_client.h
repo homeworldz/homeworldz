@@ -41,6 +41,11 @@ struct ViewerSession {
     std::string destination_region_id;
 };
 
+struct User {
+    std::string id;
+    std::string username;
+};
+
 struct TextureInventoryItem {
     std::string item_id;
     std::string creator_id;
@@ -91,6 +96,7 @@ public:
     bool renew_lease(std::string_view region_id, int lease_seconds);
     bool deregister(std::string_view region_id);
     std::optional<ViewerSession> validate_viewer_session(std::string_view session_id);
+    std::optional<User> find_user(std::string_view user_id);
     bool revoke_viewer_session(std::string_view session_id);
     bool create_inventory_folder(std::string_view user_id, std::string_view folder_id,
                                  std::string_view parent_id, std::string_view name, int type_default);

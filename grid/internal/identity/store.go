@@ -19,6 +19,7 @@ var (
 	ErrConflict           = errors.New("username is already registered")
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrSessionNotFound    = errors.New("session not found")
+	ErrUserNotFound       = errors.New("user not found")
 )
 
 type User struct {
@@ -38,6 +39,7 @@ type Session struct {
 
 type Store interface {
 	CreateUser(context.Context, string, string) (User, error)
+	FindUser(context.Context, string) (User, error)
 	CreateSession(context.Context, string, string, time.Duration) (Session, error)
 	CreateViewerSession(context.Context, string, string, time.Duration) (Session, error)
 	AssignViewerDestination(context.Context, string, uint32, string) error
@@ -73,6 +75,20 @@ func (s *PostgresStore) CreateUser(ctx context.Context, username, password strin
 	}
 	if err != nil {
 		return User{}, fmt.Errorf("create user: %w", err)
+	}
+	return user, nil
+}
+
+func (s *PostgresStore) FindUser(ctx context.Context, id string) (User, error) {
+	var user User
+	err := s.db.QueryRowContext(ctx,
+		"SELECT id, username, created_at FROM users WHERE id = $1", id,
+	).Scan(&user.ID, &user.Username, &user.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return User{}, ErrUserNotFound
+	}
+	if err != nil {
+		return User{}, fmt.Errorf("find user: %w", err)
 	}
 	return user, nil
 }

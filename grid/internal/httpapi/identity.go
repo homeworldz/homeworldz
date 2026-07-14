@@ -41,6 +41,31 @@ func (a *API) usersRoot(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, user)
 }
 
+func (a *API) userByID(w http.ResponseWriter, r *http.Request) {
+	if a.identity == nil {
+		identityUnavailable(w)
+		return
+	}
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		writeJSON(w, http.StatusMethodNotAllowed, Error{Code: "method_not_allowed", Message: "only GET is supported"})
+		return
+	}
+	id := strings.TrimPrefix(r.URL.Path, "/api/v1/users/")
+	if !validUUID(id) {
+		a.notFound(w, r)
+		return
+	}
+	user, err := a.identity.FindUser(r.Context(), id)
+	if errors.Is(err, identity.ErrUserNotFound) {
+		writeJSON(w, http.StatusNotFound, Error{Code: "user_not_found", Message: "user was not found"})
+	} else if err != nil {
+		writeJSON(w, http.StatusInternalServerError, Error{Code: "identity_store_error", Message: "user lookup failed"})
+	} else {
+		writeJSON(w, http.StatusOK, user)
+	}
+}
+
 func (a *API) sessionsRoot(w http.ResponseWriter, r *http.Request) {
 	if a.identity == nil {
 		identityUnavailable(w)

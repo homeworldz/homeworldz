@@ -63,6 +63,7 @@ func New(ready ReadinessChecker, version string, options Options) http.Handler {
 	mux.HandleFunc("/api/v1/regions", a.regionsRoot)
 	mux.HandleFunc("/api/v1/regions/", a.regionByID)
 	mux.HandleFunc("/api/v1/users", a.usersRoot)
+	mux.HandleFunc("/api/v1/users/", a.userByID)
 	mux.HandleFunc("/api/v1/sessions", a.sessionsRoot)
 	mux.HandleFunc("/api/v1/sessions/", a.sessionByID)
 	mux.HandleFunc("/api/v1/presence", a.presenceRoot)

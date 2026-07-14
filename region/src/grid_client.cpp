@@ -180,6 +180,14 @@ std::optional<ViewerSession> Client::validate_viewer_session(std::string_view se
     return session;
 }
 
+std::optional<User> Client::find_user(std::string_view user_id) {
+    const auto response = transport_->send("GET", "/api/v1/users/" + std::string(user_id), {});
+    if (response.status_code != 200) return std::nullopt;
+    User user{json_field(response.body, "id"), json_field(response.body, "username")};
+    if (user.id != user_id || user.username.empty()) return std::nullopt;
+    return user;
+}
+
 bool Client::revoke_viewer_session(std::string_view session_id) {
     const auto status = transport_->send("DELETE", "/api/v1/sessions/" + std::string(session_id), {}).status_code;
     return status == 204 || status == 404;
