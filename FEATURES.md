@@ -51,6 +51,18 @@ WHIP/Aperture boundaries, C#/.NET implementation constraints, or protobuf as
 an architectural default. Viewer-protocol compatibility remains a goal even
 when the server internals differ.
 
+## Planned differences
+
+### AIS-first viewer inventory
+
+HomeWorldz treats Second Life AIS v3 as the primary viewer-facing inventory
+mutation protocol. Legacy inventory capabilities and UDP messages may remain
+as compatibility shims for OpenSimulator, Halcyon, Firestorm, and other
+viewers, but new mutation workflows are not required to implement a legacy
+path before their AIS path. All adapters use the same grid-owned inventory
+model rather than creating separate legacy and AIS stores. See
+[`ADR 0018`](docs/adr/0018-ais-first-viewer-inventory.md).
+
 ## Maintenance rule
 
 Add an entry here when a behavior is an intentional product or architecture

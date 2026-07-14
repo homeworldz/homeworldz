@@ -31,13 +31,17 @@ std::string seed_capability_xml(std::string_view public_endpoint, std::string_vi
     while (!grid_base.empty() && grid_base.back() == '/') grid_base.pop_back();
     const auto inventory_url = xml_escape(grid_base + "/caps/inventory/descendents/" + std::string(session_id));
     const auto inventory_items_url = xml_escape(grid_base + "/caps/inventory/items/" + std::string(session_id));
+    const auto create_inventory_folder_url =
+        xml_escape(grid_base + "/caps/inventory/create-folder/" + std::string(session_id));
     return "<?xml version=\"1.0\"?><llsd><map><key>EventQueueGet</key><uri>" + event_url +
            "</uri><key>GetTexture</key><uri>" + texture_url +
            "</uri><key>ViewerAsset</key><uri>" + asset_url +
            "</uri><key>EnvironmentSettings</key><uri>" + environment_url +
            "</uri><key>UploadBakedTexture</key><uri>" + baked_upload_url +
            "</uri><key>FetchInventoryDescendents2</key><uri>" + inventory_url +
-           "</uri><key>FetchInventory2</key><uri>" + inventory_items_url + "</uri></map></llsd>";
+           "</uri><key>FetchInventory2</key><uri>" + inventory_items_url +
+           "</uri><key>CreateInventoryCategory</key><uri>" + create_inventory_folder_url +
+           "</uri></map></llsd>";
 }
 
 std::string event_queue_xml(std::uint64_t id, const std::optional<EstablishAgentCommunication>& event) {

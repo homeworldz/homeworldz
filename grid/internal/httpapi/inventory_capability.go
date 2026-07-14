@@ -7,6 +7,7 @@ import (
 	"html"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/homeworldz/homeworldz/grid/internal/identity"
@@ -222,6 +223,140 @@ func (a *API) inventoryItemsCapability(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, _ = io.WriteString(w, "<?xml version=\"1.0\"?><llsd><map><key>agent_id</key><uuid>"+
 		html.EscapeString(session.UserID)+"</uuid><key>items</key><array>"+content.String()+"</array></map></llsd>")
+}
+
+type createInventoryFolderCapabilityRequest struct {
+	ID       string
+	ParentID string
+	Name     string
+	Type     int
+}
+
+func (a *API) createInventoryFolderCapability(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		writeLLSDError(w, http.StatusMethodNotAllowed, "only POST is supported")
+		return
+	}
+	if a.identity == nil || a.inventory == nil {
+		writeLLSDError(w, http.StatusServiceUnavailable, "inventory is unavailable")
+		return
+	}
+	sessionID := strings.TrimPrefix(r.URL.Path, "/caps/inventory/create-folder/")
+	if !validUUID(sessionID) || strings.Contains(sessionID, "/") {
+		writeLLSDError(w, http.StatusNotFound, "inventory capability was not found")
+		return
+	}
+	session, err := a.identity.ValidateSession(r.Context(), sessionID)
+	if errors.Is(err, identity.ErrSessionNotFound) ||
+		(err == nil && (session.ViewerCircuitCode == 0 || session.DestinationRegionID == "")) {
+		writeLLSDError(w, http.StatusNotFound, "inventory capability expired")
+		return
+	}
+	if err != nil {
+		writeLLSDError(w, http.StatusServiceUnavailable, "session validation failed")
+		return
+	}
+	request, err := parseCreateInventoryFolderRequest(http.MaxBytesReader(w, r.Body, 64*1024))
+	if err != nil || !validUUID(request.ID) || !validUUID(request.ParentID) || request.Type != -1 {
+		writeLLSDError(w, http.StatusBadRequest, "invalid inventory folder request")
+		return
+	}
+	folder, err := a.inventory.CreateFolder(r.Context(), inventory.Folder{
+		ID: request.ID, OwnerUserID: session.UserID, ParentID: request.ParentID,
+		Name: request.Name, TypeDefault: request.Type,
+	})
+	if errors.Is(err, inventory.ErrInvalidFolder) {
+		writeLLSDError(w, http.StatusBadRequest, "invalid inventory folder request")
+		return
+	}
+	if errors.Is(err, inventory.ErrFolderNotFound) {
+		writeLLSDError(w, http.StatusNotFound, "inventory parent folder was not found")
+		return
+	}
+	if errors.Is(err, inventory.ErrFolderConflict) {
+		writeLLSDError(w, http.StatusConflict, "inventory folder already exists")
+		return
+	}
+	if err != nil {
+		writeLLSDError(w, http.StatusServiceUnavailable, "inventory folder could not be created")
+		return
+	}
+	w.Header().Set("Content-Type", "application/llsd+xml; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = fmt.Fprintf(w, "<?xml version=\"1.0\"?><llsd><map>"+
+		"<key>folder_id</key><uuid>%s</uuid><key>parent_id</key><uuid>%s</uuid>"+
+		"<key>type</key><integer>%d</integer><key>name</key><string>%s</string>"+
+		"</map></llsd>", html.EscapeString(folder.ID), html.EscapeString(folder.ParentID),
+		folder.TypeDefault, html.EscapeString(folder.Name))
+}
+
+func parseCreateInventoryFolderRequest(reader io.Reader) (createInventoryFolderCapabilityRequest, error) {
+	decoder := xml.NewDecoder(reader)
+	var request createInventoryFolderCapabilityRequest
+	var key string
+	sawLLSD := false
+	seen := make(map[string]bool)
+	for {
+		token, err := decoder.Token()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return request, err
+		}
+		start, ok := token.(xml.StartElement)
+		if !ok {
+			continue
+		}
+		if start.Name.Local == "llsd" {
+			sawLLSD = true
+			continue
+		}
+		if start.Name.Local == "key" {
+			if err := decoder.DecodeElement(&key, &start); err != nil {
+				return request, err
+			}
+			continue
+		}
+		if key == "" {
+			continue
+		}
+		if seen[key] {
+			return request, errors.New("inventory folder request repeats a field")
+		}
+		var value string
+		if start.Name.Local != "uuid" && start.Name.Local != "string" && start.Name.Local != "integer" {
+			key = ""
+			continue
+		}
+		if err := decoder.DecodeElement(&value, &start); err != nil {
+			return request, err
+		}
+		value = strings.TrimSpace(value)
+		switch key {
+		case "folder_id":
+			request.ID = value
+		case "parent_id":
+			request.ParentID = value
+		case "name":
+			request.Name = value
+		case "type":
+			request.Type, err = strconv.Atoi(value)
+			if err != nil {
+				return request, err
+			}
+		default:
+			key = ""
+			continue
+		}
+		seen[key] = true
+		key = ""
+	}
+	if !sawLLSD || !seen["folder_id"] || !seen["parent_id"] || !seen["name"] || !seen["type"] {
+		return request, errors.New("inventory folder request is incomplete")
+	}
+	return request, nil
 }
 
 func inventoryItemXML(item inventory.Item) string {

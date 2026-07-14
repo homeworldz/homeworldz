@@ -88,6 +88,43 @@ func TestInventoryItemsCapability(t *testing.T) {
 	}
 }
 
+func TestCreateInventoryFolderCapability(t *testing.T) {
+	identities := newMemoryIdentityStore()
+	user, err := identities.CreateUser(context.Background(), "inventory.create", "development-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := identities.CreateSession(context.Background(), "inventory.create", "development-password", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.AssignViewerDestination(context.Background(), session.ID, 123456,
+		"30000000-0000-4000-8000-000000000001"); err != nil {
+		t.Fatal(err)
+	}
+	inventories := &memoryInventoryStore{folders: make(map[string][]inventory.Folder)}
+	folders, _ := inventories.EnsureSystemFolders(context.Background(), user.ID)
+	const folderID = "40000000-0000-4000-8000-000000000002"
+	body := `<?xml version="1.0"?><llsd><map>` +
+		`<key>folder_id</key><uuid>` + folderID + `</uuid>` +
+		`<key>parent_id</key><uuid>` + folders[0].ID + `</uuid>` +
+		`<key>type</key><integer>-1</integer><key>name</key><string>New Folder</string>` +
+		`</map></llsd>`
+	r := httptest.NewRequest(http.MethodPost, "/caps/inventory/create-folder/"+session.ID,
+		bytes.NewBufferString(body))
+	w := httptest.NewRecorder()
+	New(checker{}, "test", Options{Identity: identities, Inventory: inventories}).ServeHTTP(w, r)
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(),
+		"<key>folder_id</key><uuid>"+folderID+"</uuid>") ||
+		!strings.Contains(w.Body.String(), "<key>name</key><string>New Folder</string>") {
+		t.Fatalf("status = %d, create folder response = %s", w.Code, w.Body.String())
+	}
+	stored, _ := inventories.ListFolders(context.Background(), user.ID)
+	if len(stored) != len(folders)+1 || stored[len(stored)-1].ID != folderID {
+		t.Fatalf("stored inventory folders = %#v", stored)
+	}
+}
+
 func TestInventoryItemXML(t *testing.T) {
 	item := inventory.Item{ID: "40000000-0000-4000-8000-000000000001",
 		OwnerUserID: "20000000-0000-4000-8000-000000000001",
