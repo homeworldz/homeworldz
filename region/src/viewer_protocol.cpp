@@ -43,6 +43,8 @@ constexpr std::array<std::byte, 4> update_create_inventory_item_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x0b}};
 constexpr std::array<std::byte, 4> move_inventory_folder_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x13}};
+constexpr std::array<std::byte, 4> move_inventory_item_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x0c}};
 constexpr std::array<std::byte, 4> economy_data_request_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x18}};
 constexpr std::array<std::byte, 4> economy_data_id{
@@ -597,6 +599,39 @@ std::optional<MoveInventoryFolder> decode_move_inventory_folder(std::span<const 
         std::copy_n(payload.begin() + offset + 16, 16, move.parent_id.begin());
         result.folders.push_back(move);
     }
+    return result;
+}
+
+std::optional<MoveInventoryItem> decode_move_inventory_item(std::span<const std::byte> payload) {
+    constexpr std::size_t header_size = 38;
+    constexpr std::size_t fixed_block_size = 33;
+    if (payload.size() < header_size ||
+        !std::equal(move_inventory_item_id.begin(), move_inventory_item_id.end(), payload.begin()))
+        return std::nullopt;
+    const auto count = std::to_integer<std::size_t>(payload[37]);
+    if (count == 0) return std::nullopt;
+    MoveInventoryItem result;
+    std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
+    result.stamp = payload[36] != std::byte{};
+    result.items.reserve(count);
+    std::size_t offset = header_size;
+    for (std::size_t index = 0; index < count; ++index) {
+        if (payload.size() < offset + fixed_block_size) return std::nullopt;
+        InventoryItemMove move;
+        std::copy_n(payload.begin() + offset, 16, move.item_id.begin());
+        std::copy_n(payload.begin() + offset + 16, 16, move.folder_id.begin());
+        const auto name_size = std::to_integer<std::size_t>(payload[offset + 32]);
+        if (name_size == 0 || payload.size() < offset + fixed_block_size + name_size)
+            return std::nullopt;
+        move.new_name.assign(
+            reinterpret_cast<const char*>(payload.data() + offset + fixed_block_size), name_size);
+        while (!move.new_name.empty() && move.new_name.back() == '\0') move.new_name.pop_back();
+        if (move.new_name.find('\0') != std::string::npos) return std::nullopt;
+        result.items.push_back(std::move(move));
+        offset += fixed_block_size + name_size;
+    }
+    if (offset != payload.size()) return std::nullopt;
     return result;
 }
 

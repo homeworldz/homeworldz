@@ -330,6 +330,14 @@ func TestCreateTextureInventoryItemEndpoint(t *testing.T) {
 	}
 	requestRegion[Error](t, handler, http.MethodPost,
 		"/api/v1/inventory/"+userID+"/items", body, http.StatusConflict)
+	moved := requestRegion[inventory.Item](t, handler, http.MethodPut,
+		"/api/v1/inventory/"+userID+"/items/"+created.ID,
+		`{"folderId":"`+inventory.SystemFolderID(userID, 14)+`","name":""}`,
+		http.StatusOK)
+	if moved.FolderID != inventory.SystemFolderID(userID, 14) || moved.Name != created.Name ||
+		moved.CreatorUserID != created.CreatorUserID || moved.AssetID != created.AssetID {
+		t.Fatalf("moved inventory item = %#v", moved)
+	}
 }
 
 func TestCopyLibraryInventoryItemEndpoint(t *testing.T) {

@@ -203,6 +203,14 @@ bool Client::move_inventory_folder(std::string_view user_id, std::string_view fo
         "/folders/" + std::string(folder_id), body).status_code == 200;
 }
 
+bool Client::move_inventory_item(std::string_view user_id, std::string_view item_id,
+                                 std::string_view folder_id, std::string_view new_name) {
+    const auto body = "{\"folderId\":" + api::json_string(folder_id) +
+                      ",\"name\":" + api::json_string(new_name) + '}';
+    return transport_->send("PUT", "/api/v1/inventory/" + std::string(user_id) +
+        "/items/" + std::string(item_id), body).status_code == 200;
+}
+
 bool Client::create_texture_inventory_item(std::string_view user_id, const TextureInventoryItem& item) {
     const auto body = "{\"id\":" + api::json_string(item.item_id) +
                       ",\"creatorUserId\":" + api::json_string(item.creator_id) +

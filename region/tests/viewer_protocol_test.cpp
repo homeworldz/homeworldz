@@ -144,6 +144,21 @@ bool message_codecs() {
     move_folder_payload.insert(move_folder_payload.end(), expected.session_id.begin(), expected.session_id.end());
     move_folder_payload.insert(move_folder_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
     const auto move_folder = decode_move_inventory_folder(move_folder_payload);
+    auto move_item_payload = bytes({0xff, 0xff, 0x01, 0x0c});
+    move_item_payload.insert(move_item_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
+    move_item_payload.insert(move_item_payload.end(), expected.session_id.begin(), expected.session_id.end());
+    move_item_payload.push_back(std::byte{1});
+    move_item_payload.push_back(std::byte{2});
+    move_item_payload.insert(move_item_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
+    move_item_payload.insert(move_item_payload.end(), expected.session_id.begin(), expected.session_id.end());
+    move_item_payload.push_back(std::byte{1});
+    move_item_payload.push_back(std::byte{});
+    move_item_payload.insert(move_item_payload.end(), expected.session_id.begin(), expected.session_id.end());
+    move_item_payload.insert(move_item_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
+    move_item_payload.push_back(std::byte{8});
+    for (const char value : std::string("Renamed\0", 8))
+        move_item_payload.push_back(static_cast<std::byte>(value));
+    const auto move_item = decode_move_inventory_item(move_item_payload);
     auto cached_payload = bytes({0xff, 0xff, 0x01, 0x80});
     cached_payload.insert(cached_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
     cached_payload.insert(cached_payload.end(), expected.session_id.begin(), expected.session_id.end());
@@ -204,6 +219,12 @@ bool message_codecs() {
            move_folder->folders[0].parent_id == expected.session_id &&
            move_folder->folders[1].folder_id == expected.session_id &&
            move_folder->folders[1].parent_id == expected.agent_id &&
+           move_item && move_item->agent_id == expected.agent_id &&
+           move_item->session_id == expected.session_id && move_item->stamp &&
+           move_item->items.size() == 2 && move_item->items[0].item_id == expected.agent_id &&
+           move_item->items[0].folder_id == expected.session_id && move_item->items[0].new_name.empty() &&
+           move_item->items[1].item_id == expected.session_id &&
+           move_item->items[1].folder_id == expected.agent_id && move_item->items[1].new_name == "Renamed" &&
            logout_reply.size() == 53 && logout_reply[3] == std::byte{0xfd} && logout_reply[36] == std::byte{1} &&
            cached && cached->serial == 7 && cached->queries.size() == 2 &&
            cached->queries[0].texture_index == 8 && cached->queries[1].texture_index == 9 &&

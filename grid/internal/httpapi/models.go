@@ -95,3 +95,8 @@ type CopyLibraryInventoryItemRequest struct {
 type MoveInventoryFolderRequest struct {
 	ParentID string `json:"parentId"`
 }
+
+type MoveInventoryItemRequest struct {
+	FolderID string `json:"folderId"`
+	Name     string `json:"name"`
+}
