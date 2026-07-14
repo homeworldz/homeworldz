@@ -364,6 +364,61 @@ std::vector<std::byte> encode_agent_cached_texture_response(const AgentCachedTex
     return output;
 }
 
+std::optional<RequestImage> decode_request_image(std::span<const std::byte> payload) {
+    constexpr std::size_t header_size = 34;
+    constexpr std::size_t block_size = 26;
+    if (payload.size() < header_size || payload[0] != std::byte{8}) return std::nullopt;
+    const auto count = std::to_integer<std::size_t>(payload[33]);
+    if (count == 0 || payload.size() != header_size + count * block_size) return std::nullopt;
+    RequestImage result;
+    std::copy_n(payload.begin() + 1, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 17, 16, result.session_id.begin());
+    result.requests.reserve(count);
+    for (std::size_t index = 0; index < count; ++index) {
+        const auto offset = header_size + index * block_size;
+        ImageRequestBlock block;
+        std::copy_n(payload.begin() + offset, 16, block.image_id.begin());
+        block.discard_level = static_cast<std::int8_t>(std::to_integer<std::uint8_t>(payload[offset + 16]));
+        block.download_priority = read_f32(payload, offset + 17);
+        block.packet = read_le_u32(payload, offset + 21);
+        block.type = std::to_integer<std::uint8_t>(payload[offset + 25]);
+        result.requests.push_back(block);
+    }
+    return result;
+}
+
+std::vector<std::vector<std::byte>> encode_image_transfer(
+    const Uuid& image_id, std::span<const std::byte> content, std::uint32_t start_packet) {
+    constexpr std::size_t first_packet_size = 600;
+    constexpr std::size_t image_packet_size = 1000;
+    if (content.empty()) return {};
+    const auto remaining = content.size() > first_packet_size ? content.size() - first_packet_size : 0;
+    const auto packet_count = 1 + (remaining + image_packet_size - 1) / image_packet_size;
+    if (packet_count > std::numeric_limits<std::uint16_t>::max() || start_packet >= packet_count) return {};
+    std::vector<std::vector<std::byte>> output;
+    if (start_packet == 0) {
+        std::vector<std::byte> header{std::byte{9}};
+        append_uuid(header, image_id);
+        header.push_back(std::byte{2});
+        append_le_u32(header, static_cast<std::uint32_t>(content.size()));
+        append_le_u16(header, static_cast<std::uint16_t>(packet_count));
+        const auto first_size = std::min(first_packet_size, content.size());
+        append_binary(header, content.first(first_size), 2);
+        output.push_back(std::move(header));
+        start_packet = 1;
+    }
+    for (std::size_t packet = start_packet; packet < packet_count; ++packet) {
+        const auto offset = first_packet_size + (packet - 1) * image_packet_size;
+        const auto size = std::min(image_packet_size, content.size() - offset);
+        std::vector<std::byte> payload{std::byte{10}};
+        append_uuid(payload, image_id);
+        append_le_u16(payload, static_cast<std::uint16_t>(packet));
+        append_binary(payload, content.subspan(offset, size), 2);
+        output.push_back(std::move(payload));
+    }
+    return output;
+}
+
 std::optional<AgentUpdate> decode_agent_update(std::span<const std::byte> payload) {
     if (payload.size() != 115 || payload[0] != std::byte{4}) return std::nullopt;
     AgentUpdate result;

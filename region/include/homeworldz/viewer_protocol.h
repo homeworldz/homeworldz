@@ -50,6 +50,18 @@ struct AgentCachedTexture : AgentMessage {
     std::vector<std::uint8_t> texture_indices;
 };
 
+struct ImageRequestBlock {
+    Uuid image_id{};
+    std::int8_t discard_level{};
+    float download_priority{};
+    std::uint32_t packet{};
+    std::uint8_t type{};
+};
+
+struct RequestImage : AgentMessage {
+    std::vector<ImageRequestBlock> requests;
+};
+
 struct CompleteAgentMovement : AgentMessage {
     std::uint32_t circuit_code{};
 };
@@ -127,6 +139,9 @@ std::optional<AgentMessage> decode_logout_request(std::span<const std::byte> pay
 std::vector<std::byte> encode_logout_reply(const AgentMessage& message);
 std::optional<AgentCachedTexture> decode_agent_cached_texture(std::span<const std::byte> payload);
 std::vector<std::byte> encode_agent_cached_texture_response(const AgentCachedTexture& message);
+std::optional<RequestImage> decode_request_image(std::span<const std::byte> payload);
+std::vector<std::vector<std::byte>> encode_image_transfer(
+    const Uuid& image_id, std::span<const std::byte> content, std::uint32_t start_packet = 0);
 std::optional<AgentUpdate> decode_agent_update(std::span<const std::byte> payload);
 std::optional<ChatFromViewer> decode_chat_from_viewer(std::span<const std::byte> payload);
 std::vector<std::byte> encode_chat_from_simulator(const ChatFromSimulator& message);

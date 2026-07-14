@@ -5,6 +5,7 @@
 #include <csignal>
 #include <chrono>
 #include <cstdlib>
+#include <deque>
 #include <exception>
 #include <iostream>
 #include <memory>
@@ -55,6 +56,12 @@ struct LiveAvatar {
     std::chrono::steady_clock::time_point next_ping{};
     std::chrono::steady_clock::time_point next_presence{};
     std::uint8_t ping_id{};
+};
+
+struct QueuedTexturePacket {
+    std::string asset_id;
+    std::vector<std::byte> payload;
+    bool last{};
 };
 
 void stop(int) { running = false; }
@@ -372,6 +379,8 @@ int main() {
     std::unordered_set<std::string> handshake_replies;
     std::unordered_set<std::string> established_events;
     std::unordered_map<std::string, LiveAvatar> avatars;
+    std::unordered_map<std::string, std::deque<QueuedTexturePacket>> texture_packets;
+    std::unordered_set<std::string> active_texture_transfers;
 
     std::cout << "{\"level\":\"info\",\"message\":\"region service listening\",\"httpPort\":"
               << configured_port() << ",\"viewerPort\":" << configured_viewer_port() << "}" << std::endl;
@@ -572,6 +581,10 @@ int main() {
                             avatars.erase(endpoint);
                             handshake_replies.erase(endpoint);
                             established_events.erase(session_id);
+                            texture_packets.erase(endpoint);
+                            std::erase_if(active_texture_transfers, [&](const std::string& key) {
+                                return key.starts_with(endpoint + '|');
+                            });
                             circuits.remove(endpoint);
                             std::cout << "{\"level\":\"info\",\"message\":\"viewer logged out\",\"sessionId\":"
                                       << homeworldz::api::json_string(session_id) << "}" << std::endl;
@@ -593,6 +606,31 @@ int main() {
                                 std::cout << "{\"level\":\"info\",\"message\":\"wearable cache misses sent\","
                                              "\"count\":" << cached_texture->texture_indices.size() << "}"
                                           << std::endl;
+                            }
+                        }
+                        const auto image_request = homeworldz::viewer::decode_request_image(packet->payload);
+                        if (image_request && image_request->agent_id == identity->agent_id &&
+                            image_request->session_id == identity->session_id) {
+                            for (const auto& requested : image_request->requests) {
+                                if (requested.download_priority <= 0.0F) continue;
+                                const auto asset_id = homeworldz::viewer::format_uuid(requested.image_id);
+                                const auto transfer_key = endpoint + '|' + asset_id;
+                                if (active_texture_transfers.contains(transfer_key)) continue;
+                                try {
+                                    const auto asset = storage->read_asset(asset_id);
+                                    auto payloads = homeworldz::viewer::encode_image_transfer(
+                                        requested.image_id, asset, requested.packet);
+                                    if (payloads.empty()) continue;
+                                    active_texture_transfers.insert(transfer_key);
+                                    for (std::size_t index = 0; index < payloads.size(); ++index) {
+                                        texture_packets[endpoint].push_back(
+                                            {asset_id, std::move(payloads[index]), index + 1 == payloads.size()});
+                                    }
+                                    std::cout << "{\"level\":\"info\",\"message\":\"texture transfer queued\","
+                                                 "\"assetId\":" << homeworldz::api::json_string(asset_id)
+                                              << ",\"packets\":" << payloads.size() << "}" << std::endl;
+                                } catch (const std::exception&) {
+                                }
                             }
                         }
                         const auto complete = homeworldz::viewer::decode_complete_agent_movement(packet->payload);
@@ -695,6 +733,24 @@ int main() {
         }
         for (const auto& outgoing : circuits.poll(now))
             static_cast<void>(send_udp(viewer_server, outgoing.endpoint, outgoing.bytes));
+        for (auto iterator = texture_packets.begin(); iterator != texture_packets.end();) {
+            auto& queue = iterator->second;
+            while (!queue.empty()) {
+                const auto outgoing = circuits.send(iterator->first, queue.front().payload, true, now);
+                if (!outgoing) break;
+                static_cast<void>(send_udp(viewer_server, iterator->first, *outgoing));
+                const auto completed_asset = queue.front().last ? queue.front().asset_id : std::string{};
+                queue.pop_front();
+                if (!completed_asset.empty()) {
+                    active_texture_transfers.erase(iterator->first + '|' + completed_asset);
+                    std::cout << "{\"level\":\"info\",\"message\":\"texture transfer sent\","
+                                 "\"assetId\":" << homeworldz::api::json_string(completed_asset) << "}"
+                              << std::endl;
+                }
+            }
+            if (queue.empty()) iterator = texture_packets.erase(iterator);
+            else ++iterator;
+        }
         const auto elapsed = std::chrono::duration<double>(now - previous_tick).count();
         simulation.advance(elapsed);
         for (auto& [endpoint, avatar] : avatars) {

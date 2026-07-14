@@ -106,6 +106,18 @@ bool message_codecs() {
     cached_payload.push_back(std::byte{9});
     const auto cached = decode_agent_cached_texture(cached_payload);
     const auto cached_response = cached ? encode_agent_cached_texture_response(*cached) : std::vector<std::byte>{};
+    auto image_payload = bytes({8});
+    image_payload.insert(image_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
+    image_payload.insert(image_payload.end(), expected.session_id.begin(), expected.session_id.end());
+    image_payload.push_back(std::byte{1});
+    image_payload.insert(image_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
+    image_payload.insert(image_payload.end(),
+                         {std::byte{0}, std::byte{0}, std::byte{0}, std::byte{0x80}, std::byte{0x3f},
+                          std::byte{0}, std::byte{0}, std::byte{0}, std::byte{0}, std::byte{1}});
+    const auto image_request = decode_request_image(image_payload);
+    const std::vector<std::byte> image_content(1601, std::byte{0x5a});
+    const auto image_transfer = encode_image_transfer(expected.agent_id, image_content);
+    const auto resumed_transfer = encode_image_transfer(expected.agent_id, image_content, 2);
     return ping == bytes({1, 7, 4, 3, 2, 1}) && ping_id && *ping_id == 7 &&
            !decode_start_ping_check(bytes({1, 7})) && encode_complete_ping_check(*ping_id) == bytes({2, 7}) &&
            logout && logout->agent_id == expected.agent_id && logout->session_id == expected.session_id &&
@@ -113,7 +125,14 @@ bool message_codecs() {
            cached && cached->serial == 7 && cached->texture_indices == std::vector<std::uint8_t>({8, 9}) &&
            cached_response.size() == 79 && cached_response[3] == std::byte{0x81} &&
            cached_response[40] == std::byte{2} && cached_response[57] == std::byte{8} &&
-           cached_response[76] == std::byte{9};
+           cached_response[76] == std::byte{9} && image_request && image_request->requests.size() == 1 &&
+           image_request->requests[0].image_id == expected.agent_id &&
+           image_request->requests[0].download_priority == 1.0F && image_request->requests[0].type == 1 &&
+           image_transfer.size() == 3 && image_transfer[0].size() == 626 &&
+           image_transfer[0][0] == std::byte{9} && image_transfer[0][22] == std::byte{3} &&
+           image_transfer[1].size() == 1021 && image_transfer[1][0] == std::byte{10} &&
+           image_transfer[1][17] == std::byte{1} && image_transfer[2].size() == 22 &&
+           resumed_transfer.size() == 1 && resumed_transfer[0] == image_transfer[2];
 }
 
 bool resend_throttle_and_timeout() {
