@@ -37,7 +37,12 @@ func (a *API) inventoryAISCapability(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		switch {
 		case len(parts) == 4 && parts[1] == "category" && validUUID(parts[2]) && parts[3] == "children":
-			a.fetchAISInventoryFolder(w, r, session.UserID, parts[2], false)
+			if inventory.IsLibraryFolder(parts[2]) {
+				writeAISInventoryFolder(w, r, inventory.LibraryOwnerID, parts[2],
+					inventory.LibraryFolders(), inventory.LibraryItems(), false)
+			} else {
+				a.fetchAISInventoryFolder(w, r, session.UserID, parts[2], false)
+			}
 			return
 		case len(parts) == 4 && parts[1] == "category" && parts[2] == "current" && parts[3] == "links":
 			a.fetchAISInventoryFolder(w, r, session.UserID, inventory.SystemFolderID(session.UserID, 46), true)

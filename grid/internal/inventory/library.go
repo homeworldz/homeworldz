@@ -61,3 +61,14 @@ func LibraryItems() []Item {
 			EveryonePermissions: fullPermissions, NextPermissions: fullPermissions},
 	}
 }
+
+// IsLibraryFolder reports whether id belongs to the shared catalog. Capability
+// handlers use it to keep library reads separate from personal inventory.
+func IsLibraryFolder(id string) bool {
+	for _, folder := range LibraryFolders() {
+		if folder.ID == id {
+			return true
+		}
+	}
+	return false
+}

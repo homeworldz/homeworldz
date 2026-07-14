@@ -18,4 +18,12 @@ func TestLibraryCatalogIsStableAndReadOnlyData(t *testing.T) {
 			t.Fatalf("invalid library item: %#v", item)
 		}
 	}
+	for _, folder := range folders {
+		if !IsLibraryFolder(folder.ID) {
+			t.Fatalf("library folder was not recognized: %#v", folder)
+		}
+	}
+	if IsLibraryFolder("ffffffff-ffff-4fff-8fff-ffffffffffff") {
+		t.Fatal("unrelated folder was recognized as library data")
+	}
 }

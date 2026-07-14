@@ -98,8 +98,11 @@ top-level `Body Parts` category. The default-avatar folder contains the same
 shape, skin, hair, eyes, shirt, and pants used to clothe a newly created user.
 
 Firestorm reads this shared catalog through the separate `LibraryAPIv3`
-capability. Library data is not copied into personal inventory and never
-changes an existing outfit merely because the viewer reads it.
+capability when supported. Firestorm 7.2.4 may instead request known Library
+folder UUIDs through `InventoryAPIv3`; HomeWorldz recognizes those UUIDs and
+returns the same read-only catalog. Library data is not copied into personal
+inventory and never changes an existing outfit merely because the viewer
+reads it.
 
 Each region registers its viewer UDP port with the grid. Login advertises that
 stored port, while `HOMEWORLDZ_VIEWER_PORT` controls the matching region
