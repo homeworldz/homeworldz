@@ -448,3 +448,10 @@ creator and owner, inherited the source permission masks, and saved the copy in
 the authoritative scene snapshot. After a complete service and viewer restart,
 Firestorm showed both objects named `Prim2`, with the copy still offset exactly
 `0.5` metres diagonally from its source.
+
+Viewer primitive physics-material editing passed its live-session acceptance
+on 2026-07-14. Firestorm changed Prim3 from Wood to Metal in the Object tab;
+the region decoded standard `ObjectMaterial`, required Jim Tarber's ownership
+and modify permission, stored the canonical material code `0x01`, and returned
+an authoritative object update. Closing and reopening Edit retained Metal.
+Persistence across a complete restart remains to be confirmed.
