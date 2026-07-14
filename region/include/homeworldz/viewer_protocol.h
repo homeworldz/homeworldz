@@ -45,6 +45,11 @@ struct AgentMessage {
     Uuid session_id{};
 };
 
+struct AgentCachedTexture : AgentMessage {
+    std::int32_t serial{};
+    std::vector<std::uint8_t> texture_indices;
+};
+
 struct CompleteAgentMovement : AgentMessage {
     std::uint32_t circuit_code{};
 };
@@ -120,6 +125,8 @@ std::optional<std::uint8_t> decode_start_ping_check(std::span<const std::byte> p
 std::vector<std::byte> encode_complete_ping_check(std::uint8_t ping_id);
 std::optional<AgentMessage> decode_logout_request(std::span<const std::byte> payload);
 std::vector<std::byte> encode_logout_reply(const AgentMessage& message);
+std::optional<AgentCachedTexture> decode_agent_cached_texture(std::span<const std::byte> payload);
+std::vector<std::byte> encode_agent_cached_texture_response(const AgentCachedTexture& message);
 std::optional<AgentUpdate> decode_agent_update(std::span<const std::byte> payload);
 std::optional<ChatFromViewer> decode_chat_from_viewer(std::span<const std::byte> payload);
 std::vector<std::byte> encode_chat_from_simulator(const ChatFromSimulator& message);

@@ -96,10 +96,24 @@ bool message_codecs() {
     logout_payload.insert(logout_payload.end(), expected.session_id.begin(), expected.session_id.end());
     const auto logout = decode_logout_request(logout_payload);
     const auto logout_reply = logout ? encode_logout_reply(*logout) : std::vector<std::byte>{};
+    auto cached_payload = bytes({0xff, 0xff, 0x01, 0x80});
+    cached_payload.insert(cached_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
+    cached_payload.insert(cached_payload.end(), expected.session_id.begin(), expected.session_id.end());
+    cached_payload.insert(cached_payload.end(), {std::byte{7}, std::byte{}, std::byte{}, std::byte{}, std::byte{2}});
+    cached_payload.insert(cached_payload.end(), 16, std::byte{1});
+    cached_payload.push_back(std::byte{8});
+    cached_payload.insert(cached_payload.end(), 16, std::byte{2});
+    cached_payload.push_back(std::byte{9});
+    const auto cached = decode_agent_cached_texture(cached_payload);
+    const auto cached_response = cached ? encode_agent_cached_texture_response(*cached) : std::vector<std::byte>{};
     return ping == bytes({1, 7, 4, 3, 2, 1}) && ping_id && *ping_id == 7 &&
            !decode_start_ping_check(bytes({1, 7})) && encode_complete_ping_check(*ping_id) == bytes({2, 7}) &&
            logout && logout->agent_id == expected.agent_id && logout->session_id == expected.session_id &&
-           logout_reply.size() == 53 && logout_reply[3] == std::byte{0xfd} && logout_reply[36] == std::byte{1};
+           logout_reply.size() == 53 && logout_reply[3] == std::byte{0xfd} && logout_reply[36] == std::byte{1} &&
+           cached && cached->serial == 7 && cached->texture_indices == std::vector<std::uint8_t>({8, 9}) &&
+           cached_response.size() == 79 && cached_response[3] == std::byte{0x81} &&
+           cached_response[40] == std::byte{2} && cached_response[57] == std::byte{8} &&
+           cached_response[76] == std::byte{9};
 }
 
 bool resend_throttle_and_timeout() {

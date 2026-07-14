@@ -533,6 +533,19 @@ int main() {
                             handshake_reply->session_id == identity->session_id) {
                             handshake_replies.insert(endpoint);
                         }
+                        const auto cached_texture =
+                            homeworldz::viewer::decode_agent_cached_texture(packet->payload);
+                        if (cached_texture && cached_texture->agent_id == identity->agent_id &&
+                            cached_texture->session_id == identity->session_id) {
+                            if (const auto outgoing = circuits.send(endpoint,
+                                    homeworldz::viewer::encode_agent_cached_texture_response(*cached_texture),
+                                    true, now, true)) {
+                                static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
+                                std::cout << "{\"level\":\"info\",\"message\":\"wearable cache misses sent\","
+                                             "\"count\":" << cached_texture->texture_indices.size() << "}"
+                                          << std::endl;
+                            }
+                        }
                         const auto complete = homeworldz::viewer::decode_complete_agent_movement(packet->payload);
                         if (complete && handshake_replies.contains(endpoint) &&
                             complete->agent_id == identity->agent_id &&

@@ -29,6 +29,10 @@ constexpr std::array<std::byte, 4> logout_request_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0xfc}};
 constexpr std::array<std::byte, 4> logout_reply_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0xfd}};
+constexpr std::array<std::byte, 4> agent_cached_texture_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x80}};
+constexpr std::array<std::byte, 4> agent_cached_texture_response_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x81}};
 
 class BitWriter {
 public:
@@ -323,6 +327,40 @@ std::vector<std::byte> encode_logout_reply(const AgentMessage& message) {
     append_uuid(output, message.session_id);
     output.push_back(std::byte{1}); // InventoryData block count
     append_uuid(output, Uuid{}); // no changed inventory items
+    return output;
+}
+
+std::optional<AgentCachedTexture> decode_agent_cached_texture(std::span<const std::byte> payload) {
+    constexpr std::size_t header_size = 41;
+    constexpr std::size_t block_size = 17;
+    if (payload.size() < header_size ||
+        !std::equal(agent_cached_texture_id.begin(), agent_cached_texture_id.end(), payload.begin()))
+        return std::nullopt;
+    const auto count = std::to_integer<std::size_t>(payload[40]);
+    if (count == 0 || payload.size() != header_size + count * block_size) return std::nullopt;
+    AgentCachedTexture result;
+    std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
+    result.serial = static_cast<std::int32_t>(read_le_u32(payload, 36));
+    result.texture_indices.reserve(count);
+    for (std::size_t index = 0; index < count; ++index)
+        result.texture_indices.push_back(
+            std::to_integer<std::uint8_t>(payload[header_size + index * block_size + 16]));
+    return result;
+}
+
+std::vector<std::byte> encode_agent_cached_texture_response(const AgentCachedTexture& message) {
+    if (message.texture_indices.empty() || message.texture_indices.size() > 255) return {};
+    std::vector<std::byte> output(agent_cached_texture_response_id.begin(), agent_cached_texture_response_id.end());
+    append_uuid(output, message.agent_id);
+    append_uuid(output, message.session_id);
+    append_le_u32(output, static_cast<std::uint32_t>(message.serial));
+    output.push_back(static_cast<std::byte>(message.texture_indices.size()));
+    for (const auto texture_index : message.texture_indices) {
+        append_uuid(output, Uuid{}); // Explicit cache miss requests a local bake and upload.
+        output.push_back(static_cast<std::byte>(texture_index));
+        if (!append_variable1(output, "")) return {};
+    }
     return output;
 }
 
