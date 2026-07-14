@@ -268,6 +268,8 @@ func TestAISLibraryIsReadableAndRejectsMutations(t *testing.T) {
 	expectedValues := []string{
 		"<key>agent_id</key><uuid>" + inventory.LibraryOwnerID + "</uuid>",
 		"<string>Library</string>", "<string>Clothing</string>", "<string>Body Parts</string>",
+		"<string>Textures</string>", "<string>Terrain</string>", "<string>Terrain Sand and Dirt</string>",
+		"<string>Terrain Grass</string>", "<string>Terrain Mountain</string>", "<string>Terrain Rock</string>",
 		"<string>Initial Outfits</string>", "<string>Default Avatar</string>",
 		"<string>Default Shape</string>", "<string>Default Skin</string>",
 		"<string>Default Hair</string>", "<string>Default Eyes</string>",

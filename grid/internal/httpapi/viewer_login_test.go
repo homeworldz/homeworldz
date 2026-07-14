@@ -118,7 +118,7 @@ func TestViewerLoginResolvesNamedRegion(t *testing.T) {
 			t.Fatalf("branded or personal library folder name = %q", name)
 		}
 	}
-	for _, name := range []string{"Library", "Clothing", "Body Parts", "Initial Outfits", "Default Avatar"} {
+	for _, name := range []string{"Library", "Clothing", "Body Parts", "Textures", "Terrain", "Initial Outfits", "Default Avatar"} {
 		if !libraryNames[name] {
 			t.Fatalf("inventory library lacks %q: %#v", name, librarySkeleton)
 		}

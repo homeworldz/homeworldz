@@ -62,6 +62,13 @@ PostgreSQL lifecycle tests run when `HOMEWORLDZ_TEST_DATABASE_URL` is set and
 otherwise skip cleanly. CI supplies a disposable PostgreSQL service and runs
 the region lease, identity/session, and presence cleanup suites against it.
 
+After pulling new database migrations into an already bootstrapped checkout,
+apply them without re-entering the PostgreSQL administrator credentials:
+
+```cmd
+go run ./grid/cmd/bootstrap-grid -migrations-only
+```
+
 On Windows with Visual Studio, install the pinned vcpkg dependencies and build
 the region service with:
 

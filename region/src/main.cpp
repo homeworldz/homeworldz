@@ -48,7 +48,7 @@ static void close_socket(socket_handle socket) { close(socket); }
 
 namespace {
 std::atomic_bool running{true};
-constexpr std::string_view system_creator_id = "00000000-0000-0000-0000-000000000000";
+constexpr std::string_view system_creator_id = "00000000-0000-0000-0000-000000000002";
 
 struct LiveAvatar {
     homeworldz::viewer::AvatarController controller;

@@ -96,6 +96,8 @@ Its initial viewer-facing structure follows the familiar Second Life layout:
 `Library / Clothing / Initial Outfits / Default Avatar`, with a standard
 top-level `Body Parts` category. The default-avatar folder contains the same
 shape, skin, hair, eyes, shirt, and pants used to clothe a newly created user.
+`Library / Textures / Terrain` contains the licensed default sand/dirt, grass,
+mountain, and rock textures used by the compatible terrain protocol.
 
 Firestorm reads this shared catalog through the separate `LibraryAPIv3`
 capability when supported. Firestorm 7.2.4 may instead request known Library
@@ -103,6 +105,13 @@ folder UUIDs through `InventoryAPIv3`; HomeWorldz recognizes those UUIDs and
 returns the same read-only catalog. Library data is not copied into personal
 inventory and never changes an existing outfit merely because the viewer
 reads it.
+
+The stable `homeworldz.library` service identity owns this catalog and is
+shown to viewers as `HomeWorldz Library` when identity names are available.
+Its UUID, `00000000-0000-0000-0000-000000000002`, is also recorded as creator
+for bundled Library inventory items and as uploader for their region asset
+mappings. The account is created locked; an administrator must explicitly set
+a password before using it for interactive content preparation.
 
 Each region registers its viewer UDP port with the grid. Login advertises that
 stored port, while `HOMEWORLDZ_VIEWER_PORT` controls the matching region

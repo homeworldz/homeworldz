@@ -14,19 +14,21 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/homeworldz/homeworldz/grid/internal/config"
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/term"
 )
 
 type options struct {
-	host       string
-	port       int
-	adminUser  string
-	adminDB    string
-	appUser    string
-	appDB      string
-	configDir  string
-	migrations string
+	host        string
+	port        int
+	adminUser   string
+	adminDB     string
+	appUser     string
+	appDB       string
+	configDir   string
+	migrations  string
+	migrateOnly bool
 }
 
 func main() {
@@ -40,12 +42,39 @@ func main() {
 	flag.StringVar(&opts.appDB, "application-database", "homeworldz", "HomeWorldz database")
 	flag.StringVar(&opts.configDir, "config-dir", filepath.Join(root, "config"), "HomeWorldz configuration directory")
 	flag.StringVar(&opts.migrations, "migrations", filepath.Join(root, "db", "migrations"), "SQL migration directory")
+	flag.BoolVar(&opts.migrateOnly, "migrations-only", false, "apply pending migrations using the configured database URL")
 	flag.Parse()
 
-	if err := run(context.Background(), opts); err != nil {
+	var err error
+	if opts.migrateOnly {
+		err = runConfiguredMigrations(context.Background(), opts.migrations)
+	} else {
+		err = run(context.Background(), opts)
+	}
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "bootstrap failed:", err)
 		os.Exit(1)
 	}
+}
+
+func runConfiguredMigrations(ctx context.Context, migrations string) error {
+	settings, err := config.LoadGrid()
+	if err != nil {
+		return err
+	}
+	if settings.DatabaseURL == "" {
+		return errors.New("database URL is not configured")
+	}
+	connection, err := pgx.Connect(ctx, settings.DatabaseURL)
+	if err != nil {
+		return fmt.Errorf("connect to configured database: %w", err)
+	}
+	defer connection.Close(ctx)
+	if err := applyMigrations(ctx, connection, migrations); err != nil {
+		return err
+	}
+	fmt.Println("HomeWorldz database migrations completed.")
+	return nil
 }
 
 func run(ctx context.Context, opts options) error {
