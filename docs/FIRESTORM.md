@@ -408,4 +408,7 @@ on 2026-07-14. Firestorm moved a box to `202, 144, 23`, resized it to
 decoded the standard `MultipleObjectUpdate` and `ObjectName` messages, checked
 Jim Tarber's ownership and modify mask, persisted all three values, and sent
 authoritative state back to the viewer. Closing and reopening Firestorm's Edit
-panel retained `Prim1`; clean-restart persistence remains to be confirmed.
+panel retained `Prim1`. Jim then renamed the other two boxes `Prim2` and
+`Prim3`; all three names reached the authoritative snapshot. After a complete
+service and viewer restart, all three names persisted and Prim1 remained at
+`202, 144, 23` with size `1 x 2 x 3` metres.
