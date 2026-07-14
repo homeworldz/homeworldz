@@ -1303,6 +1303,54 @@ int main() {
                                           << originals.size() << "}" << std::endl;
                             }
                         }
+                        const auto object_name = homeworldz::viewer::decode_object_name(packet->payload);
+                        if (object_name && object_name->agent_id == identity->agent_id &&
+                            object_name->session_id == identity->session_id) {
+                            std::unordered_map<homeworldz::scene::EntityId, std::string> original_names;
+                            std::unordered_set<homeworldz::scene::EntityId> requested_entities;
+                            const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
+                            for (const auto& update : object_name->objects) {
+                                auto* entity = scene.find(update.local_id);
+                                if (!entity) continue;
+                                requested_entities.insert(entity->id);
+                                if (entity->owner_id != user_id ||
+                                    (entity->owner_permissions & homeworldz::scene::permission_modify) == 0)
+                                    continue;
+                                original_names.try_emplace(entity->id, entity->name);
+                                entity->name = update.name;
+                            }
+                            bool persisted = false;
+                            if (!original_names.empty()) {
+                                try {
+                                    storage->save_snapshot(scene);
+                                    persisted = true;
+                                } catch (const std::exception& error) {
+                                    for (const auto& [entity_id, original_name] : original_names) {
+                                        if (auto* entity = scene.find(entity_id)) entity->name = original_name;
+                                    }
+                                    std::cout << "{\"level\":\"error\",\"message\":\"primitive name persistence failed\",\"error\":"
+                                              << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+                                }
+                            }
+                            std::vector<homeworldz::viewer::ObjectProperties> properties;
+                            properties.reserve(requested_entities.size());
+                            for (const auto entity_id : requested_entities) {
+                                if (const auto* entity = scene.find(entity_id)) {
+                                    if (const auto current = object_properties_from_entity(*entity))
+                                        properties.push_back(*current);
+                                }
+                            }
+                            auto response = homeworldz::viewer::encode_object_properties(properties);
+                            if (!response.empty()) {
+                                if (const auto outgoing = circuits.send(
+                                        endpoint, std::move(response), true, now, true))
+                                    static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
+                            }
+                            if (persisted) {
+                                std::cout << "{\"level\":\"info\",\"message\":\"primitive names updated\",\"count\":"
+                                          << original_names.size() << "}" << std::endl;
+                            }
+                        }
                         const auto object_add = homeworldz::viewer::decode_object_add(packet->payload);
                         if (object_add && object_add->agent_id == identity->agent_id &&
                             object_add->session_id == identity->session_id) {

@@ -124,6 +124,15 @@ struct MultipleObjectUpdate : AgentMessage {
     std::vector<ObjectTransformUpdate> objects;
 };
 
+struct ObjectNameUpdate {
+    std::uint32_t local_id{};
+    std::string name;
+};
+
+struct ObjectName : AgentMessage {
+    std::vector<ObjectNameUpdate> objects;
+};
+
 struct RequestObjectPropertiesFamily : AgentMessage {
     std::uint32_t request_flags{};
     Uuid object_id{};
@@ -287,6 +296,7 @@ std::optional<DeRezObject> decode_derez_object(std::span<const std::byte> payloa
 std::vector<std::byte> encode_kill_object(std::span<const std::uint32_t> local_ids);
 std::optional<ObjectSelect> decode_object_select(std::span<const std::byte> payload);
 std::optional<MultipleObjectUpdate> decode_multiple_object_update(std::span<const std::byte> payload);
+std::optional<ObjectName> decode_object_name(std::span<const std::byte> payload);
 std::optional<RequestObjectPropertiesFamily> decode_request_object_properties_family(
     std::span<const std::byte> payload);
 std::vector<std::byte> encode_object_properties(std::span<const ObjectProperties> objects);

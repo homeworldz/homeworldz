@@ -224,6 +224,14 @@ bool message_codecs() {
     write_f32(transform_payload, transform_data + 16, 2.0F);
     write_f32(transform_payload, transform_data + 20, 3.0F);
     const auto transform = decode_multiple_object_update(transform_payload);
+    auto object_name_payload = bytes({0xff, 0xff, 0x00, 0x6b});
+    object_name_payload.insert(object_name_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
+    object_name_payload.insert(object_name_payload.end(), expected.session_id.begin(), expected.session_id.end());
+    object_name_payload.insert(object_name_payload.end(), {std::byte{1}, std::byte{0x78}, std::byte{0x56},
+                                                            std::byte{0x34}, std::byte{0x12}, std::byte{6}});
+    for (const char value : std::string("Prim1\0", 6))
+        object_name_payload.push_back(static_cast<std::byte>(value));
+    const auto object_name = decode_object_name(object_name_payload);
     auto family_payload = bytes({0xff, 0x05});
     family_payload.insert(family_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
     family_payload.insert(family_payload.end(), expected.session_id.begin(), expected.session_id.end());
@@ -333,6 +341,9 @@ bool message_codecs() {
            transform->objects[0].position && (*transform->objects[0].position)[1] == 131.0F &&
            !transform->objects[0].rotation && transform->objects[0].scale &&
            (*transform->objects[0].scale)[2] == 3.0F &&
+           object_name && object_name->agent_id == expected.agent_id &&
+           object_name->session_id == expected.session_id && object_name->objects.size() == 1 &&
+           object_name->objects[0].local_id == 0x12345678 && object_name->objects[0].name == "Prim1" &&
            family && family->request_flags == 0x01020304 && family->object_id == expected.agent_id &&
            encoded_properties.size() > 180 && encoded_properties[0] == std::byte{0xff} &&
            encoded_properties[1] == std::byte{0x09} && encoded_properties[2] == std::byte{1} &&
