@@ -382,3 +382,9 @@ distinct object UUIDs and local IDs, recorded Jim's owner UUID, persisted their
 and viewer restart. A follow-up box used authoritative terrain height for a
 land click: its stored centre was 22.25 metres, placing its lower face exactly
 on the plateau's 22-metre surface rather than at the viewer ray endpoint.
+
+Object-surface placement passed on 2026-07-14. Firestorm created a fourth
+standard box on the upper face of the terrain-aligned box, preserving the
+clicked horizontal offset. The stored centres were 22.25 and 22.75 metres
+respectively for two 0.5-metre boxes, so their adjoining faces met exactly at
+22.5 metres without overlap or a gap.
