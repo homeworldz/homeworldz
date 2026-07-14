@@ -374,3 +374,11 @@ ports. The relinked Debug service then completed a normal Jim Tarber login:
 terrain and Library loaded, the clothed avatar and six Current Outfit links
 were correct, Trash and Textures remained empty, and the purged test texture
 did not return.
+
+The first user-created primitive acceptance passed on 2026-07-14. Jim Tarber
+created two standard boxes with Firestorm's Build tool; the region assigned
+distinct object UUIDs and local IDs, recorded Jim's owner UUID, persisted their
+0.5-metre scales and wood material, and restored both after a complete service
+and viewer restart. A follow-up box used authoritative terrain height for a
+land click: its stored centre was 22.25 metres, placing its lower face exactly
+on the plateau's 22-metre surface rather than at the viewer ray endpoint.
