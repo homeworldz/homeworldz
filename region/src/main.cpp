@@ -791,6 +791,66 @@ int main() {
                                       << (created ? "completed" : "rejected") << "\",\"folderId\":"
                                       << homeworldz::api::json_string(folder_id) << "}" << std::endl;
                         }
+                        const auto copy_item =
+                            homeworldz::viewer::decode_copy_inventory_item(packet->payload);
+                        if (copy_item && copy_item->agent_id == identity->agent_id &&
+                            copy_item->session_id == identity->session_id &&
+                            homeworldz::viewer::format_uuid(copy_item->old_agent_id) == system_creator_id) {
+                            const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
+                            const auto source_id = homeworldz::viewer::format_uuid(copy_item->old_item_id);
+                            const auto destination_id = homeworldz::viewer::format_uuid(copy_item->new_folder_id);
+                            std::optional<homeworldz::grid::InventoryItem> copied;
+                            try {
+                                if (viewer_grid) copied = viewer_grid->copy_library_item(
+                                    user_id, source_id, destination_id, copy_item->new_name);
+                            } catch (const std::exception& error) {
+                                std::cout << "{\"level\":\"error\",\"message\":\"library inventory copy failed\",\"error\":"
+                                          << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+                            }
+                            bool sent = false;
+                            if (copied) {
+                                const auto item_id = homeworldz::viewer::parse_uuid(copied->item_id);
+                                const auto creator_id = homeworldz::viewer::parse_uuid(copied->creator_id);
+                                const auto owner_id = homeworldz::viewer::parse_uuid(copied->owner_id);
+                                const auto folder_id = homeworldz::viewer::parse_uuid(copied->folder_id);
+                                const auto asset_id = homeworldz::viewer::parse_uuid(copied->asset_id);
+                                if (item_id && creator_id && owner_id && folder_id && asset_id) {
+                                    homeworldz::viewer::InventoryItem item;
+                                    item.item_id = *item_id;
+                                    item.creator_id = *creator_id;
+                                    item.owner_id = *owner_id;
+                                    item.folder_id = *folder_id;
+                                    item.asset_id = *asset_id;
+                                    item.asset_type = static_cast<std::int8_t>(copied->asset_type);
+                                    item.inventory_type = static_cast<std::int8_t>(copied->inventory_type);
+                                    item.name = copied->name;
+                                    item.description = copied->description;
+                                    item.flags = copied->flags;
+                                    item.base_permissions = copied->base_permissions;
+                                    item.current_permissions = copied->current_permissions;
+                                    item.everyone_permissions = copied->everyone_permissions;
+                                    item.next_permissions = copied->next_permissions;
+                                    item.sale_type = static_cast<std::uint8_t>(copied->sale_type);
+                                    item.sale_price = copied->sale_price;
+                                    item.creation_date = static_cast<std::int32_t>(
+                                        std::chrono::duration_cast<std::chrono::seconds>(
+                                            std::chrono::system_clock::now().time_since_epoch()).count());
+                                    const homeworldz::viewer::AgentMessage reply{
+                                        identity->agent_id, identity->session_id};
+                                    auto payload = homeworldz::viewer::encode_update_create_inventory_item(
+                                        reply, copy_item->callback_id, item);
+                                    if (!payload.empty()) {
+                                        if (const auto outgoing = circuits.send(
+                                                endpoint, std::move(payload), true, now, true))
+                                            sent = send_udp(viewer_server, endpoint, *outgoing);
+                                    }
+                                }
+                            }
+                            std::cout << "{\"level\":" << (sent ? "\"info\"" : "\"warn\"")
+                                      << ",\"message\":\"library inventory copy "
+                                      << (sent ? "completed" : "rejected") << "\",\"sourceItemId\":"
+                                      << homeworldz::api::json_string(source_id) << "}" << std::endl;
+                        }
                         const auto handshake_reply = homeworldz::viewer::decode_region_handshake_reply(packet->payload);
                         if (handshake_reply && handshake_reply->agent_id == identity->agent_id &&
                             handshake_reply->session_id == identity->session_id) {

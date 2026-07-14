@@ -40,6 +40,9 @@ func (a *API) inventoryAISCapability(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.Method == http.MethodGet {
 		switch {
+		case len(parts) == 3 && parts[1] == "item" && validUUID(parts[2]):
+			a.fetchAISInventoryItem(w, r, session.UserID, parts[2])
+			return
 		case len(parts) == 4 && parts[1] == "category" && validUUID(parts[2]) && parts[3] == "children":
 			if inventory.IsLibraryFolder(parts[2]) {
 				writeAISInventoryFolder(w, r, inventory.LibraryOwnerID, parts[2],
@@ -87,6 +90,24 @@ func (a *API) inventoryAISCapability(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeLLSDError(w, http.StatusNotFound, "AIS inventory resource was not found")
 	}
+}
+
+func (a *API) fetchAISInventoryItem(w http.ResponseWriter, r *http.Request, userID, itemID string) {
+	items, err := a.inventory.ListItems(r.Context(), userID)
+	if err != nil {
+		writeLLSDError(w, http.StatusServiceUnavailable, "AIS inventory item could not be loaded")
+		return
+	}
+	for _, item := range items {
+		if item.ID != itemID {
+			continue
+		}
+		w.Header().Set("Content-Type", "application/llsd+xml; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, "<?xml version=\"1.0\"?><llsd>"+inventoryAISItemXML(item, item.AssetType == 24)+"</llsd>")
+		return
+	}
+	writeLLSDError(w, http.StatusNotFound, "AIS inventory item was not found")
 }
 
 func (a *API) libraryAISCapability(w http.ResponseWriter, r *http.Request) {

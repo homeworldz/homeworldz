@@ -52,6 +52,34 @@ struct CreateInventoryFolder : AgentMessage {
     std::string name;
 };
 
+struct CopyInventoryItem : AgentMessage {
+    std::uint32_t callback_id{};
+    Uuid old_agent_id{};
+    Uuid old_item_id{};
+    Uuid new_folder_id{};
+    std::string new_name;
+};
+
+struct InventoryItem {
+    Uuid item_id{};
+    Uuid creator_id{};
+    Uuid owner_id{};
+    Uuid folder_id{};
+    Uuid asset_id{};
+    std::int8_t asset_type{};
+    std::int8_t inventory_type{};
+    std::string name;
+    std::string description;
+    std::uint32_t flags{};
+    std::uint32_t base_permissions{};
+    std::uint32_t current_permissions{};
+    std::uint32_t everyone_permissions{};
+    std::uint32_t next_permissions{};
+    std::uint8_t sale_type{};
+    std::int32_t sale_price{};
+    std::int32_t creation_date{};
+};
+
 struct CachedTextureQuery {
     Uuid cache_id{};
     std::uint8_t texture_index{};
@@ -161,6 +189,10 @@ std::vector<std::byte> encode_economy_data(std::int32_t price_upload = 0,
                                            std::int32_t object_count = 0);
 std::optional<AgentMessage> decode_logout_request(std::span<const std::byte> payload);
 std::optional<CreateInventoryFolder> decode_create_inventory_folder(std::span<const std::byte> payload);
+std::optional<CopyInventoryItem> decode_copy_inventory_item(std::span<const std::byte> payload);
+std::vector<std::byte> encode_update_create_inventory_item(const AgentMessage& message,
+                                                           std::uint32_t callback_id,
+                                                           const InventoryItem& item);
 std::vector<std::byte> encode_logout_reply(const AgentMessage& message);
 std::optional<AgentCachedTexture> decode_agent_cached_texture(std::span<const std::byte> payload);
 std::vector<std::byte> encode_agent_cached_texture_response(const AgentCachedTexture& message);

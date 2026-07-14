@@ -37,6 +37,10 @@ constexpr std::array<std::byte, 4> agent_set_appearance_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x54}};
 constexpr std::array<std::byte, 4> create_inventory_folder_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x11}};
+constexpr std::array<std::byte, 4> copy_inventory_item_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x0d}};
+constexpr std::array<std::byte, 4> update_create_inventory_item_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x0b}};
 constexpr std::array<std::byte, 4> economy_data_request_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x18}};
 constexpr std::array<std::byte, 4> economy_data_id{
@@ -548,6 +552,60 @@ std::optional<CreateInventoryFolder> decode_create_inventory_folder(std::span<co
     while (!result.name.empty() && result.name.back() == '\0') result.name.pop_back();
     if (result.name.empty() || result.name.find('\0') != std::string::npos) return std::nullopt;
     return result;
+}
+
+std::optional<CopyInventoryItem> decode_copy_inventory_item(std::span<const std::byte> payload) {
+    constexpr std::size_t fixed_size = 90;
+    if (payload.size() < fixed_size ||
+        !std::equal(copy_inventory_item_id.begin(), copy_inventory_item_id.end(), payload.begin()) ||
+        payload[36] != std::byte{1})
+        return std::nullopt;
+    const auto name_size = std::to_integer<std::size_t>(payload[89]);
+    if (name_size == 0 || payload.size() != fixed_size + name_size) return std::nullopt;
+    CopyInventoryItem result;
+    std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
+    result.callback_id = read_le_u32(payload, 37);
+    std::copy_n(payload.begin() + 41, 16, result.old_agent_id.begin());
+    std::copy_n(payload.begin() + 57, 16, result.old_item_id.begin());
+    std::copy_n(payload.begin() + 73, 16, result.new_folder_id.begin());
+    result.new_name.assign(reinterpret_cast<const char*>(payload.data() + fixed_size), name_size);
+    while (!result.new_name.empty() && result.new_name.back() == '\0') result.new_name.pop_back();
+    if (result.new_name.find('\0') != std::string::npos) return std::nullopt;
+    return result;
+}
+
+std::vector<std::byte> encode_update_create_inventory_item(const AgentMessage& message,
+                                                           std::uint32_t callback_id,
+                                                           const InventoryItem& item) {
+    std::vector<std::byte> output(update_create_inventory_item_id.begin(),
+                                  update_create_inventory_item_id.end());
+    append_uuid(output, message.agent_id);
+    output.push_back(std::byte{1}); // simulator approved
+    append_uuid(output, Uuid{}); // no transaction ID for an inventory copy
+    output.push_back(std::byte{1}); // InventoryData block count
+    append_uuid(output, item.item_id);
+    append_uuid(output, item.folder_id);
+    append_le_u32(output, callback_id);
+    append_uuid(output, item.creator_id);
+    append_uuid(output, item.owner_id);
+    append_uuid(output, Uuid{}); // group ID
+    append_le_u32(output, item.base_permissions);
+    append_le_u32(output, item.current_permissions);
+    append_le_u32(output, 0); // group permissions
+    append_le_u32(output, item.everyone_permissions);
+    append_le_u32(output, item.next_permissions);
+    output.push_back(std::byte{0}); // not group owned
+    append_uuid(output, item.asset_id);
+    output.push_back(static_cast<std::byte>(item.asset_type));
+    output.push_back(static_cast<std::byte>(item.inventory_type));
+    append_le_u32(output, item.flags);
+    output.push_back(static_cast<std::byte>(item.sale_type));
+    append_le_u32(output, static_cast<std::uint32_t>(item.sale_price));
+    if (!append_variable1(output, item.name) || !append_variable1(output, item.description)) return {};
+    append_le_u32(output, static_cast<std::uint32_t>(item.creation_date));
+    append_le_u32(output, 0); // viewer does not validate inventory CRC
+    return output;
 }
 
 std::vector<std::byte> encode_logout_reply(const AgentMessage& message) {

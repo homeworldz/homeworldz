@@ -52,6 +52,25 @@ struct TextureInventoryItem {
     std::uint32_t next_permissions{};
 };
 
+struct InventoryItem {
+    std::string item_id;
+    std::string creator_id;
+    std::string owner_id;
+    std::string folder_id;
+    std::string asset_id;
+    int asset_type{};
+    int inventory_type{};
+    std::string name;
+    std::string description;
+    std::uint32_t flags{};
+    std::uint32_t base_permissions{};
+    std::uint32_t current_permissions{};
+    std::uint32_t everyone_permissions{};
+    std::uint32_t next_permissions{};
+    int sale_type{};
+    int sale_price{};
+};
+
 class Client {
 public:
     explicit Client(std::shared_ptr<Transport> transport) : transport_(std::move(transport)) {}
@@ -63,6 +82,10 @@ public:
     bool create_inventory_folder(std::string_view user_id, std::string_view folder_id,
                                  std::string_view parent_id, std::string_view name, int type_default);
     bool create_texture_inventory_item(std::string_view user_id, const TextureInventoryItem& item);
+    std::optional<InventoryItem> copy_library_item(std::string_view user_id,
+                                                   std::string_view source_item_id,
+                                                   std::string_view destination_folder_id,
+                                                   std::string_view new_name);
     bool update_presence(std::string_view user_id, std::string_view region_id);
     bool clear_presence(std::string_view user_id);
 

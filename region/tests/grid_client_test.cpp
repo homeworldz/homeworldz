@@ -18,6 +18,8 @@ public:
     homeworldz::grid::HttpResponse send(std::string_view method, std::string_view path,
                                         std::string_view body) override {
         requests.push_back({std::string(method), std::string(path), std::string(body)});
+        if (method == "POST" && path.ends_with("/copy-library-item"))
+            return {201, R"({"id":"11111111-1111-4111-8111-111111111111","ownerUserId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","creatorUserId":"00000000-0000-0000-0000-000000000002","folderId":"22222222-2222-4222-8222-222222222222","assetId":"33333333-3333-4333-8333-333333333333","assetType":5,"inventoryType":18,"name":"Default Shirt","description":"","flags":4,"basePermissions":2147483647,"currentPermissions":2147483647,"everyonePermissions":2147483647,"nextPermissions":2147483647,"saleType":0,"salePrice":0})"};
         if (method == "POST") return {201, R"({"id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"})"};
         if (method == "PUT") return {200, R"({"id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"})"};
         if (method == "DELETE") return {204, {}};
@@ -78,6 +80,15 @@ int main() {
         transport->requests.back().body.find(R"("creatorUserId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc")") == std::string::npos ||
         transport->requests.back().body.find(R"("name":"Terrain & Sky")") == std::string::npos ||
         transport->requests.back().body.find(R"("nextPermissions":2147483647)") == std::string::npos) return 1;
+    const auto copied = client.copy_library_item(
+        session->agent_id, "d5e46210-b9d1-11dc-95ff-0800200c9a66",
+        "00000000-0000-0000-0000-000000000000", "");
+    if (!copied || copied->owner_id != session->agent_id || copied->creator_id != "00000000-0000-0000-0000-000000000002" ||
+        copied->asset_type != 5 || copied->inventory_type != 18 || copied->flags != 4 ||
+        copied->base_permissions != 2147483647 || copied->name != "Default Shirt" ||
+        transport->requests.back().path != "/api/v1/inventory/" + session->agent_id + "/copy-library-item" ||
+        transport->requests.back().body.find(R"("sourceItemId":"d5e46210-b9d1-11dc-95ff-0800200c9a66")") == std::string::npos)
+        return 1;
     if (!client.update_presence(session->agent_id, session->destination_region_id) ||
         transport->requests.back().method != "PUT" ||
         transport->requests.back().path != "/api/v1/presence/" + session->agent_id) return 1;

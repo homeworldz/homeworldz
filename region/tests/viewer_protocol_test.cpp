@@ -107,6 +107,33 @@ bool message_codecs() {
     for (const char value : std::string("Projects\0", 9))
         create_folder_payload.push_back(static_cast<std::byte>(value));
     const auto create_folder = decode_create_inventory_folder(create_folder_payload);
+    auto copy_item_payload = bytes({0xff, 0xff, 0x01, 0x0d});
+    copy_item_payload.insert(copy_item_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
+    copy_item_payload.insert(copy_item_payload.end(), expected.session_id.begin(), expected.session_id.end());
+    copy_item_payload.insert(copy_item_payload.end(),
+                             {std::byte{1}, std::byte{0x78}, std::byte{0x56}, std::byte{0x34}, std::byte{0x12}});
+    copy_item_payload.insert(copy_item_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
+    copy_item_payload.insert(copy_item_payload.end(), expected.session_id.begin(), expected.session_id.end());
+    copy_item_payload.insert(copy_item_payload.end(), 16, std::byte{});
+    copy_item_payload.push_back(std::byte{1});
+    copy_item_payload.push_back(std::byte{});
+    const auto copy_item = decode_copy_inventory_item(copy_item_payload);
+    InventoryItem copied_item;
+    copied_item.item_id = expected.session_id;
+    copied_item.creator_id = expected.agent_id;
+    copied_item.owner_id = expected.agent_id;
+    copied_item.folder_id = expected.agent_id;
+    copied_item.asset_id = expected.session_id;
+    copied_item.asset_type = 5;
+    copied_item.inventory_type = 18;
+    copied_item.name = "Default Shirt";
+    copied_item.flags = 4;
+    copied_item.base_permissions = 0x7fffffff;
+    copied_item.current_permissions = 0x7fffffff;
+    copied_item.next_permissions = 0x7fffffff;
+    const auto copy_reply = copy_item ? encode_update_create_inventory_item(
+        AgentMessage{expected.agent_id, expected.session_id}, copy_item->callback_id, copied_item)
+                                      : std::vector<std::byte>{};
     auto cached_payload = bytes({0xff, 0xff, 0x01, 0x80});
     cached_payload.insert(cached_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
     cached_payload.insert(cached_payload.end(), expected.session_id.begin(), expected.session_id.end());
@@ -156,6 +183,11 @@ bool message_codecs() {
            create_folder->session_id == expected.session_id && create_folder->folder_id == expected.session_id &&
            create_folder->parent_id == expected.agent_id && create_folder->type == -1 &&
            create_folder->name == "Projects" &&
+           copy_item && copy_item->agent_id == expected.agent_id &&
+           copy_item->session_id == expected.session_id && copy_item->old_agent_id == expected.agent_id &&
+           copy_item->old_item_id == expected.session_id && copy_item->callback_id == 0x12345678 &&
+           copy_item->new_name.empty() && copy_reply.size() > 180 && copy_reply[3] == std::byte{0x0b} &&
+           copy_reply[70] == std::byte{0x78} && copy_reply[71] == std::byte{0x56} &&
            logout_reply.size() == 53 && logout_reply[3] == std::byte{0xfd} && logout_reply[36] == std::byte{1} &&
            cached && cached->serial == 7 && cached->queries.size() == 2 &&
            cached->queries[0].texture_index == 8 && cached->queries[1].texture_index == 9 &&

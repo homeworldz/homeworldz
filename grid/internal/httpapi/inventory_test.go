@@ -232,3 +232,30 @@ func TestCreateTextureInventoryItemEndpoint(t *testing.T) {
 	requestRegion[Error](t, handler, http.MethodPost,
 		"/api/v1/inventory/"+userID+"/items", body, http.StatusConflict)
 }
+
+func TestCopyLibraryInventoryItemEndpoint(t *testing.T) {
+	const userID = "20000000-0000-4000-8000-000000000001"
+	store := &memoryInventoryStore{folders: make(map[string][]inventory.Folder)}
+	_, _ = store.EnsureSystemFolders(context.Background(), userID)
+	handler := New(checker{}, "test", Options{ServiceToken: "secret", Inventory: store})
+	source := inventory.LibraryItems()[4]
+	created := requestRegion[inventory.Item](t, handler, http.MethodPost,
+		"/api/v1/inventory/"+userID+"/copy-library-item",
+		`{"sourceItemId":"`+source.ID+`","destinationFolderId":"00000000-0000-0000-0000-000000000000","name":""}`,
+		http.StatusCreated)
+	if created.ID == "" || created.ID == source.ID || created.OwnerUserID != userID ||
+		created.CreatorUserID != inventory.LibraryOwnerID ||
+		created.FolderID != inventory.SystemFolderID(userID, 13) || created.AssetID != source.AssetID ||
+		created.AssetType != source.AssetType || created.InventoryType != source.InventoryType ||
+		created.Name != source.Name || created.Flags != source.Flags ||
+		created.BasePermissions != source.BasePermissions || created.NextPermissions != source.NextPermissions {
+		t.Fatalf("copied inventory item = %#v", created)
+	}
+	missing := requestRegion[Error](t, handler, http.MethodPost,
+		"/api/v1/inventory/"+userID+"/copy-library-item",
+		`{"sourceItemId":"40000000-0000-4000-8000-000000000099","destinationFolderId":"00000000-0000-0000-0000-000000000000","name":""}`,
+		http.StatusNotFound)
+	if missing.Code != "library_item_not_found" {
+		t.Fatalf("missing library copy error = %#v", missing)
+	}
+}

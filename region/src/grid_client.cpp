@@ -127,6 +127,17 @@ std::optional<std::uint32_t> json_u32(std::string_view body, std::string_view na
     return value;
 }
 
+std::optional<int> json_int(std::string_view body, std::string_view name) {
+    const auto marker = "\"" + std::string(name) + "\":";
+    const auto start = body.find(marker);
+    if (start == std::string_view::npos) return std::nullopt;
+    const auto value_start = start + marker.size();
+    int value{};
+    const auto result = std::from_chars(body.data() + value_start, body.data() + body.size(), value);
+    if (result.ec != std::errc{} || result.ptr == body.data() + value_start) return std::nullopt;
+    return value;
+}
+
 } // namespace
 
 std::shared_ptr<Transport> socket_transport(std::string grid_url, std::string service_token) {
@@ -196,6 +207,50 @@ bool Client::create_texture_inventory_item(std::string_view user_id, const Textu
                       ",\"nextPermissions\":" + std::to_string(item.next_permissions) + '}';
     return transport_->send("POST", "/api/v1/inventory/" + std::string(user_id) + "/items", body)
                .status_code == 201;
+}
+
+std::optional<InventoryItem> Client::copy_library_item(std::string_view user_id,
+                                                       std::string_view source_item_id,
+                                                       std::string_view destination_folder_id,
+                                                       std::string_view new_name) {
+    const auto body = "{\"sourceItemId\":" + api::json_string(source_item_id) +
+                      ",\"destinationFolderId\":" + api::json_string(destination_folder_id) +
+                      ",\"name\":" + api::json_string(new_name) + '}';
+    const auto response = transport_->send(
+        "POST", "/api/v1/inventory/" + std::string(user_id) + "/copy-library-item", body);
+    if (response.status_code != 201) return std::nullopt;
+    InventoryItem item;
+    item.item_id = json_field(response.body, "id");
+    item.creator_id = json_field(response.body, "creatorUserId");
+    item.owner_id = json_field(response.body, "ownerUserId");
+    item.folder_id = json_field(response.body, "folderId");
+    item.asset_id = json_field(response.body, "assetId");
+    item.name = json_field(response.body, "name");
+    item.description = json_field(response.body, "description");
+    const auto asset_type = json_int(response.body, "assetType");
+    const auto inventory_type = json_int(response.body, "inventoryType");
+    const auto flags = json_u32(response.body, "flags");
+    const auto base_permissions = json_u32(response.body, "basePermissions");
+    const auto current_permissions = json_u32(response.body, "currentPermissions");
+    const auto everyone_permissions = json_u32(response.body, "everyonePermissions");
+    const auto next_permissions = json_u32(response.body, "nextPermissions");
+    const auto sale_type = json_int(response.body, "saleType");
+    const auto sale_price = json_int(response.body, "salePrice");
+    if (item.item_id.empty() || item.creator_id.empty() || item.owner_id != user_id ||
+        item.folder_id.empty() || item.asset_id.empty() || item.name.empty() || !asset_type ||
+        !inventory_type || !flags || !base_permissions || !current_permissions ||
+        !everyone_permissions || !next_permissions || !sale_type || !sale_price)
+        return std::nullopt;
+    item.asset_type = *asset_type;
+    item.inventory_type = *inventory_type;
+    item.flags = *flags;
+    item.base_permissions = *base_permissions;
+    item.current_permissions = *current_permissions;
+    item.everyone_permissions = *everyone_permissions;
+    item.next_permissions = *next_permissions;
+    item.sale_type = *sale_type;
+    item.sale_price = *sale_price;
+    return item;
 }
 
 std::optional<ViewerSession> ViewerSessionCache::validate(

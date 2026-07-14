@@ -438,7 +438,7 @@ func TestAISFetchInventoryFolderChildrenAndCurrentLinks(t *testing.T) {
 
 func TestAISLibraryIsReadableAndRejectsMutations(t *testing.T) {
 	identities := newMemoryIdentityStore()
-	_, err := identities.CreateUser(context.Background(), "inventory.library", "development-password")
+	user, err := identities.CreateUser(context.Background(), "inventory.library", "development-password")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -450,12 +450,30 @@ func TestAISLibraryIsReadableAndRejectsMutations(t *testing.T) {
 		"30000000-0000-4000-8000-000000000001"); err != nil {
 		t.Fatal(err)
 	}
-	handler := New(checker{}, "test", Options{
-		Identity: identities,
-		Inventory: &memoryInventoryStore{
-			folders: make(map[string][]inventory.Folder),
-		},
+	store := &memoryInventoryStore{folders: make(map[string][]inventory.Folder)}
+	_, _ = store.EnsureSystemFolders(context.Background(), user.ID)
+	personalItem, err := store.CreateItem(context.Background(), inventory.Item{
+		ID: "30000000-0000-4000-8000-000000000088", OwnerUserID: user.ID,
+		CreatorUserID: inventory.LibraryOwnerID, FolderID: inventory.SystemFolderID(user.ID, 5),
+		AssetID: "30000000-0000-4000-8000-000000000089", AssetType: 5, InventoryType: 18,
+		Name: "Copied Shirt", BasePermissions: 0x7fffffff, CurrentPermissions: 0x7fffffff,
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := New(checker{}, "test", Options{
+		Identity:  identities,
+		Inventory: store,
+	})
+	personalRequest := httptest.NewRequest(http.MethodGet,
+		"/caps/inventory/ais/"+session.ID+"/item/"+personalItem.ID, nil)
+	personalResponse := httptest.NewRecorder()
+	handler.ServeHTTP(personalResponse, personalRequest)
+	if personalResponse.Code != http.StatusOK ||
+		!strings.Contains(personalResponse.Body.String(), "<key>item_id</key><uuid>"+personalItem.ID+"</uuid>") ||
+		!strings.Contains(personalResponse.Body.String(), "<string>Copied Shirt</string>") {
+		t.Fatalf("status = %d, AIS personal item response = %s", personalResponse.Code, personalResponse.Body.String())
+	}
 	libraryItem := inventory.LibraryItems()[0]
 	itemRequest := httptest.NewRequest(http.MethodGet,
 		"/caps/inventory/library/"+session.ID+"/item/"+libraryItem.ID, nil)

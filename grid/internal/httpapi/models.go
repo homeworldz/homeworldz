@@ -85,3 +85,9 @@ type CreateInventoryItemRequest struct {
 	EveryonePermissions uint32 `json:"everyonePermissions"`
 	NextPermissions     uint32 `json:"nextPermissions"`
 }
+
+type CopyLibraryInventoryItemRequest struct {
+	SourceItemID        string `json:"sourceItemId"`
+	DestinationFolderID string `json:"destinationFolderId"`
+	Name                string `json:"name"`
+}
