@@ -366,3 +366,11 @@ Trash through AIS v3. The purge returned success and a direct AIS lookup of the
 item returned `404`. After a clean login both Trash and Textures remained free
 of the purged item, while clothing, Current Outfit, and avatar rendering stayed
 correct.
+
+The packaged-region configuration regression passed on 2026-07-14. After the
+region gained direct `config/region.ini` support, the extracted Release package
+started from its packaged example and app-local runtime files on isolated
+ports. The relinked Debug service then completed a normal Jim Tarber login:
+terrain and Library loaded, the clothed avatar and six Current Outfit links
+were correct, Trash and Textures remained empty, and the purged test texture
+did not return.
