@@ -45,6 +45,7 @@ constexpr std::array<std::byte, 4> move_inventory_folder_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x13}};
 constexpr std::array<std::byte, 4> move_inventory_item_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x0c}};
+constexpr std::array<std::byte, 2> object_add_id{std::byte{0xff}, std::byte{0x01}};
 constexpr std::array<std::byte, 4> economy_data_request_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x18}};
 constexpr std::array<std::byte, 4> economy_data_id{
@@ -632,6 +633,37 @@ std::optional<MoveInventoryItem> decode_move_inventory_item(std::span<const std:
         offset += fixed_block_size + name_size;
     }
     if (offset != payload.size()) return std::nullopt;
+    return result;
+}
+
+std::optional<ObjectAdd> decode_object_add(std::span<const std::byte> payload) {
+    constexpr std::size_t message_size = 146;
+    if (payload.size() != message_size ||
+        !std::equal(object_add_id.begin(), object_add_id.end(), payload.begin()))
+        return std::nullopt;
+    ObjectAdd result;
+    std::copy_n(payload.begin() + 2, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 18, 16, result.session_id.begin());
+    std::copy_n(payload.begin() + 34, 16, result.group_id.begin());
+    result.pcode = std::to_integer<std::uint8_t>(payload[50]);
+    result.material = std::to_integer<std::uint8_t>(payload[51]);
+    result.add_flags = read_le_u32(payload, 52);
+    result.path_curve = std::to_integer<std::uint8_t>(payload[56]);
+    result.profile_curve = std::to_integer<std::uint8_t>(payload[57]);
+    result.bypass_raycast = payload[79] != std::byte{};
+    result.ray_start = read_vector3(payload, 80);
+    result.ray_end = read_vector3(payload, 92);
+    std::copy_n(payload.begin() + 104, 16, result.ray_target_id.begin());
+    result.ray_end_is_intersection = payload[120] != std::byte{};
+    result.scale = read_vector3(payload, 121);
+    result.rotation = read_vector3(payload, 133);
+    result.state = std::to_integer<std::uint8_t>(payload[145]);
+    const auto finite_vector = [](const auto& values) {
+        return std::all_of(values.begin(), values.end(), [](float value) { return std::isfinite(value); });
+    };
+    if (!finite_vector(result.ray_start) || !finite_vector(result.ray_end) ||
+        !finite_vector(result.scale) || !finite_vector(result.rotation))
+        return std::nullopt;
     return result;
 }
 

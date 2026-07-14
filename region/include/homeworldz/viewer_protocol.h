@@ -81,6 +81,23 @@ struct MoveInventoryItem : AgentMessage {
     std::vector<InventoryItemMove> items;
 };
 
+struct ObjectAdd : AgentMessage {
+    Uuid group_id{};
+    std::uint8_t pcode{};
+    std::uint8_t material{};
+    std::uint32_t add_flags{};
+    std::uint8_t path_curve{};
+    std::uint8_t profile_curve{};
+    std::array<float, 3> ray_start{};
+    std::array<float, 3> ray_end{};
+    Uuid ray_target_id{};
+    bool bypass_raycast{};
+    bool ray_end_is_intersection{};
+    std::array<float, 3> scale{};
+    std::array<float, 3> rotation{};
+    std::uint8_t state{};
+};
+
 struct InventoryItem {
     Uuid item_id{};
     Uuid creator_id{};
@@ -213,6 +230,7 @@ std::optional<CreateInventoryFolder> decode_create_inventory_folder(std::span<co
 std::optional<CopyInventoryItem> decode_copy_inventory_item(std::span<const std::byte> payload);
 std::optional<MoveInventoryFolder> decode_move_inventory_folder(std::span<const std::byte> payload);
 std::optional<MoveInventoryItem> decode_move_inventory_item(std::span<const std::byte> payload);
+std::optional<ObjectAdd> decode_object_add(std::span<const std::byte> payload);
 std::vector<std::byte> encode_update_create_inventory_item(const AgentMessage& message,
                                                            std::uint32_t callback_id,
                                                            const InventoryItem& item);

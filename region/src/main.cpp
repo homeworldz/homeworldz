@@ -320,6 +320,25 @@ std::string simulator_endpoint(std::string_view public_endpoint, int viewer_port
     if (colon != std::string_view::npos) authority = authority.substr(0, colon);
     return std::string(authority) + ':' + std::to_string(viewer_port);
 }
+
+std::optional<homeworldz::viewer::StaticObject> static_object_from_entity(
+    const homeworldz::scene::Entity& entity) {
+    if (entity.object_id.empty() || entity.id > (std::numeric_limits<std::uint32_t>::max)())
+        return std::nullopt;
+    const auto object_id = homeworldz::viewer::parse_uuid(entity.object_id);
+    const auto owner_id = homeworldz::viewer::parse_uuid(entity.owner_id);
+    if (!object_id || !owner_id) return std::nullopt;
+    homeworldz::viewer::StaticObject object;
+    object.local_id = static_cast<std::uint32_t>(entity.id);
+    object.id = *object_id;
+    object.owner_id = *owner_id;
+    object.material = entity.material;
+    object.position = {static_cast<float>(entity.position.x), static_cast<float>(entity.position.y),
+                       static_cast<float>(entity.position.z)};
+    object.scale = {static_cast<float>(entity.scale.x), static_cast<float>(entity.scale.y),
+                    static_cast<float>(entity.scale.z)};
+    return object;
+}
 } // namespace
 
 int main() {
@@ -1066,6 +1085,73 @@ int main() {
                                     homeworldz::viewer::encode_static_object_update(
                                         response.region_handle, welcome_prim), true, now, true))
                                 static_cast<void>(send_udp(viewer_server, endpoint, *object));
+                            for (const auto& [entity_id, entity] : scene.entities()) {
+                                static_cast<void>(entity_id);
+                                const auto restored_object = static_object_from_entity(entity);
+                                if (!restored_object) continue;
+                                if (const auto object = circuits.send(endpoint,
+                                        homeworldz::viewer::encode_static_object_update(
+                                            response.region_handle, *restored_object), true, now, true))
+                                    static_cast<void>(send_udp(viewer_server, endpoint, *object));
+                            }
+                        }
+                        const auto object_add = homeworldz::viewer::decode_object_add(packet->payload);
+                        if (object_add && object_add->agent_id == identity->agent_id &&
+                            object_add->session_id == identity->session_id) {
+                            const auto valid_scale = std::all_of(
+                                object_add->scale.begin(), object_add->scale.end(),
+                                [](float value) { return value >= 0.01F && value <= 64.0F; });
+                            const bool supported_box = object_add->pcode == 9 &&
+                                object_add->path_curve == 16 && (object_add->profile_curve & 0x0f) == 1;
+                            const bool valid_position = object_add->ray_end[0] >= 0.0F &&
+                                object_add->ray_end[0] <= 256.0F && object_add->ray_end[1] >= 0.0F &&
+                                object_add->ray_end[1] <= 256.0F && object_add->ray_end[2] >= -64.0F &&
+                                object_add->ray_end[2] <= 4096.0F;
+                            bool created = false;
+                            std::string object_id;
+                            homeworldz::scene::EntityId entity_id{};
+                            if (supported_box && valid_scale && valid_position && object_add->material <= 7) {
+                                object_id = homeworldz::viewer::random_uuid();
+                                const auto owner_id = homeworldz::viewer::format_uuid(identity->agent_id);
+                                const homeworldz::scene::Vector3 position{
+                                    object_add->ray_end[0], object_add->ray_end[1],
+                                    object_add->ray_end[2] + object_add->scale[2] * 0.5};
+                                entity_id = scene.create("Primitive", position);
+                                if (auto* entity = scene.find(entity_id)) {
+                                    entity->object_id = object_id;
+                                    entity->owner_id = owner_id;
+                                    entity->scale = {object_add->scale[0], object_add->scale[1], object_add->scale[2]};
+                                    entity->material = object_add->material;
+                                    try {
+                                        storage->save_snapshot(scene);
+                                        created = true;
+                                    } catch (const std::exception& error) {
+                                        std::cout << "{\"level\":\"error\",\"message\":\"primitive persistence failed\",\"error\":"
+                                                  << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+                                        scene.remove(entity_id);
+                                    }
+                                }
+                            }
+                            if (created) {
+                                const auto* entity = scene.find(entity_id);
+                                const auto object = entity ? static_object_from_entity(*entity) : std::nullopt;
+                                if (object) {
+                                    const auto region_handle =
+                                        (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
+                                        static_cast<std::uint32_t>(region_grid_y * 256);
+                                    for (const auto& [recipient_endpoint, recipient] : avatars) {
+                                        static_cast<void>(recipient);
+                                        if (const auto sent = circuits.send(recipient_endpoint,
+                                                homeworldz::viewer::encode_static_object_update(
+                                                    region_handle, *object), true, now, true))
+                                            static_cast<void>(send_udp(viewer_server, recipient_endpoint, *sent));
+                                    }
+                                }
+                            }
+                            std::cout << "{\"level\":" << (created ? "\"info\"" : "\"warn\"")
+                                      << ",\"message\":\"primitive creation "
+                                      << (created ? "completed" : "rejected") << "\",\"objectId\":"
+                                      << homeworldz::api::json_string(object_id) << "}" << std::endl;
                         }
                         const auto update = homeworldz::viewer::decode_agent_update(packet->payload);
                         const auto avatar = avatars.find(endpoint);

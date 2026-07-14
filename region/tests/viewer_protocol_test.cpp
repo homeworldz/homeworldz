@@ -2,6 +2,7 @@
 
 #include <array>
 #include <chrono>
+#include <cstring>
 
 namespace {
 using namespace homeworldz::viewer;
@@ -11,6 +12,13 @@ std::vector<std::byte> bytes(std::initializer_list<unsigned> values) {
     std::vector<std::byte> result;
     for (const auto value : values) result.push_back(static_cast<std::byte>(value));
     return result;
+}
+
+void write_f32(std::vector<std::byte>& output, std::size_t offset, float value) {
+    std::uint32_t bits{};
+    std::memcpy(&bits, &value, sizeof(bits));
+    for (std::size_t index = 0; index < 4; ++index)
+        output[offset + index] = static_cast<std::byte>(bits >> (index * 8));
 }
 
 bool packet_round_trip() {
@@ -158,6 +166,28 @@ bool message_codecs() {
     for (const char value : std::string("Renamed\0", 8))
         move_item_payload.push_back(static_cast<std::byte>(value));
     const auto move_item = decode_move_inventory_item(move_item_payload);
+    std::vector<std::byte> object_add_payload(146);
+    object_add_payload[0] = std::byte{0xff};
+    object_add_payload[1] = std::byte{0x01};
+    std::copy(expected.agent_id.begin(), expected.agent_id.end(), object_add_payload.begin() + 2);
+    std::copy(expected.session_id.begin(), expected.session_id.end(), object_add_payload.begin() + 18);
+    std::copy(expected.agent_id.begin(), expected.agent_id.end(), object_add_payload.begin() + 34);
+    object_add_payload[50] = std::byte{9};
+    object_add_payload[51] = std::byte{3};
+    object_add_payload[52] = std::byte{0x02};
+    object_add_payload[56] = std::byte{16};
+    object_add_payload[57] = std::byte{1};
+    object_add_payload[79] = std::byte{1};
+    write_f32(object_add_payload, 80, 128.0F);
+    write_f32(object_add_payload, 84, 128.0F);
+    write_f32(object_add_payload, 88, 30.0F);
+    write_f32(object_add_payload, 92, 132.0F);
+    write_f32(object_add_payload, 96, 129.0F);
+    write_f32(object_add_payload, 100, 22.0F);
+    write_f32(object_add_payload, 121, 0.5F);
+    write_f32(object_add_payload, 125, 0.75F);
+    write_f32(object_add_payload, 129, 1.0F);
+    const auto object_add = decode_object_add(object_add_payload);
     auto cached_payload = bytes({0xff, 0xff, 0x01, 0x80});
     cached_payload.insert(cached_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
     cached_payload.insert(cached_payload.end(), expected.session_id.begin(), expected.session_id.end());
@@ -224,6 +254,12 @@ bool message_codecs() {
            move_item->items[0].folder_id == expected.session_id && move_item->items[0].new_name.empty() &&
            move_item->items[1].item_id == expected.session_id &&
            move_item->items[1].folder_id == expected.agent_id && move_item->items[1].new_name == "Renamed" &&
+           object_add && object_add->agent_id == expected.agent_id &&
+           object_add->session_id == expected.session_id && object_add->group_id == expected.agent_id &&
+           object_add->pcode == 9 && object_add->material == 3 && object_add->add_flags == 2 &&
+           object_add->path_curve == 16 && object_add->profile_curve == 1 && object_add->bypass_raycast &&
+           object_add->ray_start[2] == 30.0F && object_add->ray_end[0] == 132.0F &&
+           object_add->scale[1] == 0.75F &&
            logout_reply.size() == 53 && logout_reply[3] == std::byte{0xfd} && logout_reply[36] == std::byte{1} &&
            cached && cached->serial == 7 && cached->queries.size() == 2 &&
            cached->queries[0].texture_index == 8 && cached->queries[1].texture_index == 9 &&

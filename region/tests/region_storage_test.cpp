@@ -22,6 +22,12 @@ int main() {
         homeworldz::scene::Scene scene;
         const auto first = scene.create("first", {1, 2, 3}, {0.5, 0, 0});
         const auto second = scene.create("second \"line\"\n", {4, 5, 6});
+        auto* primitive = scene.find(second);
+        if (primitive == nullptr) return 1;
+        primitive->object_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+        primitive->owner_id = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+        primitive->scale = {0.5, 0.75, 1.25};
+        primitive->material = 4;
         std::filesystem::create_directories(path);
         sqlite3* legacy_database = nullptr;
         if (sqlite3_open((path / "region.db").string().c_str(), &legacy_database) != SQLITE_OK) return 1;
@@ -62,7 +68,11 @@ int main() {
             const auto* restored_second = restored.find(second);
             if (restored_first == nullptr || restored_first->position.x != 2.0 ||
                 restored_first->velocity.x != 1.0 || restored_second == nullptr ||
-                restored_second->name != "second \"line\"\n" || restored.create("next") != 3) return 1;
+                restored_second->name != "second \"line\"\n" ||
+                restored_second->object_id != primitive->object_id ||
+                restored_second->owner_id != primitive->owner_id ||
+                restored_second->scale.y != 0.75 || restored_second->material != 4 ||
+                restored.create("next") != 3) return 1;
 
             const std::array content{std::byte{0x00}, std::byte{0x7f}, std::byte{0xff}, std::byte{0x42}};
             const auto first_asset = storage.store_asset(

@@ -20,6 +20,10 @@ struct Entity {
     std::string name;
     Vector3 position;
     Vector3 velocity;
+    std::string object_id;
+    std::string owner_id;
+    Vector3 scale{1.0, 1.0, 1.0};
+    std::uint8_t material{3};
 };
 
 class Scene {

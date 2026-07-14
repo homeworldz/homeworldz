@@ -228,8 +228,27 @@ private:
         expect_string("velocity");
         expect(":");
         const auto velocity = vector();
+        if (consume("}")) return {id, std::move(name), position, velocity};
+        expect(",");
+        expect_string("objectId");
+        expect(":");
+        auto object_id = string();
+        expect(",");
+        expect_string("ownerId");
+        expect(":");
+        auto owner_id = string();
+        expect(",");
+        expect_string("scale");
+        expect(":");
+        const auto scale = vector();
+        expect(",");
+        expect_string("material");
+        expect(":");
+        const auto material = unsigned_integer();
+        if (material > 255) fail("material is outside the supported range");
         expect("}");
-        return {id, std::move(name), position, velocity};
+        return {id, std::move(name), position, velocity, std::move(object_id),
+                std::move(owner_id), scale, static_cast<std::uint8_t>(material)};
     }
 
     std::string_view input_;
@@ -255,7 +274,12 @@ std::string snapshot_json(const scene::Scene& scene) {
                 ",\"position\":[" + std::to_string(entity->position.x) + ',' +
                 std::to_string(entity->position.y) + ',' + std::to_string(entity->position.z) +
                 "],\"velocity\":[" + std::to_string(entity->velocity.x) + ',' +
-                std::to_string(entity->velocity.y) + ',' + std::to_string(entity->velocity.z) + "]}";
+                std::to_string(entity->velocity.y) + ',' + std::to_string(entity->velocity.z) +
+                "],\"objectId\":" + api::json_string(entity->object_id) +
+                ",\"ownerId\":" + api::json_string(entity->owner_id) +
+                ",\"scale\":[" + std::to_string(entity->scale.x) + ',' +
+                std::to_string(entity->scale.y) + ',' + std::to_string(entity->scale.z) +
+                "],\"material\":" + std::to_string(entity->material) + '}';
     }
     return json + "]}";
 }
