@@ -417,5 +417,6 @@ Viewer primitive rotation passed its live-session acceptance on 2026-07-14.
 Firestorm rotated Prim1 to `0, 0, 45` degrees; the region validated and stored
 the packed quaternion vector `[0, 0, 0.382683]`, returned it in the
 authoritative object update, and Firestorm retained the visible rotation and
-numeric fields after closing and reopening Edit. Clean-restart persistence
-remains to be confirmed.
+numeric fields after closing and reopening Edit. After a complete service and
+viewer restart, the object remained named `Prim1`, visibly rotated, and the
+Edit fields again showed `0, 0, 45` degrees.
