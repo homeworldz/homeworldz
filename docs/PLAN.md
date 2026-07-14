@@ -57,8 +57,9 @@ than runtime dependencies.
   body-parts outfit.
 - [x] Add automatic legacy avatar bake upload, UDP delivery, and persistent
   wearable-hash cache lookup.
-- [ ] Add general inventory mutation, folder management, and non-system item
-  creation workflows.
+- [x] Add AIS v3 inventory mutation, folder management, texture-backed
+  non-system item creation, Current Outfit links, Trash lifecycle operations,
+  and the narrow legacy UDP move adapters required by supported Firestorm.
 - [x] Add a read-only, grid-owned system inventory library with stable owner,
   root, folders, items, bundled-asset provenance, and AIS v3 fetch support;
   expose legacy reads only when their compatibility value justifies the cost.
@@ -106,5 +107,5 @@ explicit viewer version. `/ping` remains successful during dependency outages;
 - Use HTTP/JSON with OpenAPI, Postgres centrally, and SQLite plus filesystem
   blobs in each region.
 - Use Jolt as the selected v1 physics backend while retaining the PhysX lab adapter.
-- Defer complete inventory, scripting, editing, federation, and multi-region
-  transfer until after the first playable region.
+- Defer legacy inventory breadth, scripting, editing, federation, and
+  multi-region transfer until after the first playable region.

@@ -69,6 +69,26 @@ its current adapter and shared acceptance lab remain the foundation for that
 eventual production support. A region selects one engine implementation while
 the authoritative scene, persistence, and transfer contracts remain common.
 
+### AIS-first viewer inventory
+
+HomeWorldz requires Second Life AIS v3 for supported viewer-facing inventory
+mutation workflows. Legacy inventory capabilities and UDP messages may remain
+as compatibility shims for OpenSimulator, Halcyon, Firestorm, and other
+viewers, but feature completion does not require a parallel legacy path. All
+adapters use the same grid-owned inventory model rather than creating separate
+legacy and AIS stores. See
+[`ADR 0018`](adr/0018-ais-first-viewer-inventory.md).
+
+The implemented AIS v3 path includes personal folder and item mutation,
+texture-backed item creation, copying a complete Library outfit into personal
+Inventory, replacing Current Outfit links, and recursively emptying Trash.
+Firestorm's individual item and folder moves use narrow legacy UDP adapters;
+those adapters update the same authoritative inventory store.
+
+Read-only legacy inventory browsing is a stretch compatibility goal for older
+viewers. It is best effort, may remain incomplete, and does not imply support
+for legacy mutation workflows or a commitment to any particular older viewer.
+
 ## Planned differences
 
 ### Variable-sized regions
@@ -80,26 +100,6 @@ scope. This differs from Second Life's public 256-by-256-metre region model
 while preserving the most useful OpenSim content convention. The first
 implementation remains fixed at 1x1, and larger regions must not be simulated
 as loosely joined independent regions.
-
-### AIS-first viewer inventory
-
-HomeWorldz requires Second Life AIS v3 for supported viewer-facing inventory
-mutation workflows. Legacy inventory capabilities and UDP messages may remain
-as compatibility shims for OpenSimulator, Halcyon, Firestorm, and other
-viewers, but feature completion does not require a parallel legacy path. All
-adapters use the same grid-owned inventory model rather than creating separate
-legacy and AIS stores. See
-[`ADR 0018`](adr/0018-ais-first-viewer-inventory.md).
-
-The implemented AIS v3 path includes copying a complete Library outfit into
-personal Inventory and replacing Current Outfit links in one viewer workflow.
-This is the supported way to adopt a Library outfit. Individual Library-item
-wear commands may still use viewer-specific legacy messages and are treated as
-compatibility behavior rather than the primary HomeWorldz inventory model.
-
-Read-only legacy inventory browsing is a stretch compatibility goal for older
-viewers. It is best effort, may remain incomplete, and does not imply support
-for legacy mutation workflows or a commitment to any particular older viewer.
 
 ## Maintenance rule
 
