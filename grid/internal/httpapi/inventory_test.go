@@ -99,6 +99,54 @@ func (s *memoryInventoryStore) CreateItem(_ context.Context, item inventory.Item
 	return item, nil
 }
 
+func (s *memoryInventoryStore) UpdateItem(_ context.Context, item inventory.Item) (inventory.Item, error) {
+	for itemIndex, existing := range s.items[item.OwnerUserID] {
+		if existing.ID != item.ID {
+			continue
+		}
+		destinationFound := false
+		for folderIndex := range s.folders[item.OwnerUserID] {
+			if s.folders[item.OwnerUserID][folderIndex].ID == item.FolderID {
+				destinationFound = true
+				break
+			}
+		}
+		if !destinationFound {
+			return inventory.Item{}, inventory.ErrItemFolderNotFound
+		}
+		for folderIndex := range s.folders[item.OwnerUserID] {
+			folder := &s.folders[item.OwnerUserID][folderIndex]
+			if folder.ID == existing.FolderID || (existing.FolderID != item.FolderID && folder.ID == item.FolderID) {
+				folder.Version++
+			}
+		}
+		item.CreatorUserID = existing.CreatorUserID
+		item.AssetID = existing.AssetID
+		item.AssetType = existing.AssetType
+		item.InventoryType = existing.InventoryType
+		item.CreatedAt = existing.CreatedAt
+		s.items[item.OwnerUserID][itemIndex] = item
+		return item, nil
+	}
+	return inventory.Item{}, inventory.ErrItemNotFound
+}
+
+func (s *memoryInventoryStore) DeleteItem(_ context.Context, userID, itemID string) (inventory.Item, error) {
+	for itemIndex, item := range s.items[userID] {
+		if item.ID != itemID {
+			continue
+		}
+		s.items[userID] = append(s.items[userID][:itemIndex], s.items[userID][itemIndex+1:]...)
+		for folderIndex := range s.folders[userID] {
+			if s.folders[userID][folderIndex].ID == item.FolderID {
+				s.folders[userID][folderIndex].Version++
+			}
+		}
+		return item, nil
+	}
+	return inventory.Item{}, inventory.ErrItemNotFound
+}
+
 func (s *memoryInventoryStore) ListItems(_ context.Context, userID string) ([]inventory.Item, error) {
 	return s.items[userID], nil
 }

@@ -181,6 +181,71 @@ func TestAISCreateAndRenameInventoryFolder(t *testing.T) {
 	}
 }
 
+func TestAISRenameMoveAndDeleteInventoryItem(t *testing.T) {
+	identities := newMemoryIdentityStore()
+	user, err := identities.CreateUser(context.Background(), "inventory.ais.items", "development-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := identities.CreateSession(context.Background(), "inventory.ais.items", "development-password", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.AssignViewerDestination(context.Background(), session.ID, 123456,
+		"30000000-0000-4000-8000-000000000001"); err != nil {
+		t.Fatal(err)
+	}
+	inventories := &memoryInventoryStore{folders: make(map[string][]inventory.Folder)}
+	_, _ = inventories.EnsureSystemFolders(context.Background(), user.ID)
+	const itemID = "40000000-0000-4000-8000-000000000001"
+	const assetID = "50000000-0000-4000-8000-000000000001"
+	textureFolderID := inventory.SystemFolderID(user.ID, 0)
+	projectsFolderID := "60000000-0000-4000-8000-000000000001"
+	if _, err := inventories.CreateFolder(context.Background(), inventory.Folder{
+		ID: projectsFolderID, OwnerUserID: user.ID,
+		ParentID: inventory.SystemFolderID(user.ID, 8), Name: "Projects", TypeDefault: -1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := inventories.CreateItem(context.Background(), inventory.Item{
+		ID: itemID, OwnerUserID: user.ID, CreatorUserID: user.ID,
+		FolderID: textureFolderID, AssetID: assetID, AssetType: 0, InventoryType: 0,
+		Name: "Uploaded Texture", BasePermissions: 0x7fffffff,
+		CurrentPermissions: 0x7fffffff, NextPermissions: 0x7fffffff,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	handler := New(checker{}, "test", Options{Identity: identities, Inventory: inventories})
+	base := "/caps/inventory/ais/" + session.ID + "/item/" + itemID
+	updateBody := `<?xml version="1.0"?><llsd><map>` +
+		`<key>item_id</key><uuid>` + itemID + `</uuid>` +
+		`<key>parent_id</key><uuid>` + projectsFolderID + `</uuid>` +
+		`<key>name</key><string>Terrain Island 5</string>` +
+		`<key>desc</key><string>Heightmap source</string></map></llsd>`
+	updateRequest := httptest.NewRequest(http.MethodPatch, base, strings.NewReader(updateBody))
+	updateResponse := httptest.NewRecorder()
+	handler.ServeHTTP(updateResponse, updateRequest)
+	items, _ := inventories.ListItems(context.Background(), user.ID)
+	if updateResponse.Code != http.StatusOK || len(items) != 1 ||
+		items[0].Name != "Terrain Island 5" || items[0].Description != "Heightmap source" ||
+		items[0].FolderID != projectsFolderID || items[0].AssetID != assetID ||
+		items[0].CreatorUserID != user.ID ||
+		!strings.Contains(updateResponse.Body.String(), "<key>item_id</key><uuid>"+itemID) {
+		t.Fatalf("status = %d, response = %s, items = %#v",
+			updateResponse.Code, updateResponse.Body.String(), items)
+	}
+	deleteRequest := httptest.NewRequest(http.MethodDelete, base, nil)
+	deleteResponse := httptest.NewRecorder()
+	handler.ServeHTTP(deleteResponse, deleteRequest)
+	items, _ = inventories.ListItems(context.Background(), user.ID)
+	if deleteResponse.Code != http.StatusOK || len(items) != 0 ||
+		!strings.Contains(deleteResponse.Body.String(),
+			"<key>_removed_items</key><array><uuid>"+itemID+"</uuid>") {
+		t.Fatalf("status = %d, response = %s, items = %#v",
+			deleteResponse.Code, deleteResponse.Body.String(), items)
+	}
+}
+
 func TestAISFetchInventoryFolderChildrenAndCurrentLinks(t *testing.T) {
 	identities := newMemoryIdentityStore()
 	user, err := identities.CreateUser(context.Background(), "inventory.ais.read", "development-password")

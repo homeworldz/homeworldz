@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"html"
@@ -55,18 +56,33 @@ func (a *API) inventoryAISCapability(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if len(parts) != 3 || parts[1] != "category" || !validUUID(parts[2]) {
+	if len(parts) != 3 || !validUUID(parts[2]) {
 		writeLLSDError(w, http.StatusNotFound, "AIS inventory capability was not found")
 		return
 	}
-	switch r.Method {
-	case http.MethodPost:
-		a.createAISInventoryFolder(w, r, session.UserID, parts[2])
-	case http.MethodPatch:
-		a.updateAISInventoryFolder(w, r, session.UserID, parts[2])
+	switch parts[1] {
+	case "category":
+		switch r.Method {
+		case http.MethodPost:
+			a.createAISInventoryFolder(w, r, session.UserID, parts[2])
+		case http.MethodPatch:
+			a.updateAISInventoryFolder(w, r, session.UserID, parts[2])
+		default:
+			w.Header().Set("Allow", "POST, PATCH")
+			writeLLSDError(w, http.StatusMethodNotAllowed, "only POST and PATCH are supported")
+		}
+	case "item":
+		switch r.Method {
+		case http.MethodPatch:
+			a.updateAISInventoryItem(w, r, session.UserID, parts[2])
+		case http.MethodDelete:
+			a.deleteAISInventoryItem(w, r, session.UserID, parts[2])
+		default:
+			w.Header().Set("Allow", "PATCH, DELETE")
+			writeLLSDError(w, http.StatusMethodNotAllowed, "only PATCH and DELETE are supported")
+		}
 	default:
-		w.Header().Set("Allow", "POST, PATCH")
-		writeLLSDError(w, http.StatusMethodNotAllowed, "only POST and PATCH are supported")
+		writeLLSDError(w, http.StatusNotFound, "AIS inventory resource was not found")
 	}
 }
 
@@ -314,4 +330,150 @@ func writeAISFolderUpdate(w http.ResponseWriter, folder inventory.Folder) {
 		html.EscapeString(folder.ID), html.EscapeString(folder.ID),
 		html.EscapeString(folder.ParentID), folder.TypeDefault,
 		html.EscapeString(folder.Name), folder.Version)
+}
+
+type aisInventoryItemMutation struct {
+	ID          string
+	ParentID    string
+	Name        string
+	Description string
+}
+
+func decodeAISInventoryItemMutation(reader io.Reader) (aisInventoryItemMutation, map[string]bool, error) {
+	decoder := xml.NewDecoder(reader)
+	var request aisInventoryItemMutation
+	seen := make(map[string]bool)
+	var key string
+	mapDepth := 0
+	sawLLSD := false
+	for {
+		token, err := decoder.Token()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return request, seen, err
+		}
+		switch value := token.(type) {
+		case xml.StartElement:
+			switch value.Name.Local {
+			case "llsd":
+				sawLLSD = true
+			case "map":
+				mapDepth++
+			case "key":
+				if mapDepth == 1 {
+					if err := decoder.DecodeElement(&key, &value); err != nil {
+						return request, seen, err
+					}
+				}
+			default:
+				if mapDepth != 1 || key == "" ||
+					(value.Name.Local != "uuid" && value.Name.Local != "string") {
+					continue
+				}
+				var field string
+				if err := decoder.DecodeElement(&field, &value); err != nil {
+					return request, seen, err
+				}
+				field = strings.TrimSpace(field)
+				normalized := key
+				if normalized == "desc" {
+					normalized = "description"
+				}
+				if seen[normalized] {
+					return request, seen, errors.New("AIS inventory item update repeats a field")
+				}
+				switch normalized {
+				case "item_id":
+					request.ID = field
+				case "parent_id":
+					request.ParentID = field
+				case "name":
+					request.Name = field
+				case "description":
+					request.Description = field
+				default:
+					key = ""
+					continue
+				}
+				seen[normalized] = true
+				key = ""
+			}
+		case xml.EndElement:
+			if value.Name.Local == "map" {
+				mapDepth--
+			}
+		}
+	}
+	if !sawLLSD || (!seen["name"] && !seen["description"] && !seen["parent_id"]) {
+		return request, seen, errors.New("AIS inventory item update is empty")
+	}
+	return request, seen, nil
+}
+
+func (a *API) updateAISInventoryItem(w http.ResponseWriter, r *http.Request, userID, itemID string) {
+	request, seen, err := decodeAISInventoryItemMutation(http.MaxBytesReader(w, r.Body, 64*1024))
+	if err != nil || (seen["item_id"] && request.ID != itemID) ||
+		(seen["parent_id"] && !validUUID(request.ParentID)) {
+		writeLLSDError(w, http.StatusBadRequest, "invalid AIS inventory item update")
+		return
+	}
+	items, err := a.inventory.ListItems(r.Context(), userID)
+	if err != nil {
+		writeLLSDError(w, http.StatusServiceUnavailable, "AIS inventory item could not be loaded")
+		return
+	}
+	var item inventory.Item
+	for _, existing := range items {
+		if existing.ID == itemID {
+			item = existing
+			break
+		}
+	}
+	if item.ID == "" {
+		writeLLSDError(w, http.StatusNotFound, "AIS inventory item was not found")
+		return
+	}
+	if seen["name"] {
+		item.Name = request.Name
+	}
+	if seen["description"] {
+		item.Description = request.Description
+	}
+	if seen["parent_id"] {
+		item.FolderID = request.ParentID
+	}
+	item, err = a.inventory.UpdateItem(r.Context(), item)
+	if writeAISItemError(w, err) {
+		return
+	}
+	w.Header().Set("Content-Type", "application/llsd+xml; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.WriteString(w, "<?xml version=\"1.0\"?><llsd>"+inventoryItemXML(item)+"</llsd>")
+}
+
+func (a *API) deleteAISInventoryItem(w http.ResponseWriter, r *http.Request, userID, itemID string) {
+	_, err := a.inventory.DeleteItem(r.Context(), userID, itemID)
+	if writeAISItemError(w, err) {
+		return
+	}
+	writeAISUUIDArray(w, "_removed_items", itemID)
+}
+
+func writeAISItemError(w http.ResponseWriter, err error) bool {
+	if err == nil {
+		return false
+	}
+	switch {
+	case errors.Is(err, inventory.ErrInvalidItem):
+		writeLLSDError(w, http.StatusBadRequest, "invalid AIS inventory item update")
+	case errors.Is(err, inventory.ErrItemNotFound):
+		writeLLSDError(w, http.StatusNotFound, "AIS inventory item was not found")
+	case errors.Is(err, inventory.ErrItemFolderNotFound):
+		writeLLSDError(w, http.StatusNotFound, "AIS inventory destination folder was not found")
+	default:
+		writeLLSDError(w, http.StatusServiceUnavailable, "AIS inventory item operation failed")
+	}
+	return true
 }

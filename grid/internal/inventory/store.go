@@ -19,6 +19,7 @@ var (
 	ErrFolderNotFound     = errors.New("inventory parent folder not found")
 	ErrInvalidFolder      = errors.New("inventory folder is invalid")
 	ErrItemConflict       = errors.New("inventory item already exists")
+	ErrItemNotFound       = errors.New("inventory item not found")
 	ErrItemFolderNotFound = errors.New("inventory item folder not found")
 	ErrInvalidItem        = errors.New("inventory item is invalid")
 )
@@ -58,6 +59,8 @@ type Store interface {
 	UpdateFolder(context.Context, Folder) (Folder, error)
 	ListFolders(context.Context, string) ([]Folder, error)
 	CreateItem(context.Context, Item) (Item, error)
+	UpdateItem(context.Context, Item) (Item, error)
+	DeleteItem(context.Context, string, string) (Item, error)
 	EnsureItem(context.Context, Item) (bool, error)
 	ListItems(context.Context, string) ([]Item, error)
 }
@@ -382,6 +385,113 @@ func (s *PostgresStore) CreateItem(ctx context.Context, item Item) (Item, error)
 	}
 	if err := tx.Commit(); err != nil {
 		return Item{}, fmt.Errorf("commit inventory item creation: %w", err)
+	}
+	return item, nil
+}
+
+func (s *PostgresStore) UpdateItem(ctx context.Context, item Item) (Item, error) {
+	item.Name = strings.TrimSpace(item.Name)
+	if item.ID == "" || item.OwnerUserID == "" || item.FolderID == "" ||
+		len(item.Name) == 0 || len(item.Name) > 255 || len(item.Description) > 1024 ||
+		item.SaleType < 0 || item.SaleType > 3 || item.SalePrice < 0 {
+		return Item{}, ErrInvalidItem
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Item{}, fmt.Errorf("begin inventory item update: %w", err)
+	}
+	defer tx.Rollback()
+	var existing Item
+	if err := tx.QueryRowContext(ctx, `SELECT id, owner_user_id, COALESCE(creator_user_id::text, $3),
+		folder_id, asset_id, asset_type, inventory_type, name, description, flags, base_permissions,
+		current_permissions, everyone_permissions, next_permissions, sale_type, sale_price, created_at
+		FROM inventory_items WHERE id = $1 AND owner_user_id = $2 FOR UPDATE`,
+		item.ID, item.OwnerUserID, zeroUUID).Scan(&existing.ID, &existing.OwnerUserID,
+		&existing.CreatorUserID, &existing.FolderID, &existing.AssetID, &existing.AssetType,
+		&existing.InventoryType, &existing.Name, &existing.Description, &existing.Flags,
+		&existing.BasePermissions, &existing.CurrentPermissions, &existing.EveryonePermissions,
+		&existing.NextPermissions, &existing.SaleType, &existing.SalePrice, &existing.CreatedAt); errors.Is(err, sql.ErrNoRows) {
+		return Item{}, ErrItemNotFound
+	} else if err != nil {
+		return Item{}, fmt.Errorf("find inventory item for update: %w", err)
+	}
+	if item.FolderID != existing.FolderID {
+		var destinationVersion int64
+		if err := tx.QueryRowContext(ctx, `SELECT version FROM inventory_folders
+			WHERE id = $1 AND owner_user_id = $2 FOR UPDATE`, item.FolderID, item.OwnerUserID).
+			Scan(&destinationVersion); errors.Is(err, sql.ErrNoRows) {
+			return Item{}, ErrItemFolderNotFound
+		} else if err != nil {
+			return Item{}, fmt.Errorf("find inventory item destination folder: %w", err)
+		}
+	}
+	item.CreatorUserID = existing.CreatorUserID
+	item.AssetID = existing.AssetID
+	item.AssetType = existing.AssetType
+	item.InventoryType = existing.InventoryType
+	item.CreatedAt = existing.CreatedAt
+	if item.FolderID == existing.FolderID && item.Name == existing.Name &&
+		item.Description == existing.Description && item.Flags == existing.Flags &&
+		item.BasePermissions == existing.BasePermissions &&
+		item.CurrentPermissions == existing.CurrentPermissions &&
+		item.EveryonePermissions == existing.EveryonePermissions &&
+		item.NextPermissions == existing.NextPermissions && item.SaleType == existing.SaleType &&
+		item.SalePrice == existing.SalePrice {
+		return existing, nil
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE inventory_items SET folder_id = $3, name = $4,
+		description = $5, flags = $6, base_permissions = $7, current_permissions = $8,
+		everyone_permissions = $9, next_permissions = $10, sale_type = $11, sale_price = $12,
+		updated_at = now() WHERE id = $1 AND owner_user_id = $2`, item.ID, item.OwnerUserID,
+		item.FolderID, item.Name, item.Description, item.Flags, item.BasePermissions,
+		item.CurrentPermissions, item.EveryonePermissions, item.NextPermissions,
+		item.SaleType, item.SalePrice); err != nil {
+		return Item{}, fmt.Errorf("update inventory item: %w", err)
+	}
+	for _, folderID := range []string{existing.FolderID, item.FolderID} {
+		if _, err := tx.ExecContext(ctx, `UPDATE inventory_folders SET version = version + 1,
+			updated_at = now() WHERE id = $1 AND owner_user_id = $2`, folderID, item.OwnerUserID); err != nil {
+			return Item{}, fmt.Errorf("update inventory item folder version: %w", err)
+		}
+		if existing.FolderID == item.FolderID {
+			break
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return Item{}, fmt.Errorf("commit inventory item update: %w", err)
+	}
+	return item, nil
+}
+
+func (s *PostgresStore) DeleteItem(ctx context.Context, userID, itemID string) (Item, error) {
+	if userID == "" || itemID == "" {
+		return Item{}, ErrInvalidItem
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Item{}, fmt.Errorf("begin inventory item deletion: %w", err)
+	}
+	defer tx.Rollback()
+	var item Item
+	if err := tx.QueryRowContext(ctx, `DELETE FROM inventory_items
+		WHERE id = $1 AND owner_user_id = $2 RETURNING id, owner_user_id,
+		COALESCE(creator_user_id::text, $3), folder_id, asset_id, asset_type, inventory_type,
+		name, description, flags, base_permissions, current_permissions, everyone_permissions,
+		next_permissions, sale_type, sale_price, created_at`, itemID, userID, zeroUUID).
+		Scan(&item.ID, &item.OwnerUserID, &item.CreatorUserID, &item.FolderID, &item.AssetID,
+			&item.AssetType, &item.InventoryType, &item.Name, &item.Description, &item.Flags,
+			&item.BasePermissions, &item.CurrentPermissions, &item.EveryonePermissions,
+			&item.NextPermissions, &item.SaleType, &item.SalePrice, &item.CreatedAt); errors.Is(err, sql.ErrNoRows) {
+		return Item{}, ErrItemNotFound
+	} else if err != nil {
+		return Item{}, fmt.Errorf("delete inventory item: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE inventory_folders SET version = version + 1,
+		updated_at = now() WHERE id = $1 AND owner_user_id = $2`, item.FolderID, userID); err != nil {
+		return Item{}, fmt.Errorf("update deleted inventory item folder version: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return Item{}, fmt.Errorf("commit inventory item deletion: %w", err)
 	}
 	return item, nil
 }

@@ -89,6 +89,14 @@ func TestPostgresSystemFolderLifecycle(t *testing.T) {
 	if _, err := store.CreateItem(ctx, uploaded); !errors.Is(err, ErrItemConflict) {
 		t.Fatalf("duplicate uploaded item error = %v", err)
 	}
+	uploaded.Name = "Renamed Uploaded Texture"
+	uploaded.Description = "AIS integration update"
+	uploaded.FolderID = custom.ID
+	updated, err := store.UpdateItem(ctx, uploaded)
+	if err != nil || updated.Name != uploaded.Name || updated.FolderID != custom.ID ||
+		updated.AssetID != uploadedAssetID || updated.CreatorUserID != userID {
+		t.Fatalf("updated uploaded item = %#v, error = %v", updated, err)
+	}
 	items, err := store.ListItems(ctx, userID)
 	if err != nil || len(items) != 2 {
 		t.Fatalf("inventory items = %#v, error = %v", items, err)
@@ -99,5 +107,12 @@ func TestPostgresSystemFolderLifecycle(t *testing.T) {
 	}
 	if !found[uploadedAssetID] || !found[replacementAssetID] {
 		t.Fatalf("inventory assets = %#v", found)
+	}
+	deleted, err := store.DeleteItem(ctx, userID, uploadedItemID)
+	if err != nil || deleted.AssetID != uploadedAssetID {
+		t.Fatalf("deleted uploaded item = %#v, error = %v", deleted, err)
+	}
+	if _, err := store.DeleteItem(ctx, userID, uploadedItemID); !errors.Is(err, ErrItemNotFound) {
+		t.Fatalf("delete missing uploaded item error = %v", err)
 	}
 }

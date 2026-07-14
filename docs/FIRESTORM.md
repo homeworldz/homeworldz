@@ -118,6 +118,16 @@ for bundled Library inventory items and as uploader for their region asset
 mappings. The account is created locked; an administrator must explicitly set
 a password before using it for interactive content preparation.
 
+## Personal Inventory Mutation
+
+`InventoryAPIv3` supports authenticated rename, description update, move, and
+delete operations for personal inventory items. Item updates preserve the
+original asset UUID and creator UUID, and moving an item updates both source
+and destination folder versions. The shared Library remains read-only through
+both its dedicated capability and the compatibility reads exposed through the
+personal AIS endpoint. Folder creation and rename use the same AIS-first model;
+legacy viewer mutations are not a second source of inventory truth.
+
 ## Ordinary Texture Upload
 
 The region advertises `NewFileAgentInventory` for the initial ordinary-upload
