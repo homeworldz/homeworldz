@@ -350,3 +350,11 @@ two inactive outfit folders and their items while retaining the protected
 Trash folder. The request returned success, Trash remained empty after a clean
 login, and the active Clothing folder, six Current Outfit links, worn state,
 and rendered avatar were unchanged.
+
+Personal item moves to Trash passed on 2026-07-14. Firestorm moved an uploaded
+texture with legacy UDP `MoveInventoryItem`, encoding its optional `NewName`
+field with zero bytes. The region compatibility adapter accepted that encoding
+and forwarded the move to the authoritative grid inventory service, which
+returned success. On a clean login the texture remained in Trash and was absent
+from Textures; Jim Tarber's clothing, Current Outfit links, and rendered avatar
+were unchanged.
