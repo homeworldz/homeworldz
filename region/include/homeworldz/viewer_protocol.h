@@ -45,9 +45,21 @@ struct AgentMessage {
     Uuid session_id{};
 };
 
+struct CachedTextureQuery {
+    Uuid cache_id{};
+    std::uint8_t texture_index{};
+    Uuid texture_id{};
+};
+
 struct AgentCachedTexture : AgentMessage {
     std::int32_t serial{};
-    std::vector<std::uint8_t> texture_indices;
+    std::vector<CachedTextureQuery> queries;
+};
+
+struct AgentSetAppearance : AgentMessage {
+    std::uint32_t serial{};
+    std::vector<CachedTextureQuery> cache_entries;
+    std::array<Uuid, 32> texture_ids{};
 };
 
 struct ImageRequestBlock {
@@ -139,6 +151,7 @@ std::optional<AgentMessage> decode_logout_request(std::span<const std::byte> pay
 std::vector<std::byte> encode_logout_reply(const AgentMessage& message);
 std::optional<AgentCachedTexture> decode_agent_cached_texture(std::span<const std::byte> payload);
 std::vector<std::byte> encode_agent_cached_texture_response(const AgentCachedTexture& message);
+std::optional<AgentSetAppearance> decode_agent_set_appearance(std::span<const std::byte> payload);
 std::optional<RequestImage> decode_request_image(std::span<const std::byte> payload);
 std::vector<std::vector<std::byte>> encode_image_transfer(
     const Uuid& image_id, std::span<const std::byte> content, std::uint32_t start_packet = 0);

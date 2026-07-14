@@ -33,6 +33,33 @@ void execute(sqlite3* database, const char* sql) {
     }
 }
 
+bool has_column(sqlite3* database, const char* table, std::string_view column) {
+    sqlite3_stmt* statement = nullptr;
+    const auto sql = std::string("PRAGMA table_info(") + table + ')';
+    if (sqlite3_prepare_v2(database, sql.c_str(), -1, &statement, nullptr) != SQLITE_OK)
+        throw std::runtime_error(sqlite3_errmsg(database));
+    bool found = false;
+    while (sqlite3_step(statement) == SQLITE_ROW) {
+        const auto* name = reinterpret_cast<const char*>(sqlite3_column_text(statement, 1));
+        if (name != nullptr && column == name) {
+            found = true;
+            break;
+        }
+    }
+    sqlite3_finalize(statement);
+    return found;
+}
+
+bool valid_uuid(std::string_view value) {
+    if (value.size() != 36 || value[8] != '-' || value[13] != '-' ||
+        value[18] != '-' || value[23] != '-') return false;
+    for (std::size_t index = 0; index < value.size(); ++index) {
+        if (index == 8 || index == 13 || index == 18 || index == 23) continue;
+        if (!std::isxdigit(static_cast<unsigned char>(value[index]))) return false;
+    }
+    return true;
+}
+
 void replace_file(const std::filesystem::path& source, const std::filesystem::path& target) {
 #ifdef _WIN32
     if (!MoveFileExW(source.c_str(), target.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
@@ -252,9 +279,18 @@ RegionStorage::RegionStorage(std::filesystem::path data_path) : data_path_(std::
                        "snapshot_path TEXT NOT NULL, saved_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);"
                        "INSERT OR IGNORE INTO scene_metadata (id, revision, snapshot_path) VALUES (1, 0, 'scene/snapshot.json');"
                        "CREATE TABLE IF NOT EXISTS asset_mappings ("
-                       "viewer_id TEXT PRIMARY KEY, sha256 TEXT NOT NULL, size INTEGER NOT NULL,"
+                       "viewer_id TEXT PRIMARY KEY, creator_id TEXT NOT NULL CHECK(length(creator_id) = 36),"
+                       "sha256 TEXT NOT NULL, size INTEGER NOT NULL,"
                        "created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);"
-                       "CREATE INDEX IF NOT EXISTS asset_mappings_sha256 ON asset_mappings(sha256);");
+                       "CREATE INDEX IF NOT EXISTS asset_mappings_sha256 ON asset_mappings(sha256);"
+                       "CREATE TABLE IF NOT EXISTS baked_texture_cache ("
+                       "cache_id TEXT NOT NULL, texture_index INTEGER NOT NULL, asset_id TEXT NOT NULL,"
+                       "updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+                       "PRIMARY KEY (cache_id, texture_index),"
+                       "FOREIGN KEY (asset_id) REFERENCES asset_mappings(viewer_id));");
+    if (!has_column(database_, "asset_mappings", "creator_id"))
+        execute(database_, "ALTER TABLE asset_mappings ADD COLUMN creator_id TEXT NOT NULL "
+                           "DEFAULT '00000000-0000-0000-0000-000000000000' CHECK(length(creator_id) = 36);");
 }
 
 RegionStorage::~RegionStorage() {
@@ -322,8 +358,11 @@ SnapshotMetadata RegionStorage::snapshot_metadata() const {
     return metadata;
 }
 
-AssetMetadata RegionStorage::store_asset(std::string viewer_id, std::span<const std::byte> content) {
-    AssetMetadata metadata{std::move(viewer_id), crypto::sha256_hex(content), content.size()};
+AssetMetadata RegionStorage::store_asset(std::string viewer_id, std::string creator_id,
+                                         std::span<const std::byte> content) {
+    if (!valid_uuid(creator_id)) throw std::invalid_argument("asset creator ID must be a UUID");
+    AssetMetadata metadata{
+        std::move(viewer_id), std::move(creator_id), crypto::sha256_hex(content), content.size()};
     const auto relative = std::filesystem::path("assets") / metadata.sha256.substr(0, 2) / metadata.sha256.substr(2);
     const auto target = data_path_ / relative;
     if (!std::filesystem::exists(target)) {
@@ -338,21 +377,56 @@ AssetMetadata RegionStorage::store_asset(std::string viewer_id, std::span<const 
         replace_file(temporary, target);
     }
     sqlite3_stmt* statement = nullptr;
-    const char* sql = "INSERT INTO asset_mappings (viewer_id, sha256, size) VALUES (?, ?, ?) "
+    const char* sql = "INSERT INTO asset_mappings (viewer_id, creator_id, sha256, size) VALUES (?, ?, ?, ?) "
                       "ON CONFLICT(viewer_id) DO UPDATE SET sha256=excluded.sha256, size=excluded.size";
     if (sqlite3_prepare_v2(database_, sql, -1, &statement, nullptr) != SQLITE_OK) {
         throw std::runtime_error(sqlite3_errmsg(database_));
     }
     sqlite3_bind_text(statement, 1, metadata.viewer_id.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(statement, 2, metadata.sha256.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int64(statement, 3, static_cast<sqlite3_int64>(metadata.size));
+    sqlite3_bind_text(statement, 2, metadata.creator_id.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(statement, 3, metadata.sha256.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int64(statement, 4, static_cast<sqlite3_int64>(metadata.size));
     const auto result = sqlite3_step(statement);
     sqlite3_finalize(statement);
     if (result != SQLITE_DONE) throw std::runtime_error(sqlite3_errmsg(database_));
     return metadata;
 }
 
-std::size_t RegionStorage::import_asset_directory(const std::filesystem::path& directory) {
+void RegionStorage::store_baked_texture(std::string cache_id, std::uint8_t texture_index,
+                                        std::string asset_id) {
+    sqlite3_stmt* statement = nullptr;
+    const char* sql = "INSERT INTO baked_texture_cache (cache_id, texture_index, asset_id) VALUES (?, ?, ?) "
+                      "ON CONFLICT(cache_id, texture_index) DO UPDATE SET "
+                      "asset_id=excluded.asset_id, updated_at=CURRENT_TIMESTAMP";
+    if (sqlite3_prepare_v2(database_, sql, -1, &statement, nullptr) != SQLITE_OK)
+        throw std::runtime_error(sqlite3_errmsg(database_));
+    sqlite3_bind_text(statement, 1, cache_id.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(statement, 2, texture_index);
+    sqlite3_bind_text(statement, 3, asset_id.c_str(), -1, SQLITE_TRANSIENT);
+    const auto result = sqlite3_step(statement);
+    sqlite3_finalize(statement);
+    if (result != SQLITE_DONE) throw std::runtime_error(sqlite3_errmsg(database_));
+}
+
+std::optional<std::string> RegionStorage::find_baked_texture(
+    std::string_view cache_id, std::uint8_t texture_index) const {
+    sqlite3_stmt* statement = nullptr;
+    const char* sql = "SELECT cache.asset_id FROM baked_texture_cache cache "
+                      "JOIN asset_mappings asset ON asset.viewer_id = cache.asset_id "
+                      "WHERE cache.cache_id = ? AND cache.texture_index = ?";
+    if (sqlite3_prepare_v2(database_, sql, -1, &statement, nullptr) != SQLITE_OK)
+        throw std::runtime_error(sqlite3_errmsg(database_));
+    sqlite3_bind_text(statement, 1, cache_id.data(), static_cast<int>(cache_id.size()), SQLITE_TRANSIENT);
+    sqlite3_bind_int(statement, 2, texture_index);
+    std::optional<std::string> result;
+    if (sqlite3_step(statement) == SQLITE_ROW)
+        result = reinterpret_cast<const char*>(sqlite3_column_text(statement, 0));
+    sqlite3_finalize(statement);
+    return result;
+}
+
+std::size_t RegionStorage::import_asset_directory(const std::filesystem::path& directory,
+                                                  std::string_view creator_id) {
     if (!std::filesystem::is_directory(directory)) return 0;
     std::size_t imported = 0;
     for (const auto& entry : std::filesystem::recursive_directory_iterator(directory)) {
@@ -365,7 +439,7 @@ std::size_t RegionStorage::import_asset_directory(const std::filesystem::path& d
         input.seekg(0);
         std::vector<std::byte> content(static_cast<std::size_t>(length));
         input.read(reinterpret_cast<char*>(content.data()), length);
-        store_asset(entry.path().stem().string(), content);
+        store_asset(entry.path().stem().string(), std::string(creator_id), content);
         ++imported;
     }
     return imported;
@@ -373,7 +447,7 @@ std::size_t RegionStorage::import_asset_directory(const std::filesystem::path& d
 
 std::optional<AssetMetadata> RegionStorage::find_asset(std::string_view viewer_id) const {
     sqlite3_stmt* statement = nullptr;
-    if (sqlite3_prepare_v2(database_, "SELECT viewer_id, sha256, size FROM asset_mappings WHERE viewer_id = ?", -1,
+    if (sqlite3_prepare_v2(database_, "SELECT viewer_id, creator_id, sha256, size FROM asset_mappings WHERE viewer_id = ?", -1,
                            &statement, nullptr) != SQLITE_OK) {
         throw std::runtime_error(sqlite3_errmsg(database_));
     }
@@ -383,7 +457,8 @@ std::optional<AssetMetadata> RegionStorage::find_asset(std::string_view viewer_i
         metadata = AssetMetadata{
             reinterpret_cast<const char*>(sqlite3_column_text(statement, 0)),
             reinterpret_cast<const char*>(sqlite3_column_text(statement, 1)),
-            static_cast<std::uint64_t>(sqlite3_column_int64(statement, 2))};
+            reinterpret_cast<const char*>(sqlite3_column_text(statement, 2)),
+            static_cast<std::uint64_t>(sqlite3_column_int64(statement, 3))};
     }
     sqlite3_finalize(statement);
     return metadata;

@@ -1,6 +1,8 @@
 #include "homeworldz/region_storage.h"
 #include "homeworldz/sha256.h"
 
+#include <sqlite3.h>
+
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -20,8 +22,23 @@ int main() {
         homeworldz::scene::Scene scene;
         const auto first = scene.create("first", {1, 2, 3}, {0.5, 0, 0});
         const auto second = scene.create("second \"line\"\n", {4, 5, 6});
+        std::filesystem::create_directories(path);
+        sqlite3* legacy_database = nullptr;
+        if (sqlite3_open((path / "region.db").string().c_str(), &legacy_database) != SQLITE_OK) return 1;
+        const auto legacy_result = sqlite3_exec(
+            legacy_database,
+            "CREATE TABLE asset_mappings (viewer_id TEXT PRIMARY KEY, sha256 TEXT NOT NULL, "
+            "size INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);"
+            "INSERT INTO asset_mappings (viewer_id, sha256, size) VALUES ("
+            "'99999999-9999-4999-8999-999999999999', "
+            "'0000000000000000000000000000000000000000000000000000000000000000', 0);",
+            nullptr, nullptr, nullptr);
+        sqlite3_close(legacy_database);
+        if (legacy_result != SQLITE_OK) return 1;
         {
             homeworldz::storage::RegionStorage storage(path);
+            const auto migrated = storage.find_asset("99999999-9999-4999-8999-999999999999");
+            if (!migrated || migrated->creator_id != "00000000-0000-0000-0000-000000000000") return 1;
             storage.save_snapshot(scene);
             auto metadata = storage.snapshot_metadata();
             if (metadata.revision != scene.revision() || metadata.path != "scene/snapshot.json") return 1;
@@ -48,11 +65,27 @@ int main() {
                 restored_second->name != "second \"line\"\n" || restored.create("next") != 3) return 1;
 
             const std::array content{std::byte{0x00}, std::byte{0x7f}, std::byte{0xff}, std::byte{0x42}};
-            const auto first_asset = storage.store_asset("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", content);
-            const auto second_asset = storage.store_asset("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", content);
-            if (first_asset.sha256 != second_asset.sha256 || first_asset.size != content.size()) return 1;
+            const auto first_asset = storage.store_asset(
+                "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "11111111-1111-4111-8111-111111111111", content);
+            const auto second_asset = storage.store_asset(
+                "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "22222222-2222-4222-8222-222222222222", content);
+            if (first_asset.sha256 != second_asset.sha256 || first_asset.size != content.size() ||
+                first_asset.creator_id != "11111111-1111-4111-8111-111111111111") return 1;
             const auto mapping = storage.find_asset("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
-            if (!mapping || mapping->sha256 != first_asset.sha256) return 1;
+            if (!mapping || mapping->sha256 != first_asset.sha256 ||
+                mapping->creator_id != "11111111-1111-4111-8111-111111111111") return 1;
+            bool invalid_creator_rejected = false;
+            try {
+                storage.store_asset("ffffffff-ffff-4fff-8fff-ffffffffffff", "not-a-uuid", content);
+            } catch (const std::invalid_argument&) {
+                invalid_creator_rejected = true;
+            }
+            if (!invalid_creator_rejected) return 1;
+            storage.store_baked_texture("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", 8,
+                                        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+            if (storage.find_baked_texture("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", 8) !=
+                    "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" ||
+                storage.find_baked_texture("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", 9)) return 1;
             const auto loaded = storage.read_asset("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
             if (loaded.size() != content.size() || !std::equal(loaded.begin(), loaded.end(), content.begin())) return 1;
             const auto source = path / "source" / "nested";
@@ -69,12 +102,14 @@ int main() {
                 std::ofstream output(source / "dddddddd-dddd-4ddd-8ddd-dddddddddddd.bodypart", std::ios::binary);
                 output.write(reinterpret_cast<const char*>(content.data()), static_cast<std::streamsize>(content.size()));
             }
-            if (storage.import_asset_directory(path / "missing") != 0 ||
-                storage.import_asset_directory(path / "source") != 2 ||
+            constexpr std::string_view importer = "33333333-3333-4333-8333-333333333333";
+            if (storage.import_asset_directory(path / "missing", importer) != 0 ||
+                storage.import_asset_directory(path / "source", importer) != 2 ||
                 storage.read_asset("cccccccc-cccc-4ccc-8ccc-cccccccccccc") !=
                     std::vector<std::byte>(content.begin(), content.end()) ||
                 storage.read_asset("dddddddd-dddd-4ddd-8ddd-dddddddddddd") !=
-                    std::vector<std::byte>(content.begin(), content.end())) return 1;
+                    std::vector<std::byte>(content.begin(), content.end()) ||
+                storage.find_asset("cccccccc-cccc-4ccc-8ccc-cccccccccccc")->creator_id != importer) return 1;
             const auto blob = path / "assets" / first_asset.sha256.substr(0, 2) / first_asset.sha256.substr(2);
             if (!std::filesystem::is_regular_file(blob)) return 1;
             {

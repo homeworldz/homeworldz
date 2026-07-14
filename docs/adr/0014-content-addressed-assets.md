@@ -7,6 +7,12 @@ are sharded under `assets/<first-two-hex>/<remaining-hex>`, while SQLite maps
 viewer-facing UUIDs to content hashes and sizes. Multiple viewer UUIDs may map
 to one blob without duplicating bytes.
 
+Every viewer-facing asset mapping also records a required creator UUID as
+creation provenance. Authenticated uploads use the uploader's agent UUID;
+bundled or migrated assets with unknown original provenance use the zero UUID.
+The creator is independent of inventory ownership and is not replaced when an
+existing mapping is encountered again.
+
 New blobs use same-directory temporary files and atomic replacement. Reads
 recompute SHA-256 and reject missing or corrupted content. Updating a viewer
 mapping never mutates an existing blob; unreferenced-blob collection is deferred

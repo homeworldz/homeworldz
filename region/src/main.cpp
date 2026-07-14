@@ -48,6 +48,7 @@ static void close_socket(socket_handle socket) { close(socket); }
 
 namespace {
 std::atomic_bool running{true};
+constexpr std::string_view system_creator_id = "00000000-0000-0000-0000-000000000000";
 
 struct LiveAvatar {
     homeworldz::viewer::AvatarController controller;
@@ -294,7 +295,7 @@ int main() {
         storage = std::make_unique<homeworldz::storage::RegionStorage>(
             environment_value("HOMEWORLDZ_REGION_DATA_PATH", "var/region"));
         const auto imported_assets = storage->import_asset_directory(
-            environment_value("HOMEWORLDZ_REGION_ASSET_PATH", "assets/region"));
+            environment_value("HOMEWORLDZ_REGION_ASSET_PATH", "assets/region"), system_creator_id);
         if (imported_assets != 0) {
             std::cout << "{\"level\":\"info\",\"message\":\"region assets imported\",\"count\":"
                       << imported_assets << "}" << std::endl;
@@ -421,10 +422,12 @@ int main() {
                     if (seed || event_queue || texture || viewer_asset || environment_settings ||
                         baked_upload || baked_upload_data) {
                         bool authorized = false;
+                        std::string authorized_agent_id;
                         const auto expected_method = texture || viewer_asset || environment_settings ? "GET" : "POST";
                         if (response.method == expected_method && registration && viewer_grid) {
                             const auto session = viewer_grid->validate_viewer_session(session_id);
                             authorized = session && session->destination_region_id == registration->region_id();
+                            if (authorized) authorized_agent_id = session->agent_id;
                         }
                         if (authorized && seed) {
                             response = homeworldz::http::response_for_content(
@@ -493,7 +496,7 @@ int main() {
                                 const auto content = std::span(
                                     reinterpret_cast<const std::byte*>(body.data()), body.size());
                                 const auto asset_id = homeworldz::viewer::baked_texture_asset_id(content);
-                                storage->store_asset(asset_id, content);
+                                storage->store_asset(asset_id, authorized_agent_id, content);
                                 response = homeworldz::http::response_for_content(
                                     request, 200, "application/llsd+xml",
                                     homeworldz::viewer::baked_texture_complete_xml(asset_id));
@@ -595,18 +598,48 @@ int main() {
                             handshake_reply->session_id == identity->session_id) {
                             handshake_replies.insert(endpoint);
                         }
-                        const auto cached_texture =
+                        auto cached_texture =
                             homeworldz::viewer::decode_agent_cached_texture(packet->payload);
                         if (cached_texture && cached_texture->agent_id == identity->agent_id &&
                             cached_texture->session_id == identity->session_id) {
+                            std::size_t hits = 0;
+                            for (auto& query : cached_texture->queries) {
+                                const auto asset_id = storage->find_baked_texture(
+                                    homeworldz::viewer::format_uuid(query.cache_id), query.texture_index);
+                                if (!asset_id) continue;
+                                if (const auto parsed = homeworldz::viewer::parse_uuid(*asset_id)) {
+                                    query.texture_id = *parsed;
+                                    ++hits;
+                                }
+                            }
                             if (const auto outgoing = circuits.send(endpoint,
                                     homeworldz::viewer::encode_agent_cached_texture_response(*cached_texture),
                                     true, now, true)) {
                                 static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
-                                std::cout << "{\"level\":\"info\",\"message\":\"wearable cache misses sent\","
-                                             "\"count\":" << cached_texture->texture_indices.size() << "}"
+                                std::cout << "{\"level\":\"info\",\"message\":\"wearable cache response sent\","
+                                             "\"hits\":" << hits << ",\"misses\":"
+                                          << cached_texture->queries.size() - hits << "}"
                                           << std::endl;
                             }
+                        }
+                        const auto appearance =
+                            homeworldz::viewer::decode_agent_set_appearance(packet->payload);
+                        if (appearance && appearance->agent_id == identity->agent_id &&
+                            appearance->session_id == identity->session_id) {
+                            std::size_t stored = 0;
+                            for (const auto& entry : appearance->cache_entries) {
+                                if (entry.texture_index >= appearance->texture_ids.size()) continue;
+                                const auto asset_id = homeworldz::viewer::format_uuid(
+                                    appearance->texture_ids[entry.texture_index]);
+                                if (!storage->find_asset(asset_id)) continue;
+                                storage->store_baked_texture(
+                                    homeworldz::viewer::format_uuid(entry.cache_id),
+                                    entry.texture_index, asset_id);
+                                ++stored;
+                            }
+                            if (stored != 0)
+                                std::cout << "{\"level\":\"info\",\"message\":\"wearable cache updated\","
+                                             "\"count\":" << stored << "}" << std::endl;
                         }
                         const auto image_request = homeworldz::viewer::decode_request_image(packet->payload);
                         if (image_request && image_request->agent_id == identity->agent_id &&

@@ -90,6 +90,7 @@ Without a service token, the region runs without grid registration.
 
 ## Documentation
 
+- [Feature differences](FEATURES.md)
 - [Implementation plan](docs/PLAN.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Physics evaluation](docs/PHYSICS.md)

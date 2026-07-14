@@ -33,6 +33,8 @@ constexpr std::array<std::byte, 4> agent_cached_texture_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x80}};
 constexpr std::array<std::byte, 4> agent_cached_texture_response_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x81}};
+constexpr std::array<std::byte, 4> agent_set_appearance_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x54}};
 
 class BitWriter {
 public:
@@ -342,26 +344,86 @@ std::optional<AgentCachedTexture> decode_agent_cached_texture(std::span<const st
     std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
     std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
     result.serial = static_cast<std::int32_t>(read_le_u32(payload, 36));
-    result.texture_indices.reserve(count);
-    for (std::size_t index = 0; index < count; ++index)
-        result.texture_indices.push_back(
-            std::to_integer<std::uint8_t>(payload[header_size + index * block_size + 16]));
+    result.queries.reserve(count);
+    for (std::size_t index = 0; index < count; ++index) {
+        const auto offset = header_size + index * block_size;
+        CachedTextureQuery query;
+        std::copy_n(payload.begin() + offset, 16, query.cache_id.begin());
+        query.texture_index = std::to_integer<std::uint8_t>(payload[offset + 16]);
+        result.queries.push_back(query);
+    }
     return result;
 }
 
 std::vector<std::byte> encode_agent_cached_texture_response(const AgentCachedTexture& message) {
-    if (message.texture_indices.empty() || message.texture_indices.size() > 255) return {};
+    if (message.queries.empty() || message.queries.size() > 255) return {};
     std::vector<std::byte> output(agent_cached_texture_response_id.begin(), agent_cached_texture_response_id.end());
     append_uuid(output, message.agent_id);
     append_uuid(output, message.session_id);
     append_le_u32(output, static_cast<std::uint32_t>(message.serial));
-    output.push_back(static_cast<std::byte>(message.texture_indices.size()));
-    for (const auto texture_index : message.texture_indices) {
-        append_uuid(output, Uuid{}); // Explicit cache miss requests a local bake and upload.
-        output.push_back(static_cast<std::byte>(texture_index));
+    output.push_back(static_cast<std::byte>(message.queries.size()));
+    for (const auto& query : message.queries) {
+        append_uuid(output, query.texture_id);
+        output.push_back(static_cast<std::byte>(query.texture_index));
         if (!append_variable1(output, "")) return {};
     }
     return output;
+}
+
+std::optional<AgentSetAppearance> decode_agent_set_appearance(std::span<const std::byte> payload) {
+    constexpr std::size_t fixed_size = 53;
+    constexpr std::size_t cache_block_size = 17;
+    if (payload.size() < fixed_size ||
+        !std::equal(agent_set_appearance_id.begin(), agent_set_appearance_id.end(), payload.begin()))
+        return std::nullopt;
+    AgentSetAppearance result;
+    std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
+    result.serial = read_le_u32(payload, 36);
+    const auto cache_count = std::to_integer<std::size_t>(payload[52]);
+    auto position = fixed_size;
+    if (position + cache_count * cache_block_size + 2 > payload.size()) return std::nullopt;
+    result.cache_entries.reserve(cache_count);
+    for (std::size_t index = 0; index < cache_count; ++index) {
+        CachedTextureQuery entry;
+        std::copy_n(payload.begin() + position, 16, entry.cache_id.begin());
+        entry.texture_index = std::to_integer<std::uint8_t>(payload[position + 16]);
+        result.cache_entries.push_back(entry);
+        position += cache_block_size;
+    }
+    const auto texture_entry_size = std::to_integer<std::size_t>(payload[position]) |
+                                    (std::to_integer<std::size_t>(payload[position + 1]) << 8);
+    position += 2;
+    if (position + texture_entry_size + 1 > payload.size()) return std::nullopt;
+    const auto texture_entry = payload.subspan(position, texture_entry_size);
+    position += texture_entry_size;
+    const auto visual_count = std::to_integer<std::size_t>(payload[position++]);
+    if (position + visual_count != payload.size()) return std::nullopt;
+    if (texture_entry.size() >= 16) {
+        Uuid default_id;
+        std::copy_n(texture_entry.begin(), 16, default_id.begin());
+        result.texture_ids.fill(default_id);
+        std::size_t texture_position = 16;
+        while (texture_position < texture_entry.size()) {
+            std::uint32_t faces = 0;
+            unsigned face_bits = 0;
+            std::uint8_t value{};
+            do {
+                if (texture_position >= texture_entry.size() || face_bits >= 32) return std::nullopt;
+                value = std::to_integer<std::uint8_t>(texture_entry[texture_position++]);
+                faces = (faces << 7) | (value & 0x7f);
+                face_bits += 7;
+            } while (value & 0x80);
+            if (faces == 0) break;
+            if (texture_position + 16 > texture_entry.size()) return std::nullopt;
+            Uuid texture_id;
+            std::copy_n(texture_entry.begin() + texture_position, 16, texture_id.begin());
+            texture_position += 16;
+            for (unsigned face = 0; face < 32; ++face)
+                if (faces & (std::uint32_t{1} << face)) result.texture_ids[face] = texture_id;
+        }
+    }
+    return result;
 }
 
 std::optional<RequestImage> decode_request_image(std::span<const std::byte> payload) {
