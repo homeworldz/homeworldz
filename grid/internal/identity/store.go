@@ -77,6 +77,37 @@ func (s *PostgresStore) CreateUser(ctx context.Context, username, password strin
 	return user, nil
 }
 
+// ConfigureSystemUser assigns interactive credentials to a stable, reserved
+// identity created by a migration. It is intentionally not part of Store and
+// is therefore unavailable through the public user API.
+func (s *PostgresStore) ConfigureSystemUser(ctx context.Context, id, username, password string) (User, error) {
+	if password == "" {
+		return User{}, errors.New("system user password cannot be empty")
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return User{}, fmt.Errorf("hash system user password: %w", err)
+	}
+	viewerDigest := md5.Sum([]byte(password))
+	var user User
+	err = s.db.QueryRowContext(ctx, `
+		UPDATE users SET username = $2, password_hash = $3, viewer_password_hash = $4
+		WHERE id = $1 RETURNING id, username, created_at`, id, username, string(hash),
+		hex.EncodeToString(viewerDigest[:]),
+	).Scan(&user.ID, &user.Username, &user.CreatedAt)
+	var postgresError *pgconn.PgError
+	if errors.As(err, &postgresError) && postgresError.Code == "23505" {
+		return User{}, ErrConflict
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		return User{}, fmt.Errorf("system user %s is not installed; apply pending migrations", id)
+	}
+	if err != nil {
+		return User{}, fmt.Errorf("configure system user: %w", err)
+	}
+	return user, nil
+}
+
 func (s *PostgresStore) CreateSession(ctx context.Context, username, password string, duration time.Duration) (Session, error) {
 	var userID, passwordHash string
 	err := s.db.QueryRowContext(ctx, "SELECT id, password_hash FROM users WHERE username = $1", username).

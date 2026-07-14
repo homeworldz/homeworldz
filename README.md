@@ -69,6 +69,13 @@ apply them without re-entering the PostgreSQL administrator credentials:
 go run ./grid/cmd/bootstrap-grid -migrations-only
 ```
 
+The shared Library identity is installed in a locked state. To assign local
+interactive credentials to `HomeWorldz Library`, run:
+
+```cmd
+go run ./grid/cmd/configure-library
+```
+
 On Windows with Visual Studio, install the pinned vcpkg dependencies and build
 the region service with:
 
