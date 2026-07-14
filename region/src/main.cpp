@@ -68,6 +68,14 @@ struct QueuedTexturePacket {
     bool last{};
 };
 
+struct PendingInventoryUpload {
+    std::string session_id;
+    std::string agent_id;
+    std::string item_id;
+    std::string asset_id;
+    homeworldz::viewer::NewFileInventoryUpload request;
+};
+
 void stop(int) { running = false; }
 
 std::string environment_value(const char* name, std::string fallback = {}) {
@@ -272,6 +280,27 @@ std::optional<std::pair<std::string, std::string>> baked_upload_data_request(std
     return std::pair{std::string(session), std::string(token)};
 }
 
+std::optional<std::pair<std::string, std::string>> file_upload_data_request(std::string_view path) {
+    constexpr std::string_view prefix = "/caps/upload-file-data/";
+    if (!path.starts_with(prefix)) return std::nullopt;
+    const auto separator = path.find('/', prefix.size());
+    if (separator == std::string_view::npos) return std::nullopt;
+    const auto session = path.substr(prefix.size(), separator - prefix.size());
+    const auto token = path.substr(separator + 1);
+    if (session.empty() || token.empty() || token.find('/') != std::string_view::npos) return std::nullopt;
+    return std::pair{std::string(session), std::string(token)};
+}
+
+bool jpeg2000_content(std::string_view body) {
+    const auto byte = [&body](std::size_t index) { return static_cast<unsigned char>(body[index]); };
+    const bool codestream = body.size() >= 4 && byte(0) == 0xff && byte(1) == 0x4f &&
+                            byte(2) == 0xff && byte(3) == 0x51;
+    const bool jp2 = body.size() >= 12 && byte(0) == 0 && byte(1) == 0 && byte(2) == 0 && byte(3) == 12 &&
+                     body.substr(4, 4) == "jP  " && byte(8) == 0x0d && byte(9) == 0x0a &&
+                     byte(10) == 0x87 && byte(11) == 0x0a;
+    return codestream || jp2;
+}
+
 std::string_view http_request_body(std::string_view request) {
     const auto separator = request.find("\r\n\r\n");
     return separator == std::string_view::npos ? std::string_view{} : request.substr(separator + 4);
@@ -441,6 +470,7 @@ int main() {
     std::unordered_map<std::string, LiveAvatar> avatars;
     std::unordered_map<std::string, std::deque<QueuedTexturePacket>> texture_packets;
     std::unordered_set<std::string> active_texture_transfers;
+    std::unordered_map<std::string, PendingInventoryUpload> pending_inventory_uploads;
 
     std::cout << "{\"level\":\"info\",\"message\":\"region service listening\",\"httpPort\":"
               << configured_port() << ",\"viewerPort\":" << configured_viewer_port() << "}" << std::endl;
@@ -478,8 +508,14 @@ int main() {
                     if (baked_upload) session_id = baked_upload_session;
                     const auto baked_upload_data = baked_upload_data_request(response.path);
                     if (baked_upload_data) session_id = baked_upload_data->first;
+                    const auto file_upload_session =
+                        capability_session(response.path, "/caps/upload-file/");
+                    const bool file_upload = !file_upload_session.empty();
+                    if (file_upload) session_id = file_upload_session;
+                    const auto file_upload_data = file_upload_data_request(response.path);
+                    if (file_upload_data) session_id = file_upload_data->first;
                     if (seed || event_queue || texture || viewer_asset || environment_settings ||
-                        baked_upload || baked_upload_data) {
+                        baked_upload || baked_upload_data || file_upload || file_upload_data) {
                         bool authorized = false;
                         std::string authorized_agent_id;
                         std::optional<homeworldz::grid::ViewerSession> authorized_session;
@@ -563,6 +599,62 @@ int main() {
                                 std::cout << "{\"level\":\"info\",\"message\":\"baked texture stored\","
                                              "\"assetId\":" << homeworldz::api::json_string(asset_id)
                                           << ",\"bytes\":" << body.size() << "}" << std::endl;
+                            }
+                        } else if (authorized && file_upload) {
+                            const auto upload = homeworldz::viewer::parse_new_file_inventory_upload(
+                                http_request_body(request));
+                            if (!upload) {
+                                response = homeworldz::http::response_for_content(
+                                    request, 400, "application/llsd+xml", "<llsd><undef/></llsd>");
+                            } else {
+                                const auto token = homeworldz::viewer::random_uuid();
+                                PendingInventoryUpload pending{session_id, authorized_agent_id,
+                                    homeworldz::viewer::random_uuid(), homeworldz::viewer::random_uuid(), *upload};
+                                pending_inventory_uploads.insert_or_assign(token, pending);
+                                auto base = region_public_endpoint;
+                                while (!base.empty() && base.back() == '/') base.pop_back();
+                                const auto uploader = base + "/caps/upload-file-data/" + session_id + '/' + token;
+                                response = homeworldz::http::response_for_content(
+                                    request, 200, "application/llsd+xml",
+                                    homeworldz::viewer::new_file_inventory_upload_xml(uploader));
+                            }
+                        } else if (authorized && file_upload_data) {
+                            const auto pending = pending_inventory_uploads.find(file_upload_data->second);
+                            const auto body = http_request_body(request);
+                            if (pending == pending_inventory_uploads.end() ||
+                                pending->second.session_id != session_id ||
+                                pending->second.agent_id != authorized_agent_id) {
+                                response = homeworldz::http::response_for_content(
+                                    request, 404, "application/llsd+xml", "<llsd><undef/></llsd>");
+                            } else if (!jpeg2000_content(body)) {
+                                response = homeworldz::http::response_for_content(
+                                    request, 400, "application/llsd+xml", "<llsd><undef/></llsd>");
+                            } else {
+                                const auto& upload = pending->second;
+                                const auto content = std::span(
+                                    reinterpret_cast<const std::byte*>(body.data()), body.size());
+                                storage->store_asset(upload.asset_id, authorized_agent_id, content);
+                                const bool item_created = viewer_grid && viewer_grid->create_texture_inventory_item(
+                                    authorized_agent_id, homeworldz::grid::TextureInventoryItem{
+                                        upload.item_id, authorized_agent_id, upload.request.folder_id,
+                                        upload.asset_id, upload.request.name, upload.request.description,
+                                        upload.request.everyone_permissions, upload.request.next_permissions});
+                                if (!item_created) {
+                                    response = homeworldz::http::response_for_content(
+                                        request, 500, "application/llsd+xml", "<llsd><undef/></llsd>");
+                                } else {
+                                    response = homeworldz::http::response_for_content(
+                                        request, 200, "application/llsd+xml",
+                                        homeworldz::viewer::new_file_inventory_complete_xml(
+                                            upload.item_id, upload.asset_id,
+                                            upload.request.everyone_permissions, upload.request.next_permissions));
+                                    std::cout << "{\"level\":\"info\",\"message\":\"texture upload stored\","
+                                                 "\"assetId\":" << homeworldz::api::json_string(upload.asset_id)
+                                              << ",\"itemId\":" << homeworldz::api::json_string(upload.item_id)
+                                              << ",\"creatorId\":" << homeworldz::api::json_string(authorized_agent_id)
+                                              << ",\"bytes\":" << body.size() << "}" << std::endl;
+                                    pending_inventory_uploads.erase(pending);
+                                }
                             }
                         } else {
                             response = homeworldz::http::response_for_content(

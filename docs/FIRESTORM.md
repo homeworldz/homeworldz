@@ -118,6 +118,19 @@ for bundled Library inventory items and as uploader for their region asset
 mappings. The account is created locked; an administrator must explicitly set
 a password before using it for interactive content preparation.
 
+## Ordinary Texture Upload
+
+The region advertises `NewFileAgentInventory` for the initial ordinary-upload
+slice. Firestorm sends texture metadata as LLSD, receives a one-shot uploader
+URL, converts the selected source image to JPEG2000, and posts the binary asset.
+HomeWorldz validates the active viewer session and JPEG2000 signature, records
+the authenticated uploader UUID as asset creator provenance, and asks the Grid
+to create a texture inventory item in the requested folder owned by that same
+user. The completion response contains distinct new asset and inventory-item
+UUIDs. Upload cost is zero in the local development grid. Sounds, animations,
+snapshots, mesh, objects, and bulk or variable-price uploads remain outside
+this first slice.
+
 Each region registers its viewer UDP port with the grid. Login advertises that
 stored port, while `HOMEWORLDZ_VIEWER_PORT` controls the matching region
 listener (default `42002`). The first reliable `UseCircuitCode` datagram is

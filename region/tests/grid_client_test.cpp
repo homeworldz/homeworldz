@@ -68,6 +68,16 @@ int main() {
         transport->requests.back().path != "/api/v1/inventory/" + session->agent_id + "/folders" ||
         transport->requests.back().body.find(R"("name":"Projects")") == std::string::npos ||
         transport->requests.back().body.find(R"("typeDefault":-1)") == std::string::npos) return 1;
+    const homeworldz::grid::TextureInventoryItem texture{
+        "11111111-1111-4111-8111-111111111111", session->agent_id,
+        "22222222-2222-4222-8222-222222222222", "33333333-3333-4333-8333-333333333333",
+        "Terrain & Sky", "Uploaded <texture>", 0, 0x7fffffff};
+    if (!client.create_texture_inventory_item(session->agent_id, texture) ||
+        transport->requests.back().path != "/api/v1/inventory/" + session->agent_id + "/items" ||
+        transport->requests.back().body.find(R"("assetType":0,"inventoryType":0)") == std::string::npos ||
+        transport->requests.back().body.find(R"("creatorUserId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc")") == std::string::npos ||
+        transport->requests.back().body.find(R"("name":"Terrain & Sky")") == std::string::npos ||
+        transport->requests.back().body.find(R"("nextPermissions":2147483647)") == std::string::npos) return 1;
     if (!client.update_presence(session->agent_id, session->destination_region_id) ||
         transport->requests.back().method != "PUT" ||
         transport->requests.back().path != "/api/v1/presence/" + session->agent_id) return 1;

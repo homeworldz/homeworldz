@@ -41,6 +41,17 @@ struct ViewerSession {
     std::string destination_region_id;
 };
 
+struct TextureInventoryItem {
+    std::string item_id;
+    std::string creator_id;
+    std::string folder_id;
+    std::string asset_id;
+    std::string name;
+    std::string description;
+    std::uint32_t everyone_permissions{};
+    std::uint32_t next_permissions{};
+};
+
 class Client {
 public:
     explicit Client(std::shared_ptr<Transport> transport) : transport_(std::move(transport)) {}
@@ -51,6 +62,7 @@ public:
     bool revoke_viewer_session(std::string_view session_id);
     bool create_inventory_folder(std::string_view user_id, std::string_view folder_id,
                                  std::string_view parent_id, std::string_view name, int type_default);
+    bool create_texture_inventory_item(std::string_view user_id, const TextureInventoryItem& item);
     bool update_presence(std::string_view user_id, std::string_view region_id);
     bool clear_presence(std::string_view user_id);
 

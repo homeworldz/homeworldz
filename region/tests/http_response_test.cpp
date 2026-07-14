@@ -128,6 +128,7 @@ int main() {
     passed &= contains(seed, "<key>ViewerAsset</key><uri>http://region.example:42001/caps/assets/session-id</uri>");
     passed &= contains(seed, "<key>EnvironmentSettings</key><uri>http://region.example:42001/caps/environment/session-id</uri>");
     passed &= contains(seed, "<key>UploadBakedTexture</key><uri>http://region.example:42001/caps/upload-baked/session-id</uri>");
+    passed &= contains(seed, "<key>NewFileAgentInventory</key><uri>http://region.example:42001/caps/upload-file/session-id</uri>");
     passed &= contains(seed, "<key>FetchInventoryDescendents2</key><uri>http://grid.example:42000/caps/inventory/descendents/session-id</uri>");
     passed &= contains(seed, "<key>FetchInventory2</key><uri>http://grid.example:42000/caps/inventory/items/session-id</uri>");
     passed &= contains(seed, "<key>CreateInventoryCategory</key><uri>http://grid.example:42000/caps/inventory/create-folder/session-id</uri>");
@@ -157,6 +158,33 @@ int main() {
     const auto complete = homeworldz::viewer::baked_texture_complete_xml(baked_id);
     passed &= contains(complete, "<key>state</key><string>complete</string>");
     passed &= contains(complete, "<key>new_asset</key><uuid>" + baked_id + "</uuid>");
+    const auto file_request = homeworldz::viewer::parse_new_file_inventory_upload(
+        "<?xml version=\"1.0\"?><llsd><map>"
+        "<key>folder_id</key><uuid>11111111-1111-4111-8111-111111111111</uuid>"
+        "<key>asset_type</key><string>texture</string>"
+        "<key>inventory_type</key><string>texture</string>"
+        "<key>name</key><string>Terrain &amp; Sky</string>"
+        "<key>description</key><string>Library &lt;source&gt;</string>"
+        "<key>everyone_mask</key><integer>8</integer>"
+        "<key>group_mask</key><integer>16</integer>"
+        "<key>next_owner_mask</key><integer>2147483647</integer></map></llsd>");
+    passed &= file_request && file_request->folder_id == "11111111-1111-4111-8111-111111111111" &&
+              file_request->name == "Terrain & Sky" && file_request->description == "Library <source>" &&
+              file_request->everyone_permissions == 8 && file_request->group_permissions == 16 &&
+              file_request->next_permissions == 0x7fffffff;
+    passed &= !homeworldz::viewer::parse_new_file_inventory_upload(
+        "<llsd><map><key>asset_type</key><string>sound</string></map></llsd>");
+    const auto file_upload = homeworldz::viewer::new_file_inventory_upload_xml(
+        "http://region.example/upload?a=1&amp;b=2");
+    passed &= contains(file_upload, "<key>state</key><string>upload</string>") &&
+              contains(file_upload, "upload?a=1&amp;amp;b=2");
+    const auto file_complete = homeworldz::viewer::new_file_inventory_complete_xml(
+        "22222222-2222-4222-8222-222222222222", "33333333-3333-4333-8333-333333333333", 8, 16);
+    passed &= contains(file_complete, "<key>new_inventory_item</key><uuid>22222222-2222-4222-8222-222222222222</uuid>") &&
+              contains(file_complete, "<key>new_asset</key><uuid>33333333-3333-4333-8333-333333333333</uuid>") &&
+              contains(file_complete, "<key>new_everyone_mask</key><integer>8</integer>");
+    const auto random_id = homeworldz::viewer::random_uuid();
+    passed &= random_id.size() == 36 && random_id[14] == '4' && random_id[19] >= '8' && random_id[19] <= 'b';
 
     const auto unsafe_id = homeworldz::http::response_for(
         "GET /ping HTTP/1.1\r\nX-Request-ID: unsafe value\r\n\r\n");

@@ -185,6 +185,19 @@ bool Client::create_inventory_folder(std::string_view user_id, std::string_view 
                .status_code == 201;
 }
 
+bool Client::create_texture_inventory_item(std::string_view user_id, const TextureInventoryItem& item) {
+    const auto body = "{\"id\":" + api::json_string(item.item_id) +
+                      ",\"creatorUserId\":" + api::json_string(item.creator_id) +
+                      ",\"folderId\":" + api::json_string(item.folder_id) +
+                      ",\"assetId\":" + api::json_string(item.asset_id) +
+                      ",\"assetType\":0,\"inventoryType\":0,\"name\":" + api::json_string(item.name) +
+                      ",\"description\":" + api::json_string(item.description) +
+                      ",\"everyonePermissions\":" + std::to_string(item.everyone_permissions) +
+                      ",\"nextPermissions\":" + std::to_string(item.next_permissions) + '}';
+    return transport_->send("POST", "/api/v1/inventory/" + std::string(user_id) + "/items", body)
+               .status_code == 201;
+}
+
 std::optional<ViewerSession> ViewerSessionCache::validate(
     std::string_view session_id, std::chrono::steady_clock::time_point now) {
     const auto key = std::string(session_id);
