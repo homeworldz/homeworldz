@@ -219,3 +219,10 @@ over simulator UDP, and rendered the avatar. A subsequent clean launcher run
 returned five server-side wearable-cache hits, zero misses, and made no baked
 upload requests. Firestorm displayed the avatar immediately and logout again
 cleared presence and revoked the viewer session normally.
+
+The read-only system Library acceptance passed on 2026-07-14. Firestorm showed
+the shared `Library / Clothing / Initial Outfits / Default Avatar` hierarchy
+and all six default wearable items. This Firestorm build requested the Library
+folder UUIDs through `InventoryAPIv3`; HomeWorldz returned the shared catalog
+without copying it into Demo Avatar's personal inventory or changing the worn
+outfit.

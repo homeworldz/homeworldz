@@ -59,7 +59,7 @@ than runtime dependencies.
   wearable-hash cache lookup.
 - [ ] Add general inventory mutation, folder management, and non-system item
   creation workflows.
-- [ ] Add a read-only, grid-owned system inventory library with stable owner,
+- [x] Add a read-only, grid-owned system inventory library with stable owner,
   root, folders, items, bundled-asset provenance, and AIS v3 fetch support;
   expose legacy reads only when their compatibility value justifies the cost.
 - [ ] Asset upload, authorization, replication, and federation lookup.
