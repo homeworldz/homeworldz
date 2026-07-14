@@ -450,7 +450,7 @@ func (a *API) createAISInventoryLinks(w http.ResponseWriter, r *http.Request, us
 			return
 		}
 		creatorID := source.CreatorUserID
-		if creatorID == "" {
+		if creatorID == "" || creatorID == nullInventoryFolderID {
 			creatorID = userID
 		}
 		created = append(created, inventory.Item{

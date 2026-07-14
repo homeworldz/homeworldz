@@ -273,6 +273,10 @@ func TestAISCreateInventoryLinks(t *testing.T) {
 			AssetType: 5, InventoryType: 18, Name: "Default Shirt", Flags: 4,
 			BasePermissions: 0x7fffffff, CurrentPermissions: 0x7fffffff, NextPermissions: 0x7fffffff},
 	}
+	// Inventory rows created before creator provenance was added read back with
+	// the zero UUID. New links must use the authenticated owner rather than
+	// attempting to insert that non-user UUID through the creator foreign key.
+	sources[1].CreatorUserID = nullInventoryFolderID
 	for _, source := range sources {
 		if _, err := inventories.CreateItem(context.Background(), source); err != nil {
 			t.Fatal(err)
@@ -299,9 +303,13 @@ func TestAISCreateInventoryLinks(t *testing.T) {
 	}
 	links := items[2:]
 	for index, link := range links {
+		expectedCreator := creatorID
+		if index == 1 {
+			expectedCreator = user.ID
+		}
 		if link.FolderID != currentOutfitID || link.AssetID != sources[index].ID ||
 			link.AssetType != 24 || link.InventoryType != sources[index].InventoryType ||
-			link.CreatorUserID != creatorID || link.Flags != sources[index].Flags ||
+			link.CreatorUserID != expectedCreator || link.Flags != sources[index].Flags ||
 			!strings.Contains(response.Body.String(), "<key>"+link.ID+"</key>") {
 			t.Fatalf("created link %d = %#v, response = %s", index, link, response.Body.String())
 		}
