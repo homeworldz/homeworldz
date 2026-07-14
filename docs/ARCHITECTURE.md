@@ -224,9 +224,12 @@ The asset model should support:
 Local asset bytes are immutable SHA-256-addressed blobs sharded by the first
 hash byte. SQLite maps viewer-facing UUIDs to hashes, sizes, and required
 creator UUID provenance, allowing many UUIDs to share one blob. Creator
-provenance is independent of inventory ownership. Reads verify the content hash
+provenance is independent of inventory ownership. A viewer UUID cannot be
+remapped to different content or provenance. Grid metadata locates stable
+region origin and replica endpoints; receiving regions verify size and SHA-256
+before retaining the same UUID and creator. Reads verify the content hash
 before returning bytes; garbage collection is deferred until retention and
-replication rules exist.
+replication rules exist. See [ADR 0020](adr/0020-asset-origin-and-replication.md).
 
 This replaces the assumption that WHIP/Aperture are central platform services.
 They remain useful references for asset behavior and performance expectations.
