@@ -53,6 +53,16 @@ when the server internals differ.
 
 ## Planned differences
 
+### Variable-sized regions
+
+HomeWorldz plans to support OpenSimulator-style variable-sized regions when
+the viewer-protocol and physics costs remain reasonable. A standard region is
+1x1 (256 by 256 metres); intended larger sizes include 2x2 (512 by 512), 4x4
+(1024 by 1024), and other whole multiples. This differs from Second Life's
+public 256-by-256-metre region model while preserving the familiar OpenSim
+content convention. The first implementation remains fixed at 1x1, and larger
+regions must not be simulated as loosely joined independent regions.
+
 ### AIS-first viewer inventory
 
 HomeWorldz requires Second Life AIS v3 for supported viewer-facing inventory

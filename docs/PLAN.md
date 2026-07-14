@@ -66,6 +66,9 @@ than runtime dependencies.
 - [ ] Object rez, edit, take, delete, permissions, and persistence.
 - [ ] Script runtime boundary and implementation selection.
 - [ ] Teleport and cross-region avatar/object handoff.
+- [ ] Evaluate and implement OpenSimulator-compatible variable-sized regions
+  (2x2, 4x4, and other whole multiples of the 256-metre 1x1 region) without
+  coupling terrain, physics, or scene storage to a fixed region size.
 - [ ] Map, search, groups, permissions, and administration.
 - [ ] Backups, restore drills, reconciliation, audit logs, metrics, and hardened
   deployment.
