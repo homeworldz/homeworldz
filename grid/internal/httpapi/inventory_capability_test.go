@@ -314,6 +314,20 @@ func TestAISCreateInventoryLinks(t *testing.T) {
 			t.Fatalf("created link %d = %#v, response = %s", index, link, response.Body.String())
 		}
 	}
+	linkXML := inventoryAISItemXML(links[0], true)
+	for _, required := range []string{
+		"<key>agent_id</key><uuid>" + user.ID + "</uuid>",
+		"<key>linked_id</key><uuid>" + sources[0].ID + "</uuid>",
+	} {
+		if !strings.Contains(linkXML, required) {
+			t.Fatalf("AIS link lacks %q: %s", required, linkXML)
+		}
+	}
+	for _, forbidden := range []string{"<key>asset_id</key>", "<key>permissions</key>", "<key>flags</key>"} {
+		if strings.Contains(linkXML, forbidden) {
+			t.Fatalf("AIS link unexpectedly contains %q: %s", forbidden, linkXML)
+		}
+	}
 	linkUpdateBody := `<?xml version="1.0"?><llsd><map>` +
 		`<key>desc</key><string>@400</string></map></llsd>`
 	linkUpdateRequest := httptest.NewRequest(http.MethodPatch,

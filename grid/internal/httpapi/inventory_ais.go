@@ -231,13 +231,22 @@ func inventoryAISLinkXML(link inventory.Item, source inventory.Item, sourceFound
 }
 
 func inventoryAISItemXML(item inventory.Item, link bool) string {
-	content := inventoryItemXML(item)
 	if link {
-		asset := "<key>asset_id</key><uuid>" + html.EscapeString(item.AssetID) + "</uuid>"
-		content = strings.Replace(content, asset,
-			"<key>linked_id</key><uuid>"+html.EscapeString(item.AssetID)+"</uuid>"+asset, 1)
+		created := item.CreatedAt.Unix()
+		if item.CreatedAt.IsZero() {
+			created = 0
+		}
+		return fmt.Sprintf("<map><key>item_id</key><uuid>%s</uuid>"+
+			"<key>parent_id</key><uuid>%s</uuid><key>agent_id</key><uuid>%s</uuid>"+
+			"<key>linked_id</key><uuid>%s</uuid><key>type</key><integer>%d</integer>"+
+			"<key>inv_type</key><integer>%d</integer><key>name</key><string>%s</string>"+
+			"<key>desc</key><string>%s</string><key>created_at</key><integer>%d</integer></map>",
+			html.EscapeString(item.ID), html.EscapeString(item.FolderID),
+			html.EscapeString(item.OwnerUserID), html.EscapeString(item.AssetID),
+			item.AssetType, item.InventoryType, html.EscapeString(item.Name),
+			html.EscapeString(item.Description), created)
 	}
-	return content
+	return inventoryItemXML(item)
 }
 
 func writeAISEmptyOrphans(w http.ResponseWriter) {

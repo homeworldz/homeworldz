@@ -388,6 +388,7 @@ func inventoryItemXML(item inventory.Item) string {
 		created = 0
 	}
 	return fmt.Sprintf("<map><key>item_id</key><uuid>%s</uuid><key>parent_id</key><uuid>%s</uuid>"+
+		"<key>agent_id</key><uuid>%s</uuid>"+
 		"<key>permissions</key><map><key>creator_id</key><uuid>%s</uuid><key>owner_id</key><uuid>%s</uuid>"+
 		"<key>last_owner_id</key><uuid>%s</uuid><key>group_id</key><uuid>%s</uuid>"+
 		"<key>is_owner_group</key><boolean>false</boolean><key>base_mask</key><integer>%d</integer>"+
@@ -398,7 +399,8 @@ func inventoryItemXML(item inventory.Item) string {
 		"<key>sale_info</key><map><key>sale_type</key><integer>%d</integer><key>sale_price</key><integer>%d</integer></map>"+
 		"<key>name</key><string>%s</string><key>desc</key><string>%s</string>"+
 		"<key>created_at</key><integer>%d</integer></map>",
-		html.EscapeString(item.ID), html.EscapeString(item.FolderID), html.EscapeString(creator),
+		html.EscapeString(item.ID), html.EscapeString(item.FolderID), html.EscapeString(item.OwnerUserID),
+		html.EscapeString(creator),
 		html.EscapeString(item.OwnerUserID), nullInventoryFolderID, nullInventoryFolderID,
 		item.BasePermissions, item.CurrentPermissions, item.EveryonePermissions, item.NextPermissions,
 		html.EscapeString(item.AssetID), item.AssetType, item.InventoryType, item.Flags, item.SaleType,
