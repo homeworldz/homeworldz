@@ -72,16 +72,16 @@ std::size_t peak_rss_kib() {
 physics::BodyState replay(const physics::WorldFactory& factory) {
     auto world = factory();
     physics::BodyDefinition floor;
-    floor.shape.half_extents = {10, 0.5, 10};
-    floor.position = {0, -0.5, 0};
+    floor.shape.half_extents = {10, 10, 0.5};
+    floor.position = {0, 0, -0.5};
     world->create_body(floor);
     physics::BodyDefinition body;
     body.entity_id = 2;
     body.motion = physics::MotionType::Dynamic;
     body.shape.type = physics::ShapeType::Sphere;
-    body.position = {0, 5, 0};
+    body.position = {0, 0, 5};
     const auto id = world->create_body(body);
-    world->apply_impulse(id, {1, 2, 0.5});
+    world->apply_impulse(id, {1, 0.5, 2});
     for (int step = 0; step < 120; ++step) world->step(1.0 / 60.0);
     return *world->body_state(id);
 }

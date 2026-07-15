@@ -12,8 +12,8 @@ constexpr double tick = 1.0 / 60.0;
 BodyId add_floor(World& world) {
     BodyDefinition floor;
     floor.entity_id = 1;
-    floor.shape.half_extents = {32, 0.5, 32};
-    floor.position = {0, -0.5, 0};
+    floor.shape.half_extents = {32, 32, 0.5};
+    floor.position = {0, 0, -0.5};
     return world.create_body(floor);
 }
 
@@ -35,17 +35,17 @@ ScenarioResult terrain(const WorldFactory& factory) {
     auto world = factory();
     add_floor(*world);
     Shape sphere; sphere.type = ShapeType::Sphere;
-    const auto body = add_dynamic(*world, 2, {0, 5, 0}, sphere);
+    const auto body = add_dynamic(*world, 2, {0, 0, 5}, sphere);
     advance(*world, 120);
     const auto state = world->body_state(body);
-    const bool passed = state && state->position.y > -0.1 && state->position.y < 1.0;
+    const bool passed = state && state->position.z > -0.1 && state->position.z < 1.0;
     return {"terrain-collision", passed, passed ? "body settled on terrain" : "body did not settle on terrain", 2, 120};
 }
 
 ScenarioResult avatar(const WorldFactory& factory) {
     auto world = factory();
     add_floor(*world);
-    const auto character = world->create_character({2, {0, 1, 0}});
+    const auto character = world->create_character({2, {0, 0, 1}});
     world->set_character_velocity(character, {2, 0, 0});
     advance(*world, 30);
     const bool passed = world->remove_character(character);
@@ -57,14 +57,14 @@ ScenarioResult stacking(const WorldFactory& factory) {
     add_floor(*world);
     std::array<BodyId, 5> bodies{};
     for (std::size_t index = 0; index < bodies.size(); ++index)
-        bodies[index] = add_dynamic(*world, 10 + index, {0, 0.6 + index * 1.1, 0});
+        bodies[index] = add_dynamic(*world, 10 + index, {0, 0, 0.6 + index * 1.1});
     advance(*world, 180);
     bool passed = true;
     double previous = -1.0;
     for (const auto body : bodies) {
         const auto state = world->body_state(body);
-        passed = passed && state && state->position.y > previous && state->position.y > -0.1;
-        if (state) previous = state->position.y;
+        passed = passed && state && state->position.z > previous && state->position.z > -0.1;
+        if (state) previous = state->position.z;
     }
     return {"object-stacking", passed, passed ? "stack remained ordered" : "stack collapsed or tunneled", 6, 180};
 }
@@ -72,8 +72,8 @@ ScenarioResult stacking(const WorldFactory& factory) {
 ScenarioResult impulse(const WorldFactory& factory) {
     auto world = factory();
     add_floor(*world);
-    const auto body = add_dynamic(*world, 2, {0, 1, 0});
-    world->apply_impulse(body, {4, 2, 0});
+    const auto body = add_dynamic(*world, 2, {0, 0, 1});
+    world->apply_impulse(body, {4, 0, 2});
     advance(*world, 30);
     const auto state = world->body_state(body);
     const bool passed = state && state->position.x > 0.25;
@@ -84,19 +84,19 @@ ScenarioResult vehicle(const WorldFactory& factory) {
     auto world = factory();
     add_floor(*world);
     Shape chassis; chassis.half_extents = {1.2, 0.3, 0.7};
-    const auto body = add_dynamic(*world, 2, {0, 0.6, 0}, chassis);
+    const auto body = add_dynamic(*world, 2, {0, 0, 0.6}, chassis);
     for (int step = 0; step < 60; ++step) {
         world->apply_impulse(body, {0.4, 0, 0});
         world->step(tick);
     }
     const auto state = world->body_state(body);
-    const bool passed = state && state->position.x > 1.0 && state->position.y > -0.1;
+    const bool passed = state && state->position.x > 1.0 && state->position.z > -0.1;
     return {"vehicle-style-motion", passed, passed ? "chassis accelerated across terrain" : "chassis motion failed", 2, 60};
 }
 
 ScenarioResult handoff(const WorldFactory& factory) {
     auto world = factory();
-    const auto body = add_dynamic(*world, 2, {255.5, 4, 0});
+    const auto body = add_dynamic(*world, 2, {255.5, 0, 4});
     world->apply_impulse(body, {2, 0, 0});
     advance(*world, 15);
     const std::array ids{body};
@@ -114,7 +114,7 @@ ScenarioResult handoff(const WorldFactory& factory) {
 
 ScenarioResult restore(const WorldFactory& factory) {
     auto world = factory();
-    const auto body = add_dynamic(*world, 2, {3, 7, 2});
+    const auto body = add_dynamic(*world, 2, {3, 2, 7});
     const std::array ids{body};
     auto transfer = world->capture(ids);
     world->apply_impulse(body, {5, 0, 0});
@@ -123,7 +123,7 @@ ScenarioResult restore(const WorldFactory& factory) {
     const auto state = world->body_state(body);
     const auto& expected = transfer.bodies.front();
     const bool passed = state && std::abs(state->position.x - expected.position.x) < 0.01
-        && std::abs(state->position.y - expected.position.y) < 0.01;
+        && std::abs(state->position.z - expected.position.z) < 0.01;
     return {"state-restore", passed, passed ? "captured transform was restored" : "restored transform differed", 1, 20};
 }
 
@@ -134,8 +134,8 @@ ScenarioResult load(const WorldFactory& factory) {
     for (std::size_t index = 0; index < count; ++index) {
         Shape sphere; sphere.type = ShapeType::Sphere; sphere.radius = 0.2;
         add_dynamic(*world, 1000 + index,
-            {static_cast<double>(index % 16) - 8, 2.0 + static_cast<double>(index / 16) * 0.5,
-             static_cast<double>((index / 4) % 16) - 8}, sphere);
+            {static_cast<double>(index % 16) - 8, static_cast<double>((index / 4) % 16) - 8,
+             2.0 + static_cast<double>(index / 16) * 0.5}, sphere);
     }
     advance(*world, 30);
     const bool passed = world->body_state(count).has_value();

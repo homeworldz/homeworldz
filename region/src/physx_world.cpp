@@ -27,7 +27,7 @@ public:
         const auto hardware_threads = std::thread::hardware_concurrency();
         dispatcher_ = physx::PxDefaultCpuDispatcherCreate(std::max(1u, hardware_threads > 1 ? hardware_threads - 1 : 1));
         physx::PxSceneDesc description(physics_->getTolerancesScale());
-        description.gravity = {0.0f, -9.81f, 0.0f};
+        description.gravity = {0.0f, 0.0f, -9.81f};
         description.cpuDispatcher = dispatcher_;
         description.filterShader = physx::PxDefaultSimulationFilterShader;
         scene_ = physics_->createScene(description);

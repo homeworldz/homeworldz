@@ -71,6 +71,8 @@ default engine. NVIDIA PhysX 5.x is also intended to become a supported plugin;
 its current adapter and shared acceptance lab remain the foundation for that
 eventual production support. A region selects one engine implementation while
 the authoritative scene, persistence, and transfer contracts remain common.
+The common physics contract uses the same right-handed, Z-up coordinates as
+regions and viewers; adapters must not expose an engine-native vertical axis.
 
 ### AIS-first viewer inventory
 

@@ -100,6 +100,7 @@ public:
           jobs_(JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers,
                 std::max(1u, std::thread::hardware_concurrency()) - 1) {
         system_.Init(65536, 0, 65536, 10240, broad_layers_, broad_filter_, pair_filter_);
+        system_.SetGravity({0.0F, 0.0F, -9.81F});
     }
 
     BodyId create_body(const BodyDefinition& definition) override {
