@@ -1781,6 +1781,28 @@ std::vector<std::byte> default_texture_entry(const Uuid& texture_id) {
     return output;
 }
 
+bool normalize_primitive_texture_entry(
+    std::vector<std::byte>& texture_entry, std::span<const std::byte> default_entry) {
+    if (default_entry.size() < 16) return false;
+    if (texture_entry.size() < 16) {
+        texture_entry.assign(default_entry.begin(), default_entry.end());
+        return true;
+    }
+    constexpr std::array<std::byte, 16> viewer_default{
+        std::byte{0xd2}, std::byte{0x11}, std::byte{0x44}, std::byte{0x04},
+        std::byte{0xdd}, std::byte{0x59}, std::byte{0x4a}, std::byte{0x4d},
+        std::byte{0x8e}, std::byte{0x6c}, std::byte{0x49}, std::byte{0x35},
+        std::byte{0x9e}, std::byte{0x91}, std::byte{0xbb}, std::byte{0xf0}};
+    const bool null_default = std::all_of(
+        texture_entry.begin(), texture_entry.begin() + 16,
+        [](std::byte value) { return value == std::byte{}; });
+    const bool viewer_local_default = std::equal(
+        viewer_default.begin(), viewer_default.end(), texture_entry.begin());
+    if (!null_default && !viewer_local_default) return false;
+    std::copy_n(default_entry.begin(), 16, texture_entry.begin());
+    return true;
+}
+
 std::vector<std::byte> encode_avatar_object_update(std::uint64_t region_handle, std::uint32_t local_id,
                                                    const Uuid& agent_id,
                                                    std::array<float, 3> position,

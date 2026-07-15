@@ -804,8 +804,25 @@ bool default_primitive_texture() {
         0x00, 0x00, 0x80, 0x3f, 0x00, // U repeat and overrides
         0x00, 0x00, 0x80, 0x3f, 0x00  // V repeat and overrides
     });
-    return std::equal(expected_tail.begin(), expected_tail.end(), entry.begin() + 16) &&
-           std::all_of(entry.begin() + 32, entry.end(), [](std::byte value) { return value == std::byte{}; });
+    if (!std::equal(expected_tail.begin(), expected_tail.end(), entry.begin() + 16) ||
+        !std::all_of(entry.begin() + 32, entry.end(), [](std::byte value) { return value == std::byte{}; }))
+        return false;
+    auto absent = std::vector<std::byte>{};
+    if (!normalize_primitive_texture_entry(absent, entry) || absent != entry) return false;
+    auto null_default = entry;
+    std::fill_n(null_default.begin(), 16, std::byte{});
+    null_default[18] = std::byte{0x7f};
+    if (!normalize_primitive_texture_entry(null_default, entry) ||
+        !std::equal(plywood.begin(), plywood.end(), null_default.begin()) ||
+        null_default[18] != std::byte{0x7f}) return false;
+    auto viewer_default = entry;
+    const auto fallback = *parse_uuid("d2114404-dd59-4a4d-8e6c-49359e91bbf0");
+    std::copy(fallback.begin(), fallback.end(), viewer_default.begin());
+    viewer_default[19] = std::byte{0x55};
+    if (!normalize_primitive_texture_entry(viewer_default, entry) ||
+        !std::equal(plywood.begin(), plywood.end(), viewer_default.begin()) ||
+        viewer_default[19] != std::byte{0x55}) return false;
+    return !normalize_primitive_texture_entry(viewer_default, entry);
 }
 }
 

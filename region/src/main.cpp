@@ -652,6 +652,19 @@ int main() {
         if (storage->load_snapshot(scene)) {
             std::cout << "{\"level\":\"info\",\"message\":\"scene snapshot restored\",\"revision\":"
                       << scene.revision() << ",\"entities\":" << scene.size() << "}" << std::endl;
+            std::size_t repaired_texture_entries = 0;
+            for (const auto& [entity_id, restored_entity] : scene.entities()) {
+                if (restored_entity.object_id.empty()) continue;
+                auto* entity = scene.find(entity_id);
+                if (entity && homeworldz::viewer::normalize_primitive_texture_entry(
+                                  entity->texture_entry, default_prim_texture_entry()))
+                    ++repaired_texture_entries;
+            }
+            if (repaired_texture_entries != 0) {
+                storage->save_snapshot(scene);
+                std::cout << "{\"level\":\"info\",\"message\":\"legacy primitive textures repaired\",\"count\":"
+                          << repaired_texture_entries << "}" << std::endl;
+            }
         }
     } catch (const std::exception& error) {
         std::cerr << "{\"level\":\"error\",\"message\":\"open region storage failed\",\"error\":"
@@ -2470,12 +2483,15 @@ int main() {
                                 auto* entity = scene.find(update.local_id);
                                 if (!entity) continue;
                                 requested_entities.insert(entity->id);
+                                auto texture_entry = update.texture_entry;
+                                homeworldz::viewer::normalize_primitive_texture_entry(
+                                    texture_entry, default_prim_texture_entry());
                                 if (entity->owner_id != user_id ||
                                     (entity->owner_permissions & homeworldz::scene::permission_modify) == 0 ||
-                                    entity->texture_entry == update.texture_entry)
+                                    entity->texture_entry == texture_entry)
                                     continue;
                                 originals.try_emplace(entity->id, entity->texture_entry);
-                                entity->texture_entry = update.texture_entry;
+                                entity->texture_entry = std::move(texture_entry);
                             }
                             bool persisted = false;
                             if (!originals.empty()) {

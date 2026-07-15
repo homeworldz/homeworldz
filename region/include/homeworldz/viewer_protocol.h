@@ -420,6 +420,11 @@ struct StaticObject {
 // white tint, 1x repeats, zero offsets/rotation, and no per-face overrides.
 std::vector<std::byte> default_texture_entry(const Uuid& texture_id);
 
+// Replaces an absent, null, or viewer-local fallback default face with the
+// supplied server-backed default while preserving valid face parameters.
+bool normalize_primitive_texture_entry(
+    std::vector<std::byte>& texture_entry, std::span<const std::byte> default_entry);
+
 std::vector<std::byte> encode_use_circuit_code(const UseCircuitCode& message);
 std::optional<UseCircuitCode> decode_use_circuit_code(std::span<const std::byte> payload);
 std::vector<std::byte> encode_region_handshake(const RegionHandshake& message);
