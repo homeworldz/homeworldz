@@ -55,6 +55,10 @@ constexpr std::array<std::byte, 4> rez_object_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x25}};
 constexpr std::array<std::byte, 4> object_select_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x6e}};
+constexpr std::array<std::byte, 4> object_deselect_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x6f}};
+constexpr std::array<std::byte, 4> object_grab_update_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x76}};
 constexpr std::array<std::byte, 2> multiple_object_update_id{
     std::byte{0xff}, std::byte{0x02}};
 constexpr std::array<std::byte, 4> object_name_id{
@@ -839,6 +843,49 @@ std::optional<ObjectSelect> decode_object_select(std::span<const std::byte> payl
     result.local_ids.reserve(count);
     for (std::size_t index = 0; index < count; ++index)
         result.local_ids.push_back(read_le_u32(payload, header_size + index * sizeof(std::uint32_t)));
+    return result;
+}
+
+std::optional<ObjectSelect> decode_object_deselect(std::span<const std::byte> payload) {
+    constexpr std::size_t header_size = 37;
+    if (payload.size() < header_size ||
+        !std::equal(object_deselect_id.begin(), object_deselect_id.end(), payload.begin()))
+        return std::nullopt;
+    const auto count = std::to_integer<std::size_t>(payload[36]);
+    if (count == 0 || payload.size() != header_size + count * sizeof(std::uint32_t))
+        return std::nullopt;
+    ObjectSelect result;
+    std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
+    result.local_ids.reserve(count);
+    for (std::size_t index = 0; index < count; ++index)
+        result.local_ids.push_back(read_le_u32(payload, header_size + index * sizeof(std::uint32_t)));
+    return result;
+}
+
+std::optional<ObjectGrabUpdate> decode_object_grab_update(std::span<const std::byte> payload) {
+    constexpr std::size_t fixed_size = 81;
+    constexpr std::size_t surface_block_size = 64;
+    if (payload.size() < fixed_size ||
+        !std::equal(object_grab_update_id.begin(), object_grab_update_id.end(), payload.begin()))
+        return std::nullopt;
+    const auto surface_count = std::to_integer<std::size_t>(payload[80]);
+    if (payload.size() != fixed_size + surface_count * surface_block_size) return std::nullopt;
+    ObjectGrabUpdate result;
+    std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
+    std::copy_n(payload.begin() + 36, 16, result.object_id.begin());
+    result.grab_offset_initial = {
+        read_f32(payload, 52), read_f32(payload, 56), read_f32(payload, 60)};
+    result.grab_position = {
+        read_f32(payload, 64), read_f32(payload, 68), read_f32(payload, 72)};
+    result.time_since_last = read_le_u32(payload, 76);
+    const auto finite = [](const auto& values) {
+        return std::all_of(values.begin(), values.end(),
+            [](float value) { return std::isfinite(value); });
+    };
+    if (!finite(result.grab_offset_initial) || !finite(result.grab_position))
+        return std::nullopt;
     return result;
 }
 

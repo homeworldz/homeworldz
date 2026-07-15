@@ -126,6 +126,13 @@ struct ObjectSelect : AgentMessage {
     std::vector<std::uint32_t> local_ids;
 };
 
+struct ObjectGrabUpdate : AgentMessage {
+    Uuid object_id{};
+    std::array<float, 3> grab_offset_initial{};
+    std::array<float, 3> grab_position{};
+    std::uint32_t time_since_last{};
+};
+
 struct ObjectTransformUpdate {
     std::uint32_t local_id{};
     std::uint8_t type{};
@@ -423,6 +430,8 @@ bool valid_derez_batch(std::uint8_t packet_count, std::uint8_t packet_number);
 std::optional<RezObject> decode_rez_object(std::span<const std::byte> payload);
 std::vector<std::byte> encode_kill_object(std::span<const std::uint32_t> local_ids);
 std::optional<ObjectSelect> decode_object_select(std::span<const std::byte> payload);
+std::optional<ObjectSelect> decode_object_deselect(std::span<const std::byte> payload);
+std::optional<ObjectGrabUpdate> decode_object_grab_update(std::span<const std::byte> payload);
 std::optional<MultipleObjectUpdate> decode_multiple_object_update(std::span<const std::byte> payload);
 std::optional<ObjectName> decode_object_name(std::span<const std::byte> payload);
 std::optional<ObjectDescription> decode_object_description(std::span<const std::byte> payload);

@@ -739,6 +739,44 @@ bool object_flag_codec() {
            decoded->friction == 0.7F && decoded->restitution == 0.25F &&
            decoded->gravity_multiplier == 1.5F;
 }
+
+bool object_interaction_codecs() {
+    const auto agent = *parse_uuid("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");
+    const auto session = *parse_uuid("11111111-2222-4333-8444-555555555555");
+    const auto object = *parse_uuid("12345678-1234-4234-8234-123456789abc");
+    auto deselect = bytes({0xff, 0xff, 0x00, 0x6f});
+    deselect.insert(deselect.end(), agent.begin(), agent.end());
+    deselect.insert(deselect.end(), session.begin(), session.end());
+    deselect.insert(deselect.end(), {std::byte{1}, std::byte{0x2a}, std::byte{},
+                                     std::byte{}, std::byte{}});
+    const auto decoded_deselect = decode_object_deselect(deselect);
+    if (!decoded_deselect || decoded_deselect->agent_id != agent ||
+        decoded_deselect->session_id != session ||
+        decoded_deselect->local_ids != std::vector<std::uint32_t>{42})
+        return false;
+
+    std::vector<std::byte> grab(81);
+    grab[0] = std::byte{0xff};
+    grab[1] = std::byte{0xff};
+    grab[2] = std::byte{0x00};
+    grab[3] = std::byte{0x76};
+    std::copy(agent.begin(), agent.end(), grab.begin() + 4);
+    std::copy(session.begin(), session.end(), grab.begin() + 20);
+    std::copy(object.begin(), object.end(), grab.begin() + 36);
+    write_f32(grab, 52, 0.25F);
+    write_f32(grab, 56, -0.5F);
+    write_f32(grab, 60, 0.75F);
+    write_f32(grab, 64, 100.0F);
+    write_f32(grab, 68, 101.0F);
+    write_f32(grab, 72, 24.0F);
+    grab[76] = std::byte{25};
+    const auto decoded_grab = decode_object_grab_update(grab);
+    return decoded_grab && decoded_grab->agent_id == agent &&
+           decoded_grab->session_id == session && decoded_grab->object_id == object &&
+           decoded_grab->grab_offset_initial == std::array<float, 3>{0.25F, -0.5F, 0.75F} &&
+           decoded_grab->grab_position == std::array<float, 3>{100.0F, 101.0F, 24.0F} &&
+           decoded_grab->time_since_last == 25;
+}
 }
 
 int main() {
@@ -755,6 +793,7 @@ int main() {
     if (!flat_terrain_codec()) return 10;
     if (!static_object_codec()) return 11;
     if (!object_flag_codec()) return 14;
+    if (!object_interaction_codecs()) return 15;
     if (decode_packet(std::array<std::byte, 2>{})) return 12;
     return 0;
 }

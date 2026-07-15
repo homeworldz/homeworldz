@@ -91,6 +91,10 @@ Jolt's contact solver rather than being automatically stepped over.
 Live Firestorm acceptance on 2026-07-15 confirmed that a 0.5 m dynamic cube
 slides a controlled distance under avatar contact, while a 1 x 1 x 1 m dynamic
 cube remains effectively stationary and blocks or deflects avatar movement.
+Selecting an owned, modifiable physical object temporarily suspends its dynamic
+simulation until deselection, matching viewer edit expectations without changing
+the persisted Physical flag. Viewer mouse dragging is handled separately through
+`ObjectGrabUpdate` and a bounded, mass-scaled physics impulse.
 
 The planned vehicle layer preserves the Second Life/Halcyon LSL model while
 using native physics-plugin capabilities. A single `llSetVehicleType` call is

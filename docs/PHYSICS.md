@@ -249,6 +249,14 @@ can be pushed roughly a metre by sustained avatar contact without being
 launched or destabilized, while a 1 x 1 x 1 m physical cube remains effectively
 stationary and causes the avatar to bounce off or walk around it.
 
+Viewer editing and grabbing have separate physics behavior. Selecting an owned,
+modifiable physical object temporarily mirrors it as a non-dynamic body, so it
+cannot fall or react to collisions while its edit controls are open; deselection
+restores its saved physical state. `ObjectGrabUpdate` mouse drags apply a bounded,
+mass-scaled impulse through the physics interface toward the viewer's grab
+target. This explicit grab controller is independent of ordinary avatar contact,
+which remains entirely within Jolt's character/body solver.
+
 ### Required Scenarios
 
 - Avatar walking on flat terrain, slopes, ramps, stairs, and mesh surfaces.

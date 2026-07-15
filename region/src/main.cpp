@@ -697,6 +697,9 @@ int main() {
               << terrain_heightmap->size() << ",\"synchronized\":"
               << (physics_terrain_ready ? "true" : "false") << "}" << std::endl;
     std::unique_ptr<homeworldz::physics::StaticSceneMirror> physics_scene;
+    std::unordered_map<homeworldz::scene::EntityId, std::size_t> physics_edit_suspended;
+    std::unordered_map<std::string, std::unordered_set<homeworldz::scene::EntityId>>
+        physics_edit_selections;
     if (physics_world) {
         try {
             physics_scene = std::make_unique<homeworldz::physics::StaticSceneMirror>(*physics_world);
@@ -712,7 +715,9 @@ int main() {
     const auto synchronize_physics_object = [&](const homeworldz::scene::Entity& entity) {
         if (!physics_scene) return;
         try {
-            if (!physics_scene->synchronize(entity))
+            auto synchronized_entity = entity;
+            if (physics_edit_suspended.contains(entity.id)) synchronized_entity.physical = false;
+            if (!physics_scene->synchronize(synchronized_entity))
                 std::cerr << "{\"level\":\"warning\",\"message\":\"static object physics synchronization rejected\","
                              "\"entityId\":" << entity.id << "}" << std::endl;
         } catch (const std::exception& error) {
@@ -722,6 +727,11 @@ int main() {
         }
     };
     const auto remove_physics_object = [&](homeworldz::scene::EntityId entity_id) {
+        physics_edit_suspended.erase(entity_id);
+        for (auto& [selection_endpoint, selected] : physics_edit_selections) {
+            static_cast<void>(selection_endpoint);
+            selected.erase(entity_id);
+        }
         if (physics_scene) physics_scene->remove(entity_id);
     };
     const auto collision_ground_height = [&](const homeworldz::scene::Vector3& position) {
@@ -1255,6 +1265,19 @@ int main() {
                             if (const auto live = avatars.find(endpoint); live != avatars.end() &&
                                 physics_world && live->second.physics_character != 0)
                                 physics_world->remove_character(live->second.physics_character);
+                            if (const auto selected = physics_edit_selections.find(endpoint);
+                                selected != physics_edit_selections.end()) {
+                                for (const auto entity_id : selected->second) {
+                                    const auto suspended = physics_edit_suspended.find(entity_id);
+                                    if (suspended == physics_edit_suspended.end()) continue;
+                                    if (--suspended->second == 0) {
+                                        physics_edit_suspended.erase(suspended);
+                                        if (const auto* entity = scene.find(entity_id))
+                                            synchronize_physics_object(*entity);
+                                    }
+                                }
+                                physics_edit_selections.erase(selected);
+                            }
                             avatars.erase(endpoint);
                             avatar_geometries.erase(endpoint);
                             avatar_animations.erase(endpoint);
@@ -1867,9 +1890,17 @@ int main() {
                             object_select->session_id == identity->session_id) {
                             std::vector<homeworldz::viewer::ObjectProperties> properties;
                             properties.reserve(object_select->local_ids.size());
+                            const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
                             for (const auto local_id : object_select->local_ids) {
                                 const auto* entity = scene.find(local_id);
                                 if (!entity) continue;
+                                auto& selected = physics_edit_selections[endpoint];
+                                if (entity->physical && entity->owner_id == user_id &&
+                                    (entity->owner_permissions & homeworldz::scene::permission_modify) != 0 &&
+                                    selected.insert(entity->id).second) {
+                                    ++physics_edit_suspended[entity->id];
+                                    synchronize_physics_object(*entity);
+                                }
                                 if (const auto object = object_properties_from_entity(*entity))
                                     properties.push_back(*object);
                             }
@@ -1878,6 +1909,70 @@ int main() {
                                 if (const auto outgoing = circuits.send(
                                         endpoint, std::move(response), true, now, true))
                                     static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
+                            }
+                        }
+                        const auto object_deselect =
+                            homeworldz::viewer::decode_object_deselect(packet->payload);
+                        if (object_deselect && object_deselect->agent_id == identity->agent_id &&
+                            object_deselect->session_id == identity->session_id) {
+                            for (const auto local_id : object_deselect->local_ids) {
+                                const auto selected = physics_edit_selections.find(endpoint);
+                                if (selected == physics_edit_selections.end() ||
+                                    selected->second.erase(local_id) == 0)
+                                    continue;
+                                const auto suspended = physics_edit_suspended.find(local_id);
+                                if (suspended != physics_edit_suspended.end() &&
+                                    --suspended->second == 0) {
+                                    physics_edit_suspended.erase(suspended);
+                                    if (const auto* entity = scene.find(local_id))
+                                        synchronize_physics_object(*entity);
+                                }
+                            }
+                        }
+                        const auto grab_update =
+                            homeworldz::viewer::decode_object_grab_update(packet->payload);
+                        if (grab_update && grab_update->agent_id == identity->agent_id &&
+                            grab_update->session_id == identity->session_id && physics_world &&
+                            physics_scene) {
+                            const auto object_id = homeworldz::viewer::format_uuid(grab_update->object_id);
+                            const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
+                            for (const auto& [entity_id, entity] : scene.entities()) {
+                                if (entity.object_id != object_id) continue;
+                                const bool may_move = entity.owner_id == user_id ||
+                                    (entity.everyone_permissions & homeworldz::scene::permission_move) != 0;
+                                if (!may_move || !entity.physical || entity.phantom ||
+                                    physics_edit_suspended.contains(entity_id))
+                                    break;
+                                const auto body_id = physics_scene->body_id(entity_id);
+                                const auto state = physics_world->body_state(body_id);
+                                if (!state) break;
+                                constexpr double grab_response_seconds = 0.25;
+                                constexpr double maximum_delta_speed = 10.0;
+                                homeworldz::scene::Vector3 delta_velocity{
+                                    (grab_update->grab_position[0] - state->position.x) /
+                                        grab_response_seconds - state->linear_velocity.x,
+                                    (grab_update->grab_position[1] - state->position.y) /
+                                        grab_response_seconds - state->linear_velocity.y,
+                                    (grab_update->grab_position[2] - state->position.z) /
+                                        grab_response_seconds - state->linear_velocity.z};
+                                const auto delta_speed = std::sqrt(
+                                    delta_velocity.x * delta_velocity.x +
+                                    delta_velocity.y * delta_velocity.y +
+                                    delta_velocity.z * delta_velocity.z);
+                                if (delta_speed > maximum_delta_speed) {
+                                    const auto scale = maximum_delta_speed / delta_speed;
+                                    delta_velocity.x *= scale;
+                                    delta_velocity.y *= scale;
+                                    delta_velocity.z *= scale;
+                                }
+                                const auto density = std::isfinite(entity.physics_density)
+                                    ? std::clamp(entity.physics_density, 1.0, 22587.0)
+                                    : homeworldz::physics::material_properties(entity.material).density;
+                                const auto mass = homeworldz::physics::box_mass(entity.scale, density);
+                                physics_world->apply_impulse(body_id, {
+                                    delta_velocity.x * mass, delta_velocity.y * mass,
+                                    delta_velocity.z * mass});
+                                break;
                             }
                         }
                         const auto family_request =
