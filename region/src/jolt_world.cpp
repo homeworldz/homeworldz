@@ -96,6 +96,12 @@ JPH::ShapeRefC make_shape(const Shape& shape) {
     }
 }
 
+JPH::ShapeRefC make_character_shape(double radius, double height) {
+    const Shape capsule{ShapeType::Capsule, {}, radius, height};
+    return new JPH::RotatedTranslatedShape(
+        {0, 0, static_cast<float>(height * 0.5)}, JPH::Quat::sIdentity(), make_shape(capsule));
+}
+
 JPH::EMotionType motion(MotionType value) {
     if (value == MotionType::Dynamic) return JPH::EMotionType::Dynamic;
     if (value == MotionType::Kinematic) return JPH::EMotionType::Kinematic;
@@ -110,6 +116,7 @@ struct JoltBody {
 struct JoltCharacter {
     JPH::Ref<JPH::CharacterVirtual> character;
     scene::EntityId entity{};
+    double height{1.8};
     double step_height{0.4};
 };
 
@@ -207,12 +214,18 @@ public:
     CharacterId create_character(const CharacterDefinition& definition) override {
         JPH::CharacterVirtualSettings settings;
         settings.mUp = JPH::Vec3::sAxisZ();
-        settings.mSupportingVolume = JPH::Plane(JPH::Vec3::sAxisZ(), -static_cast<float>(definition.height * 0.5));
-        settings.mShape = make_shape({ShapeType::Capsule, {}, definition.radius, definition.height});
+        settings.mSupportingVolume = JPH::Plane(
+            JPH::Vec3::sAxisZ(), -static_cast<float>(definition.radius));
+        settings.mShape = make_character_shape(definition.radius, definition.height);
+        const scene::Vector3 feet{
+            definition.position.x, definition.position.y,
+            definition.position.z - definition.height * 0.5};
         auto character = JPH::Ref<JPH::CharacterVirtual>(new JPH::CharacterVirtual(
-            &settings, JPH::RVec3(vec(definition.position)), JPH::Quat::sIdentity(), &system_));
+            &settings, JPH::RVec3(vec(feet)),
+            JPH::Quat::sIdentity(), &system_));
         const auto id = next_character_++;
-        characters_.emplace(id, JoltCharacter{std::move(character), definition.entity_id, definition.step_height});
+        characters_.emplace(id, JoltCharacter{
+            std::move(character), definition.entity_id, definition.height, definition.step_height});
         return id;
     }
     bool remove_character(CharacterId id) override {
@@ -224,14 +237,18 @@ public:
     std::optional<BodyState> character_state(CharacterId id) const override {
         const auto found = characters_.find(id);
         if (found == characters_.end()) return std::nullopt;
-        return BodyState{id, found->second.entity, vec(found->second.character->GetPosition()),
+        auto position = vec(found->second.character->GetPosition());
+        position.z += found->second.height * 0.5;
+        return BodyState{id, found->second.entity, position,
                          vec(found->second.character->GetLinearVelocity()), {}, false,
                          found->second.character->IsSupported()};
     }
     void set_character_state(CharacterId id, const BodyState& state) override {
         const auto found = characters_.find(id);
         if (found == characters_.end()) return;
-        found->second.character->SetPosition(JPH::RVec3(vec(state.position)));
+        auto feet = state.position;
+        feet.z -= found->second.height * 0.5;
+        found->second.character->SetPosition(JPH::RVec3(vec(feet)));
         found->second.character->SetLinearVelocity(vec(state.linear_velocity));
     }
     void set_character_velocity(CharacterId id, scene::Vector3 velocity) override {

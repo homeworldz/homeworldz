@@ -132,8 +132,19 @@ bool jolt_character_step_test() {
     const auto character = world->create_character({3, {0, 0, 0.9}, 0.3, 1.8, 0.4});
     world->set_character_velocity(character, {2, 0, 0});
     for (int tick = 0; tick < 45; ++tick) world->step(1.0 / 60.0);
-    const auto state = world->character_state(character);
-    return state && state->position.x > 1.0 && state->position.z > 1.05 && state->grounded;
+    const auto moving = world->character_state(character);
+    if (!moving || moving->position.x <= 1.0 || moving->position.z <= 1.05 || !moving->grounded)
+        return false;
+    world->set_character_velocity(character, {});
+    for (int tick = 0; tick < 300; ++tick) world->step(1.0 / 60.0);
+    const auto resting = world->character_state(character);
+    if (!resting || !resting->grounded || std::abs(resting->position.z - 1.15) > 0.01)
+        return false;
+    const auto falling = world->create_character({4, {-2, 0, 4}, 0.3, 1.8, 0.4});
+    world->set_character_velocity(falling, {0, 0, -5});
+    for (int tick = 0; tick < 300; ++tick) world->step(1.0 / 60.0);
+    const auto landed = world->character_state(falling);
+    return landed && landed->grounded && std::abs(landed->position.z - 0.9) < 0.01;
 }
 }
 
