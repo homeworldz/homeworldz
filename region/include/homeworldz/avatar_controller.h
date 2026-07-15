@@ -23,6 +23,7 @@ struct AvatarState {
     scene::Vector3 position{128.0, 128.0, 25.0};
     scene::Vector3 velocity{};
     std::array<float, 3> rotation{};
+    double height{1.56};
     bool flying{};
     bool grounded{true};
     std::array<float, 3> camera_center{};
@@ -34,8 +35,11 @@ struct AvatarState {
 
 class AvatarController {
 public:
-    explicit AvatarController(scene::Vector3 spawn = {128.0, 128.0, 25.0}, double ground_height = 25.0);
+    explicit AvatarController(scene::Vector3 spawn = {128.0, 128.0, 25.0},
+                              double ground_height = 25.0, double avatar_height = 1.56);
     void apply(const AgentUpdate& update);
+    void set_avatar_height(double height);
+    void set_ground_height(double height);
     void step(double seconds);
     const AvatarState& state() const { return state_; }
 

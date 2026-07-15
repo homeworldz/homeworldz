@@ -1130,6 +1130,8 @@ std::optional<AgentSetAppearance> decode_agent_set_appearance(std::span<const st
     std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
     std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
     result.serial = read_le_u32(payload, 36);
+    for (std::size_t axis = 0; axis < result.size.size(); ++axis)
+        result.size[axis] = read_f32(payload, 40 + axis * 4);
     const auto cache_count = std::to_integer<std::size_t>(payload[52]);
     auto position = fixed_size;
     if (position + cache_count * cache_block_size + 2 > payload.size()) return std::nullopt;
@@ -1149,6 +1151,9 @@ std::optional<AgentSetAppearance> decode_agent_set_appearance(std::span<const st
     position += texture_entry_size;
     const auto visual_count = std::to_integer<std::size_t>(payload[position++]);
     if (position + visual_count != payload.size()) return std::nullopt;
+    result.visual_params.reserve(visual_count);
+    for (std::size_t index = 0; index < visual_count; ++index)
+        result.visual_params.push_back(std::to_integer<std::uint8_t>(payload[position + index]));
     if (texture_entry.size() >= 16) {
         Uuid default_id;
         std::copy_n(texture_entry.begin(), 16, default_id.begin());

@@ -38,7 +38,7 @@ acceptance tests pass.
 
 - [x] Decode movement, camera, jump, and flight controls and persist provisional
   avatar state.
-- [x] Begin streaming authoritative position, velocity, and rotation changes
+- [x] Stream authoritative position, velocity, and rotation changes
   back to viewers.
 - [ ] Complete viewer-visible walking, turning, jumping, stopping, flight
   toggling, ascent, and descent without requiring a relog.

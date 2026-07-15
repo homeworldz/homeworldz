@@ -48,7 +48,7 @@ than runtime dependencies.
 - [x] Implement region handshake, seed capability, and required event delivery.
 - [x] Decode avatar movement, flying, jumping, and camera inputs and persist the
   resulting provisional avatar state.
-- [ ] Stream continuous authoritative avatar transforms and flight state back
+- [x] Stream continuous authoritative avatar transforms and flight state back
   to Firestorm.
 - [ ] Add a Jolt-backed avatar capsule with terrain walking, grounding, flight,
   and collision-safe movement.

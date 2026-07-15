@@ -148,6 +148,25 @@ double ground_height(const std::optional<std::array<float, 256 * 256>>& heightma
     return (*heightmap)[static_cast<std::size_t>(y) * 256 + x];
 }
 
+std::optional<double> avatar_height(const homeworldz::viewer::AgentSetAppearance& appearance) {
+    // Match the Halcyon/InWorldz visual-parameter height calculation. The
+    // viewer-provided Size is a fallback for clients with a shorter block.
+    const auto& values = appearance.visual_params;
+    if (values.size() > 148) {
+        return 1.23077
+             + 0.516945 * values[25] / 255.0
+             + 0.072514 * values[120] / 255.0
+             + 0.3836 * values[125] / 255.0
+             + 0.08 * values[77] / 255.0
+             + 0.07 * values[78] / 255.0
+             + 0.076 * values[148] / 255.0;
+    }
+    const auto viewer_height = static_cast<double>(appearance.size[2]);
+    if (std::isfinite(viewer_height) && viewer_height >= 1.0 && viewer_height <= 3.0)
+        return viewer_height;
+    return std::nullopt;
+}
+
 int environment_int(const char* name, int fallback, int minimum, int maximum) {
     const auto value = environment_value(name);
     if (value.empty()) return fallback;
@@ -658,6 +677,7 @@ int main() {
     std::unordered_set<std::string> handshake_replies;
     std::unordered_set<std::string> established_events;
     std::unordered_map<std::string, LiveAvatar> avatars;
+    std::unordered_map<std::string, double> avatar_heights;
     std::unordered_map<std::string, homeworldz::viewer::UuidName> resolved_avatar_names;
     std::unordered_map<std::string, std::deque<QueuedTexturePacket>> texture_packets;
     std::unordered_set<std::string> active_texture_transfers;
@@ -1032,6 +1052,7 @@ int main() {
                             }
                             if (viewer_sessions) viewer_sessions->invalidate(session_id);
                             avatars.erase(endpoint);
+                            avatar_heights.erase(endpoint);
                             handshake_replies.erase(endpoint);
                             established_events.erase(session_id);
                             texture_packets.erase(endpoint);
@@ -1205,6 +1226,11 @@ int main() {
                             homeworldz::viewer::decode_agent_set_appearance(packet->payload);
                         if (appearance && appearance->agent_id == identity->agent_id &&
                             appearance->session_id == identity->session_id) {
+                            if (const auto height = avatar_height(*appearance)) {
+                                avatar_heights[endpoint] = *height;
+                                if (const auto live = avatars.find(endpoint); live != avatars.end())
+                                    live->second.controller.set_avatar_height(*height);
+                            }
                             std::size_t stored = 0;
                             for (const auto& entry : appearance->cache_entries) {
                                 if (entry.texture_index >= appearance->texture_ids.size()) continue;
@@ -1275,12 +1301,18 @@ int main() {
                                 if (entity == 0) entity = scene.create(name, initial_spawn);
                                 const auto* persisted = scene.find(entity);
                                 const auto spawn = persisted ? persisted->position : initial_spawn;
-                                response.position = {static_cast<float>(spawn.x), static_cast<float>(spawn.y),
-                                                     static_cast<float>(spawn.z)};
+                                const auto known_height = avatar_heights.find(endpoint);
+                                const auto height = known_height == avatar_heights.end() ? 1.56 : known_height->second;
+                                homeworldz::viewer::AvatarController controller{
+                                    spawn, ground_height(terrain_heightmap, spawn), height};
+                                const auto initial_position = controller.state().position;
+                                response.position = {static_cast<float>(initial_position.x),
+                                                     static_cast<float>(initial_position.y),
+                                                     static_cast<float>(initial_position.z)};
                                 avatars.emplace(endpoint, LiveAvatar{
-                                    homeworldz::viewer::AvatarController{spawn, ground_height(terrain_heightmap, spawn)}, entity, name,
+                                    std::move(controller), entity, name,
                                     now + std::chrono::seconds(5), now + std::chrono::seconds(30),
-                                    now + std::chrono::milliseconds(100), spawn, 0});
+                                    now + std::chrono::milliseconds(100), initial_position, 0});
                                 if (viewer_grid && registration)
                                     static_cast<void>(viewer_grid->update_presence(name, registration->region_id()));
                             }
@@ -2135,6 +2167,8 @@ int main() {
                 static_cast<void>(viewer_grid->update_presence(avatar.user_id, registration->region_id()));
                 avatar.next_presence = now + std::chrono::seconds(30);
             }
+            avatar.controller.set_ground_height(
+                ground_height(terrain_heightmap, avatar.controller.state().position));
             avatar.controller.step(elapsed);
             if (auto* entity = scene.find(avatar.entity_id)) {
                 entity->position = avatar.controller.state().position;

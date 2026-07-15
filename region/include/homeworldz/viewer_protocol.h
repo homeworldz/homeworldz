@@ -241,8 +241,10 @@ struct AgentCachedTexture : AgentMessage {
 
 struct AgentSetAppearance : AgentMessage {
     std::uint32_t serial{};
+    std::array<float, 3> size{};
     std::vector<CachedTextureQuery> cache_entries;
     std::array<Uuid, 32> texture_ids{};
+    std::vector<std::uint8_t> visual_params;
 };
 
 struct ImageRequestBlock {

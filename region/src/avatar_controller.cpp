@@ -5,8 +5,13 @@
 
 namespace homeworldz::viewer {
 
-AvatarController::AvatarController(scene::Vector3 spawn, double ground_height)
-    : state_{spawn}, ground_height_(ground_height) {}
+AvatarController::AvatarController(scene::Vector3 spawn, double ground_height, double avatar_height)
+    : state_{spawn}, ground_height_(ground_height) {
+    set_avatar_height(avatar_height);
+    const auto support_height = ground_height_ + state_.height * 0.5;
+    if (state_.position.z <= support_height) state_.position.z = support_height;
+    state_.grounded = state_.position.z <= support_height + 0.05;
+}
 
 void AvatarController::apply(const AgentUpdate& update) {
     controls_ = update.control_flags;
@@ -20,8 +25,25 @@ void AvatarController::apply(const AgentUpdate& update) {
     state_.draw_distance = update.draw_distance;
 }
 
+void AvatarController::set_avatar_height(double height) {
+    if (!std::isfinite(height)) return;
+    state_.height = std::clamp(height, 1.0, 3.0);
+    if (state_.grounded) state_.position.z = ground_height_ + state_.height * 0.5;
+}
+
+void AvatarController::set_ground_height(double height) {
+    if (std::isfinite(height)) ground_height_ = height;
+}
+
 void AvatarController::step(double seconds) {
     seconds = std::clamp(seconds, 0.0, 0.25);
+    const auto support_height = ground_height_ + state_.height * 0.5;
+    if (!state_.flying && state_.grounded) {
+        if (state_.position.z > support_height + 0.25)
+            state_.grounded = false;
+        else
+            state_.position.z = support_height;
+    }
     const double x = body_rotation_[0], y = body_rotation_[1], z = body_rotation_[2];
     const double w = std::sqrt(std::max(0.0, 1.0 - x * x - y * y - z * z));
     const double forward_x = 1.0 - 2.0 * (y * y + z * z);
@@ -50,8 +72,8 @@ void AvatarController::step(double seconds) {
     state_.position.x += state_.velocity.x * seconds;
     state_.position.y += state_.velocity.y * seconds;
     state_.position.z += state_.velocity.z * seconds;
-    if (!state_.flying && state_.position.z <= ground_height_) {
-        state_.position.z = ground_height_;
+    if (!state_.flying && state_.position.z <= support_height) {
+        state_.position.z = support_height;
         state_.velocity.z = 0.0;
         state_.grounded = true;
     }

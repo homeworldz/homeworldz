@@ -159,9 +159,17 @@ returning `AgentMovementComplete`.
 
 After movement completes, authenticated `AgentUpdate` packets drive the
 provisional avatar controller. It retains viewer camera axes and draw distance,
-resolves movement relative to body orientation, and persists the resulting
-position. Continuous authoritative transform updates, visible flight toggling,
-terrain-aware grounding, and a physics capsule remain pending.
+resolves movement relative to body orientation, persists the resulting
+position, and streams authoritative position, velocity, and rotation changes
+to viewers at a bounded rate. Walking, turning, flying, falling, ascent, and
+descent were accepted in Firestorm on 2026-07-15.
+
+`AgentSetAppearance` supplies the viewer size and visual-parameter block. The
+provisional controller mirrors the Halcyon/InWorldz avatar-height calculation
+and treats the avatar root as the center of that height, so the support point is
+`terrain height + avatar height / 2`. Terrain is resampled beneath the avatar as
+it moves. Viewer acceptance of this appearance-derived foot placement and the
+production Jolt capsule remain pending.
 
 Once movement completes, the region streams all 256 flat 16-by-16 terrain
 patches in bounded reliable batches and sends a full static volume-primitive
