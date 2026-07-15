@@ -306,8 +306,10 @@ to authenticated region services and is never logged. The Grid relinks only
 an owned, modifiable clothing or body-part
 item, and only to an asset whose recorded creator is the editing avatar. The
 inventory item's original creator is preserved while the new asset records its
-actual uploader. Viewer acceptance of wearable edit persistence remains
-pending.
+actual uploader. Firestorm performs that relink through an AISv3 item `PATCH`:
+it replaces `asset_id` with the upload transaction in `hash_id`, which the
+Grid resolves with the same secure-session combination before accepting the
+new asset. Viewer acceptance of wearable edit persistence remains pending.
 
 The read-only system Library acceptance passed on 2026-07-14. Firestorm showed
 the shared `Library / Clothing / Initial Outfits / Default Avatar` hierarchy
@@ -549,4 +551,6 @@ region therefore provides a narrow compatibility adapter for that message:
 it authenticates the agent and source owner, asks the grid inventory service
 to create the copy, enforces the source's Copy bit (`0x00008000`), and returns
 `UpdateCreateInventoryItem`. AIS-backed grid storage remains authoritative;
-the region does not maintain a parallel inventory.
+the region does not maintain a parallel inventory. Firestorm encodes the
+usual unchanged copy name as a zero-length `NewName`; this is valid for the
+protocol's variable field and means the source name must be retained.

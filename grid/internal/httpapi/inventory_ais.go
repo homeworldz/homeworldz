@@ -3,6 +3,8 @@ package httpapi
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -98,7 +100,7 @@ func (a *API) inventoryAISCapability(w http.ResponseWriter, r *http.Request) {
 	case "item":
 		switch r.Method {
 		case http.MethodPatch:
-			a.updateAISInventoryItem(w, r, session.UserID, parts[2])
+			a.updateAISInventoryItem(w, r, session.UserID, session.SecureID, parts[2])
 		case http.MethodDelete:
 			a.deleteAISInventoryItem(w, r, session.UserID, parts[2])
 		default:
@@ -903,6 +905,7 @@ type aisInventoryItemMutation struct {
 	ParentID    string
 	Name        string
 	Description string
+	HashID      string
 }
 
 func decodeAISInventoryItemMutation(reader io.Reader) (aisInventoryItemMutation, map[string]bool, error) {
@@ -959,6 +962,8 @@ func decodeAISInventoryItemMutation(reader io.Reader) (aisInventoryItemMutation,
 					request.Name = field
 				case "description":
 					request.Description = field
+				case "hash_id":
+					request.HashID = field
 				default:
 					key = ""
 					continue
@@ -972,16 +977,17 @@ func decodeAISInventoryItemMutation(reader io.Reader) (aisInventoryItemMutation,
 			}
 		}
 	}
-	if !sawLLSD || (!seen["name"] && !seen["description"] && !seen["parent_id"]) {
+	if !sawLLSD || (!seen["name"] && !seen["description"] && !seen["parent_id"] && !seen["hash_id"]) {
 		return request, seen, errors.New("AIS inventory item update is empty")
 	}
 	return request, seen, nil
 }
 
-func (a *API) updateAISInventoryItem(w http.ResponseWriter, r *http.Request, userID, itemID string) {
+func (a *API) updateAISInventoryItem(w http.ResponseWriter, r *http.Request, userID, secureSessionID, itemID string) {
 	request, seen, err := decodeAISInventoryItemMutation(http.MaxBytesReader(w, r.Body, 64*1024))
 	if err != nil || (seen["item_id"] && request.ID != itemID) ||
-		(seen["parent_id"] && !validUUID(request.ParentID)) {
+		(seen["parent_id"] && !validUUID(request.ParentID)) ||
+		(seen["hash_id"] && !validUUID(request.HashID)) {
 		writeLLSDError(w, http.StatusBadRequest, "invalid AIS inventory item update")
 		return
 	}
@@ -1001,6 +1007,24 @@ func (a *API) updateAISInventoryItem(w http.ResponseWriter, r *http.Request, use
 		writeLLSDError(w, http.StatusNotFound, "AIS inventory item was not found")
 		return
 	}
+	var uploadedAssetID string
+	if seen["hash_id"] {
+		if a.assets == nil {
+			writeLLSDError(w, http.StatusServiceUnavailable, "AIS wearable asset metadata is unavailable")
+			return
+		}
+		var ok bool
+		uploadedAssetID, ok = combineViewerAssetID(request.HashID, secureSessionID)
+		if !ok {
+			writeLLSDError(w, http.StatusBadRequest, "invalid AIS wearable asset transaction")
+			return
+		}
+		asset, err := a.assets.Get(r.Context(), uploadedAssetID)
+		if err != nil || asset.CreatorUserID != userID {
+			writeLLSDError(w, http.StatusNotFound, "AIS wearable asset was not found")
+			return
+		}
+	}
 	existingFolderID := item.FolderID
 	if seen["name"] {
 		item.Name = request.Name
@@ -1015,6 +1039,12 @@ func (a *API) updateAISInventoryItem(w http.ResponseWriter, r *http.Request, use
 	if writeAISItemError(w, err) {
 		return
 	}
+	if uploadedAssetID != "" {
+		item, err = a.inventory.UpdateItemAsset(r.Context(), userID, itemID, uploadedAssetID)
+		if writeAISItemError(w, err) {
+			return
+		}
+	}
 	versions, err := a.inventoryFolderVersions(r.Context(), userID, existingFolderID, item.FolderID)
 	if err != nil {
 		writeLLSDError(w, http.StatusServiceUnavailable, "AIS inventory folder version could not be loaded")
@@ -1025,6 +1055,29 @@ func (a *API) updateAISInventoryItem(w http.ResponseWriter, r *http.Request, use
 	content := strings.TrimSuffix(inventoryAISItemXML(item, item.AssetType == 24), "</map>")
 	_, _ = io.WriteString(w, "<?xml version=\"1.0\"?><llsd>"+content+
 		inventoryFolderVersionsXML(versions)+"</map></llsd>")
+}
+
+func combineViewerAssetID(transactionID, secureSessionID string) (string, bool) {
+	decode := func(value string) ([]byte, bool) {
+		value = strings.ReplaceAll(value, "-", "")
+		if len(value) != 32 {
+			return nil, false
+		}
+		decoded, err := hex.DecodeString(value)
+		return decoded, err == nil && len(decoded) == 16
+	}
+	transaction, ok := decode(transactionID)
+	if !ok {
+		return "", false
+	}
+	secure, ok := decode(secureSessionID)
+	if !ok {
+		return "", false
+	}
+	digest := md5.Sum(append(transaction, secure...))
+	encoded := hex.EncodeToString(digest[:])
+	return encoded[0:8] + "-" + encoded[8:12] + "-" + encoded[12:16] + "-" +
+		encoded[16:20] + "-" + encoded[20:32], true
 }
 
 func (a *API) deleteAISInventoryItem(w http.ResponseWriter, r *http.Request, userID, itemID string) {

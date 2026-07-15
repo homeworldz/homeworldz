@@ -9,8 +9,64 @@ import (
 	"testing"
 	"time"
 
+	"github.com/homeworldz/homeworldz/grid/internal/assetmeta"
 	"github.com/homeworldz/homeworldz/grid/internal/inventory"
 )
+
+func TestAISWearableHashIDUpdatesAsset(t *testing.T) {
+	if combined, ok := combineViewerAssetID(
+		"99999999-8888-4777-8666-555555555555",
+		"dddddddd-dddd-4ddd-8ddd-dddddddddddd"); !ok ||
+		combined != "a43650ca-1978-2e0b-9c01-1818739e7d32" {
+		t.Fatalf("combined viewer asset ID = %q, ok = %v", combined, ok)
+	}
+	identities := newMemoryIdentityStore()
+	user, err := identities.CreateUser(context.Background(), "inventory.ais.wearable", "development-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := identities.CreateSession(context.Background(), "inventory.ais.wearable", "development-password", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.AssignViewerDestination(context.Background(), session.ID, 123456,
+		"30000000-0000-4000-8000-000000000001"); err != nil {
+		t.Fatal(err)
+	}
+	const transactionID = "99999999-8888-4777-8666-555555555555"
+	assetID, ok := combineViewerAssetID(transactionID, session.SecureID)
+	if !ok {
+		t.Fatal("could not derive test wearable asset ID")
+	}
+	inventories := &memoryInventoryStore{folders: make(map[string][]inventory.Folder)}
+	_, _ = inventories.EnsureSystemFolders(context.Background(), user.ID)
+	item, err := inventories.CreateItem(context.Background(), inventory.Item{
+		ID: "40000000-0000-4000-8000-000000000041", OwnerUserID: user.ID,
+		CreatorUserID: inventory.LibraryOwnerID, FolderID: inventory.SystemFolderID(user.ID, 13),
+		AssetID: "50000000-0000-4000-8000-000000000041", AssetType: 13, InventoryType: 18,
+		Name: "Default Shape", BasePermissions: 0x7fffffff, CurrentPermissions: 0x7fffffff,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assets := &memoryAssetStore{assets: map[string]assetmeta.Asset{
+		assetID: {ID: assetID, CreatorUserID: user.ID, SHA256: "aa", Size: 1321},
+	}}
+	body := `<?xml version="1.0"?><llsd><map><key>item_id</key><uuid>` + item.ID +
+		`</uuid><key>name</key><string>Default Shape Male</string>` +
+		`<key>hash_id</key><uuid>` + transactionID + `</uuid></map></llsd>`
+	request := httptest.NewRequest(http.MethodPatch,
+		"/caps/inventory/ais/"+session.ID+"/item/"+item.ID, strings.NewReader(body))
+	response := httptest.NewRecorder()
+	New(checker{}, "test", Options{Identity: identities, Inventory: inventories, Assets: assets}).
+		ServeHTTP(response, request)
+	items, _ := inventories.ListItems(context.Background(), user.ID)
+	if response.Code != http.StatusOK || len(items) != 1 || items[0].AssetID != assetID ||
+		items[0].Name != "Default Shape Male" ||
+		!strings.Contains(response.Body.String(), "<key>asset_id</key><uuid>"+assetID+"</uuid>") {
+		t.Fatalf("status = %d, response = %s, items = %#v", response.Code, response.Body.String(), items)
+	}
+}
 
 func TestInventoryDescendentsCapability(t *testing.T) {
 	identities := newMemoryIdentityStore()

@@ -658,7 +658,7 @@ std::optional<CopyInventoryItem> decode_copy_inventory_item(std::span<const std:
         payload[36] != std::byte{1})
         return std::nullopt;
     const auto name_size = std::to_integer<std::size_t>(payload[89]);
-    if (name_size == 0 || payload.size() != fixed_size + name_size) return std::nullopt;
+    if (payload.size() != fixed_size + name_size) return std::nullopt;
     CopyInventoryItem result;
     std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
     std::copy_n(payload.begin() + 20, 16, result.session_id.begin());

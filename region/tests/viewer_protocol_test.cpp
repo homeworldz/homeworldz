@@ -126,6 +126,10 @@ bool message_codecs() {
     copy_item_payload.push_back(std::byte{1});
     copy_item_payload.push_back(std::byte{});
     const auto copy_item = decode_copy_inventory_item(copy_item_payload);
+    auto copy_item_without_name = copy_item_payload;
+    copy_item_without_name.resize(copy_item_without_name.size() - 1);
+    copy_item_without_name.back() = std::byte{};
+    const auto unnamed_copy_item = decode_copy_inventory_item(copy_item_without_name);
     InventoryItem copied_item;
     copied_item.item_id = expected.session_id;
     copied_item.creator_id = expected.agent_id;
@@ -139,6 +143,7 @@ bool message_codecs() {
     copied_item.base_permissions = 0x7fffffff;
     copied_item.current_permissions = 0x7fffffff;
     copied_item.next_permissions = 0x7fffffff;
+    if (!unnamed_copy_item || !unnamed_copy_item->new_name.empty()) return false;
     const auto copy_reply = copy_item ? encode_update_create_inventory_item(
         AgentMessage{expected.agent_id, expected.session_id}, copy_item->callback_id, copied_item)
                                       : std::vector<std::byte>{};
