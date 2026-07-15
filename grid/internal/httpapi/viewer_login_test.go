@@ -50,17 +50,30 @@ func viewerResponse(t *testing.T, handler http.Handler, body string) map[string]
 }
 
 func TestViewerLoginResolvesNamedRegion(t *testing.T) {
+	var testUserID string
+	startState := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/agents/"+testUserID+"/start-state" ||
+			r.Header.Get("Authorization") != "Bearer region-secret" {
+			http.Error(w, "unexpected start-state request", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"position":[202,144,28],"lookAt":[-0.995,-0.098,0],"flying":true}`))
+	}))
+	defer startState.Close()
 	identities := newMemoryIdentityStore()
-	if _, err := identities.CreateUser(context.Background(), "test.user", "development-password"); err != nil {
+	user, err := identities.CreateUser(context.Background(), "test.user", "development-password")
+	if err != nil {
 		t.Fatal(err)
 	}
+	testUserID = user.ID
 	regionStore := newMemoryRegionStore()
 	_, _ = regionStore.Register(context.Background(), regions.Registration{Name: "Fallback", GridX: 1000, GridY: 1000,
 		PublicEndpoint: "http://fallback.example:42001", LeaseDuration: time.Minute})
 	target, _ := regionStore.Register(context.Background(), regions.Registration{Name: "Welcome", GridX: 1001, GridY: 1002,
-		PublicEndpoint: "http://127.0.0.1:42001", ViewerPort: 43002, LeaseDuration: time.Minute})
+		PublicEndpoint: startState.URL, ViewerPort: 43002, LeaseDuration: time.Minute})
 	inventories := &memoryInventoryStore{folders: make(map[string][]inventory.Folder)}
-	handler := New(checker{}, "test", Options{Identity: identities, Regions: regionStore, Inventory: inventories})
+	handler := New(checker{}, "test", Options{ServiceToken: "region-secret", Identity: identities, Regions: regionStore, Inventory: inventories})
 	fields := viewerResponse(t, handler, viewerRequest("Test", "User", "development-password", "uri:Welcome&128&128&25"))
 	if fields["login"].text() != "true" {
 		t.Fatalf("login = %q, reason = %q, message = %q", fields["login"].text(), fields["reason"].text(), fields["message"].text())
@@ -75,6 +88,9 @@ func TestViewerLoginResolvesNamedRegion(t *testing.T) {
 	wantSeed := strings.TrimRight(target.PublicEndpoint, "/") + "/caps/seed/" + fields["session_id"].text()
 	if fields["seed_capability"].text() != wantSeed {
 		t.Fatalf("seed = %q, want %q", fields["seed_capability"].text(), wantSeed)
+	}
+	if fields["look_at"].text() != "[r-0.995,r-0.098,r0]" {
+		t.Fatalf("look_at = %q", fields["look_at"].text())
 	}
 	rootValues := fields["inventory-root"].Array.Values
 	skeletonValues := fields["inventory-skeleton"].Array.Values

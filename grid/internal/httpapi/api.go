@@ -23,14 +23,15 @@ type ReadinessChecker interface {
 }
 
 type API struct {
-	ready     ReadinessChecker
-	version   string
-	publicURL string
-	regions   regions.Store
-	identity  identity.Store
-	presence  presence.Store
-	inventory inventory.Store
-	assets    assetmeta.Store
+	ready        ReadinessChecker
+	version      string
+	publicURL    string
+	regions      regions.Store
+	identity     identity.Store
+	presence     presence.Store
+	inventory    inventory.Store
+	assets       assetmeta.Store
+	serviceToken string
 }
 
 type Options struct {
@@ -47,7 +48,7 @@ type Options struct {
 func New(ready ReadinessChecker, version string, options Options) http.Handler {
 	a := &API{ready: ready, version: version, publicURL: strings.TrimRight(options.GridPublicURL, "/"),
 		regions: options.Regions, identity: options.Identity, presence: options.Presence,
-		inventory: options.Inventory, assets: options.Assets}
+		inventory: options.Inventory, assets: options.Assets, serviceToken: options.ServiceToken}
 	if a.publicURL == "" {
 		a.publicURL = "http://127.0.0.1:42000"
 	}

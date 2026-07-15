@@ -4,9 +4,12 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
+	"encoding/json"
 	"encoding/xml"
 	"errors"
+	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"strings"
@@ -235,6 +238,10 @@ func (a *API) viewerLogin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	rootID, skeleton := inventorySkeleton(folders)
+	lookAt := "[r1,r0,r0]"
+	if state, ok := a.regionStartState(r.Context(), region.PublicEndpoint, session.UserID); ok {
+		lookAt = fmt.Sprintf("[r%.9g,r%.9g,r%.9g]", state.LookAt[0], state.LookAt[1], state.LookAt[2])
+	}
 	root := rpcStructValue(rpcField("folder_id", rpcString(rootID)))
 	libraryRoot := rpcStructValue(rpcField("folder_id", rpcString(inventory.LibraryRootID)))
 	libraryOwner := rpcStructValue(rpcField("agent_id", rpcString(inventory.LibraryOwnerID)))
@@ -248,7 +255,7 @@ func (a *API) viewerLogin(w http.ResponseWriter, r *http.Request) {
 		rpcField("region_x", rpcInt(region.GridX*256)), rpcField("region_y", rpcInt(region.GridY*256)),
 		rpcField("region_size_x", rpcInt(256)), rpcField("region_size_y", rpcInt(256)),
 		rpcField("start_location", rpcString(normalizeStart(fields["start"].text()))),
-		rpcField("look_at", rpcString("[r1,r0,r0]")),
+		rpcField("look_at", rpcString(lookAt)),
 		rpcField("seed_capability", rpcString(strings.TrimRight(region.PublicEndpoint, "/")+"/caps/seed/"+session.ID)),
 		rpcField("seconds_since_epoch", rpcInt(int(time.Now().Unix()))),
 		rpcField("inventory-root", rpcArrayValue(root)), rpcField("inventory-skeleton", rpcArrayValue(skeleton...)),
@@ -258,6 +265,42 @@ func (a *API) viewerLogin(w http.ResponseWriter, r *http.Request) {
 	)
 	writeViewerLogin(w, response)
 }
+
+type regionStartState struct {
+	LookAt [3]float64 `json:"lookAt"`
+}
+
+func (a *API) regionStartState(ctx context.Context, endpoint, userID string) (regionStartState, bool) {
+	if a.serviceToken == "" {
+		return regionStartState{}, false
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		strings.TrimRight(endpoint, "/")+"/api/v1/agents/"+url.PathEscape(userID)+"/start-state", nil)
+	if err != nil {
+		return regionStartState{}, false
+	}
+	request.Header.Set("Authorization", "Bearer "+a.serviceToken)
+	client := http.Client{Timeout: time.Second}
+	response, err := client.Do(request)
+	if err != nil {
+		return regionStartState{}, false
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return regionStartState{}, false
+	}
+	var state regionStartState
+	if err := json.NewDecoder(io.LimitReader(response.Body, 4096)).Decode(&state); err != nil {
+		return regionStartState{}, false
+	}
+	length := math.Hypot(state.LookAt[0], state.LookAt[1])
+	if !isFinite(state.LookAt[0]) || !isFinite(state.LookAt[1]) || !isFinite(state.LookAt[2]) || length < 0.001 {
+		return regionStartState{}, false
+	}
+	return state, true
+}
+
+func isFinite(value float64) bool { return !math.IsNaN(value) && !math.IsInf(value, 0) }
 
 func resolveDestination(ctx context.Context, store regions.Store, start string) (regions.Region, error) {
 	items, err := store.List(ctx)

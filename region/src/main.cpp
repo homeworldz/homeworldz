@@ -77,6 +77,7 @@ struct LiveAvatar {
     std::uint32_t last_agent_update_sequence{};
     bool has_agent_update{};
     homeworldz::physics::CharacterId physics_character{};
+    std::chrono::steady_clock::time_point restored_flying_until{};
 };
 
 bool sequence_is_newer(std::uint32_t candidate, std::uint32_t current) {
@@ -839,6 +840,58 @@ int main() {
                                     request, 404, "application/json",
                                     homeworldz::api::to_json(homeworldz::api::Error{
                                         "asset_not_found", "asset was not found"}));
+                            }
+                        }
+                    }
+                    constexpr std::string_view start_state_prefix = "/api/v1/agents/";
+                    constexpr std::string_view start_state_suffix = "/start-state";
+                    if (response.path.starts_with(start_state_prefix) &&
+                        response.path.ends_with(start_state_suffix)) {
+                        const auto user_id = response.path.substr(
+                            start_state_prefix.size(), response.path.size() -
+                            start_state_prefix.size() - start_state_suffix.size());
+                        const auto authorization = homeworldz::http::request_header_value(request, "Authorization");
+                        if (response.method != "GET") {
+                            response = homeworldz::http::response_for_content(
+                                request, 405, "application/json",
+                                homeworldz::api::to_json(homeworldz::api::Error{
+                                    "method_not_allowed", "start-state endpoint requires GET"}));
+                        } else if (service_token.empty() || authorization != "Bearer " + service_token) {
+                            response = homeworldz::http::response_for_content(
+                                request, 401, "application/json",
+                                homeworldz::api::to_json(homeworldz::api::Error{
+                                    "unauthorized", "a valid grid service token is required"}));
+                        } else if (!homeworldz::viewer::parse_uuid(user_id)) {
+                            response = homeworldz::http::response_for_content(
+                                request, 404, "application/json",
+                                homeworldz::api::to_json(homeworldz::api::Error{
+                                    "agent_not_found", "agent start state was not found"}));
+                        } else {
+                            const homeworldz::scene::Entity* agent{};
+                            for (const auto& [candidate_id, candidate] : scene.entities())
+                                if (candidate.name == user_id && (!agent || candidate_id > agent->id))
+                                    agent = &candidate;
+                            if (!agent) {
+                                response = homeworldz::http::response_for_content(
+                                    request, 404, "application/json",
+                                    homeworldz::api::to_json(homeworldz::api::Error{
+                                        "agent_not_found", "agent start state was not found"}));
+                            } else {
+                                const double qx = agent->rotation.x, qy = agent->rotation.y,
+                                             qz = agent->rotation.z;
+                                const auto qw = std::sqrt((std::max)(
+                                    0.0, 1.0 - qx * qx - qy * qy - qz * qz));
+                                const auto look_x = 1.0 - 2.0 * (qy * qy + qz * qz);
+                                const auto look_y = 2.0 * (qx * qy + qw * qz);
+                                const auto body = std::string{"{\"position\":["} +
+                                    std::to_string(agent->position.x) + ',' +
+                                    std::to_string(agent->position.y) + ',' +
+                                    std::to_string(agent->position.z) + "],\"lookAt\":[" +
+                                    std::to_string(look_x) + ',' + std::to_string(look_y) +
+                                    ",0],\"flying\":" +
+                                    (agent->avatar_flying ? "true}" : "false}");
+                                response = homeworldz::http::response_for_content(
+                                    request, 200, "application/json", body);
                             }
                         }
                     }
@@ -1713,10 +1766,14 @@ int main() {
                                 response.look_at = {
                                     static_cast<float>(1.0 - 2.0 * (qy * qy + qz * qz)),
                                     static_cast<float>(2.0 * (qx * qy + qw * qz)), 0.0F};
-                                avatars.emplace(endpoint, LiveAvatar{
+                                const auto [avatar_iterator, inserted] = avatars.emplace(endpoint, LiveAvatar{
                                     std::move(controller), entity, name,
                                     now + std::chrono::seconds(5), now + std::chrono::seconds(30),
                                     now + std::chrono::milliseconds(100), initial_viewer_position});
+                                static_cast<void>(inserted);
+                                avatar_iterator->second.restored_flying_until =
+                                    persisted && persisted->avatar_flying ?
+                                        now + std::chrono::seconds(2) : now;
                                 if (physics_world) {
                                     auto& live = avatars.at(endpoint);
                                     live.physics_character = physics_world->create_character({
@@ -2540,7 +2597,11 @@ int main() {
                             update->session_id == identity->session_id &&
                             (!avatar->second.has_agent_update || sequence_is_newer(
                                 packet->sequence, avatar->second.last_agent_update_sequence))) {
-                            avatar->second.controller.apply(*update);
+                            auto accepted = *update;
+                            if (now < avatar->second.restored_flying_until &&
+                                avatar->second.controller.state().flying)
+                                accepted.control_flags |= homeworldz::viewer::control_fly;
+                            avatar->second.controller.apply(accepted);
                             avatar->second.last_agent_update = now;
                             avatar->second.last_agent_update_sequence = packet->sequence;
                             avatar->second.has_agent_update = true;
