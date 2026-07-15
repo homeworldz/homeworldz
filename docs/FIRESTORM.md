@@ -702,3 +702,12 @@ overrides. Two newly created boxes visibly used Plywood, and their complete
 63-byte default texture entries were present in the authoritative snapshot.
 Editing an existing prim's texture or tint remains independent and must not
 change the default used by later prim creation.
+
+Firestorm Build-preference application passed live acceptance on 2026-07-15.
+HomeWorldz honors the `ObjectAdd` material, scale, rotation, Physical, and
+Create Selected fields. The last is returned transiently only to the creating
+avatar, causing Firestorm to select the new object and apply its configured
+follow-up object updates. A new box received the viewer's configured texture,
+tint, dimensions, and Physical setting immediately and correctly. Library
+textures can be selected directly for this purpose; copying them into personal
+Inventory is not required.
