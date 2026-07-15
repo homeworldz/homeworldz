@@ -673,6 +673,8 @@ int main() {
     std::unordered_set<std::string> established_events;
     std::unordered_map<std::string, LiveAvatar> avatars;
     std::unordered_map<std::string, homeworldz::viewer::AvatarGeometry> avatar_geometries;
+    std::unordered_map<std::string, std::vector<homeworldz::viewer::AvatarAnimationEntry>> avatar_animations;
+    std::unordered_map<std::string, std::int32_t> next_animation_sequences;
     std::unordered_map<std::string, homeworldz::viewer::UuidName> resolved_avatar_names;
     std::unordered_map<std::string, std::deque<QueuedTexturePacket>> texture_packets;
     std::unordered_set<std::string> active_texture_transfers;
@@ -1056,6 +1058,8 @@ int main() {
                             if (viewer_sessions) viewer_sessions->invalidate(session_id);
                             avatars.erase(endpoint);
                             avatar_geometries.erase(endpoint);
+                            avatar_animations.erase(endpoint);
+                            next_animation_sequences.erase(endpoint);
                             handshake_replies.erase(endpoint);
                             established_events.erase(session_id);
                             texture_packets.erase(endpoint);
@@ -1254,6 +1258,39 @@ int main() {
                                 std::cout << "{\"level\":\"info\",\"message\":\"wearable cache updated\","
                                              "\"count\":" << stored << "}" << std::endl;
                         }
+                        const auto agent_animation =
+                            homeworldz::viewer::decode_agent_animation(packet->payload);
+                        if (agent_animation && agent_animation->agent_id == identity->agent_id &&
+                            agent_animation->session_id == identity->session_id) {
+                            auto& animations = avatar_animations[endpoint];
+                            auto& next_sequence = next_animation_sequences[endpoint];
+                            if (next_sequence < 2) next_sequence = 2;
+                            for (const auto& change : agent_animation->animations) {
+                                const auto existing = std::find_if(
+                                    animations.begin(), animations.end(), [&](const auto& animation) {
+                                        return animation.animation_id == change.animation_id;
+                                    });
+                                if (change.start && existing == animations.end()) {
+                                    animations.push_back(
+                                        {change.animation_id, next_sequence++, identity->agent_id});
+                                } else if (!change.start && existing != animations.end()) {
+                                    animations.erase(existing);
+                                }
+                            }
+                            if (animations.empty()) {
+                                if (const auto stand = homeworldz::viewer::parse_uuid(
+                                        "2408fe9e-df1d-1d7d-f4ff-1384fa7b350f"))
+                                    animations.push_back({*stand, 1, identity->agent_id});
+                            }
+                            const homeworldz::viewer::AvatarAnimation response{
+                                identity->agent_id, animations};
+                            if (const auto outgoing = circuits.send(endpoint,
+                                    homeworldz::viewer::encode_avatar_animation(response), false, now))
+                                static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
+                            std::cout << "{\"level\":\"info\",\"message\":\"avatar animation state updated\","
+                                         "\"changes\":" << agent_animation->animations.size()
+                                      << ",\"active\":" << animations.size() << "}" << std::endl;
+                        }
                         const auto image_request = homeworldz::viewer::decode_request_image(packet->payload);
                         if (image_request && image_request->agent_id == identity->agent_id &&
                             image_request->session_id == identity->session_id) {
@@ -1328,6 +1365,13 @@ int main() {
                                     static_cast<void>(viewer_grid->update_presence(name, registration->region_id()));
                             }
                             const auto& live_avatar = avatars.at(endpoint);
+                            auto& animations = avatar_animations[endpoint];
+                            if (animations.empty()) {
+                                if (const auto stand = homeworldz::viewer::parse_uuid(
+                                        "2408fe9e-df1d-1d7d-f4ff-1384fa7b350f"))
+                                    animations.push_back({*stand, 1, identity->agent_id});
+                                next_animation_sequences[endpoint] = 2;
+                            }
                             const auto initial_viewer_position = live_avatar.controller.viewer_position();
                             const std::array<float, 3> avatar_position{
                                 static_cast<float>(initial_viewer_position.x),
@@ -1340,6 +1384,11 @@ int main() {
                                 static_cast<void>(send_udp(viewer_server, endpoint, *avatar));
                             if (const auto outgoing = circuits.send(endpoint,
                                     homeworldz::viewer::encode_agent_movement_complete(response), true, now))
+                                static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
+                            const homeworldz::viewer::AvatarAnimation animation_response{
+                                identity->agent_id, animations};
+                            if (const auto outgoing = circuits.send(endpoint,
+                                    homeworldz::viewer::encode_avatar_animation(animation_response), false, now))
                                 static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
                             for (std::uint8_t y = 0; y < 16; ++y) {
                                 std::array<homeworldz::viewer::TerrainPatch, 16> row{};

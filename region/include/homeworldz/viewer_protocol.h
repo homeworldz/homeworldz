@@ -247,6 +247,26 @@ struct AgentSetAppearance : AgentMessage {
     std::vector<std::uint8_t> visual_params;
 };
 
+struct AgentAnimationEntry {
+    Uuid animation_id{};
+    bool start{};
+};
+
+struct AgentAnimation : AgentMessage {
+    std::vector<AgentAnimationEntry> animations;
+};
+
+struct AvatarAnimationEntry {
+    Uuid animation_id{};
+    std::int32_t sequence{};
+    Uuid source_id{};
+};
+
+struct AvatarAnimation {
+    Uuid sender_id{};
+    std::vector<AvatarAnimationEntry> animations;
+};
+
 struct ImageRequestBlock {
     Uuid image_id{};
     std::int8_t discard_level{};
@@ -372,6 +392,8 @@ std::vector<std::byte> encode_logout_reply(const AgentMessage& message);
 std::optional<AgentCachedTexture> decode_agent_cached_texture(std::span<const std::byte> payload);
 std::vector<std::byte> encode_agent_cached_texture_response(const AgentCachedTexture& message);
 std::optional<AgentSetAppearance> decode_agent_set_appearance(std::span<const std::byte> payload);
+std::optional<AgentAnimation> decode_agent_animation(std::span<const std::byte> payload);
+std::vector<std::byte> encode_avatar_animation(const AvatarAnimation& message);
 std::optional<RequestImage> decode_request_image(std::span<const std::byte> payload);
 std::vector<std::vector<std::byte>> encode_image_transfer(
     const Uuid& image_id, std::span<const std::byte> content, std::uint32_t start_packet = 0);

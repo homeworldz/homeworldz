@@ -177,6 +177,13 @@ also mirrors Halcyon's 2 m/s upward impulse with short damping, producing
 approximately 0.5 metres of lift without teleporting the avatar. Viewer
 acceptance of that launch and the production Jolt capsule remain pending.
 
+Firestorm also sends `AgentAnimation` start/stop changes for viewer-driven
+states such as appearance customization. The region maintains the active set,
+starts each avatar in the standard `STAND` animation, and returns the complete
+simulator-authoritative `AvatarAnimation` set. This prevents a local customize
+pose from becoming the avatar's indefinite rendered state. Viewer acceptance
+of appearance-mode exit remains pending.
+
 Once movement completes, the region streams all 256 flat 16-by-16 terrain
 patches in bounded reliable batches and sends a full static volume-primitive
 update. Channel-zero viewer chat is rebroadcast reliably to avatars within the

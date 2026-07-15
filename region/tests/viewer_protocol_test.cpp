@@ -546,6 +546,31 @@ bool agent_update_codec() {
            update->draw_distance == 128.0F && update->control_flags == 0x2001;
 }
 
+bool animation_codecs() {
+    const auto agent = parse_uuid("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");
+    const auto session = parse_uuid("11111111-2222-4333-8444-555555555555");
+    const auto customize = parse_uuid("038fcec9-5ebd-8a8e-0e2e-6e71a0a1ac53");
+    if (!agent || !session || !customize) return false;
+    auto payload = bytes({5});
+    payload.insert(payload.end(), agent->begin(), agent->end());
+    payload.insert(payload.end(), session->begin(), session->end());
+    payload.push_back(std::byte{1});
+    payload.insert(payload.end(), customize->begin(), customize->end());
+    payload.push_back(std::byte{1});
+    payload.push_back(std::byte{});
+    const auto incoming = decode_agent_animation(payload);
+    if (!incoming || incoming->agent_id != *agent || incoming->session_id != *session ||
+        incoming->animations.size() != 1 || incoming->animations[0].animation_id != *customize ||
+        !incoming->animations[0].start)
+        return false;
+    const AvatarAnimation outgoing{*agent, {{*customize, 7, *agent}}};
+    const auto encoded = encode_avatar_animation(outgoing);
+    return encoded.size() == 56 && encoded[0] == std::byte{20} && encoded[17] == std::byte{1} &&
+           encoded[34] == std::byte{7} && encoded[38] == std::byte{1} &&
+           std::equal(agent->begin(), agent->end(), encoded.begin() + 39) &&
+           encoded.back() == std::byte{};
+}
+
 bool chat_codecs() {
     const auto agent = parse_uuid("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");
     const auto session = parse_uuid("11111111-2222-4333-8444-555555555555");
@@ -613,9 +638,10 @@ int main() {
     if (!resend_throttle_and_timeout()) return 4;
     if (!circuit_registry()) return 5;
     if (!agent_update_codec()) return 6;
-    if (!chat_codecs()) return 7;
-    if (!flat_terrain_codec()) return 8;
-    if (!static_object_codec()) return 9;
-    if (decode_packet(std::array<std::byte, 2>{})) return 10;
+    if (!animation_codecs()) return 7;
+    if (!chat_codecs()) return 8;
+    if (!flat_terrain_codec()) return 9;
+    if (!static_object_codec()) return 10;
+    if (decode_packet(std::array<std::byte, 2>{})) return 11;
     return 0;
 }

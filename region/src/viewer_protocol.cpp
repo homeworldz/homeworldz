@@ -1181,6 +1181,50 @@ std::optional<AgentSetAppearance> decode_agent_set_appearance(std::span<const st
     return result;
 }
 
+std::optional<AgentAnimation> decode_agent_animation(std::span<const std::byte> payload) {
+    constexpr std::size_t fixed_size = 34;
+    constexpr std::size_t animation_size = 17;
+    if (payload.size() < fixed_size || payload[0] != std::byte{5}) return std::nullopt;
+    AgentAnimation result;
+    std::copy_n(payload.begin() + 1, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 17, 16, result.session_id.begin());
+    const auto count = std::to_integer<std::size_t>(payload[33]);
+    auto position = fixed_size;
+    if (position + count * animation_size + 1 > payload.size()) return std::nullopt;
+    result.animations.reserve(count);
+    for (std::size_t index = 0; index < count; ++index) {
+        AgentAnimationEntry entry;
+        std::copy_n(payload.begin() + position, 16, entry.animation_id.begin());
+        entry.start = payload[position + 16] != std::byte{};
+        result.animations.push_back(entry);
+        position += animation_size;
+    }
+    const auto physical_count = std::to_integer<std::size_t>(payload[position++]);
+    for (std::size_t index = 0; index < physical_count; ++index) {
+        if (position >= payload.size()) return std::nullopt;
+        const auto size = std::to_integer<std::size_t>(payload[position++]);
+        if (position + size > payload.size()) return std::nullopt;
+        position += size;
+    }
+    if (position != payload.size()) return std::nullopt;
+    return result;
+}
+
+std::vector<std::byte> encode_avatar_animation(const AvatarAnimation& message) {
+    if (message.animations.empty() || message.animations.size() > 255) return {};
+    std::vector<std::byte> output{std::byte{20}};
+    append_uuid(output, message.sender_id);
+    output.push_back(static_cast<std::byte>(message.animations.size()));
+    for (const auto& animation : message.animations) {
+        append_uuid(output, animation.animation_id);
+        append_le_u32(output, static_cast<std::uint32_t>(animation.sequence));
+    }
+    output.push_back(static_cast<std::byte>(message.animations.size()));
+    for (const auto& animation : message.animations) append_uuid(output, animation.source_id);
+    output.push_back(std::byte{}); // no physical avatar events
+    return output;
+}
+
 std::optional<RequestImage> decode_request_image(std::span<const std::byte> payload) {
     constexpr std::size_t header_size = 34;
     constexpr std::size_t block_size = 26;
