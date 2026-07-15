@@ -48,6 +48,13 @@ int main() {
     if (!avatar.state().grounded || std::abs(avatar.state().position.z - 25.78) > 1e-9) return 5;
     if (!saw_land_animation) return 14;
 
+    homeworldz::viewer::AvatarController drop_avatar;
+    drop_avatar.set_ground_height(20.0);
+    drop_avatar.step(0.1);
+    if (drop_avatar.state().grounded || drop_avatar.state().velocity.z >= 0.0 ||
+        drop_avatar.movement_animation() != homeworldz::viewer::MovementAnimation::fall)
+        return 16;
+
     avatar.set_avatar_geometry(2.0, -0.075);
     avatar.set_ground_height(26.0);
     avatar.step(0.1);

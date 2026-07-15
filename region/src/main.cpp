@@ -67,6 +67,8 @@ struct LiveAvatar {
     std::chrono::steady_clock::time_point next_presence{};
     std::chrono::steady_clock::time_point next_transform{};
     homeworldz::scene::Vector3 last_sent_position{};
+    homeworldz::scene::Vector3 last_sent_velocity{};
+    std::array<float, 3> last_sent_rotation{};
     std::uint8_t ping_id{};
     std::chrono::steady_clock::time_point last_agent_update{};
     std::uint32_t last_agent_update_sequence{};
@@ -980,14 +982,25 @@ int main() {
         }
         const auto now = std::chrono::steady_clock::now();
         if (ready > 0 && FD_ISSET(viewer_server, &readable)) {
-            std::array<std::byte, 65535> datagram{};
-            sockaddr_in sender{};
-            socket_length sender_size = sizeof(sender);
-            const auto received = recvfrom(viewer_server, reinterpret_cast<char*>(datagram.data()),
-                                           static_cast<int>(datagram.size()), 0,
-                                           reinterpret_cast<sockaddr*>(&sender), &sender_size);
-            const auto endpoint = udp_endpoint(sender);
-            if (received > 0 && !endpoint.empty()) {
+            constexpr std::size_t max_viewer_packets_per_tick = 256;
+            for (std::size_t packet_index = 0; packet_index < max_viewer_packets_per_tick; ++packet_index) {
+                if (packet_index > 0) {
+                    fd_set immediately_readable;
+                    FD_ZERO(&immediately_readable);
+                    FD_SET(viewer_server, &immediately_readable);
+                    timeval no_wait{0, 0};
+                    if (select(static_cast<int>(viewer_server) + 1, &immediately_readable,
+                               nullptr, nullptr, &no_wait) <= 0)
+                        break;
+                }
+                std::array<std::byte, 65535> datagram{};
+                sockaddr_in sender{};
+                socket_length sender_size = sizeof(sender);
+                const auto received = recvfrom(viewer_server, reinterpret_cast<char*>(datagram.data()),
+                                               static_cast<int>(datagram.size()), 0,
+                                               reinterpret_cast<sockaddr*>(&sender), &sender_size);
+                const auto endpoint = udp_endpoint(sender);
+                if (received > 0 && !endpoint.empty()) {
                 const auto packet = circuits.receive(
                     endpoint, std::span<const std::byte>(datagram.data(), static_cast<std::size_t>(received)), now);
                 if (packet) {
@@ -1602,7 +1615,7 @@ int main() {
                                 avatars.emplace(endpoint, LiveAvatar{
                                     std::move(controller), entity, name,
                                     now + std::chrono::seconds(5), now + std::chrono::seconds(30),
-                                    now + std::chrono::milliseconds(100), initial_viewer_position, 0});
+                                    now + std::chrono::milliseconds(100), initial_viewer_position});
                                 if (viewer_grid && registration)
                                     static_cast<void>(viewer_grid->update_presence(name, registration->region_id()));
                             }
@@ -2442,6 +2455,7 @@ int main() {
                         }
                     }
                 }
+                }
             }
         }
         for (const auto& outgoing : circuits.poll(now))
@@ -2526,7 +2540,16 @@ int main() {
             const auto dx = viewer_position.x - avatar.last_sent_position.x;
             const auto dy = viewer_position.y - avatar.last_sent_position.y;
             const auto dz = viewer_position.z - avatar.last_sent_position.z;
-            if ((dx * dx + dy * dy + dz * dz) > 0.001 && now >= avatar.next_transform) {
+            const auto dvx = state.velocity.x - avatar.last_sent_velocity.x;
+            const auto dvy = state.velocity.y - avatar.last_sent_velocity.y;
+            const auto dvz = state.velocity.z - avatar.last_sent_velocity.z;
+            const auto drx = state.rotation[0] - avatar.last_sent_rotation[0];
+            const auto dry = state.rotation[1] - avatar.last_sent_rotation[1];
+            const auto drz = state.rotation[2] - avatar.last_sent_rotation[2];
+            const bool transform_changed = (dx * dx + dy * dy + dz * dz) > 0.001 ||
+                                           (dvx * dvx + dvy * dvy + dvz * dvz) > 0.000001 ||
+                                           (drx * drx + dry * dry + drz * drz) > 0.000001F;
+            if (transform_changed && now >= avatar.next_transform) {
                 const auto agent_id = homeworldz::viewer::parse_uuid(avatar.user_id);
                 if (agent_id) {
                     const auto region_handle =
@@ -2547,6 +2570,8 @@ int main() {
                             static_cast<void>(send_udp(viewer_server, recipient_endpoint, *outgoing));
                     }
                     avatar.last_sent_position = viewer_position;
+                    avatar.last_sent_velocity = state.velocity;
+                    avatar.last_sent_rotation = state.rotation;
                     avatar.next_transform = now + std::chrono::milliseconds(100);
                 }
             }

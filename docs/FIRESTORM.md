@@ -585,4 +585,11 @@ forward input. `AgentUpdate` is an unreliable UDP snapshot, so the region now
 rejects older per-avatar packet sequences and expires transient directional
 controls after one second without a fresh update, while retaining persistent
 flight mode. This prevents a lost key-release snapshot from carrying an avatar
-indefinitely and awaits a repeat live-session check.
+indefinitely. A first repeat session passed, but a second fresh start exposed
+alternating stop/start prediction until the region boundary. The region had
+been consuming only one viewer datagram per simulation tick and only sending
+avatar transforms when position changed. It now drains a bounded shared batch
+of up to 256 immediately available viewer packets per tick and also transmits
+velocity and rotation transitions, including the final zero-velocity update
+Firestorm needs to stop extrapolating. These reconciliation changes await a
+repeat live-session check.
