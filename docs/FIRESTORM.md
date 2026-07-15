@@ -554,3 +554,6 @@ to create the copy, enforces the source's Copy bit (`0x00008000`), and returns
 the region does not maintain a parallel inventory. Firestorm encodes the
 usual unchanged copy name as a zero-length `NewName`; this is valid for the
 protocol's variable field and means the source name must be retained.
+Personal Objects-item copy/paste passed live Firestorm acceptance on
+2026-07-15: copying Prim1 created a distinct inventory item through the Grid,
+and the region returned it through the viewer's registered callback.

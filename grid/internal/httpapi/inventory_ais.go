@@ -14,7 +14,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/homeworldz/homeworldz/grid/internal/assetmeta"
 	"github.com/homeworldz/homeworldz/grid/internal/identifier"
 	"github.com/homeworldz/homeworldz/grid/internal/identity"
 	"github.com/homeworldz/homeworldz/grid/internal/inventory"
@@ -1019,7 +1021,19 @@ func (a *API) updateAISInventoryItem(w http.ResponseWriter, r *http.Request, use
 			writeLLSDError(w, http.StatusBadRequest, "invalid AIS wearable asset transaction")
 			return
 		}
-		asset, err := a.assets.Get(r.Context(), uploadedAssetID)
+		var asset assetmeta.Asset
+		for attempt := 0; attempt < 50; attempt++ {
+			asset, err = a.assets.Get(r.Context(), uploadedAssetID)
+			if err == nil || !errors.Is(err, assetmeta.ErrNotFound) {
+				break
+			}
+			select {
+			case <-r.Context().Done():
+				err = r.Context().Err()
+				attempt = 50
+			case <-time.After(10 * time.Millisecond):
+			}
+		}
 		if err != nil || asset.CreatorUserID != userID {
 			writeLLSDError(w, http.StatusNotFound, "AIS wearable asset was not found")
 			return

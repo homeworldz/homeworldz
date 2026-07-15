@@ -13,6 +13,24 @@ import (
 	"github.com/homeworldz/homeworldz/grid/internal/inventory"
 )
 
+type eventualAssetStore struct {
+	asset  assetmeta.Asset
+	misses int
+	calls  int
+}
+
+func (s *eventualAssetStore) Register(_ context.Context, input assetmeta.Registration) (assetmeta.Asset, error) {
+	return s.asset, nil
+}
+
+func (s *eventualAssetStore) Get(_ context.Context, id string) (assetmeta.Asset, error) {
+	s.calls++
+	if s.calls <= s.misses || id != s.asset.ID {
+		return assetmeta.Asset{}, assetmeta.ErrNotFound
+	}
+	return s.asset, nil
+}
+
 func TestAISWearableHashIDUpdatesAsset(t *testing.T) {
 	if combined, ok := combineViewerAssetID(
 		"99999999-8888-4777-8666-555555555555",
@@ -49,8 +67,8 @@ func TestAISWearableHashIDUpdatesAsset(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assets := &memoryAssetStore{assets: map[string]assetmeta.Asset{
-		assetID: {ID: assetID, CreatorUserID: user.ID, SHA256: "aa", Size: 1321},
+	assets := &eventualAssetStore{misses: 2, asset: assetmeta.Asset{
+		ID: assetID, CreatorUserID: user.ID, SHA256: "aa", Size: 1321,
 	}}
 	body := `<?xml version="1.0"?><llsd><map><key>item_id</key><uuid>` + item.ID +
 		`</uuid><key>name</key><string>Default Shape Male</string>` +
@@ -61,7 +79,7 @@ func TestAISWearableHashIDUpdatesAsset(t *testing.T) {
 	New(checker{}, "test", Options{Identity: identities, Inventory: inventories, Assets: assets}).
 		ServeHTTP(response, request)
 	items, _ := inventories.ListItems(context.Background(), user.ID)
-	if response.Code != http.StatusOK || len(items) != 1 || items[0].AssetID != assetID ||
+	if response.Code != http.StatusOK || assets.calls != 3 || len(items) != 1 || items[0].AssetID != assetID ||
 		items[0].Name != "Default Shape Male" ||
 		!strings.Contains(response.Body.String(), "<key>asset_id</key><uuid>"+assetID+"</uuid>") {
 		t.Fatalf("status = %d, response = %s, items = %#v", response.Code, response.Body.String(), items)
