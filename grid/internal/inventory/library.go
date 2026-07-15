@@ -22,7 +22,7 @@ func LibraryFolders() []Folder {
 		{ID: LibraryBodyPartsID, OwnerUserID: LibraryOwnerID, ParentID: LibraryRootID,
 			Name: "Body Parts", TypeDefault: 13, Version: 1},
 		{ID: LibraryTexturesID, OwnerUserID: LibraryOwnerID, ParentID: LibraryRootID,
-			Name: "Textures", TypeDefault: 0, Version: 1},
+			Name: "Textures", TypeDefault: 0, Version: 2},
 		{ID: LibraryTerrainID, OwnerUserID: LibraryOwnerID, ParentID: LibraryTexturesID,
 			Name: "Terrain", TypeDefault: -1, Version: 1},
 		{ID: LibraryInitialOutfitsID, OwnerUserID: LibraryOwnerID, ParentID: LibraryClothingID,

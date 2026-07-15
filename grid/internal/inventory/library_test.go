@@ -8,7 +8,7 @@ func TestLibraryCatalogIsStableAndReadOnlyData(t *testing.T) {
 	if len(folders) != 7 || folders[0].ID != LibraryRootID || folders[0].ParentID != zeroUUID ||
 		folders[1].ID != LibraryClothingID || folders[1].ParentID != LibraryRootID ||
 		folders[2].ID != LibraryBodyPartsID || folders[2].ParentID != LibraryRootID ||
-		folders[3].ID != LibraryTexturesID || folders[3].ParentID != LibraryRootID ||
+		folders[3].ID != LibraryTexturesID || folders[3].ParentID != LibraryRootID || folders[3].Version != 2 ||
 		folders[4].ID != LibraryTerrainID || folders[4].ParentID != LibraryTexturesID ||
 		folders[5].ID != LibraryInitialOutfitsID || folders[5].ParentID != LibraryClothingID ||
 		folders[6].ID != LibraryDefaultAvatarID || folders[6].ParentID != LibraryInitialOutfitsID || len(items) != 12 {
