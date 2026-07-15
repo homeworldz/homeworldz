@@ -2282,6 +2282,11 @@ int main() {
                                 }
                             }
                             if (persisted) {
+                                for (const auto& [entity_id, original] : originals) {
+                                    static_cast<void>(original);
+                                    if (const auto* entity = scene.find(entity_id))
+                                        synchronize_physics_object(*entity);
+                                }
                                 std::cout << "{\"level\":\"info\",\"message\":\"primitive materials updated\",\"count\":"
                                           << originals.size() << "}" << std::endl;
                             }

@@ -69,6 +69,10 @@ add_executable(homeworldz-physics-contract-tests tests/physics_contract_test.cpp
 target_link_libraries(homeworldz-physics-contract-tests PRIVATE homeworldz-region-core)
 add_test(NAME region-physics-contract COMMAND homeworldz-physics-contract-tests)
 
+add_executable(homeworldz-physics-scene-tests tests/physics_scene_test.cpp)
+target_link_libraries(homeworldz-physics-scene-tests PRIVATE homeworldz-region-core)
+add_test(NAME region-physics-scene COMMAND homeworldz-physics-scene-tests)
+
 add_executable(homeworldz-viewer-protocol-tests tests/viewer_protocol_test.cpp)
 target_link_libraries(homeworldz-viewer-protocol-tests PRIVATE homeworldz-region-core)
 add_test(NAME region-viewer-protocol COMMAND homeworldz-viewer-protocol-tests)

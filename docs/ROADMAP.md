@@ -112,6 +112,10 @@ acceptance tests pass.
 - [ ] Implement stable dynamic-object movement, editing, taking, and restoration
   without losing physics state.
 - [ ] Add the Second Life vehicle parameter model required by LSL vehicles.
+- [ ] Make a single `llSetVehicleType(VEHICLE_TYPE_*)` call activate a usable
+  SL/Halcyon-compatible car, sled, boat, airplane, balloon, sailboat, or motorcycle
+  preset; map presets and later parameter overrides to each physics plugin's
+  native vehicle, motor, and constraint facilities.
 - [ ] Synchronize driver controls, vehicle motion, cameras, passengers, and
   seated-avatar transforms.
 - [ ] Preserve object, linkset, inventory, permission, passenger, and physical

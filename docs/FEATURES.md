@@ -78,6 +78,11 @@ appearance-sized avatar capsules, static prim collision, and viewer-toggled
 dynamic box bodies with persisted Physical/Phantom flags and streamed linear
 and angular motion.
 
+The planned vehicle layer preserves the Second Life/Halcyon LSL model while
+using native physics-plugin capabilities. A single `llSetVehicleType` call is
+intended to activate a usable named preset; standard vehicle parameters then
+refine its behavior without exposing Jolt- or PhysX-specific APIs to scripts.
+
 ### AIS-first viewer inventory
 
 HomeWorldz requires Second Life AIS v3 for supported viewer-facing inventory

@@ -199,6 +199,26 @@ covers body and character creation, impulses, fixed steps, contact retrieval,
 ray queries, and capture/restore of transferable body state. Engine adapters
 must keep their native handles and configuration behind this boundary.
 
+### Mass and contact materials
+
+The authoritative scene records shape, scale, material, and eventually an
+optional per-object physics-density override. It does not implement special
+avatar-push forces or calculate collision responses. The physics integration
+converts shape volume and density to body mass, supplies mass and the contact
+properties to Jolt, and lets the engine calculate inertia and collision response.
+
+HomeWorldz follows [Second Life's legacy `PRIM_MATERIAL_*` defaults](https://wiki.secondlife.com/wiki/LlSetPhysicsMaterial): all eight
+materials initially have density 1000 kg/m3, while their friction and
+restitution differ. Stone, metal, glass, wood, flesh, plastic, rubber, and the
+deprecated light material therefore do not have different default weights.
+Distinct object weights belong to the explicit physics-density property used by
+Extra Physics and `llSetPhysicsMaterial`, whose SL-compatible range is
+1-22587 kg/m3. Adapter-level mass limits protect solver stability.
+
+This distinction is also the basis for vehicles: scripted forces, impulses,
+motors, and constraints act on physics-engine mass and inertia rather than a
+parallel approximation in region or script code.
+
 ### Required Scenarios
 
 - Avatar walking on flat terrain, slopes, ramps, stairs, and mesh surfaces.

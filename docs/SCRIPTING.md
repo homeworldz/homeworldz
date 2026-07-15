@@ -48,6 +48,14 @@ compatibility tests. OpenSimulator extensions will not be admitted accidentally
 through shared historical code or names. HomeWorldz-specific additions, if any,
 must use a separately documented namespace and compatibility decision.
 
+Vehicle compatibility includes the SL/Halcyon `llSetVehicleType` model. As a
+stretch goal, a script containing only a call such as
+`llSetVehicleType(VEHICLE_TYPE_CAR);` produces a usable vehicle from the named
+preset. Subsequent standard vehicle parameter calls refine that preset. The LSL
+host interface passes vehicle intent and parameters through the engine-neutral
+physics contract; each adapter maps them to Jolt or PhysX native vehicle,
+motor, and constraint support. Scripts never select or address a physics engine.
+
 ## Execution and scheduling
 
 Scripts run cooperatively on the authoritative region thread in a defined
