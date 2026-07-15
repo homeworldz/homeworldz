@@ -683,6 +683,21 @@ int main() {
                          "\"error\":" << homeworldz::api::json_string(error.what()) << "}" << std::endl;
         }
     }
+    const auto synchronize_physics_object = [&](const homeworldz::scene::Entity& entity) {
+        if (!physics_scene) return;
+        try {
+            if (!physics_scene->synchronize(entity))
+                std::cerr << "{\"level\":\"warning\",\"message\":\"static object physics synchronization rejected\","
+                             "\"entityId\":" << entity.id << "}" << std::endl;
+        } catch (const std::exception& error) {
+            std::cerr << "{\"level\":\"error\",\"message\":\"static object physics synchronization failed\","
+                         "\"entityId\":" << entity.id << ",\"error\":"
+                      << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+        }
+    };
+    const auto remove_physics_object = [&](homeworldz::scene::EntityId entity_id) {
+        if (physics_scene) physics_scene->remove(entity_id);
+    };
     const auto collision_ground_height = [&](const homeworldz::scene::Vector3& position) {
         if (physics_world && physics_terrain != 0) {
             constexpr double ray_origin_height = 4096.0;
@@ -1867,6 +1882,7 @@ int main() {
                             for (const auto entity_id : requested_entities) {
                                 const auto* entity = scene.find(entity_id);
                                 if (!entity) continue;
+                                if (persisted) synchronize_physics_object(*entity);
                                 for (const auto& [recipient_endpoint, recipient] : avatars) {
                                     const auto object = static_object_from_entity(*entity, recipient.user_id);
                                     if (!object) continue;
@@ -2127,6 +2143,7 @@ int main() {
                                 for (const auto entity_id : created_entities) {
                                     const auto* entity = scene.find(entity_id);
                                     if (!entity) continue;
+                                    synchronize_physics_object(*entity);
                                     for (const auto& [recipient_endpoint, recipient] : avatars) {
                                         auto object = static_object_from_entity(*entity, recipient.user_id);
                                         if (!object) continue;
@@ -2268,6 +2285,7 @@ int main() {
                             if (created) {
                                 const auto* entity = scene.find(entity_id);
                                 if (entity) {
+                                    synchronize_physics_object(*entity);
                                     const auto region_handle =
                                         (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
                                         static_cast<std::uint32_t>(region_grid_y * 256);
@@ -2373,6 +2391,7 @@ int main() {
                                 }
                             }
                             if (persisted && !removed_ids.empty()) {
+                                for (const auto entity_id : removed_ids) remove_physics_object(entity_id);
                                 const auto kill = homeworldz::viewer::encode_kill_object(removed_ids);
                                 for (const auto& [recipient_endpoint, recipient] : avatars) {
                                     static_cast<void>(recipient);
@@ -2477,6 +2496,7 @@ int main() {
                             if (created) {
                                 const auto* entity = scene.find(entity_id);
                                 if (entity) {
+                                    synchronize_physics_object(*entity);
                                     const auto region_handle =
                                         (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
                                         static_cast<std::uint32_t>(region_grid_y * 256);
