@@ -192,14 +192,20 @@ int main() {
                 std::ofstream output(source / "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee.clothing", std::ios::binary);
                 output.write(reinterpret_cast<const char*>(content.data()), static_cast<std::streamsize>(content.size()));
             }
+            {
+                std::ofstream output(source / "ffffffff-ffff-4fff-8fff-ffffffffffff.ogg", std::ios::binary);
+                output.write(reinterpret_cast<const char*>(content.data()), static_cast<std::streamsize>(content.size()));
+            }
             constexpr std::string_view importer = "33333333-3333-4333-8333-333333333333";
             if (storage.import_asset_directory(path / "missing", importer) != 0 ||
-                storage.import_asset_directory(path / "source", importer) != 3 ||
+                storage.import_asset_directory(path / "source", importer) != 4 ||
                 storage.read_asset("cccccccc-cccc-4ccc-8ccc-cccccccccccc") !=
                     std::vector<std::byte>(content.begin(), content.end()) ||
                 storage.read_asset("dddddddd-dddd-4ddd-8ddd-dddddddddddd") !=
                     std::vector<std::byte>(content.begin(), content.end()) ||
                 storage.read_asset("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee") !=
+                    std::vector<std::byte>(content.begin(), content.end()) ||
+                storage.read_asset("ffffffff-ffff-4fff-8fff-ffffffffffff") !=
                     std::vector<std::byte>(content.begin(), content.end()) ||
                 storage.find_asset("cccccccc-cccc-4ccc-8ccc-cccccccccccc")->creator_id != importer) return 1;
             const auto blob = path / "assets" / first_asset.sha256.substr(0, 2) / first_asset.sha256.substr(2);

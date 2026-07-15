@@ -12,6 +12,11 @@ They retain their standard viewer UUIDs. Library inventory records attribute
 their import to the `HomeWorldz Library` service identity, independently of
 their upstream artwork provenance.
 
+`viewer-standard/` contains server-backed textures and UI sounds that
+Second Life-compatible viewers request by fixed UUID. These are protocol
+resources rather than user-visible Library inventory. Supplying them prevents
+grey fallback images and missing interaction sounds on a new grid.
+
 The Halcyon source is distributed under the 3-clause BSD license. The texture
 set's provenance notice says that some included textures derive from Second
 Life Viewer Artwork, copyright Linden Research, Inc., and are licensed under
