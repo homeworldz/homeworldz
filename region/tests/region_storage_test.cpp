@@ -137,6 +137,20 @@ int main() {
             if (!conflicting_content_rejected || !conflicting_creator_rejected ||
                 repeated.sha256 != first_asset.sha256 || repeated.creator_id != first_asset.creator_id)
                 return 1;
+            const auto reconciled = storage.reconcile_asset_creator(
+                first_asset.viewer_id, "44444444-4444-4444-8444-444444444444",
+                first_asset.sha256, first_asset.size);
+            if (reconciled.creator_id != "44444444-4444-4444-8444-444444444444" ||
+                storage.find_asset(first_asset.viewer_id)->creator_id != reconciled.creator_id)
+                return 1;
+            bool invalid_reconciliation_rejected = false;
+            try {
+                storage.reconcile_asset_creator(first_asset.viewer_id, first_asset.creator_id,
+                                                std::string(64, '0'), first_asset.size);
+            } catch (const std::invalid_argument&) {
+                invalid_reconciliation_rejected = true;
+            }
+            if (!invalid_reconciliation_rejected) return 1;
             storage.store_baked_texture("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", 8,
                                         "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
             if (storage.find_baked_texture("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", 8) !=

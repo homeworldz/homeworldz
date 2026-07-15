@@ -284,8 +284,10 @@ and displayed `Error in upload request`; an uncaught upload-path exception
 could also terminate the region. Baked uploads now receive fresh viewer asset
 UUIDs while identical bytes remain deduplicated by the region's SHA-256 blob
 store, and the capability converts storage or registration exceptions into a
-bounded `500` response without stopping the region. Viewer acceptance of the
-fix remains pending.
+bounded `500` response without stopping the region. On startup, legacy local
+mappings are reconciled to the Grid's authoritative creator only when their
+viewer UUID, SHA-256 digest, and byte length all match; a content mismatch
+still fails closed. Viewer acceptance of the fix remains pending.
 
 The read-only system Library acceptance passed on 2026-07-14. Firestorm showed
 the shared `Library / Clothing / Initial Outfits / Default Avatar` hierarchy

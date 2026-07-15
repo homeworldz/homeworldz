@@ -529,7 +529,21 @@ int main() {
             for (const auto& asset : assets) {
                 if (!viewer_grid->register_asset(asset.viewer_id, asset.creator_id, asset.sha256,
                                                  asset.size, region_public_endpoint, true)) {
-                    throw std::runtime_error("register local asset origin failed");
+                    const auto authoritative = viewer_grid->find_asset(asset.viewer_id);
+                    if (!authoritative || authoritative->sha256 != asset.sha256 ||
+                        authoritative->size != asset.size)
+                        throw std::runtime_error("register local asset origin failed");
+                    const auto reconciled = storage->reconcile_asset_creator(
+                        asset.viewer_id, authoritative->creator_id, asset.sha256, asset.size);
+                    if (!viewer_grid->register_asset(
+                            reconciled.viewer_id, reconciled.creator_id, reconciled.sha256,
+                            reconciled.size, region_public_endpoint, true))
+                        throw std::runtime_error("register reconciled local asset origin failed");
+                    std::cout << "{\"level\":\"warning\",\"message\":\"local asset provenance reconciled\","
+                                 "\"assetId\":" << homeworldz::api::json_string(asset.viewer_id)
+                              << ",\"creatorId\":"
+                              << homeworldz::api::json_string(authoritative->creator_id) << "}"
+                              << std::endl;
                 }
             }
             if (!assets.empty()) {

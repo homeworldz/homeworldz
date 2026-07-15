@@ -37,6 +37,8 @@ public:
     SnapshotMetadata snapshot_metadata() const;
     AssetMetadata store_asset(std::string viewer_id, std::string creator_id,
                               std::span<const std::byte> content);
+    AssetMetadata reconcile_asset_creator(std::string_view viewer_id, std::string_view creator_id,
+                                          std::string_view sha256, std::uint64_t size);
     void store_baked_texture(std::string cache_id, std::uint8_t texture_index, std::string asset_id);
     std::optional<std::string> find_baked_texture(std::string_view cache_id,
                                                   std::uint8_t texture_index) const;

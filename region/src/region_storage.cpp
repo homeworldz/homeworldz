@@ -499,6 +499,27 @@ AssetMetadata RegionStorage::store_asset(std::string viewer_id, std::string crea
     return metadata;
 }
 
+AssetMetadata RegionStorage::reconcile_asset_creator(std::string_view viewer_id,
+                                                      std::string_view creator_id,
+                                                      std::string_view sha256,
+                                                      std::uint64_t size) {
+    if (!valid_uuid(viewer_id)) throw std::invalid_argument("asset viewer ID must be a UUID");
+    if (!valid_uuid(creator_id)) throw std::invalid_argument("asset creator ID must be a UUID");
+    const auto existing = find_asset(viewer_id);
+    if (!existing || existing->sha256 != sha256 || existing->size != size)
+        throw std::invalid_argument("asset content identity does not match reconciliation request");
+    sqlite3_stmt* statement = nullptr;
+    if (sqlite3_prepare_v2(database_, "UPDATE asset_mappings SET creator_id = ? WHERE viewer_id = ?", -1,
+                           &statement, nullptr) != SQLITE_OK)
+        throw std::runtime_error(sqlite3_errmsg(database_));
+    sqlite3_bind_text(statement, 1, creator_id.data(), static_cast<int>(creator_id.size()), SQLITE_TRANSIENT);
+    sqlite3_bind_text(statement, 2, viewer_id.data(), static_cast<int>(viewer_id.size()), SQLITE_TRANSIENT);
+    const auto result = sqlite3_step(statement);
+    sqlite3_finalize(statement);
+    if (result != SQLITE_DONE) throw std::runtime_error(sqlite3_errmsg(database_));
+    return {std::string(viewer_id), std::string(creator_id), std::string(sha256), size};
+}
+
 void RegionStorage::store_baked_texture(std::string cache_id, std::uint8_t texture_index,
                                         std::string asset_id) {
     sqlite3_stmt* statement = nullptr;
