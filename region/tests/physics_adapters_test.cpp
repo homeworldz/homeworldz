@@ -41,6 +41,15 @@ bool smoke_test(std::unique_ptr<homeworldz::physics::World> world) {
     const auto rotated_id = world->create_body(rotated);
     const auto rotated_hit = world->ray_cast({5, 1, 10}, {0, 0, -1}, 20);
     if (!rotated_hit || rotated_hit->body != rotated_id) return false;
+    physics::BodyDefinition capsule;
+    capsule.entity_id = 4;
+    capsule.shape.type = physics::ShapeType::Capsule;
+    capsule.shape.radius = 0.3;
+    capsule.shape.height = 4.0;
+    capsule.position = {10, 0, 2};
+    const auto capsule_id = world->create_body(capsule);
+    const auto capsule_hit = world->ray_cast({8, 0, 3.5}, {1, 0, 0}, 4);
+    if (!capsule_hit || capsule_hit->body != capsule_id) return false;
     return world->ray_cast({0, 0, 10}, {0, 0, -1}, 20).has_value();
 }
 

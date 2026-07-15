@@ -11,6 +11,7 @@
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
 #include <Jolt/Physics/Collision/Shape/HeightFieldShape.h>
+#include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/RegisterTypes.h>
@@ -82,8 +83,12 @@ JPH::ShapeRefC make_shape(const Shape& shape) {
     case ShapeType::Sphere:
         return new JPH::SphereShape(static_cast<float>(shape.radius));
     case ShapeType::Capsule:
-        return new JPH::CapsuleShape(static_cast<float>(std::max(0.0, shape.height * 0.5 - shape.radius)),
-                                     static_cast<float>(shape.radius));
+        return new JPH::RotatedTranslatedShape(
+            JPH::Vec3::sZero(),
+            JPH::Quat::sRotation(JPH::Vec3::sAxisX(), JPH::DegreesToRadians(90.0F)),
+            new JPH::CapsuleShape(
+                static_cast<float>(std::max(0.0, shape.height * 0.5 - shape.radius)),
+                static_cast<float>(shape.radius)));
     case ShapeType::Box:
     default:
         return new JPH::BoxShape(vec(shape.half_extents));

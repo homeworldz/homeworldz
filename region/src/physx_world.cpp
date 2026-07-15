@@ -67,6 +67,9 @@ public:
         case ShapeType::Capsule:
             shape = physics_->createShape(physx::PxCapsuleGeometry(static_cast<float>(definition.shape.radius),
                 static_cast<float>(std::max(0.0, definition.shape.height * 0.5 - definition.shape.radius))), *material);
+            if (shape)
+                shape->setLocalPose(physx::PxTransform(
+                    physx::PxQuat(physx::PxHalfPi, physx::PxVec3(0.0F, 1.0F, 0.0F))));
             break;
         case ShapeType::Box:
         default:
