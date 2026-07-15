@@ -5,9 +5,33 @@
 
 namespace homeworldz::viewer {
 
-AvatarController::AvatarController(scene::Vector3 spawn, double ground_height, double avatar_height)
+std::optional<AvatarGeometry> avatar_geometry(const AgentSetAppearance& appearance) {
+    // Match the Halcyon/InWorldz visual-parameter height and hip calculation.
+    // The viewer-provided Size is a fallback for clients with a shorter block.
+    const auto& values = appearance.visual_params;
+    if (values.size() > 148) {
+        const auto shoe_heel = 0.08 * values[77] / 255.0;
+        const auto shoe_platform = 0.07 * values[78] / 255.0;
+        const auto leg_length = 0.3836 * values[125] / 255.0;
+        const auto height = 1.23077
+                          + 0.516945 * values[25] / 255.0
+                          + 0.072514 * values[120] / 255.0
+                          + leg_length + shoe_heel + shoe_platform
+                          + 0.076 * values[148] / 255.0;
+        const auto hip_offset =
+            (0.615385 + shoe_heel + shoe_platform + leg_length - height * 0.5) * 0.3 - 0.04;
+        return AvatarGeometry{height, hip_offset};
+    }
+    const auto viewer_height = static_cast<double>(appearance.size[2]);
+    if (std::isfinite(viewer_height) && viewer_height >= 1.0 && viewer_height <= 3.0)
+        return AvatarGeometry{viewer_height, 0.0};
+    return std::nullopt;
+}
+
+AvatarController::AvatarController(scene::Vector3 spawn, double ground_height, double avatar_height,
+                                   double hip_offset)
     : state_{spawn}, ground_height_(ground_height) {
-    set_avatar_height(avatar_height);
+    set_avatar_geometry(avatar_height, hip_offset);
     const auto support_height = ground_height_ + state_.height * 0.5;
     if (state_.position.z <= support_height) state_.position.z = support_height;
     state_.grounded = state_.position.z <= support_height + 0.05;
@@ -25,14 +49,21 @@ void AvatarController::apply(const AgentUpdate& update) {
     state_.draw_distance = update.draw_distance;
 }
 
-void AvatarController::set_avatar_height(double height) {
+void AvatarController::set_avatar_geometry(double height, double hip_offset) {
     if (!std::isfinite(height)) return;
     state_.height = std::clamp(height, 1.0, 3.0);
+    if (std::isfinite(hip_offset)) state_.hip_offset = std::clamp(hip_offset, -0.5, 0.5);
     if (state_.grounded) state_.position.z = ground_height_ + state_.height * 0.5;
 }
 
 void AvatarController::set_ground_height(double height) {
     if (std::isfinite(height)) ground_height_ = height;
+}
+
+scene::Vector3 AvatarController::viewer_position() const {
+    auto position = state_.position;
+    position.z -= state_.hip_offset;
+    return position;
 }
 
 void AvatarController::step(double seconds) {

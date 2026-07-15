@@ -148,25 +148,6 @@ double ground_height(const std::optional<std::array<float, 256 * 256>>& heightma
     return (*heightmap)[static_cast<std::size_t>(y) * 256 + x];
 }
 
-std::optional<double> avatar_height(const homeworldz::viewer::AgentSetAppearance& appearance) {
-    // Match the Halcyon/InWorldz visual-parameter height calculation. The
-    // viewer-provided Size is a fallback for clients with a shorter block.
-    const auto& values = appearance.visual_params;
-    if (values.size() > 148) {
-        return 1.23077
-             + 0.516945 * values[25] / 255.0
-             + 0.072514 * values[120] / 255.0
-             + 0.3836 * values[125] / 255.0
-             + 0.08 * values[77] / 255.0
-             + 0.07 * values[78] / 255.0
-             + 0.076 * values[148] / 255.0;
-    }
-    const auto viewer_height = static_cast<double>(appearance.size[2]);
-    if (std::isfinite(viewer_height) && viewer_height >= 1.0 && viewer_height <= 3.0)
-        return viewer_height;
-    return std::nullopt;
-}
-
 int environment_int(const char* name, int fallback, int minimum, int maximum) {
     const auto value = environment_value(name);
     if (value.empty()) return fallback;
@@ -677,7 +658,7 @@ int main() {
     std::unordered_set<std::string> handshake_replies;
     std::unordered_set<std::string> established_events;
     std::unordered_map<std::string, LiveAvatar> avatars;
-    std::unordered_map<std::string, double> avatar_heights;
+    std::unordered_map<std::string, homeworldz::viewer::AvatarGeometry> avatar_geometries;
     std::unordered_map<std::string, homeworldz::viewer::UuidName> resolved_avatar_names;
     std::unordered_map<std::string, std::deque<QueuedTexturePacket>> texture_packets;
     std::unordered_set<std::string> active_texture_transfers;
@@ -1052,7 +1033,7 @@ int main() {
                             }
                             if (viewer_sessions) viewer_sessions->invalidate(session_id);
                             avatars.erase(endpoint);
-                            avatar_heights.erase(endpoint);
+                            avatar_geometries.erase(endpoint);
                             handshake_replies.erase(endpoint);
                             established_events.erase(session_id);
                             texture_packets.erase(endpoint);
@@ -1226,10 +1207,15 @@ int main() {
                             homeworldz::viewer::decode_agent_set_appearance(packet->payload);
                         if (appearance && appearance->agent_id == identity->agent_id &&
                             appearance->session_id == identity->session_id) {
-                            if (const auto height = avatar_height(*appearance)) {
-                                avatar_heights[endpoint] = *height;
+                            if (const auto geometry = homeworldz::viewer::avatar_geometry(*appearance)) {
+                                avatar_geometries[endpoint] = *geometry;
                                 if (const auto live = avatars.find(endpoint); live != avatars.end())
-                                    live->second.controller.set_avatar_height(*height);
+                                    live->second.controller.set_avatar_geometry(
+                                        geometry->height, geometry->hip_offset);
+                                std::cout << "{\"level\":\"info\",\"message\":\"avatar geometry updated\","
+                                             "\"height\":" << geometry->height << ",\"hipOffset\":"
+                                          << geometry->hip_offset << ",\"visualParams\":"
+                                          << appearance->visual_params.size() << "}" << std::endl;
                             }
                             std::size_t stored = 0;
                             for (const auto& entry : appearance->cache_entries) {
@@ -1301,32 +1287,35 @@ int main() {
                                 if (entity == 0) entity = scene.create(name, initial_spawn);
                                 const auto* persisted = scene.find(entity);
                                 const auto spawn = persisted ? persisted->position : initial_spawn;
-                                const auto known_height = avatar_heights.find(endpoint);
-                                const auto height = known_height == avatar_heights.end() ? 1.56 : known_height->second;
+                                const auto known_geometry = avatar_geometries.find(endpoint);
+                                const auto geometry = known_geometry == avatar_geometries.end() ?
+                                    homeworldz::viewer::AvatarGeometry{} : known_geometry->second;
                                 homeworldz::viewer::AvatarController controller{
-                                    spawn, ground_height(terrain_heightmap, spawn), height};
+                                    spawn, ground_height(terrain_heightmap, spawn),
+                                    geometry.height, geometry.hip_offset};
                                 const auto initial_position = controller.state().position;
+                                const auto initial_viewer_position = controller.viewer_position();
                                 response.position = {static_cast<float>(initial_position.x),
                                                      static_cast<float>(initial_position.y),
                                                      static_cast<float>(initial_position.z)};
                                 avatars.emplace(endpoint, LiveAvatar{
                                     std::move(controller), entity, name,
                                     now + std::chrono::seconds(5), now + std::chrono::seconds(30),
-                                    now + std::chrono::milliseconds(100), initial_position, 0});
+                                    now + std::chrono::milliseconds(100), initial_viewer_position, 0});
                                 if (viewer_grid && registration)
                                     static_cast<void>(viewer_grid->update_presence(name, registration->region_id()));
                             }
                             const auto& live_avatar = avatars.at(endpoint);
-                            if (const auto* entity = scene.find(live_avatar.entity_id)) {
-                                const std::array<float, 3> position{
-                                    static_cast<float>(entity->position.x), static_cast<float>(entity->position.y),
-                                    static_cast<float>(entity->position.z)};
-                                if (const auto avatar = circuits.send(endpoint,
-                                        homeworldz::viewer::encode_avatar_object_update(
-                                            response.region_handle, static_cast<std::uint32_t>(live_avatar.entity_id),
-                                            identity->agent_id, position), true, now, true))
-                                    static_cast<void>(send_udp(viewer_server, endpoint, *avatar));
-                            }
+                            const auto initial_viewer_position = live_avatar.controller.viewer_position();
+                            const std::array<float, 3> avatar_position{
+                                static_cast<float>(initial_viewer_position.x),
+                                static_cast<float>(initial_viewer_position.y),
+                                static_cast<float>(initial_viewer_position.z)};
+                            if (const auto avatar = circuits.send(endpoint,
+                                    homeworldz::viewer::encode_avatar_object_update(
+                                        response.region_handle, static_cast<std::uint32_t>(live_avatar.entity_id),
+                                        identity->agent_id, avatar_position), true, now, true))
+                                static_cast<void>(send_udp(viewer_server, endpoint, *avatar));
                             if (const auto outgoing = circuits.send(endpoint,
                                     homeworldz::viewer::encode_agent_movement_complete(response), true, now))
                                 static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
@@ -2175,9 +2164,10 @@ int main() {
                 entity->velocity = avatar.controller.state().velocity;
             }
             const auto& state = avatar.controller.state();
-            const auto dx = state.position.x - avatar.last_sent_position.x;
-            const auto dy = state.position.y - avatar.last_sent_position.y;
-            const auto dz = state.position.z - avatar.last_sent_position.z;
+            const auto viewer_position = avatar.controller.viewer_position();
+            const auto dx = viewer_position.x - avatar.last_sent_position.x;
+            const auto dy = viewer_position.y - avatar.last_sent_position.y;
+            const auto dz = viewer_position.z - avatar.last_sent_position.z;
             if ((dx * dx + dy * dy + dz * dz) > 0.001 && now >= avatar.next_transform) {
                 const auto agent_id = homeworldz::viewer::parse_uuid(avatar.user_id);
                 if (agent_id) {
@@ -2185,8 +2175,8 @@ int main() {
                         (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
                         static_cast<std::uint32_t>(region_grid_y * 256);
                     const std::array<float, 3> position{
-                        static_cast<float>(state.position.x), static_cast<float>(state.position.y),
-                        static_cast<float>(state.position.z)};
+                        static_cast<float>(viewer_position.x), static_cast<float>(viewer_position.y),
+                        static_cast<float>(viewer_position.z)};
                     const std::array<float, 3> velocity{
                         static_cast<float>(state.velocity.x), static_cast<float>(state.velocity.y),
                         static_cast<float>(state.velocity.z)};
@@ -2198,7 +2188,7 @@ int main() {
                         if (const auto outgoing = circuits.send(recipient_endpoint, update, false, now, true))
                             static_cast<void>(send_udp(viewer_server, recipient_endpoint, *outgoing));
                     }
-                    avatar.last_sent_position = state.position;
+                    avatar.last_sent_position = viewer_position;
                     avatar.next_transform = now + std::chrono::milliseconds(100);
                 }
             }

@@ -50,8 +50,8 @@ acceptance tests pass.
 ### Basic avatar physics
 
 - [ ] Integrate a Jolt avatar capsule into the production scene loop.
-- [ ] Sample terrain continuously for grounding rather than retaining only the
-  height at the login position.
+- [x] Sample terrain continuously for provisional grounding rather than
+  retaining only the height at the login position.
 - [ ] Support terrain walking, slopes, steps, falling, jumping, landing, flight,
   and collision-safe motion.
 - [ ] Collide avatars with static and dynamic scene objects while preserving

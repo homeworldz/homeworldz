@@ -168,8 +168,11 @@ descent were accepted in Firestorm on 2026-07-15.
 provisional controller mirrors the Halcyon/InWorldz avatar-height calculation
 and treats the avatar root as the center of that height, so the support point is
 `terrain height + avatar height / 2`. Terrain is resampled beneath the avatar as
-it moves. Viewer acceptance of this appearance-derived foot placement and the
-production Jolt capsule remain pending.
+it moves; following the loaded terrain was accepted on 2026-07-15. The
+viewer-facing position separately applies Halcyon's appearance-derived hip
+offset, while the authoritative physics center remains unchanged. Acceptance
+of stopped and moving foot placement with that correction and the production
+Jolt capsule remain pending.
 
 Once movement completes, the region streams all 256 flat 16-by-16 terrain
 patches in bounded reliable batches and sends a full static volume-primitive

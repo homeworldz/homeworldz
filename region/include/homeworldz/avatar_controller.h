@@ -5,6 +5,7 @@
 
 #include <array>
 #include <cstdint>
+#include <optional>
 
 namespace homeworldz::viewer {
 
@@ -19,11 +20,19 @@ inline constexpr std::uint32_t control_fast_left = 0x00000800;
 inline constexpr std::uint32_t control_fast_up = 0x00001000;
 inline constexpr std::uint32_t control_fly = 0x00002000;
 
+struct AvatarGeometry {
+    double height{1.56};
+    double hip_offset{};
+};
+
+std::optional<AvatarGeometry> avatar_geometry(const AgentSetAppearance& appearance);
+
 struct AvatarState {
     scene::Vector3 position{128.0, 128.0, 25.0};
     scene::Vector3 velocity{};
     std::array<float, 3> rotation{};
     double height{1.56};
+    double hip_offset{};
     bool flying{};
     bool grounded{true};
     std::array<float, 3> camera_center{};
@@ -36,12 +45,14 @@ struct AvatarState {
 class AvatarController {
 public:
     explicit AvatarController(scene::Vector3 spawn = {128.0, 128.0, 25.0},
-                              double ground_height = 25.0, double avatar_height = 1.56);
+                              double ground_height = 25.0, double avatar_height = 1.56,
+                              double hip_offset = 0.0);
     void apply(const AgentUpdate& update);
-    void set_avatar_height(double height);
+    void set_avatar_geometry(double height, double hip_offset);
     void set_ground_height(double height);
     void step(double seconds);
     const AvatarState& state() const { return state_; }
+    scene::Vector3 viewer_position() const;
 
 private:
     AvatarState state_;
