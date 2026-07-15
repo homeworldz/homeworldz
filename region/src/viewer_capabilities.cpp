@@ -1,6 +1,5 @@
 #include "homeworldz/viewer_capabilities.h"
 
-#include "homeworldz/sha256.h"
 #include "homeworldz/viewer_protocol.h"
 
 #include <array>
@@ -153,14 +152,6 @@ std::string baked_texture_upload_xml(std::string_view uploader) {
 std::string baked_texture_complete_xml(std::string_view asset_id) {
     return "<?xml version=\"1.0\"?><llsd><map><key>state</key><string>complete</string>"
            "<key>new_asset</key><uuid>" + xml_escape(asset_id) + "</uuid></map></llsd>";
-}
-
-std::string baked_texture_asset_id(std::span<const std::byte> content) {
-    auto digest = crypto::sha256_hex(content);
-    digest[12] = '4';
-    digest[16] = '8';
-    return digest.substr(0, 8) + '-' + digest.substr(8, 4) + '-' + digest.substr(12, 4) + '-' +
-           digest.substr(16, 4) + '-' + digest.substr(20, 12);
 }
 
 std::optional<NewFileInventoryUpload> parse_new_file_inventory_upload(std::string_view xml) {

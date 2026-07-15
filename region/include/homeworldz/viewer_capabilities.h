@@ -1,9 +1,7 @@
 #pragma once
 
 #include <cstdint>
-#include <cstddef>
 #include <optional>
-#include <span>
 #include <string>
 #include <string_view>
 
@@ -32,7 +30,6 @@ std::string simulator_features_xml(std::string_view currency = "C$");
 std::string environment_settings_xml(std::string_view region_id);
 std::string baked_texture_upload_xml(std::string_view uploader);
 std::string baked_texture_complete_xml(std::string_view asset_id);
-std::string baked_texture_asset_id(std::span<const std::byte> content);
 std::optional<NewFileInventoryUpload> parse_new_file_inventory_upload(std::string_view xml);
 std::string new_file_inventory_upload_xml(std::string_view uploader);
 std::string new_file_inventory_complete_xml(std::string_view item_id, std::string_view asset_id,

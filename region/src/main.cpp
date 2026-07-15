@@ -831,23 +831,31 @@ int main() {
                                 response = homeworldz::http::response_for_content(
                                     request, 400, "application/llsd+xml", "<llsd><undef/></llsd>");
                             } else {
-                                const auto content = std::span(
-                                    reinterpret_cast<const std::byte*>(body.data()), body.size());
-                                const auto asset_id = homeworldz::viewer::baked_texture_asset_id(content);
-                                const auto metadata = storage->store_asset(
-                                    asset_id, authorized_agent_id, content);
-                                const bool registered = !viewer_grid || viewer_grid->register_asset(
-                                    metadata.viewer_id, metadata.creator_id, metadata.sha256,
-                                    metadata.size, region_public_endpoint, true);
-                                response = registered
-                                    ? homeworldz::http::response_for_content(
-                                          request, 200, "application/llsd+xml",
-                                          homeworldz::viewer::baked_texture_complete_xml(asset_id))
-                                    : homeworldz::http::response_for_content(
-                                          request, 500, "application/llsd+xml", "<llsd><undef/></llsd>");
-                                std::cout << "{\"level\":\"info\",\"message\":\"baked texture stored\","
-                                             "\"assetId\":" << homeworldz::api::json_string(asset_id)
-                                          << ",\"bytes\":" << body.size() << "}" << std::endl;
+                                try {
+                                    const auto content = std::span(
+                                        reinterpret_cast<const std::byte*>(body.data()), body.size());
+                                    const auto asset_id = homeworldz::viewer::random_uuid();
+                                    const auto metadata = storage->store_asset(
+                                        asset_id, authorized_agent_id, content);
+                                    const bool registered = !viewer_grid || viewer_grid->register_asset(
+                                        metadata.viewer_id, metadata.creator_id, metadata.sha256,
+                                        metadata.size, region_public_endpoint, true);
+                                    response = registered
+                                        ? homeworldz::http::response_for_content(
+                                              request, 200, "application/llsd+xml",
+                                              homeworldz::viewer::baked_texture_complete_xml(asset_id))
+                                        : homeworldz::http::response_for_content(
+                                              request, 500, "application/llsd+xml", "<llsd><undef/></llsd>");
+                                    std::cout << "{\"level\":\"info\",\"message\":\"baked texture stored\","
+                                                 "\"assetId\":" << homeworldz::api::json_string(asset_id)
+                                              << ",\"bytes\":" << body.size() << "}" << std::endl;
+                                } catch (const std::exception& error) {
+                                    response = homeworldz::http::response_for_content(
+                                        request, 500, "application/llsd+xml", "<llsd><undef/></llsd>");
+                                    std::cerr << "{\"level\":\"error\",\"message\":\"baked texture upload failed\","
+                                                 "\"error\":" << homeworldz::api::json_string(error.what())
+                                              << "}" << std::endl;
+                                }
                             }
                         } else if (authorized && file_upload) {
                             const auto upload = homeworldz::viewer::parse_new_file_inventory_upload(

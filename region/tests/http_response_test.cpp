@@ -162,9 +162,7 @@ int main() {
         "http://region.example:42001/caps/upload-baked-data/session&amp;id/7");
     passed &= contains(upload, "<key>state</key><string>upload</string>");
     passed &= contains(upload, "session&amp;amp;id/7");
-    const std::array baked_content{std::byte{1}, std::byte{2}, std::byte{3}};
-    const auto baked_id = homeworldz::viewer::baked_texture_asset_id(baked_content);
-    passed &= baked_id.size() == 36 && baked_id[14] == '4' && baked_id[19] == '8';
+    const std::string baked_id{"11111111-2222-4333-8444-555555555555"};
     const auto complete = homeworldz::viewer::baked_texture_complete_xml(baked_id);
     passed &= contains(complete, "<key>state</key><string>complete</string>");
     passed &= contains(complete, "<key>new_asset</key><uuid>" + baked_id + "</uuid>");

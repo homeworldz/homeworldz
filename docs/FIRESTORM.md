@@ -276,6 +276,17 @@ returned five server-side wearable-cache hits, zero misses, and made no baked
 upload requests. Firestorm displayed the avatar immediately and logout again
 cleared presence and revoked the viewer session normally.
 
+A 2026-07-15 shape edit and wearable copy exposed a provenance conflict in
+rebaking: baked uploads derived their viewer UUID from texture bytes, so the
+same baked content uploaded by another avatar collided with the immutable
+creator recorded by the Grid. Firestorm retried the resulting failed upload
+and displayed `Error in upload request`; an uncaught upload-path exception
+could also terminate the region. Baked uploads now receive fresh viewer asset
+UUIDs while identical bytes remain deduplicated by the region's SHA-256 blob
+store, and the capability converts storage or registration exceptions into a
+bounded `500` response without stopping the region. Viewer acceptance of the
+fix remains pending.
+
 The read-only system Library acceptance passed on 2026-07-14. Firestorm showed
 the shared `Library / Clothing / Initial Outfits / Default Avatar` hierarchy
 and all six default wearable items. This Firestorm build requested the Library
