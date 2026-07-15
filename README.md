@@ -120,6 +120,7 @@ Without a service token, the region runs without grid registration.
 - [Install a packaged grid](docs/INSTALL-GRID.md)
 - [Install a packaged region](docs/INSTALL-REGION.md)
 - [Release packaging](docs/PACKAGING.md)
+- [Project roadmap](docs/ROADMAP.md)
 - [Implementation plan](docs/PLAN.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Physics evaluation](docs/PHYSICS.md)
