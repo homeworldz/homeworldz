@@ -1831,17 +1831,6 @@ int main() {
                                 if (const auto terrain = circuits.send(endpoint, terrain_payload, true, now))
                                     static_cast<void>(send_udp(viewer_server, endpoint, *terrain));
                             }
-                            homeworldz::viewer::StaticObject welcome_prim;
-                            if (const auto id = homeworldz::viewer::parse_uuid(
-                                    "00000000-0000-4000-8000-000000000001"))
-                                welcome_prim.id = *id;
-                            welcome_prim.position = {static_cast<float>(initial_spawn.x + 4.0),
-                                                     static_cast<float>(initial_spawn.y),
-                                                     static_cast<float>(initial_spawn.z + 1.0)};
-                            if (const auto object = circuits.send(endpoint,
-                                    homeworldz::viewer::encode_static_object_update(
-                                        response.region_handle, welcome_prim), true, now, true))
-                                static_cast<void>(send_udp(viewer_server, endpoint, *object));
                             for (const auto& [entity_id, entity] : scene.entities()) {
                                 static_cast<void>(entity_id);
                                 const auto restored_object = static_object_from_entity(entity, live_avatar.user_id);
