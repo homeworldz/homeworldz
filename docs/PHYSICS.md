@@ -226,6 +226,11 @@ matches PhysX's default combination policy. Jolt's native maximum-value policy
 made a wood prim with restitution 0.5 rebound from zero-restitution terrain as
 if the complete contact also had restitution 0.5; averaging makes that contact
 0.25 while preserving 0.5 for wood against wood.
+Dynamic viewer updates include the physics body's authoritative linear velocity
+alongside position and rotation. This lets Firestorm dead-reckon between the
+region's 10 Hz object updates instead of easing each update from an incorrectly
+reported zero velocity, which otherwise makes the last part of a fall look
+artificially cushioned.
 
 This distinction is also the basis for vehicles: scripted forces, impulses,
 motors, and constraints act on physics-engine mass and inertia rather than a

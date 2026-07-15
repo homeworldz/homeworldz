@@ -423,6 +423,8 @@ std::optional<homeworldz::viewer::StaticObject> static_object_from_entity(
     object.material = entity.material;
     object.position = {static_cast<float>(entity.position.x), static_cast<float>(entity.position.y),
                        static_cast<float>(entity.position.z)};
+    object.velocity = {static_cast<float>(entity.velocity.x), static_cast<float>(entity.velocity.y),
+                       static_cast<float>(entity.velocity.z)};
     object.rotation = {static_cast<float>(entity.rotation.x), static_cast<float>(entity.rotation.y),
                        static_cast<float>(entity.rotation.z)};
     object.scale = {static_cast<float>(entity.scale.x), static_cast<float>(entity.scale.y),
