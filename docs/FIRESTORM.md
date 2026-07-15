@@ -591,5 +591,8 @@ been consuming only one viewer datagram per simulation tick and only sending
 avatar transforms when position changed. It now drains a bounded shared batch
 of up to 256 immediately available viewer packets per tick and also transmits
 velocity and rotation transitions, including the final zero-velocity update
-Firestorm needs to stop extrapolating. These reconciliation changes await a
-repeat live-session check.
+Firestorm needs to stop extrapolating. These reconciliation changes passed a
+fresh-region repeat on 2026-07-15: immediate
+forward/release, repeated direction changes, and movement down toward the lower
+shoreline all behaved correctly, with no continued, alternating, or visibly
+mis-predicted motion.

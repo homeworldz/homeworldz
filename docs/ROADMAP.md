@@ -40,11 +40,11 @@ acceptance tests pass.
   avatar state.
 - [x] Stream authoritative position, velocity, and rotation changes
   back to viewers.
-- [ ] Complete viewer-visible walking, turning, jumping, stopping, flight
+- [x] Complete viewer-visible walking, turning, jumping, stopping, flight
   toggling, ascent, and descent without requiring a relog.
 - [x] Add animation-state selection and synchronization for standing, walking,
   running, jumping, falling, flying, hovering, and landing.
-- [ ] Reconcile viewer prediction with the authoritative region position without
+- [x] Reconcile viewer prediction with the authoritative region position without
   visible snapping or drift.
 
 ### Basic avatar physics
