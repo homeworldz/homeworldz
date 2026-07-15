@@ -2579,9 +2579,15 @@ int main() {
                         const auto object_add = homeworldz::viewer::decode_object_add(packet->payload);
                         if (object_add && object_add->agent_id == identity->agent_id &&
                             object_add->session_id == identity->session_id) {
+                            constexpr std::uint32_t add_use_physics = 0x00000001;
+                            constexpr std::uint32_t add_create_selected = 0x00000002;
                             const auto valid_scale = std::all_of(
                                 object_add->scale.begin(), object_add->scale.end(),
                                 [](float value) { return value >= 0.01F && value <= 64.0F; });
+                            const auto rotation_norm = object_add->rotation[0] * object_add->rotation[0] +
+                                                       object_add->rotation[1] * object_add->rotation[1] +
+                                                       object_add->rotation[2] * object_add->rotation[2];
+                            const bool valid_rotation = rotation_norm <= 1.001F;
                             const bool supported_box = object_add->pcode == 9 &&
                                 object_add->path_curve == 16 && (object_add->profile_curve & 0x0f) == 1;
                             std::optional<homeworldz::scene::Vector3> placement;
@@ -2620,7 +2626,7 @@ int main() {
                             bool created = false;
                             std::string object_id;
                             homeworldz::scene::EntityId entity_id{};
-                            if (supported_box && valid_position && object_add->material <= 7) {
+                            if (supported_box && valid_position && valid_rotation && object_add->material <= 7) {
                                 object_id = homeworldz::viewer::random_uuid();
                                 const auto owner_id = homeworldz::viewer::format_uuid(identity->agent_id);
                                 entity_id = scene.create("Primitive", *placement);
@@ -2629,7 +2635,10 @@ int main() {
                                     entity->owner_id = owner_id;
                                     entity->creator_id = owner_id;
                                     entity->scale = {object_add->scale[0], object_add->scale[1], object_add->scale[2]};
+                                    entity->rotation = {object_add->rotation[0], object_add->rotation[1],
+                                                        object_add->rotation[2]};
                                     entity->material = object_add->material;
+                                    entity->physical = (object_add->add_flags & add_use_physics) != 0;
                                     entity->texture_entry = default_prim_texture_entry();
                                     apply_material_contact_defaults(*entity);
                                     entity->creation_date = static_cast<std::uint64_t>(
@@ -2653,8 +2662,11 @@ int main() {
                                         (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
                                         static_cast<std::uint32_t>(region_grid_y * 256);
                                     for (const auto& [recipient_endpoint, recipient] : avatars) {
-                                        const auto object = static_object_from_entity(*entity, recipient.user_id);
+                                        auto object = static_object_from_entity(*entity, recipient.user_id);
                                         if (!object) continue;
+                                        if (recipient.user_id == entity->owner_id &&
+                                            (object_add->add_flags & add_create_selected) != 0)
+                                            object->update_flags |= add_create_selected;
                                         if (const auto sent = circuits.send(recipient_endpoint,
                                                 homeworldz::viewer::encode_static_object_update(
                                                     region_handle, *object), true, now, true))
