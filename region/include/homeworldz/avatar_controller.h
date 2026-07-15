@@ -6,6 +6,7 @@
 #include <array>
 #include <cstdint>
 #include <optional>
+#include <string_view>
 
 namespace homeworldz::viewer {
 
@@ -42,6 +43,21 @@ struct AvatarState {
     float draw_distance{};
 };
 
+enum class MovementAnimation {
+    stand,
+    walk,
+    run,
+    jump,
+    fall,
+    fly,
+    hover,
+    hover_up,
+    hover_down,
+    land,
+};
+
+std::string_view movement_animation_id(MovementAnimation animation);
+
 class AvatarController {
 public:
     explicit AvatarController(scene::Vector3 spawn = {128.0, 128.0, 25.0},
@@ -54,6 +70,7 @@ public:
     void step(double seconds);
     const AvatarState& state() const { return state_; }
     scene::Vector3 viewer_position() const;
+    MovementAnimation movement_animation() const;
 
 private:
     AvatarState state_;
@@ -63,6 +80,7 @@ private:
     double flight_lift_velocity_{};
     std::uint32_t controls_{};
     std::array<float, 3> body_rotation_{};
+    double landing_animation_remaining_{};
 };
 
 } // namespace homeworldz::viewer

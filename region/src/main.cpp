@@ -691,6 +691,7 @@ int main() {
     std::unordered_map<std::string, homeworldz::viewer::AvatarGeometry> avatar_geometries;
     std::unordered_map<std::string, std::vector<homeworldz::viewer::AvatarAnimationEntry>> avatar_animations;
     std::unordered_map<std::string, std::int32_t> next_animation_sequences;
+    std::unordered_map<std::string, homeworldz::viewer::MovementAnimation> movement_animations;
     std::unordered_map<std::string, homeworldz::viewer::UuidName> resolved_avatar_names;
     std::unordered_map<std::string, std::deque<QueuedTexturePacket>> texture_packets;
     std::unordered_set<std::string> active_texture_transfers;
@@ -1079,6 +1080,7 @@ int main() {
                             avatar_geometries.erase(endpoint);
                             avatar_animations.erase(endpoint);
                             next_animation_sequences.erase(endpoint);
+                            movement_animations.erase(endpoint);
                             handshake_replies.erase(endpoint);
                             established_events.erase(session_id);
                             texture_packets.erase(endpoint);
@@ -1605,6 +1607,8 @@ int main() {
                                     animations.push_back({*stand, 1, identity->agent_id});
                                 next_animation_sequences[endpoint] = 2;
                             }
+                            movement_animations.insert_or_assign(
+                                endpoint, homeworldz::viewer::MovementAnimation::stand);
                             const auto initial_viewer_position = live_avatar.controller.viewer_position();
                             const std::array<float, 3> avatar_position{
                                 static_cast<float>(initial_viewer_position.x),
@@ -2463,6 +2467,40 @@ int main() {
             avatar.controller.set_ground_height(
                 ground_height(terrain_heightmap, avatar.controller.state().position));
             avatar.controller.step(elapsed);
+            const auto desired_animation = avatar.controller.movement_animation();
+            const auto desired_id = homeworldz::viewer::parse_uuid(
+                homeworldz::viewer::movement_animation_id(desired_animation));
+            const auto movement_agent_id = homeworldz::viewer::parse_uuid(avatar.user_id);
+            auto& animations = avatar_animations[endpoint];
+            const auto previous = movement_animations.find(endpoint);
+            bool animation_changed = previous == movement_animations.end() ||
+                                     previous->second != desired_animation;
+            if (desired_id) {
+                const auto present = std::find_if(animations.begin(), animations.end(),
+                    [&](const auto& entry) { return entry.animation_id == *desired_id; });
+                animation_changed = animation_changed || present == animations.end();
+            }
+            if (animation_changed && desired_id && movement_agent_id) {
+                if (previous != movement_animations.end()) {
+                    if (const auto old_id = homeworldz::viewer::parse_uuid(
+                            homeworldz::viewer::movement_animation_id(previous->second)))
+                        std::erase_if(animations, [&](const auto& entry) {
+                            return entry.animation_id == *old_id;
+                        });
+                }
+                auto& sequence = next_animation_sequences[endpoint];
+                if (sequence < 2) sequence = 2;
+                animations.push_back({*desired_id, sequence++, *movement_agent_id});
+                movement_animations.insert_or_assign(endpoint, desired_animation);
+                const homeworldz::viewer::AvatarAnimation update{*movement_agent_id, animations};
+                const auto payload = homeworldz::viewer::encode_avatar_animation(update);
+                for (const auto& [recipient_endpoint, recipient] : avatars) {
+                    static_cast<void>(recipient);
+                    if (const auto outgoing = circuits.send(
+                            recipient_endpoint, payload, false, now, true))
+                        static_cast<void>(send_udp(viewer_server, recipient_endpoint, *outgoing));
+                }
+            }
             if (auto* entity = scene.find(avatar.entity_id)) {
                 entity->position = avatar.controller.state().position;
                 entity->velocity = avatar.controller.state().velocity;

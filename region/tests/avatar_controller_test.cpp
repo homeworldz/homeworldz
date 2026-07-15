@@ -27,15 +27,23 @@ int main() {
         std::abs(avatar.state().position.z - 25.78) > 1e-9 ||
         avatar.state().camera_center[1] != 2.F || avatar.state().rotation != update.body_rotation)
         return 3;
+    if (avatar.movement_animation() != homeworldz::viewer::MovementAnimation::walk) return 11;
 
     update.control_flags = homeworldz::viewer::control_up;
     avatar.apply(update);
     avatar.step(0.1);
     if (avatar.state().grounded || avatar.state().position.z <= 25.78) return 4;
+    if (avatar.movement_animation() != homeworldz::viewer::MovementAnimation::jump) return 12;
     update.control_flags = 0;
     avatar.apply(update);
-    for (int index = 0; index < 20; ++index) avatar.step(0.1);
+    bool saw_land_animation = false;
+    for (int index = 0; index < 20; ++index) {
+        avatar.step(0.1);
+        saw_land_animation = saw_land_animation ||
+            avatar.movement_animation() == homeworldz::viewer::MovementAnimation::land;
+    }
     if (!avatar.state().grounded || std::abs(avatar.state().position.z - 25.78) > 1e-9) return 5;
+    if (!saw_land_animation) return 14;
 
     avatar.set_avatar_geometry(2.0, -0.075);
     avatar.set_ground_height(26.0);
@@ -50,6 +58,7 @@ int main() {
     avatar.step(0.25);
     if (!avatar.state().flying || avatar.state().velocity.z != 10.0 || avatar.state().position.z != 29.5)
         return 7;
+    if (avatar.movement_animation() != homeworldz::viewer::MovementAnimation::hover_up) return 13;
 
     homeworldz::viewer::AvatarController launch_avatar;
     update.control_flags = homeworldz::viewer::control_fly;

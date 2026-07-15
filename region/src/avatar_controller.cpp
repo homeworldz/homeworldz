@@ -5,6 +5,22 @@
 
 namespace homeworldz::viewer {
 
+std::string_view movement_animation_id(MovementAnimation animation) {
+    switch (animation) {
+    case MovementAnimation::walk: return "6ed24bd8-91aa-4b12-ccc7-c97c857ab4e0";
+    case MovementAnimation::run: return "05ddbff8-aaa9-92a1-2b74-8fe77a29b445";
+    case MovementAnimation::jump: return "2305bd75-1ca9-b03b-1faa-b176b8a8c49e";
+    case MovementAnimation::fall: return "666307d9-a860-572d-6fd4-c3ab8865c094";
+    case MovementAnimation::fly: return "aec4610c-757f-bc4e-c092-c6e9caf18daf";
+    case MovementAnimation::hover: return "4ae8016b-31b9-03bb-c401-b1ea941db41d";
+    case MovementAnimation::hover_up: return "62c5de58-cb33-5743-3d07-9e4cd4352864";
+    case MovementAnimation::hover_down: return "20f063ea-8306-2562-0b07-5c853b37b31e";
+    case MovementAnimation::land: return "7a17b059-12b2-41b1-570a-186368b6aa6f";
+    case MovementAnimation::stand:
+    default: return "2408fe9e-df1d-1d7d-f4ff-1384fa7b350f";
+    }
+}
+
 std::optional<AvatarGeometry> avatar_geometry(const AgentSetAppearance& appearance) {
     // Match the Halcyon/InWorldz visual-parameter height and hip calculation.
     // The viewer-provided Size is a fallback for clients with a shorter block.
@@ -80,8 +96,25 @@ scene::Vector3 AvatarController::viewer_position() const {
     return position;
 }
 
+MovementAnimation AvatarController::movement_animation() const {
+    if (state_.grounded && landing_animation_remaining_ > 0.0) return MovementAnimation::land;
+    const auto horizontal_speed = std::hypot(state_.velocity.x, state_.velocity.y);
+    if (state_.flying) {
+        if (horizontal_speed > 0.05) return MovementAnimation::fly;
+        if (state_.velocity.z > 0.1) return MovementAnimation::hover_up;
+        if (state_.velocity.z < -0.1) return MovementAnimation::hover_down;
+        return MovementAnimation::hover;
+    }
+    if (!state_.grounded)
+        return state_.velocity.z > 0.0 ? MovementAnimation::jump : MovementAnimation::fall;
+    if (horizontal_speed > 6.0) return MovementAnimation::run;
+    if (horizontal_speed > 0.05) return MovementAnimation::walk;
+    return MovementAnimation::stand;
+}
+
 void AvatarController::step(double seconds) {
     seconds = std::clamp(seconds, 0.0, 0.25);
+    landing_animation_remaining_ = std::max(0.0, landing_animation_remaining_ - seconds);
     const auto support_height = ground_height_ + state_.height * 0.5;
     if (!state_.flying && state_.grounded) {
         if (state_.position.z > support_height + 0.25)
@@ -129,6 +162,7 @@ void AvatarController::step(double seconds) {
     state_.position.x = bounded_x;
     state_.position.y = bounded_y;
     if (!state_.flying && state_.position.z <= support_height) {
+        if (!state_.grounded) landing_animation_remaining_ = 0.4;
         state_.position.z = support_height;
         state_.velocity.z = 0.0;
         state_.grounded = true;
