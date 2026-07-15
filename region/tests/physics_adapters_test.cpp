@@ -73,6 +73,34 @@ bool jolt_heightfield_test() {
            hit->body == body && std::abs(hit->point.z - 6.0) < 0.1;
 }
 
+bool jolt_restitution_combine_test() {
+    using namespace homeworldz;
+    auto world = physics::make_jolt_world();
+    physics::BodyDefinition floor;
+    floor.entity_id = 110;
+    floor.shape.half_extents = {5, 5, 0.5};
+    floor.position = {0, 0, -0.5};
+    floor.restitution = 0.0;
+    world->create_body(floor);
+    physics::BodyDefinition ball;
+    ball.entity_id = 111;
+    ball.motion = physics::MotionType::Dynamic;
+    ball.shape.type = physics::ShapeType::Sphere;
+    ball.shape.radius = 0.5;
+    ball.position = {0, 0, 2};
+    ball.restitution = 0.5;
+    const auto body = world->create_body(ball);
+    double maximum_rebound_speed = 0.0;
+    for (int tick = 0; tick < 600; ++tick) {
+        world->step(1.0 / 180.0);
+        if (const auto state = world->body_state(body))
+            maximum_rebound_speed = std::max(maximum_rebound_speed, state->linear_velocity.z);
+    }
+    // A 1.5 m drop reaches about 5.4 m/s. Average restitution gives roughly
+    // 1.35 m/s; Jolt's former max rule produces roughly 2.7 m/s.
+    return maximum_rebound_speed > 0.8 && maximum_rebound_speed < 1.8;
+}
+
 bool static_scene_mirror_test() {
     auto world = homeworldz::physics::make_jolt_world();
     homeworldz::physics::StaticSceneMirror mirror(*world);
@@ -223,6 +251,7 @@ bool jolt_flying_hover_test() {
 
 int main() {
     if (!jolt_heightfield_test()) return 1;
+    if (!jolt_restitution_combine_test()) return 1;
     if (!static_scene_mirror_test()) return 1;
     if (!jolt_character_collision_test()) return 1;
     if (!jolt_character_step_test()) return 1;

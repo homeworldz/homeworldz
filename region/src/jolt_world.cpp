@@ -129,6 +129,13 @@ public:
                 std::max(1u, std::thread::hardware_concurrency()) - 1) {
         system_.Init(65536, 0, 65536, 10240, broad_layers_, broad_filter_, pair_filter_);
         system_.SetGravity({0.0F, 0.0F, -9.81F});
+        // Jolt defaults to the larger restitution value. PhysX and the virtual-world
+        // material model use an average, which prevents a moderately elastic prim
+        // from making an otherwise inelastic terrain contact feel like rubber.
+        system_.SetCombineRestitution([](const JPH::Body& first, const JPH::SubShapeID&,
+                                         const JPH::Body& second, const JPH::SubShapeID&) {
+            return 0.5F * (first.GetRestitution() + second.GetRestitution());
+        });
     }
 
     BodyId create_body(const BodyDefinition& definition) override {

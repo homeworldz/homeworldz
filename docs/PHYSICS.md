@@ -221,6 +221,11 @@ the production Jolt adapter also applies gravity multiplier through Jolt's
 per-body gravity factor. PhysX parity for per-body gravity scaling remains
 pending. `PhysicsShapeType.None` removes the object's collision body while
 leaving the scene object itself present.
+HomeWorldz configures Jolt to average the two bodies' restitution values, which
+matches PhysX's default combination policy. Jolt's native maximum-value policy
+made a wood prim with restitution 0.5 rebound from zero-restitution terrain as
+if the complete contact also had restitution 0.5; averaging makes that contact
+0.25 while preserving 0.5 for wood against wood.
 
 This distinction is also the basis for vehicles: scripted forces, impulses,
 motors, and constraints act on physics-engine mass and inertia rather than a
