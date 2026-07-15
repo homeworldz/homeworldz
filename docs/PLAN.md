@@ -68,7 +68,8 @@ than runtime dependencies.
   including exact region dimensions, north/south row conversion, and HSL
   lightness mapped to the 0-to-128-metre height range; reject JPEG terrain.
 - [x] Object rez, edit, take, delete, permissions, and persistence.
-- [ ] Script runtime boundary and implementation selection.
+- [x] Define the engine-independent script runtime boundary.
+- [ ] Select and implement the initial script runtime backend.
 - [ ] Teleport and cross-region avatar/object handoff.
 - [ ] Evaluate and implement exactly three OpenSimulator-compatible region
   sizes: 1x1 (256 metres), 2x2 (512 metres), and 4x4 (1024 metres), without

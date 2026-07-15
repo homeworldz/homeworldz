@@ -70,6 +70,10 @@ add_executable(homeworldz-avatar-controller-tests tests/avatar_controller_test.c
 target_link_libraries(homeworldz-avatar-controller-tests PRIVATE homeworldz-region-core)
 add_test(NAME region-avatar-controller COMMAND homeworldz-avatar-controller-tests)
 
+add_executable(homeworldz-script-runtime-tests tests/script_runtime_test.cpp)
+target_link_libraries(homeworldz-script-runtime-tests PRIVATE homeworldz-region-core)
+add_test(NAME region-script-runtime COMMAND homeworldz-script-runtime-tests)
+
 if(HOMEWORLDZ_PHYSICS_ADAPTERS_AVAILABLE)
   add_executable(homeworldz-physics-adapter-smoke tests/physics_adapters_test.cpp)
   target_link_libraries(homeworldz-physics-adapter-smoke PRIVATE homeworldz-region-core)
