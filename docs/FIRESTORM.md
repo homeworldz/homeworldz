@@ -604,3 +604,15 @@ Tarber, synchronized it on the bounded fixed-step clock, and retained stable
 login, terrain following, walking, stopping, jumping, and flight behavior.
 No viewer-visible regression was detected. Authoritative scene identity and
 persistence remain owned by HomeWorldz rather than by Jolt.
+
+Viewer terrain editing passed live Firestorm acceptance on 2026-07-15.
+Firestorm's standard `ModifyLand` Raise tool changed only the affected terrain
+patches, the region broadcast the result immediately, and avatar grounding
+followed both a subtle default-strength edit and a stronger near-spike. The
+region persisted sub-metre heights in its region-local `terrain.f32` state
+rather than overwriting the packaged RAW default. After a complete viewer,
+grid, and region restart, the region reported `region-state` as its terrain
+source, the spike remained visible, and walking over it produced the expected
+avatar-height changes. At this acceptance point, the provisional avatar
+controller samples the authoritative edited heightmap and mirrors its resolved
+capsule into Jolt; Jolt terrain collision itself remains the next step.

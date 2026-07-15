@@ -50,6 +50,8 @@ acceptance tests pass.
 ### Basic avatar physics
 
 - [x] Integrate a Jolt avatar capsule into the production scene loop.
+- [x] Support persistent viewer terrain editing with live patch updates for
+  targeted slope, step, drop, and grounding tests.
 - [x] Sample terrain continuously for provisional grounding rather than
   retaining only the height at the login position.
 - [ ] Support terrain walking, slopes, steps, falling, jumping, landing, flight,
