@@ -309,6 +309,8 @@ func (a *API) copyLibraryInventoryItem(w http.ResponseWriter, r *http.Request, u
 	destinationID := request.DestinationFolderID
 	if destinationID == "00000000-0000-0000-0000-000000000000" {
 		switch source.AssetType {
+		case 0:
+			destinationID = inventory.SystemFolderID(userID, 0)
 		case 5:
 			destinationID = inventory.SystemFolderID(userID, 5)
 		case 13:

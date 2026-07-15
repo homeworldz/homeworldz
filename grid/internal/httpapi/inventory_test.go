@@ -426,7 +426,16 @@ func TestCopyLibraryInventoryItemEndpoint(t *testing.T) {
 	store := &memoryInventoryStore{folders: make(map[string][]inventory.Folder)}
 	_, _ = store.EnsureSystemFolders(context.Background(), userID)
 	handler := New(checker{}, "test", Options{ServiceToken: "secret", Inventory: store})
-	source := inventory.LibraryItems()[4]
+	var source inventory.Item
+	for _, item := range inventory.LibraryItems() {
+		if item.Name == "Default Shape" {
+			source = item
+			break
+		}
+	}
+	if source.ID == "" {
+		t.Fatal("Default Shape is missing from the Library")
+	}
 	created := requestRegion[inventory.Item](t, handler, http.MethodPost,
 		"/api/v1/inventory/"+userID+"/copy-library-item",
 		`{"sourceItemId":"`+source.ID+`","destinationFolderId":"00000000-0000-0000-0000-000000000000","name":""}`,
@@ -445,6 +454,31 @@ func TestCopyLibraryInventoryItemEndpoint(t *testing.T) {
 		http.StatusNotFound)
 	if missing.Code != "library_item_not_found" {
 		t.Fatalf("missing library copy error = %#v", missing)
+	}
+}
+
+func TestCopyLibraryTextureUsesPersonalTexturesFolder(t *testing.T) {
+	const userID = "20000000-0000-4000-8000-000000000001"
+	store := &memoryInventoryStore{folders: make(map[string][]inventory.Folder)}
+	_, _ = store.EnsureSystemFolders(context.Background(), userID)
+	handler := New(checker{}, "test", Options{ServiceToken: "secret", Inventory: store})
+	var source inventory.Item
+	for _, item := range inventory.LibraryItems() {
+		if item.Name == "Blank" {
+			source = item
+			break
+		}
+	}
+	if source.ID == "" {
+		t.Fatal("Blank is missing from the Library")
+	}
+	created := requestRegion[inventory.Item](t, handler, http.MethodPost,
+		"/api/v1/inventory/"+userID+"/copy-library-item",
+		`{"sourceItemId":"`+source.ID+`","destinationFolderId":"00000000-0000-0000-0000-000000000000","name":""}`,
+		http.StatusCreated)
+	if created.FolderID != inventory.SystemFolderID(userID, 0) || created.AssetID != source.AssetID ||
+		created.CreatorUserID != inventory.LibraryOwnerID || created.AssetType != 0 || created.InventoryType != 0 {
+		t.Fatalf("copied library texture = %#v", created)
 	}
 }
 

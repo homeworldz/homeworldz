@@ -679,3 +679,9 @@ physics body; it was therefore non-editable and non-colliding. Future contact
 tests use only persisted scene entities. A separate follow-up should determine
 whether Firestorm defers Physical changes while the edit window remains open or
 merely suppresses selected-object transform display until the editor closes.
+
+Primitive texture-entry persistence passed live Firestorm acceptance on
+2026-07-15. All four dynamic test prims retained their distinct color tints
+after a complete region and viewer restart. The region stores and restores the
+opaque viewer texture entry rather than reconstructing only its default face,
+which preserves both per-face texture UUIDs and tint data.
