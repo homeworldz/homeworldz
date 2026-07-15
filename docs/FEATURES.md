@@ -95,6 +95,9 @@ Selecting an owned, modifiable physical object temporarily suspends its dynamic
 simulation until deselection, matching viewer edit expectations without changing
 the persisted Physical flag. Viewer mouse dragging is handled separately through
 `ObjectGrabUpdate` and a bounded, mass-scaled physics impulse.
+Live Firestorm acceptance confirmed edit suspension and restoration, mouse-hand
+dragging, and mass-relative avatar contact after resizing a physical prim to
+1 x 0.5 x 0.75 m.
 
 The planned vehicle layer preserves the Second Life/Halcyon LSL model while
 using native physics-plugin capabilities. A single `llSetVehicleType` call is

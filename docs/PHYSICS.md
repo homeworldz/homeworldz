@@ -256,6 +256,11 @@ restores its saved physical state. `ObjectGrabUpdate` mouse drags apply a bounde
 mass-scaled impulse through the physics interface toward the viewer's grab
 target. This explicit grab controller is independent of ordinary avatar contact,
 which remains entirely within Jolt's character/body solver.
+Live Firestorm acceptance on 2026-07-15 confirmed all three behaviors: an
+edited physical prim remained suspended until its edit form closed, mouse-hand
+dragging moved it through the grab controller, and resizing Dynamic4 to
+1 x 0.5 x 0.75 m made ordinary avatar collisions move it as expected from its
+reduced mass.
 
 ### Required Scenarios
 
