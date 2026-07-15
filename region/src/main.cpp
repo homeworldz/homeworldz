@@ -2613,6 +2613,9 @@ int main() {
         const auto elapsed = std::chrono::duration<double>(now - previous_tick).count();
         const auto fixed_steps = simulation.advance(elapsed);
         for (auto& [endpoint, avatar] : avatars) {
+            if (physics_world && avatar.physics_character != 0)
+                if (const auto state = physics_world->character_state(avatar.physics_character))
+                    avatar.controller.synchronize_physics(state->position, state->linear_velocity);
             if (avatar.has_agent_update &&
                 now - avatar.last_agent_update > std::chrono::seconds(1))
                 avatar.controller.expire_transient_controls();
@@ -2631,8 +2634,6 @@ int main() {
             avatar.controller.step(elapsed);
             if (physics_world && avatar.physics_character != 0) {
                 const auto& controller_state = avatar.controller.state();
-                physics_world->set_character_state(avatar.physics_character,
-                    {0, avatar.entity_id, controller_state.position, controller_state.velocity, {}, false});
                 physics_world->set_character_velocity(avatar.physics_character, controller_state.velocity);
             }
             const auto desired_animation = avatar.controller.movement_animation();

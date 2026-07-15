@@ -97,6 +97,13 @@ void AvatarController::set_ground_height(double height) {
     if (std::isfinite(height)) ground_height_ = height;
 }
 
+void AvatarController::synchronize_physics(scene::Vector3 position, scene::Vector3 velocity) {
+    if (std::isfinite(position.x) && std::isfinite(position.y) && std::isfinite(position.z))
+        state_.position = position;
+    if (std::isfinite(velocity.x) && std::isfinite(velocity.y) && std::isfinite(velocity.z))
+        state_.velocity = velocity;
+}
+
 scene::Vector3 AvatarController::viewer_position() const {
     auto position = state_.position;
     position.z -= state_.hip_offset;

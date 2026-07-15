@@ -68,6 +68,7 @@ public:
     void expire_transient_controls();
     void set_avatar_geometry(double height, double hip_offset);
     void set_ground_height(double height);
+    void synchronize_physics(scene::Vector3 position, scene::Vector3 velocity);
     void step(double seconds);
     const AvatarState& state() const { return state_; }
     scene::Vector3 viewer_position() const;
