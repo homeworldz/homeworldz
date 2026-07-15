@@ -13,6 +13,7 @@
 #include <Jolt/Physics/Collision/Shape/HeightFieldShape.h>
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
+#include <Jolt/Physics/Character/CharacterVirtual.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/RegisterTypes.h>
 
@@ -104,6 +105,12 @@ JPH::EMotionType motion(MotionType value) {
 struct JoltBody {
     JPH::BodyID native;
     scene::EntityId entity{};
+};
+
+struct JoltCharacter {
+    JPH::Ref<JPH::CharacterVirtual> character;
+    scene::EntityId entity{};
+    double step_height{0.4};
 };
 
 class JoltWorld final : public World {
@@ -198,40 +205,49 @@ public:
     }
 
     CharacterId create_character(const CharacterDefinition& definition) override {
-        BodyDefinition body{definition.entity_id, MotionType::Kinematic,
-            {ShapeType::Capsule, {}, definition.radius, definition.height}, definition.position};
-        const auto body_id = create_body(body);
+        JPH::CharacterVirtualSettings settings;
+        settings.mUp = JPH::Vec3::sAxisZ();
+        settings.mSupportingVolume = JPH::Plane(JPH::Vec3::sAxisZ(), -static_cast<float>(definition.height * 0.5));
+        settings.mShape = make_shape({ShapeType::Capsule, {}, definition.radius, definition.height});
+        auto character = JPH::Ref<JPH::CharacterVirtual>(new JPH::CharacterVirtual(
+            &settings, JPH::RVec3(vec(definition.position)), JPH::Quat::sIdentity(), &system_));
         const auto id = next_character_++;
-        characters_.emplace(id, body_id);
+        characters_.emplace(id, JoltCharacter{std::move(character), definition.entity_id, definition.step_height});
         return id;
     }
     bool remove_character(CharacterId id) override {
         const auto found = characters_.find(id);
         if (found == characters_.end()) return false;
-        remove_body(found->second);
         characters_.erase(found);
         return true;
     }
     std::optional<BodyState> character_state(CharacterId id) const override {
         const auto found = characters_.find(id);
-        return found == characters_.end() ? std::nullopt : body_state(found->second);
+        if (found == characters_.end()) return std::nullopt;
+        return BodyState{id, found->second.entity, vec(found->second.character->GetPosition()),
+                         vec(found->second.character->GetLinearVelocity()), {}, false};
     }
     void set_character_state(CharacterId id, const BodyState& state) override {
         const auto found = characters_.find(id);
         if (found == characters_.end()) return;
-        auto character = state;
-        character.body_id = found->second;
-        set_body_state(character);
+        found->second.character->SetPosition(JPH::RVec3(vec(state.position)));
+        found->second.character->SetLinearVelocity(vec(state.linear_velocity));
     }
     void set_character_velocity(CharacterId id, scene::Vector3 velocity) override {
-        if (const auto found = characters_.find(id); found != characters_.end()) {
-            auto state = body_state(found->second);
-            if (state) { state->linear_velocity = velocity; set_body_state(*state); }
-        }
+        if (const auto found = characters_.find(id); found != characters_.end())
+            found->second.character->SetLinearVelocity(vec(velocity));
     }
 
     void step(double seconds) override {
         contacts_.clear();
+        for (auto& [id, entry] : characters_) {
+            static_cast<void>(id);
+            JPH::CharacterVirtual::ExtendedUpdateSettings settings;
+            settings.mStickToFloorStepDown = {0, 0, -0.5F};
+            settings.mWalkStairsStepUp = {0, 0, static_cast<float>(entry.step_height)};
+            entry.character->ExtendedUpdate(
+                static_cast<float>(seconds), {0, 0, -9.81F}, settings, {}, {}, {}, {}, allocator_);
+        }
         system_.Update(static_cast<float>(seconds), 1, &allocator_, &jobs_);
     }
     std::span<const Contact> contacts() const override { return contacts_; }
@@ -289,7 +305,7 @@ private:
     CharacterId next_character_{1};
     std::unordered_map<BodyId, JoltBody> bodies_;
     std::unordered_map<JPH::uint32, BodyId> native_to_body_;
-    std::unordered_map<CharacterId, BodyId> characters_;
+    std::unordered_map<CharacterId, JoltCharacter> characters_;
     std::vector<Contact> contacts_;
 };
 
