@@ -82,6 +82,8 @@ func run(ctx context.Context, opts options) error {
 	}
 	gridEntries = append(gridEntries,
 		archiveEntry{filepath.Join(root, "config", "examples", "grid.ini"), "config/examples/grid.ini"},
+		archiveEntry{filepath.Join(root, "config", "examples", "grid-personal.ini"), "config/examples/grid-personal.ini"},
+		archiveEntry{filepath.Join(root, "config", "examples", "grid-cloud.ini"), "config/examples/grid-cloud.ini"},
 		archiveEntry{filepath.Join(root, "docs", "INSTALL-GRID.md"), "INSTALL-GRID.md"},
 	)
 	gridEntries, err = appendTree(gridEntries, filepath.Join(root, "db", "migrations"), "db/migrations", func(path string) bool {
@@ -98,6 +100,8 @@ func run(ctx context.Context, opts options) error {
 	regionEntries := []archiveEntry{
 		{regionExecutable, "homeworldz-region.exe"},
 		{filepath.Join(root, "config", "examples", "region.ini"), "config/examples/region.ini"},
+		{filepath.Join(root, "config", "examples", "region-personal.ini"), "config/examples/region-personal.ini"},
+		{filepath.Join(root, "config", "examples", "region-cloud.ini"), "config/examples/region-cloud.ini"},
 		{filepath.Join(root, "docs", "INSTALL-REGION.md"), "INSTALL-REGION.md"},
 	}
 	for _, dll := range siblingDLLs(regionExecutable) {

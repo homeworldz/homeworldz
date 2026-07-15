@@ -34,7 +34,10 @@ homeworldz-region/
   homeworldz-region[.exe]
   *.dll                 # Windows runtime libraries, when required
   config/
-    examples/region.ini
+    examples/
+      region.ini
+      region-personal.ini
+      region-cloud.ini
   assets/
     region/
       terrain/plateau-square.raw
@@ -65,10 +68,12 @@ region is stopped.
 
 ## Configure the region
 
-Copy the packaged example to the live, private configuration file:
+Copy the packaged example matching the grid deployment to the live, private
+configuration file. Use `region-personal.ini` with `grid-personal.ini`, or
+`region-cloud.ini` with `grid-cloud.ini`:
 
 ```cmd
-copy config\examples\region.ini config\region.ini
+copy config\examples\region-personal.ini config\region.ini
 ```
 
 Edit `config/region.ini` with the values supplied by the grid operator. The

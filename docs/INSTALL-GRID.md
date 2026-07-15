@@ -22,7 +22,10 @@ homeworldz-grid/
   bootstrap-grid[.exe]
   configure-library[.exe]
   config/
-    examples/grid.ini
+    examples/
+      grid.ini              # repository-development ports
+      grid-personal.ini     # loopback port 8002
+      grid-cloud.ini        # direct public port 80
   db/
     migrations/*.up.sql
 ```
@@ -43,18 +46,21 @@ Docker, or a C++ compiler.
 
 ## Configure the grid
 
-Copy the example to the live, private configuration file:
+Choose a deployment profile and copy it to the live, private configuration
+file. Personal-machine grids should use `grid-personal.ini`; direct cloud test
+grids should use `grid-cloud.ini`. The unqualified `grid.ini` retains the
+repository-development ports.
 
 Windows Command Prompt:
 
 ```cmd
-copy config\examples\grid.ini config\grid.ini
+copy config\examples\grid-personal.ini config\grid.ini
 ```
 
 Linux:
 
 ```sh
-cp config/examples/grid.ini config/grid.ini
+cp config/examples/grid-personal.ini config/grid.ini
 chmod 600 config/grid.ini
 ```
 
@@ -62,8 +68,8 @@ Edit `config/grid.ini`:
 
 ```ini
 [server]
-address = 127.0.0.1:42000
-public_url = http://127.0.0.1:42000
+address = 127.0.0.1:8002
+public_url = http://127.0.0.1:8002
 
 [auth]
 service_token = replace-with-a-long-random-secret
@@ -76,8 +82,10 @@ service_token = replace-with-a-long-random-secret
   transmit it privately to region owners, and never commit it to source
   control.
 
-Loopback is appropriate when grid, region, and viewer are all on one computer.
-It deliberately accepts no remote connections.
+Loopback port 8002 is appropriate when grid, region, and viewer are all on one
+personal computer. It deliberately accepts no remote connections. The cloud
+profile instead binds `0.0.0.0:80` and must be edited to use the grid's DNS
+name, for example `http://sandbox.homeworldz.com`.
 
 ## Create the database
 
@@ -137,14 +145,14 @@ Windows-service and systemd integration, but neither is implemented yet.
 
 The default operational endpoints are:
 
-- Grid/login service: `127.0.0.1:42000/tcp`
-- Viewer grid-discovery URL: `http://127.0.0.1:42000/`
-- Liveness: `http://127.0.0.1:42000/ping`
-- Dependency-aware readiness: `http://127.0.0.1:42000/ready`
-- Version: `http://127.0.0.1:42000/version`
+- Grid/login service: `127.0.0.1:8002/tcp`
+- Viewer grid-discovery URL: `http://127.0.0.1:8002/`
+- Liveness: `http://127.0.0.1:8002/ping`
+- Dependency-aware readiness: `http://127.0.0.1:8002/ready`
+- Version: `http://127.0.0.1:8002/version`
 
-Verify readiness with `curl.exe --fail http://127.0.0.1:42000/ready` on
-Windows or `curl --fail http://127.0.0.1:42000/ready` on Linux. Readiness fails
+Verify readiness with `curl.exe --fail http://127.0.0.1:8002/ready` on
+Windows or `curl --fail http://127.0.0.1:8002/ready` on Linux. Readiness fails
 when the configured PostgreSQL database cannot be used.
 
 ## Connect region owners
