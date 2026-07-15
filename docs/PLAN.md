@@ -63,7 +63,7 @@ than runtime dependencies.
 - [x] Add a read-only, grid-owned system inventory library with stable owner,
   root, folders, items, bundled-asset provenance, and AIS v3 fetch support;
   expose legacy reads only when their compatibility value justifies the cost.
-- [ ] Asset upload, authorization, replication, and federation lookup.
+- [x] Asset upload, authorization, replication, and federation lookup.
 - [x] Match OpenSimulator/Halcyon lossless PNG terrain-image semantics,
   including exact region dimensions, north/south row conversion, and HSL
   lightness mapped to the 0-to-128-metre height range; reject JPEG terrain.
@@ -85,6 +85,8 @@ than runtime dependencies.
 - `/api/v1/regions` registers, renews, deregisters, and discovers regions.
 - `/api/v1/sessions` creates and validates viewer sessions.
 - `/api/v1/presence` updates and queries online presence.
+- `/api/v1/assets` records immutable asset provenance and region locations;
+  authenticated region endpoints serve and explicitly replicate verified blobs.
 - Region-local capabilities provide viewer events and asset access.
 - An engine-independent C++ physics boundary owns bodies, characters, contacts,
   queries, simulation steps, and transferable physical state.

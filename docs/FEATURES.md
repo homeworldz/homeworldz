@@ -40,7 +40,10 @@ Viewer UUIDs map to those blobs in SQLite, allowing different viewer IDs to
 share bytes without duplication. This deliberately does not preserve the
 central or pluggable legacy asset-service boundaries commonly used by
 OpenSimulator and Halcyon, and it does not attempt to reproduce Second Life's
-private backend layout.
+private backend layout. Regions register stable origin and replica locations
+with the grid, fetch missing assets directly from another region using an
+authenticated internal endpoint, verify the advertised size and SHA-256, and
+retain the original UUID and creator provenance in the local replica.
 
 ### Free texture uploads
 

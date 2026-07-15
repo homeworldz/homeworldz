@@ -277,13 +277,24 @@ std::optional<std::pair<std::string, std::string>> viewer_asset_request(std::str
     return std::pair{std::string(session), std::string(asset)};
 }
 
-std::optional<std::string> internal_asset_request(std::string_view path) {
+struct InternalAssetRequest {
+    std::string asset_id;
+    bool replicate{};
+};
+
+std::optional<InternalAssetRequest> internal_asset_request(std::string_view path) {
     constexpr std::string_view prefix = "/api/v1/assets/";
     if (!path.starts_with(prefix)) return std::nullopt;
-    const auto asset_id = path.substr(prefix.size());
+    auto asset_id = path.substr(prefix.size());
+    constexpr std::string_view replicate_suffix = "/replicate";
+    bool replicate = false;
+    if (asset_id.ends_with(replicate_suffix)) {
+        asset_id.remove_suffix(replicate_suffix.size());
+        replicate = true;
+    }
     if (asset_id.empty() || asset_id.find('/') != std::string_view::npos ||
         !homeworldz::viewer::parse_uuid(asset_id)) return std::nullopt;
-    return std::string(asset_id);
+    return InternalAssetRequest{std::string(asset_id), replicate};
 }
 
 std::optional<std::pair<std::string, std::string>> baked_upload_data_request(std::string_view path) {
@@ -667,21 +678,34 @@ int main() {
                 if (received_request) {
                     const std::string_view request(*received_request);
                     auto response = homeworldz::http::response_for(request);
-                    if (const auto asset_id = internal_asset_request(response.path)) {
+                    if (const auto asset_request = internal_asset_request(response.path)) {
                         const auto authorization = homeworldz::http::request_header_value(request, "Authorization");
-                        if (response.method != "GET") {
+                        const auto expected_method = asset_request->replicate ? "POST" : "GET";
+                        if (response.method != expected_method) {
                             response = homeworldz::http::response_for_content(
                                 request, 405, "application/json",
                                 homeworldz::api::to_json(homeworldz::api::Error{
-                                    "method_not_allowed", "only GET is supported"}));
+                                    "method_not_allowed", "asset endpoint method is invalid"}));
                         } else if (service_token.empty() || authorization != "Bearer " + service_token) {
                             response = homeworldz::http::response_for_content(
                                 request, 401, "application/json",
                                 homeworldz::api::to_json(homeworldz::api::Error{
                                     "unauthorized", "a valid grid service token is required"}));
+                        } else if (asset_request->replicate) {
+                            try {
+                                const auto asset = read_federated_asset(asset_request->asset_id);
+                                response = homeworldz::http::response_for_content(
+                                    request, 200, "application/json",
+                                    homeworldz::api::to_json(homeworldz::api::Status{"replicated"}));
+                            } catch (const std::exception&) {
+                                response = homeworldz::http::response_for_content(
+                                    request, 404, "application/json",
+                                    homeworldz::api::to_json(homeworldz::api::Error{
+                                        "asset_not_found", "no verified asset source was available"}));
+                            }
                         } else {
                             try {
-                                const auto asset = storage->read_asset(*asset_id);
+                                const auto asset = storage->read_asset(asset_request->asset_id);
                                 response = homeworldz::http::response_for_content(
                                     request, 200, "application/octet-stream",
                                     std::string(reinterpret_cast<const char*>(asset.data()), asset.size()));

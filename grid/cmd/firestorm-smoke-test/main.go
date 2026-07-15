@@ -28,6 +28,7 @@ import (
 const (
 	gridURL                = "http://127.0.0.1:42000"
 	regionURL              = "http://127.0.0.1:42001"
+	replicaRegionURL       = "http://127.0.0.1:42011"
 	federationProbeAssetID = "00000000-0000-1111-9999-000000000010"
 )
 
@@ -183,6 +184,43 @@ func run(ctx context.Context, opts options) error {
 
 	fmt.Println("HomeWorldz grid and region are ready on loopback.")
 	if opts.validateOnly {
+		replicaDataPath := filepath.Join(logDirectory, "replica-region")
+		replicaAssetPath := filepath.Join(logDirectory, "replica-assets")
+		if err := os.RemoveAll(replicaDataPath); err != nil {
+			return fmt.Errorf("reset replica test data: %w", err)
+		}
+		if err := os.MkdirAll(replicaAssetPath, 0o700); err != nil {
+			return fmt.Errorf("create replica test asset directory: %w", err)
+		}
+		replicaEnvironment := environmentWith(map[string]string{
+			"HOMEWORLDZ_CONFIG_DIR":             filepath.Join(root, "config"),
+			"HOMEWORLDZ_DATABASE_URL":           databaseURL,
+			"HOMEWORLDZ_GRID_PUBLIC_URL":        gridURL,
+			"HOMEWORLDZ_GRID_SERVICE_TOKEN":     serviceToken,
+			"HOMEWORLDZ_GRID_URL":               gridURL,
+			"HOMEWORLDZ_REGION_PUBLIC_ENDPOINT": replicaRegionURL,
+			"HOMEWORLDZ_REGION_DATA_PATH":       replicaDataPath,
+			"HOMEWORLDZ_REGION_ASSET_PATH":      replicaAssetPath,
+			"HOMEWORLDZ_REGION_NAME":            "Smoke Replica Region",
+			"HOMEWORLDZ_REGION_GRID_X":          "1001",
+			"HOMEWORLDZ_REGION_GRID_Y":          "1000",
+			"HOMEWORLDZ_REGION_PORT":            "42011",
+			"HOMEWORLDZ_VIEWER_PORT":            "42012",
+		})
+		replica, err := startChild(regionExecutable, root, replicaEnvironment,
+			filepath.Join(logDirectory, stamp+"-replica-region.stdout.log"),
+			filepath.Join(logDirectory, stamp+"-replica-region.stderr.log"))
+		if err != nil {
+			return fmt.Errorf("start replica region: %w", err)
+		}
+		defer replica.stop()
+		if err := waitReady(ctx, replicaRegionURL+"/ready", replica); err != nil {
+			return fmt.Errorf("replica region did not become ready (inspect %s): %w", logDirectory, err)
+		}
+		if err := validateAssetReplica(
+			ctx, gridURL, replicaRegionURL, serviceToken, federationProbeAssetID); err != nil {
+			return fmt.Errorf("validate asset replication: %w", err)
+		}
 		fmt.Println("Smoke-test launcher validation completed.")
 		return nil
 	}
@@ -290,6 +328,67 @@ func validateAssetFederation(ctx context.Context, gridBase, regionBase, serviceT
 	}
 	if length := assetResponse.Header.Get("Content-Length"); length != "" && length != strconv.FormatInt(metadata.Size, 10) {
 		return errors.New("region asset Content-Length does not match grid metadata")
+	}
+	return nil
+}
+
+func validateAssetReplica(ctx context.Context, gridBase, replicaBase, serviceToken, assetID string) error {
+	request := func(method, url string) (*http.Response, error) {
+		req, err := http.NewRequestWithContext(ctx, method, url, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Authorization", "Bearer "+serviceToken)
+		return http.DefaultClient.Do(req)
+	}
+	replicateResponse, err := request(
+		http.MethodPost, strings.TrimRight(replicaBase, "/")+"/api/v1/assets/"+assetID+"/replicate")
+	if err != nil {
+		return fmt.Errorf("request replica creation: %w", err)
+	}
+	replicateResponse.Body.Close()
+	if replicateResponse.StatusCode != http.StatusOK {
+		return fmt.Errorf("replica creation status %s", replicateResponse.Status)
+	}
+	metadataResponse, err := request(
+		http.MethodGet, strings.TrimRight(gridBase, "/")+"/api/v1/assets/"+assetID)
+	if err != nil {
+		return fmt.Errorf("request replicated metadata: %w", err)
+	}
+	defer metadataResponse.Body.Close()
+	if metadataResponse.StatusCode != http.StatusOK {
+		return fmt.Errorf("replicated metadata status %s", metadataResponse.Status)
+	}
+	var metadata assetFederationMetadata
+	if err := json.NewDecoder(metadataResponse.Body).Decode(&metadata); err != nil {
+		return fmt.Errorf("decode replicated metadata: %w", err)
+	}
+	foundReplica := false
+	for _, location := range metadata.Locations {
+		if strings.TrimRight(location.Endpoint, "/") == strings.TrimRight(replicaBase, "/") && !location.Origin {
+			foundReplica = true
+			break
+		}
+	}
+	if !foundReplica {
+		return errors.New("grid metadata did not include the expected replica location")
+	}
+	assetResponse, err := request(
+		http.MethodGet, strings.TrimRight(replicaBase, "/")+"/api/v1/assets/"+assetID)
+	if err != nil {
+		return fmt.Errorf("request replicated asset: %w", err)
+	}
+	defer assetResponse.Body.Close()
+	if assetResponse.StatusCode != http.StatusOK {
+		return fmt.Errorf("replicated asset status %s", assetResponse.Status)
+	}
+	content, err := io.ReadAll(io.LimitReader(assetResponse.Body, metadata.Size+1))
+	if err != nil {
+		return fmt.Errorf("read replicated asset: %w", err)
+	}
+	hash := sha256.Sum256(content)
+	if int64(len(content)) != metadata.Size || fmt.Sprintf("%x", hash) != metadata.SHA256 {
+		return errors.New("replicated asset bytes do not match grid metadata")
 	}
 	return nil
 }
