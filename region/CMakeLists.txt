@@ -4,6 +4,7 @@ add_library(homeworldz-region-core
   src/grid_client.cpp
   src/http_response.cpp
   src/object_asset.cpp
+  src/physics_scene.cpp
   src/physics_scenarios.cpp
   src/region_config.cpp
   src/region_storage.cpp

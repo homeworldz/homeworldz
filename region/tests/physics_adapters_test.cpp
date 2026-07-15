@@ -1,4 +1,5 @@
 #include "homeworldz/physics_adapters.h"
+#include "homeworldz/physics_scene.h"
 
 #include <array>
 #include <cmath>
@@ -62,10 +63,36 @@ bool jolt_heightfield_test() {
     return body != 0 && obstacle_body != 0 && nearest && nearest->body == obstacle_body && hit &&
            hit->body == body && std::abs(hit->point.z - 6.0) < 0.1;
 }
+
+bool static_scene_mirror_test() {
+    auto world = homeworldz::physics::make_jolt_world();
+    homeworldz::physics::StaticSceneMirror mirror(*world);
+    homeworldz::scene::Scene scene;
+    const auto avatar = scene.create("avatar", {2, 2, 2});
+    const auto object = scene.create("rotated", {5, 0, 1});
+    auto* entity = scene.find(object);
+    entity->object_id = "00000000-0000-0000-0000-000000000001";
+    entity->scale = {4, 0.5, 0.5};
+    constexpr double half_sqrt_two = 0.7071067811865476;
+    entity->rotation = {0, 0, half_sqrt_two};
+    mirror.synchronize(scene);
+    const auto first_body = mirror.body_id(object);
+    const auto hit = world->ray_cast({5, 1, 10}, {0, 0, -1}, 20);
+    if (mirror.size() != 1 || mirror.body_id(avatar) != 0 || first_body == 0 ||
+        !hit || hit->body != first_body) return false;
+    entity->position = {8, 0, 1};
+    if (!mirror.synchronize(*entity) || mirror.body_id(object) == first_body) return false;
+    const auto moved_hit = world->ray_cast({8, 1, 10}, {0, 0, -1}, 20);
+    if (!moved_hit || moved_hit->body != mirror.body_id(object)) return false;
+    scene.remove(object);
+    mirror.synchronize(scene);
+    return mirror.size() == 0;
+}
 }
 
 int main() {
     if (!jolt_heightfield_test()) return 1;
+    if (!static_scene_mirror_test()) return 1;
     if (!smoke_test(homeworldz::physics::make_jolt_world())) return 1;
     if (!smoke_test(homeworldz::physics::make_physx_world())) return 1;
     return 0;
