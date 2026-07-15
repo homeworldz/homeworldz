@@ -127,6 +127,36 @@ std::optional<std::uint32_t> json_u32(std::string_view body, std::string_view na
     return value;
 }
 
+std::optional<std::uint64_t> json_u64(std::string_view body, std::string_view name) {
+    const auto marker = "\"" + std::string(name) + "\":";
+    const auto start = body.find(marker);
+    if (start == std::string_view::npos) return std::nullopt;
+    const auto value_start = start + marker.size();
+    std::uint64_t value{};
+    const auto result = std::from_chars(body.data() + value_start, body.data() + body.size(), value);
+    if (result.ec != std::errc{} || result.ptr == body.data() + value_start) return std::nullopt;
+    return value;
+}
+
+std::vector<AssetLocation> asset_locations_from_json(std::string_view body) {
+    std::vector<AssetLocation> locations;
+    constexpr std::string_view marker = "\"endpoint\":\"";
+    std::size_t position = 0;
+    while ((position = body.find(marker, position)) != std::string_view::npos) {
+        const auto value_start = position + marker.size();
+        const auto value_end = body.find('"', value_start);
+        if (value_end == std::string_view::npos) break;
+        const auto object_end = body.find('}', value_end);
+        if (object_end == std::string_view::npos) break;
+        const auto origin = body.find("\"origin\":true", value_end);
+        locations.push_back(AssetLocation{
+            std::string(body.substr(value_start, value_end - value_start)),
+            origin != std::string_view::npos && origin < object_end});
+        position = object_end + 1;
+    }
+    return locations;
+}
+
 std::optional<int> json_int(std::string_view body, std::string_view name) {
     const auto marker = "\"" + std::string(name) + "\":";
     const auto start = body.find(marker);
@@ -315,6 +345,27 @@ bool Client::register_asset(std::string_view asset_id, std::string_view creator_
                       ",\"endpoint\":" + api::json_string(endpoint) +
                       ",\"origin\":" + (origin ? "true" : "false") + '}';
     return transport_->send("POST", "/api/v1/assets", body).status_code == 201;
+}
+
+std::optional<FederatedAsset> Client::find_asset(std::string_view asset_id) {
+    const auto response = transport_->send("GET", "/api/v1/assets/" + std::string(asset_id), {});
+    if (response.status_code != 200) return std::nullopt;
+    FederatedAsset asset;
+    asset.asset_id = json_field(response.body, "id");
+    asset.creator_id = json_field(response.body, "creatorUserId");
+    asset.sha256 = json_field(response.body, "sha256");
+    const auto size = json_u64(response.body, "size");
+    asset.locations = asset_locations_from_json(response.body);
+    if (asset.asset_id != asset_id || asset.creator_id.empty() || asset.sha256.size() != 64 ||
+        !size || *size == 0 || asset.locations.empty()) return std::nullopt;
+    asset.size = *size;
+    return asset;
+}
+
+HttpResponse fetch_asset_from(std::string endpoint, std::string service_token,
+                              std::string_view asset_id) {
+    return socket_transport(std::move(endpoint), std::move(service_token))->send(
+        "GET", "/api/v1/assets/" + std::string(asset_id), {});
 }
 
 std::optional<InventoryItem> Client::copy_library_item(std::string_view user_id,

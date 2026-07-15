@@ -8,6 +8,7 @@
 #include <string_view>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 namespace homeworldz::grid {
 
@@ -44,6 +45,19 @@ struct ViewerSession {
 struct User {
     std::string id;
     std::string username;
+};
+
+struct AssetLocation {
+    std::string endpoint;
+    bool origin{};
+};
+
+struct FederatedAsset {
+    std::string asset_id;
+    std::string creator_id;
+    std::string sha256;
+    std::uint64_t size{};
+    std::vector<AssetLocation> locations;
 };
 
 struct TextureInventoryItem {
@@ -113,6 +127,7 @@ public:
     bool register_asset(std::string_view asset_id, std::string_view creator_id,
                         std::string_view sha256, std::uint64_t size,
                         std::string_view endpoint, bool origin);
+    std::optional<FederatedAsset> find_asset(std::string_view asset_id);
     std::optional<InventoryItem> copy_library_item(std::string_view user_id,
                                                    std::string_view source_item_id,
                                                    std::string_view destination_folder_id,
@@ -123,6 +138,9 @@ public:
 private:
     std::shared_ptr<Transport> transport_;
 };
+
+HttpResponse fetch_asset_from(std::string endpoint, std::string service_token,
+                              std::string_view asset_id);
 
 class ViewerSessionCache {
 public:

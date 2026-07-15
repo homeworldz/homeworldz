@@ -30,6 +30,8 @@ public:
         if (method == "GET" && path.find("/inventory/") != std::string_view::npos &&
             path.find("/items/") != std::string_view::npos)
             return {200, R"({"id":"44444444-4444-4444-8444-444444444444","ownerUserId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","creatorUserId":"77777777-7777-4777-8777-777777777777","folderId":"55555555-5555-4555-8555-555555555555","assetId":"66666666-6666-4666-8666-666666666666","assetType":6,"inventoryType":6,"name":"Prim2","description":"","flags":0,"basePermissions":647168,"currentPermissions":647168,"everyonePermissions":0,"nextPermissions":581632,"saleType":0,"salePrice":0})"};
+        if (method == "GET" && path.starts_with("/api/v1/assets/"))
+            return {200, R"({"id":"66666666-6666-4666-8666-666666666666","creatorUserId":"77777777-7777-4777-8777-777777777777","sha256":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","size":332,"locations":[{"endpoint":"http://origin.example:42001","origin":true,"verifiedAt":"2026-07-14T00:00:00Z"},{"endpoint":"http://replica.example:42001","origin":false,"verifiedAt":"2026-07-14T00:00:00Z"}]})"};
         if (method == "GET") return {200, R"({"id":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","userId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","expiresAt":"2026-07-14T00:00:00Z","viewerCircuitCode":123456,"destinationRegionId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"})"};
         return {500, {}};
     }
@@ -139,6 +141,12 @@ int main() {
         transport->requests.back().path != "/api/v1/assets" ||
         transport->requests.back().body.find(R"("size":332)") == std::string::npos ||
         transport->requests.back().body.find(R"("origin":true)") == std::string::npos)
+        return 1;
+    const auto asset = client.find_asset("66666666-6666-4666-8666-666666666666");
+    if (!asset || asset->creator_id != "77777777-7777-4777-8777-777777777777" ||
+        asset->size != 332 || asset->locations.size() != 2 || !asset->locations[0].origin ||
+        asset->locations[1].origin || asset->locations[1].endpoint != "http://replica.example:42001" ||
+        transport->requests.back().path != "/api/v1/assets/66666666-6666-4666-8666-666666666666")
         return 1;
     const auto copied = client.copy_library_item(
         session->agent_id, "d5e46210-b9d1-11dc-95ff-0800200c9a66",

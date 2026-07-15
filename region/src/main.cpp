@@ -30,6 +30,7 @@
 #include "homeworldz/region_config.h"
 #include "homeworldz/region_storage.h"
 #include "homeworldz/scene.h"
+#include "homeworldz/sha256.h"
 #include "homeworldz/simulation_loop.h"
 #include "homeworldz/viewer_capabilities.h"
 #include "homeworldz/viewer_protocol.h"
@@ -536,6 +537,47 @@ int main() {
 #endif
         return 1;
     }
+    const auto read_federated_asset = [&](std::string_view asset_id) -> std::vector<std::byte> {
+        try {
+            return storage->read_asset(asset_id);
+        } catch (const std::exception&) {
+            if (!viewer_grid) throw;
+        }
+        const auto metadata = viewer_grid->find_asset(asset_id);
+        if (!metadata) throw std::runtime_error("asset federation metadata was not found");
+        const auto normalized_region_endpoint = [&] {
+            auto endpoint = region_public_endpoint;
+            while (!endpoint.empty() && endpoint.back() == '/') endpoint.pop_back();
+            return endpoint;
+        }();
+        for (const auto& location : metadata->locations) {
+            auto endpoint = location.endpoint;
+            while (!endpoint.empty() && endpoint.back() == '/') endpoint.pop_back();
+            if (endpoint == normalized_region_endpoint) continue;
+            homeworldz::grid::HttpResponse response;
+            try {
+                response = homeworldz::grid::fetch_asset_from(
+                    endpoint, service_token, metadata->asset_id);
+            } catch (const std::exception&) {
+                continue;
+            }
+            if (response.status_code != 200 || response.body.size() != metadata->size) continue;
+            const auto content = std::span(
+                reinterpret_cast<const std::byte*>(response.body.data()), response.body.size());
+            if (homeworldz::crypto::sha256_hex(content) != metadata->sha256) continue;
+            const auto stored = storage->store_asset(
+                metadata->asset_id, metadata->creator_id, content);
+            if (!viewer_grid->register_asset(
+                    stored.viewer_id, stored.creator_id, stored.sha256, stored.size,
+                    region_public_endpoint, false))
+                throw std::runtime_error("register replicated asset failed");
+            std::cout << "{\"level\":\"info\",\"message\":\"region asset replicated\",\"assetId\":"
+                      << homeworldz::api::json_string(stored.viewer_id) << ",\"source\":"
+                      << homeworldz::api::json_string(endpoint) << "}" << std::endl;
+            return {content.begin(), content.end()};
+        }
+        throw std::runtime_error("no verified asset replica was available");
+    };
     homeworldz::simulation::FixedStepLoop simulation(scene);
     auto previous_tick = std::chrono::steady_clock::now();
     auto next_snapshot = previous_tick + std::chrono::seconds(30);
@@ -716,7 +758,7 @@ int main() {
                                 homeworldz::viewer::event_queue_xml(++event_id, event));
                         } else if (authorized && texture && homeworldz::viewer::parse_uuid(texture->second)) {
                             try {
-                                const auto asset = storage->read_asset(texture->second);
+                                const auto asset = read_federated_asset(texture->second);
                                 response = homeworldz::http::response_for_content(
                                     request, 200, "image/x-j2c",
                                     std::string(reinterpret_cast<const char*>(asset.data()), asset.size()));
@@ -729,7 +771,7 @@ int main() {
                         } else if (authorized && viewer_asset &&
                                    homeworldz::viewer::parse_uuid(viewer_asset->second)) {
                             try {
-                                const auto asset = storage->read_asset(viewer_asset->second);
+                                const auto asset = read_federated_asset(viewer_asset->second);
                                 response = homeworldz::http::response_for_content(
                                     request, 200, "application/octet-stream",
                                     std::string(reinterpret_cast<const char*>(asset.data()), asset.size()));
@@ -1161,7 +1203,7 @@ int main() {
                                 const auto transfer_key = endpoint + '|' + asset_id;
                                 if (active_texture_transfers.contains(transfer_key)) continue;
                                 try {
-                                    const auto asset = storage->read_asset(asset_id);
+                                    const auto asset = read_federated_asset(asset_id);
                                     auto payloads = homeworldz::viewer::encode_image_transfer(
                                         requested.image_id, asset, requested.packet);
                                     if (payloads.empty()) continue;
@@ -1907,7 +1949,7 @@ int main() {
                                 if (item && item->asset_type == 6 && item->inventory_type == 6 &&
                                     (!rez->remove_item ||
                                      (item->current_permissions & homeworldz::scene::permission_copy) != 0)) {
-                                    const auto content = storage->read_asset(item->asset_id);
+                                    const auto content = read_federated_asset(item->asset_id);
                                     const auto asset = homeworldz::asset::parse_object_asset(content);
                                     std::optional<homeworldz::scene::Vector3> placement;
                                     if (asset && rez->bypass_raycast) {
