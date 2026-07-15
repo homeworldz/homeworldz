@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/homeworldz/homeworldz/grid/internal/assetmeta"
 	"github.com/homeworldz/homeworldz/grid/internal/config"
 	"github.com/homeworldz/homeworldz/grid/internal/httpapi"
 	"github.com/homeworldz/homeworldz/grid/internal/identity"
@@ -50,6 +51,7 @@ func main() {
 			Identity:      identityStore(db),
 			Presence:      presenceStore(db),
 			Inventory:     inventoryStore(db),
+			Assets:        assetStore(db),
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
@@ -98,4 +100,11 @@ func inventoryStore(db *sql.DB) inventory.Store {
 		return nil
 	}
 	return inventory.NewPostgresStore(db)
+}
+
+func assetStore(db *sql.DB) assetmeta.Store {
+	if db == nil {
+		return nil
+	}
+	return assetmeta.NewPostgresStore(db)
 }

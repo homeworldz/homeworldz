@@ -476,6 +476,55 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/assets:
+    parameters:
+      - $ref: "#/components/parameters/RequestId"
+    post:
+      operationId: registerAssetMetadata
+      summary: Register an immutable asset origin or verified replica
+      security:
+        - ServiceToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegisterAssetRequest" }
+      responses:
+        "201":
+          description: Asset metadata registered
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetMetadata" }
+        "400":
+          description: Invalid asset registration
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: Asset UUID conflicts with immutable metadata
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/assets/{assetId}:
+    parameters:
+      - $ref: "#/components/parameters/RequestId"
+      - $ref: "#/components/parameters/AssetId"
+    get:
+      operationId: getAssetMetadata
+      summary: Look up immutable asset metadata and verified locations
+      security:
+        - ServiceToken: []
+      responses:
+        "200":
+          description: Asset metadata and locations
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetMetadata" }
+        "404":
+          description: Asset metadata was not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 components:
   parameters:
     RequestId:
@@ -521,6 +570,13 @@ components:
       required: true
       schema:
         type: integer
+    AssetId:
+      name: assetId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
   headers:
     RequestId:
       required: true
@@ -632,6 +688,35 @@ components:
         presence:
           type: array
           items: { $ref: "#/components/schemas/Presence" }
+    RegisterAssetRequest:
+      type: object
+      additionalProperties: false
+      required: [id, creatorUserId, sha256, size, endpoint, origin]
+      properties:
+        id: { type: string, format: uuid }
+        creatorUserId: { type: string, format: uuid }
+        sha256: { type: string, pattern: "^[0-9a-f]{64}$" }
+        size: { type: integer, format: int64, minimum: 1 }
+        endpoint: { type: string, format: uri }
+        origin: { type: boolean }
+    AssetLocation:
+      type: object
+      required: [endpoint, origin, verifiedAt]
+      properties:
+        endpoint: { type: string, format: uri }
+        origin: { type: boolean }
+        verifiedAt: { type: string, format: date-time }
+    AssetMetadata:
+      type: object
+      required: [id, creatorUserId, sha256, size, locations]
+      properties:
+        id: { type: string, format: uuid }
+        creatorUserId: { type: string, format: uuid }
+        sha256: { type: string, pattern: "^[0-9a-f]{64}$" }
+        size: { type: integer, format: int64, minimum: 1 }
+        locations:
+          type: array
+          items: { $ref: "#/components/schemas/AssetLocation" }
     InventoryFolder:
       type: object
       required: [id, ownerUserId, parentId, name, typeDefault, version]

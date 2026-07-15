@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/homeworldz/homeworldz/grid/internal/assetmeta"
 	"github.com/homeworldz/homeworldz/grid/internal/identity"
 	"github.com/homeworldz/homeworldz/grid/internal/inventory"
 	"github.com/homeworldz/homeworldz/grid/internal/presence"
@@ -29,6 +30,7 @@ type API struct {
 	identity  identity.Store
 	presence  presence.Store
 	inventory inventory.Store
+	assets    assetmeta.Store
 }
 
 type Options struct {
@@ -39,11 +41,13 @@ type Options struct {
 	Identity      identity.Store
 	Presence      presence.Store
 	Inventory     inventory.Store
+	Assets        assetmeta.Store
 }
 
 func New(ready ReadinessChecker, version string, options Options) http.Handler {
 	a := &API{ready: ready, version: version, publicURL: strings.TrimRight(options.GridPublicURL, "/"),
-		regions: options.Regions, identity: options.Identity, presence: options.Presence, inventory: options.Inventory}
+		regions: options.Regions, identity: options.Identity, presence: options.Presence,
+		inventory: options.Inventory, assets: options.Assets}
 	if a.publicURL == "" {
 		a.publicURL = "http://127.0.0.1:42000"
 	}
@@ -69,6 +73,8 @@ func New(ready ReadinessChecker, version string, options Options) http.Handler {
 	mux.HandleFunc("/api/v1/presence", a.presenceRoot)
 	mux.HandleFunc("/api/v1/presence/", a.presenceByUser)
 	mux.HandleFunc("/api/v1/inventory/", a.inventoryByUser)
+	mux.HandleFunc("/api/v1/assets", a.assetsRoot)
+	mux.HandleFunc("/api/v1/assets/", a.assetByID)
 	mux.HandleFunc("/", a.notFound)
 	return withRequestID(withRequestLogging(
 		authenticateInternal(mux, options.ServiceToken), options.Logger,

@@ -102,3 +102,12 @@ type MoveInventoryItemRequest struct {
 	FolderID string `json:"folderId"`
 	Name     string `json:"name"`
 }
+
+type RegisterAssetRequest struct {
+	ID            string `json:"id"`
+	CreatorUserID string `json:"creatorUserId"`
+	SHA256        string `json:"sha256"`
+	Size          int64  `json:"size"`
+	Endpoint      string `json:"endpoint"`
+	Origin        bool   `json:"origin"`
+}
