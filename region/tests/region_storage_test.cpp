@@ -38,6 +38,7 @@ int main() {
         primitive->physics_friction = 0.7;
         primitive->physics_restitution = 0.25;
         primitive->physics_gravity_multiplier = 1.5;
+        primitive->texture_entry = {std::byte{0xaa}, std::byte{0xbb}, std::byte{0xcc}};
         std::filesystem::create_directories(path);
         sqlite3* legacy_database = nullptr;
         if (sqlite3_open((path / "region.db").string().c_str(), &legacy_database) != SQLITE_OK) return 1;
@@ -94,6 +95,7 @@ int main() {
                 restored_second->physics_friction != 0.7 ||
                 restored_second->physics_restitution != 0.25 ||
                 restored_second->physics_gravity_multiplier != 1.5 ||
+                restored_second->texture_entry != primitive->texture_entry ||
                 restored.create("next") != 3) return 1;
 
             const std::array content{std::byte{0x00}, std::byte{0x7f}, std::byte{0xff}, std::byte{0x42}};

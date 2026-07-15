@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -50,6 +51,7 @@ struct Entity {
     std::uint64_t creation_date{};
     Vector3 rotation;
     std::string description;
+    std::vector<std::byte> texture_entry;
     bool avatar_flying{};
     bool physical{};
     bool phantom{};

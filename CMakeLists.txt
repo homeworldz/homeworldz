@@ -1,7 +1,11 @@
 cmake_minimum_required(VERSION 3.24)
 project(homeworldz VERSION 0.1.0 LANGUAGES CXX)
 
-set(HOMEWORLDZ_VERSION "dev" CACHE STRING "Version reported by HomeWorldz executables")
+file(STRINGS "${CMAKE_SOURCE_DIR}/VERSION" HOMEWORLDZ_VERSION LIMIT_COUNT 1)
+string(STRIP "${HOMEWORLDZ_VERSION}" HOMEWORLDZ_VERSION)
+if(NOT HOMEWORLDZ_VERSION MATCHES "^[A-Za-z0-9._-]+$")
+  message(FATAL_ERROR "VERSION must contain a release-safe version string")
+endif()
 
 find_package(unofficial-sqlite3 CONFIG QUIET)
 find_package(Jolt CONFIG QUIET)

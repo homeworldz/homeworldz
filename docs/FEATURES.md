@@ -53,6 +53,10 @@ currency as credits (`C$`) for viewer interfaces that insist on displaying a
 currency beside zero. Credits may support other features later, but texture
 upload pricing is not reserved as an economy mechanism.
 
+Primitive texture entries are retained as viewer-protocol data, including
+per-face texture selection and color tint. They persist across region restarts
+and are included when an object is taken to inventory and re-rezzed.
+
 ### Internal service boundaries
 
 HomeWorldz uses a C++20 region server, Go grid services, HTTP/JSON internal

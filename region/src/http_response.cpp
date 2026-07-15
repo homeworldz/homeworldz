@@ -123,6 +123,10 @@ Response response_for_content(std::string_view request, int status_code,
 }
 
 Response response_for(std::string_view request) {
+    return response_for(request, HOMEWORLDZ_VERSION);
+}
+
+Response response_for(std::string_view request, std::string_view version) {
     std::string method;
     std::string path;
     parse_request_line(request, method, path);
@@ -141,7 +145,7 @@ Response response_for(std::string_view request) {
     } else if (method == "GET" && path == "/version") {
         status_code = 200;
         status = "HTTP/1.1 200 OK\r\n";
-        body = api::to_json(api::Version{"region", HOMEWORLDZ_VERSION, std::string(api::api_version)});
+        body = api::to_json(api::Version{"region", std::string(version), std::string(api::api_version)});
     } else if (path == "/ping" || path == "/ready" || path == "/version") {
         status_code = 405;
         status = "HTTP/1.1 405 Method Not Allowed\r\n";

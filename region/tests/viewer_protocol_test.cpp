@@ -303,6 +303,16 @@ bool message_codecs() {
         {std::byte{1}, std::byte{0x78}, std::byte{0x56}, std::byte{0x34},
          std::byte{0x12}, std::byte{0x01}});
     const auto object_material = decode_object_material(object_material_payload);
+    auto object_image_payload = bytes({0xff, 0xff, 0x00, 0x60});
+    object_image_payload.insert(
+        object_image_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
+    object_image_payload.insert(
+        object_image_payload.end(), expected.session_id.begin(), expected.session_id.end());
+    object_image_payload.insert(object_image_payload.end(),
+        {std::byte{1}, std::byte{0x78}, std::byte{0x56}, std::byte{0x34},
+         std::byte{0x12}, std::byte{}, std::byte{3}, std::byte{},
+         std::byte{0xaa}, std::byte{0xbb}, std::byte{0xcc}});
+    const auto object_image = decode_object_image(object_image_payload);
     auto family_payload = bytes({0xff, 0x05});
     family_payload.insert(family_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
     family_payload.insert(family_payload.end(), expected.session_id.begin(), expected.session_id.end());
@@ -448,6 +458,10 @@ bool message_codecs() {
            object_material->objects.size() == 1 &&
            object_material->objects[0].local_id == 0x12345678 &&
            object_material->objects[0].material == 0x01 &&
+           object_image && object_image->agent_id == expected.agent_id &&
+           object_image->session_id == expected.session_id && object_image->objects.size() == 1 &&
+           object_image->objects[0].local_id == 0x12345678 &&
+           object_image->objects[0].texture_entry == bytes({0xaa, 0xbb, 0xcc}) &&
            family && family->request_flags == 0x01020304 && family->object_id == expected.agent_id &&
            encoded_properties.size() > 180 && encoded_properties[0] == std::byte{0xff} &&
            encoded_properties[1] == std::byte{0x09} && encoded_properties[2] == std::byte{1} &&

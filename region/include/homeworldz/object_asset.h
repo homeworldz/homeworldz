@@ -7,6 +7,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <vector>
 
 namespace homeworldz::asset {
 
@@ -20,6 +21,7 @@ struct ObjectAsset {
     double physics_friction{0.6};
     double physics_restitution{0.5};
     double physics_gravity_multiplier{1.0};
+    std::vector<std::byte> texture_entry;
 };
 
 std::optional<ObjectAsset> parse_object_asset(std::span<const std::byte> content);

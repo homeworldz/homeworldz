@@ -7,6 +7,8 @@ grid database. If you operate the central grid too, complete the
 
 Development snapshots can now be assembled as release ZIPs. Public release
 publication and an installer remain future work.
+Archive names, service metadata, and the packaged `VERSION` file are derived
+from the repository's root `VERSION` source when the package is built.
 
 ## Information to obtain from the grid operator
 
@@ -31,6 +33,8 @@ program and its static assets:
 ```text
 homeworldz-region/
   INSTALL-REGION.md
+  INSTALL-GRID.md         # reference for operators hosting both services
+  VERSION
   homeworldz-region[.exe]
   *.dll                 # Windows runtime libraries, when required
   config/
@@ -42,6 +46,9 @@ homeworldz-region/
     region/
       terrain/plateau-square.raw
       ...
+  docs/
+    FEATURES.md
+    ROADMAP.md
 ```
 
 Extract the package into a dedicated directory. The packaged region will not

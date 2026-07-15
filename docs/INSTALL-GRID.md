@@ -8,6 +8,8 @@ PostgreSQL credentials.
 
 Development snapshots can now be assembled as release ZIPs. Public release
 publication and an installer remain future work.
+Archive names, executable metadata, and the packaged `VERSION` file are derived
+from the repository's root `VERSION` source when the package is built.
 
 ## Expected grid package
 
@@ -18,6 +20,8 @@ bootstrap programs plus the files they need:
 ```text
 homeworldz-grid/
   INSTALL-GRID.md
+  INSTALL-REGION.md       # reference for connected region owners
+  VERSION
   homeworldz-grid[.exe]
   bootstrap-grid[.exe]
   configure-library[.exe]
@@ -28,6 +32,9 @@ homeworldz-grid/
       grid-cloud.ini        # direct public port 80
   db/
     migrations/*.up.sql
+  docs/
+    FEATURES.md
+    ROADMAP.md
 ```
 
 Extract it to a dedicated directory. Run the commands in this guide from that

@@ -32,7 +32,7 @@ type archiveEntry struct {
 
 func main() {
 	var opts options
-	flag.StringVar(&opts.version, "version", "dev", "release version used in archive names")
+	flag.StringVar(&opts.version, "version", "", "override the repository VERSION for a preview package")
 	flag.StringVar(&opts.outputDirectory, "output", "dist", "release archive output directory")
 	flag.StringVar(&opts.regionExecutable, "region-executable", "", "path to the native homeworldz-region executable")
 	flag.Parse()
@@ -46,11 +46,19 @@ func run(ctx context.Context, opts options) error {
 	if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
 		return errors.New("native release packaging currently supports windows-amd64")
 	}
-	version, err := safeVersion(opts.version)
+	root, err := repositoryRoot()
 	if err != nil {
 		return err
 	}
-	root, err := repositoryRoot()
+	requestedVersion := opts.version
+	if requestedVersion == "" {
+		content, readErr := os.ReadFile(filepath.Join(root, "VERSION"))
+		if readErr != nil {
+			return fmt.Errorf("read repository VERSION: %w", readErr)
+		}
+		requestedVersion = strings.TrimSpace(string(content))
+	}
+	version, err := safeVersion(requestedVersion)
 	if err != nil {
 		return err
 	}
@@ -66,6 +74,10 @@ func run(ctx context.Context, opts options) error {
 		return fmt.Errorf("create release workspace: %w", err)
 	}
 	defer os.RemoveAll(work)
+	versionFile := filepath.Join(work, "VERSION")
+	if err := os.WriteFile(versionFile, []byte(version+"\n"), 0o644); err != nil {
+		return fmt.Errorf("write packaged version: %w", err)
+	}
 
 	gridBins := []struct{ command, name string }{
 		{"./grid/cmd/grid", "homeworldz-grid.exe"},
@@ -81,10 +93,14 @@ func run(ctx context.Context, opts options) error {
 		gridEntries = append(gridEntries, archiveEntry{destination, binary.name})
 	}
 	gridEntries = append(gridEntries,
+		archiveEntry{versionFile, "VERSION"},
 		archiveEntry{filepath.Join(root, "config", "examples", "grid.ini"), "config/examples/grid.ini"},
 		archiveEntry{filepath.Join(root, "config", "examples", "grid-personal.ini"), "config/examples/grid-personal.ini"},
 		archiveEntry{filepath.Join(root, "config", "examples", "grid-cloud.ini"), "config/examples/grid-cloud.ini"},
 		archiveEntry{filepath.Join(root, "docs", "INSTALL-GRID.md"), "INSTALL-GRID.md"},
+		archiveEntry{filepath.Join(root, "docs", "INSTALL-REGION.md"), "INSTALL-REGION.md"},
+		archiveEntry{filepath.Join(root, "docs", "FEATURES.md"), "docs/FEATURES.md"},
+		archiveEntry{filepath.Join(root, "docs", "ROADMAP.md"), "docs/ROADMAP.md"},
 	)
 	gridEntries, err = appendTree(gridEntries, filepath.Join(root, "db", "migrations"), "db/migrations", func(path string) bool {
 		return strings.HasSuffix(path, ".up.sql")
@@ -98,11 +114,15 @@ func run(ctx context.Context, opts options) error {
 		return err
 	}
 	regionEntries := []archiveEntry{
+		{versionFile, "VERSION"},
 		{regionExecutable, "homeworldz-region.exe"},
 		{filepath.Join(root, "config", "examples", "region.ini"), "config/examples/region.ini"},
 		{filepath.Join(root, "config", "examples", "region-personal.ini"), "config/examples/region-personal.ini"},
 		{filepath.Join(root, "config", "examples", "region-cloud.ini"), "config/examples/region-cloud.ini"},
 		{filepath.Join(root, "docs", "INSTALL-REGION.md"), "INSTALL-REGION.md"},
+		{filepath.Join(root, "docs", "INSTALL-GRID.md"), "INSTALL-GRID.md"},
+		{filepath.Join(root, "docs", "FEATURES.md"), "docs/FEATURES.md"},
+		{filepath.Join(root, "docs", "ROADMAP.md"), "docs/ROADMAP.md"},
 	}
 	for _, dll := range siblingDLLs(regionExecutable) {
 		regionEntries = append(regionEntries, archiveEntry{dll, filepath.Base(dll)})

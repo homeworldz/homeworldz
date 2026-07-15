@@ -429,10 +429,18 @@ std::optional<homeworldz::viewer::StaticObject> static_object_from_entity(
                        static_cast<float>(entity.rotation.z)};
     object.scale = {static_cast<float>(entity.scale.x), static_cast<float>(entity.scale.y),
                     static_cast<float>(entity.scale.z)};
+    object.texture_entry = entity.texture_entry;
     return object;
 }
 
 std::string object_asset_json(const homeworldz::scene::Entity& entity) {
+    constexpr char hex[] = "0123456789abcdef";
+    std::string texture_entry(entity.texture_entry.size() * 2, '0');
+    for (std::size_t index = 0; index < entity.texture_entry.size(); ++index) {
+        const auto value = std::to_integer<unsigned>(entity.texture_entry[index]);
+        texture_entry[index * 2] = hex[value >> 4];
+        texture_entry[index * 2 + 1] = hex[value & 0x0f];
+    }
     return "{\"format\":\"homeworldz-object-v1\",\"creatorId\":" +
         homeworldz::api::json_string(entity.creator_id) + ",\"name\":" +
         homeworldz::api::json_string(entity.name) + ",\"scale\":[" +
@@ -447,6 +455,7 @@ std::string object_asset_json(const homeworldz::scene::Entity& entity) {
         ",\"physicsFriction\":" + std::to_string(entity.physics_friction) +
         ",\"physicsRestitution\":" + std::to_string(entity.physics_restitution) +
         ",\"physicsGravityMultiplier\":" + std::to_string(entity.physics_gravity_multiplier) +
+        ",\"textureEntry\":" + homeworldz::api::json_string(texture_entry) +
         ",\"basePermissions\":" + std::to_string(entity.base_permissions) +
         ",\"ownerPermissions\":" + std::to_string(entity.owner_permissions) +
         ",\"groupPermissions\":" + std::to_string(entity.group_permissions) +
@@ -488,6 +497,23 @@ std::pair<std::string, std::string> legacy_avatar_name(std::string_view username
     capitalize(last);
     return {std::move(first), std::move(last)};
 }
+
+std::string runtime_version() {
+    std::ifstream input("VERSION");
+    std::string value;
+    if (input && std::getline(input, value)) {
+        const auto first = value.find_first_not_of(" \t\r\n");
+        const auto last = value.find_last_not_of(" \t\r\n");
+        if (first != std::string::npos) value = value.substr(first, last - first + 1);
+        const bool valid = !value.empty() && value.size() <= 64 &&
+            std::all_of(value.begin(), value.end(), [](unsigned char character) {
+                return std::isalnum(character) || character == '.' || character == '-' ||
+                       character == '_';
+            });
+        if (valid) return value;
+    }
+    return HOMEWORLDZ_VERSION;
+}
 } // namespace
 
 int main() {
@@ -497,6 +523,7 @@ int main() {
 #endif
     std::signal(SIGINT, stop);
     std::signal(SIGTERM, stop);
+    const auto region_version = runtime_version();
 
     try {
         const auto config_directory = environment_value("HOMEWORLDZ_CONFIG_DIR", "config");
@@ -841,7 +868,7 @@ int main() {
                 const auto received_request = receive_http_request(client);
                 if (received_request) {
                     const std::string_view request(*received_request);
-                    auto response = homeworldz::http::response_for(request);
+                    auto response = homeworldz::http::response_for(request, region_version);
                     if (const auto asset_request = internal_asset_request(response.path)) {
                         const auto authorization = homeworldz::http::request_header_value(request, "Authorization");
                         const auto expected_method = asset_request->replicate ? "POST" : "GET";
@@ -1779,6 +1806,7 @@ int main() {
                                 static_cast<std::uint32_t>(region_grid_y * 256);
                             response.timestamp = static_cast<std::uint32_t>(
                                 std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
+                            response.channel_version = "HomeWorldz " + region_version;
                             if (!avatars.contains(endpoint)) {
                                 const auto name = homeworldz::viewer::format_uuid(identity->agent_id);
                                 homeworldz::scene::EntityId entity{};
@@ -2421,6 +2449,57 @@ int main() {
                                           << originals.size() << "}" << std::endl;
                             }
                         }
+                        const auto object_image =
+                            homeworldz::viewer::decode_object_image(packet->payload);
+                        if (object_image && object_image->agent_id == identity->agent_id &&
+                            object_image->session_id == identity->session_id) {
+                            std::unordered_map<homeworldz::scene::EntityId, std::vector<std::byte>> originals;
+                            std::unordered_set<homeworldz::scene::EntityId> requested_entities;
+                            const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
+                            for (const auto& update : object_image->objects) {
+                                auto* entity = scene.find(update.local_id);
+                                if (!entity) continue;
+                                requested_entities.insert(entity->id);
+                                if (entity->owner_id != user_id ||
+                                    (entity->owner_permissions & homeworldz::scene::permission_modify) == 0 ||
+                                    entity->texture_entry == update.texture_entry)
+                                    continue;
+                                originals.try_emplace(entity->id, entity->texture_entry);
+                                entity->texture_entry = update.texture_entry;
+                            }
+                            bool persisted = false;
+                            if (!originals.empty()) {
+                                try {
+                                    storage->save_snapshot(scene);
+                                    persisted = true;
+                                } catch (const std::exception& error) {
+                                    for (auto& [entity_id, texture_entry] : originals)
+                                        if (auto* entity = scene.find(entity_id))
+                                            entity->texture_entry = std::move(texture_entry);
+                                    std::cout << "{\"level\":\"error\",\"message\":\"primitive texture persistence failed\",\"error\":"
+                                              << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+                                }
+                            }
+                            const auto region_handle =
+                                (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
+                                static_cast<std::uint32_t>(region_grid_y * 256);
+                            for (const auto entity_id : requested_entities) {
+                                const auto* entity = scene.find(entity_id);
+                                if (!entity) continue;
+                                for (const auto& [recipient_endpoint, recipient] : avatars) {
+                                    const auto object = static_object_from_entity(*entity, recipient.user_id);
+                                    if (!object) continue;
+                                    if (const auto sent = circuits.send(recipient_endpoint,
+                                            homeworldz::viewer::encode_static_object_update(
+                                                region_handle, *object), true, now, true))
+                                        static_cast<void>(send_udp(
+                                            viewer_server, recipient_endpoint, *sent));
+                                }
+                            }
+                            if (persisted)
+                                std::cout << "{\"level\":\"info\",\"message\":\"primitive textures updated\",\"count\":"
+                                          << originals.size() << "}" << std::endl;
+                        }
                         const auto object_flags =
                             homeworldz::viewer::decode_object_flag_update(packet->payload);
                         if (object_flags && object_flags->agent_id == identity->agent_id &&
@@ -2753,6 +2832,7 @@ int main() {
                                             entity->physics_restitution = asset->physics_restitution;
                                             entity->physics_gravity_multiplier =
                                                 asset->physics_gravity_multiplier;
+                                            entity->texture_entry = asset->texture_entry;
                                             entity->description = item->description.empty()
                                                 ? asset->description : item->description;
                                             entity->base_permissions = item->base_permissions;

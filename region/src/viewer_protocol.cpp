@@ -71,6 +71,8 @@ constexpr std::array<std::byte, 4> object_duplicate_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x5a}};
 constexpr std::array<std::byte, 4> object_material_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x61}};
+constexpr std::array<std::byte, 4> object_image_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x60}};
 constexpr std::array<std::byte, 4> object_flag_update_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x5e}};
 constexpr std::array<std::byte, 2> request_object_properties_family_id{
@@ -299,6 +301,11 @@ std::uint32_t read_le_u32(std::span<const std::byte> data, std::size_t offset) {
            (std::to_integer<std::uint32_t>(data[offset + 1]) << 8) |
            (std::to_integer<std::uint32_t>(data[offset + 2]) << 16) |
            (std::to_integer<std::uint32_t>(data[offset + 3]) << 24);
+}
+
+std::uint16_t read_le_u16(std::span<const std::byte> data, std::size_t offset) {
+    return static_cast<std::uint16_t>(std::to_integer<std::uint16_t>(data[offset]) |
+        (std::to_integer<std::uint16_t>(data[offset + 1]) << 8));
 }
 
 float read_f32(std::span<const std::byte> data, std::size_t offset) {
@@ -1062,6 +1069,37 @@ std::optional<ObjectMaterial> decode_object_material(std::span<const std::byte> 
     return result;
 }
 
+std::optional<ObjectImage> decode_object_image(std::span<const std::byte> payload) {
+    constexpr std::size_t header_size = 37;
+    if (payload.size() < header_size ||
+        !std::equal(object_image_id.begin(), object_image_id.end(), payload.begin()))
+        return std::nullopt;
+    ObjectImage result;
+    std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
+    const auto count = std::to_integer<std::size_t>(payload[36]);
+    if (count == 0) return std::nullopt;
+    result.objects.reserve(count);
+    std::size_t offset = header_size;
+    for (std::size_t index = 0; index < count; ++index) {
+        if (offset + 7 > payload.size()) return std::nullopt;
+        ObjectImageUpdate update;
+        update.local_id = read_le_u32(payload, offset);
+        offset += 4;
+        const auto media_size = std::to_integer<std::size_t>(payload[offset++]);
+        if (offset + media_size + 2 > payload.size()) return std::nullopt;
+        offset += media_size;
+        const auto texture_size = static_cast<std::size_t>(read_le_u16(payload, offset));
+        offset += 2;
+        if (offset + texture_size > payload.size()) return std::nullopt;
+        update.texture_entry.assign(payload.begin() + offset, payload.begin() + offset + texture_size);
+        offset += texture_size;
+        result.objects.push_back(std::move(update));
+    }
+    if (offset != payload.size()) return std::nullopt;
+    return result;
+}
+
 std::optional<ObjectFlagUpdate> decode_object_flag_update(std::span<const std::byte> payload) {
     constexpr std::size_t fixed_size = 45;
     constexpr std::size_t extra_physics_size = 17;
@@ -1704,7 +1742,7 @@ std::vector<std::byte> encode_static_object_update(std::uint64_t region_handle, 
     output.push_back(std::byte{}); // one path revolution: (value * 0.015) + 1.0
     output.push_back(std::byte{}); // skew
     append_le_u16(output, 0); append_le_u16(output, 0); append_le_u16(output, 0); // profile
-    if (!append_binary(output, {}, 2) || !append_binary(output, {}, 1) ||
+    if (!append_binary(output, object.texture_entry, 2) || !append_binary(output, {}, 1) ||
         !append_binary(output, {}, 2)) return {}; // texture, animation, name/value
     const std::array<std::byte, 1> prim_count{std::byte{1}};
     if (!append_binary(output, prim_count, 2) || !append_binary(output, {}, 1)) return {}; // data, text

@@ -191,6 +191,15 @@ struct ObjectMaterial : AgentMessage {
     std::vector<ObjectMaterialUpdate> objects;
 };
 
+struct ObjectImageUpdate {
+    std::uint32_t local_id{};
+    std::vector<std::byte> texture_entry;
+};
+
+struct ObjectImage : AgentMessage {
+    std::vector<ObjectImageUpdate> objects;
+};
+
 struct ObjectFlagUpdate : AgentMessage {
     std::uint32_t local_id{};
     bool use_physics{};
@@ -404,6 +413,7 @@ struct StaticObject {
     std::array<float, 3> acceleration{};
     std::array<float, 3> rotation{};
     std::array<float, 3> scale{2.0F, 2.0F, 2.0F};
+    std::vector<std::byte> texture_entry;
 };
 
 std::vector<std::byte> encode_use_circuit_code(const UseCircuitCode& message);
@@ -438,6 +448,7 @@ std::optional<ObjectDescription> decode_object_description(std::span<const std::
 std::optional<ObjectPermissions> decode_object_permissions(std::span<const std::byte> payload);
 std::optional<ObjectDuplicate> decode_object_duplicate(std::span<const std::byte> payload);
 std::optional<ObjectMaterial> decode_object_material(std::span<const std::byte> payload);
+std::optional<ObjectImage> decode_object_image(std::span<const std::byte> payload);
 std::optional<ObjectFlagUpdate> decode_object_flag_update(std::span<const std::byte> payload);
 std::optional<RequestObjectPropertiesFamily> decode_request_object_properties_family(
     std::span<const std::byte> payload);

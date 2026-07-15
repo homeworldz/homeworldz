@@ -103,7 +103,12 @@ int main() {
     passed &= contains(ready.content, R"({"status":"ready"})");
 
     const auto version = homeworldz::http::response_for("GET /version HTTP/1.1\r\n\r\n");
-    passed &= contains(version.content, R"({"service":"region","version":"dev","apiVersion":"v1"})");
+    passed &= contains(version.content, std::string(R"({"service":"region","version":")") +
+        HOMEWORLDZ_VERSION + R"(","apiVersion":"v1"})");
+    const auto packaged_version =
+        homeworldz::http::response_for("GET /version HTTP/1.1\r\n\r\n", "1.2.3");
+    passed &= contains(
+        packaged_version.content, R"({"service":"region","version":"1.2.3","apiVersion":"v1"})");
 
     const auto missing = homeworldz::http::response_for("GET /missing HTTP/1.1\r\n\r\n");
     passed &= missing.status_code == 404;

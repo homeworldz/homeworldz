@@ -58,6 +58,20 @@ std::optional<std::string> string_after(std::string_view content, std::string_vi
     return std::nullopt;
 }
 
+std::optional<std::vector<std::byte>> bytes_from_hex(std::string_view value) {
+    if (value.size() % 2 != 0 || value.size() > 131070) return std::nullopt;
+    std::vector<std::byte> result(value.size() / 2);
+    for (std::size_t index = 0; index < result.size(); ++index) {
+        unsigned parsed{};
+        const auto converted = std::from_chars(
+            value.data() + index * 2, value.data() + index * 2 + 2, parsed, 16);
+        if (converted.ec != std::errc{} || converted.ptr != value.data() + index * 2 + 2)
+            return std::nullopt;
+        result[index] = static_cast<std::byte>(parsed);
+    }
+    return result;
+}
+
 } // namespace
 
 std::optional<ObjectAsset> parse_object_asset(std::span<const std::byte> content) {
@@ -79,6 +93,7 @@ std::optional<ObjectAsset> parse_object_asset(std::span<const std::byte> content
     auto physics_restitution = number_after(text, R"("physicsRestitution":)", position);
     position = 0;
     auto physics_gravity_multiplier = number_after(text, R"("physicsGravityMultiplier":)", position);
+    const auto texture_entry_hex = string_after(text, R"("textureEntry":")");
     if (!scale || !rotation || !description || !material ||
         scale->x <= 0.0 || scale->y <= 0.0 || scale->z <= 0.0 ||
         scale->x > 64.0 || scale->y > 64.0 || scale->z > 64.0 ||
@@ -96,9 +111,12 @@ std::optional<ObjectAsset> parse_object_asset(std::span<const std::byte> content
         *physics_restitution < 0.0 || *physics_restitution > 1.0 ||
         *physics_gravity_multiplier < -1.0 || *physics_gravity_multiplier > 28.0)
         return std::nullopt;
+    auto texture_entry = texture_entry_hex
+        ? bytes_from_hex(*texture_entry_hex) : std::optional<std::vector<std::byte>>{{}};
+    if (!texture_entry) return std::nullopt;
     return ObjectAsset{*scale, *rotation, static_cast<std::uint8_t>(*material), *description,
         static_cast<std::uint8_t>(*physics_shape_type), *physics_density, *physics_friction,
-        *physics_restitution, *physics_gravity_multiplier};
+        *physics_restitution, *physics_gravity_multiplier, std::move(*texture_entry)};
 }
 
 } // namespace homeworldz::asset

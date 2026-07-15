@@ -80,6 +80,32 @@ void apply_snapshot_material_defaults(scene::Entity& entity) {
     entity.physics_restitution = material.restitution;
 }
 
+std::string bytes_to_hex(std::span<const std::byte> bytes) {
+    constexpr char hex[] = "0123456789abcdef";
+    std::string result(bytes.size() * 2, '0');
+    for (std::size_t index = 0; index < bytes.size(); ++index) {
+        const auto value = std::to_integer<unsigned>(bytes[index]);
+        result[index * 2] = hex[value >> 4];
+        result[index * 2 + 1] = hex[value & 0x0f];
+    }
+    return result;
+}
+
+std::vector<std::byte> bytes_from_hex(std::string_view value) {
+    if (value.size() % 2 != 0 || value.size() > 131070)
+        throw std::runtime_error("invalid texture entry encoding");
+    std::vector<std::byte> result(value.size() / 2);
+    for (std::size_t index = 0; index < result.size(); ++index) {
+        unsigned parsed{};
+        const auto converted = std::from_chars(
+            value.data() + index * 2, value.data() + index * 2 + 2, parsed, 16);
+        if (converted.ec != std::errc{} || converted.ptr != value.data() + index * 2 + 2)
+            throw std::runtime_error("invalid texture entry encoding");
+        result[index] = static_cast<std::byte>(parsed);
+    }
+    return result;
+}
+
 class SnapshotReader {
 public:
     explicit SnapshotReader(std::string_view input) : input_(input) {}
@@ -343,6 +369,11 @@ private:
         expect_string("physicsGravityMultiplier");
         expect(":");
         result.physics_gravity_multiplier = number();
+        if (consume("}")) return result;
+        expect(",");
+        expect_string("textureEntry");
+        expect(":");
+        result.texture_entry = bytes_from_hex(string());
         expect("}");
         return result;
     }
@@ -394,7 +425,8 @@ std::string snapshot_json(const scene::Scene& scene) {
                 ",\"physicsFriction\":" + std::to_string(entity->physics_friction) +
                 ",\"physicsRestitution\":" + std::to_string(entity->physics_restitution) +
                 ",\"physicsGravityMultiplier\":" +
-                    std::to_string(entity->physics_gravity_multiplier) + '}';
+                    std::to_string(entity->physics_gravity_multiplier) +
+                ",\"textureEntry\":" + api::json_string(bytes_to_hex(entity->texture_entry)) + '}';
     }
     return json + "]}";
 }
