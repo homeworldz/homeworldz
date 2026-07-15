@@ -575,7 +575,11 @@ bool wearable_asset_codecs() {
     const auto agent = parse_uuid("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");
     const auto session = parse_uuid("11111111-2222-4333-8444-555555555555");
     const auto transaction = parse_uuid("99999999-8888-4777-8666-555555555555");
-    if (!agent || !session || !transaction) return false;
+    const auto secure = parse_uuid("dddddddd-dddd-4ddd-8ddd-dddddddddddd");
+    if (!agent || !session || !transaction || !secure ||
+        format_uuid(combine_uuids(*transaction, *secure)) !=
+            "a43650ca-1978-2e0b-9c01-1818739e7d32")
+        return false;
     auto upload = bytes({0xff, 0xff, 0x01, 0x4d});
     upload.insert(upload.end(), transaction->begin(), transaction->end());
     upload.insert(upload.end(), {std::byte{13}, std::byte{}, std::byte{},

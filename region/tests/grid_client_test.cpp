@@ -32,7 +32,7 @@ public:
             return {200, R"({"id":"44444444-4444-4444-8444-444444444444","ownerUserId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","creatorUserId":"77777777-7777-4777-8777-777777777777","folderId":"55555555-5555-4555-8555-555555555555","assetId":"66666666-6666-4666-8666-666666666666","assetType":6,"inventoryType":6,"name":"Prim2","description":"","flags":0,"basePermissions":647168,"currentPermissions":647168,"everyonePermissions":0,"nextPermissions":581632,"saleType":0,"salePrice":0})"};
         if (method == "GET" && path.starts_with("/api/v1/assets/"))
             return {200, R"({"id":"66666666-6666-4666-8666-666666666666","creatorUserId":"77777777-7777-4777-8777-777777777777","sha256":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","size":332,"locations":[{"endpoint":"http://origin.example:42001","origin":true,"verifiedAt":"2026-07-14T00:00:00Z"},{"endpoint":"http://replica.example:42001","origin":false,"verifiedAt":"2026-07-14T00:00:00Z"}]})"};
-        if (method == "GET") return {200, R"({"id":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","userId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","expiresAt":"2026-07-14T00:00:00Z","viewerCircuitCode":123456,"destinationRegionId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"})"};
+        if (method == "GET") return {200, R"({"id":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","secureSessionId":"dddddddd-dddd-4ddd-8ddd-dddddddddddd","userId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","expiresAt":"2026-07-14T00:00:00Z","viewerCircuitCode":123456,"destinationRegionId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"})"};
         return {500, {}};
     }
 
@@ -60,6 +60,7 @@ int main() {
         !lifecycle.region_id().empty()) return 1;
     const auto session = client.validate_viewer_session("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
     if (!session || session->agent_id != "cccccccc-cccc-4ccc-8ccc-cccccccccccc" ||
+        session->secure_session_id != "dddddddd-dddd-4ddd-8ddd-dddddddddddd" ||
         session->circuit_code != 123456 || session->destination_region_id != "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" ||
         transport->requests.back().method != "GET") return 1;
     const auto user = client.find_user(session->agent_id);

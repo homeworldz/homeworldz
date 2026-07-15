@@ -1326,8 +1326,15 @@ int main() {
                             if ((asset_upload->asset_type == 5 || asset_upload->asset_type == 13) &&
                                 !asset_upload->temporary) {
                                 try {
-                                    asset_id = homeworldz::viewer::random_uuid();
-                                    asset_uuid = *homeworldz::viewer::parse_uuid(asset_id);
+                                    const auto session = viewer_sessions ? viewer_sessions->validate(
+                                        homeworldz::viewer::format_uuid(identity->session_id)) : std::nullopt;
+                                    const auto secure_id = session ?
+                                        homeworldz::viewer::parse_uuid(session->secure_session_id) : std::nullopt;
+                                    if (!secure_id)
+                                        throw std::runtime_error("secure viewer session was unavailable");
+                                    asset_uuid = homeworldz::viewer::combine_uuids(
+                                        asset_upload->transaction_id, *secure_id);
+                                    asset_id = homeworldz::viewer::format_uuid(asset_uuid);
                                     const auto transaction_id =
                                         homeworldz::viewer::format_uuid(asset_upload->transaction_id);
                                     if (asset_upload->data.empty()) {

@@ -236,10 +236,12 @@ std::optional<ViewerSession> Client::validate_viewer_session(std::string_view se
     if (response.status_code != 200) return std::nullopt;
     ViewerSession session;
     session.session_id = json_field(response.body, "id");
+    session.secure_session_id = json_field(response.body, "secureSessionId");
     session.agent_id = json_field(response.body, "userId");
     session.destination_region_id = json_field(response.body, "destinationRegionId");
     const auto circuit = json_u32(response.body, "viewerCircuitCode");
-    if (session.session_id != session_id || session.agent_id.empty() || session.destination_region_id.empty() ||
+    if (session.session_id != session_id || session.secure_session_id.empty() || session.agent_id.empty() ||
+        session.destination_region_id.empty() ||
         !circuit || *circuit == 0)
         return std::nullopt;
     session.circuit_code = *circuit;

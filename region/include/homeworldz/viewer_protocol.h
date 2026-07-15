@@ -33,6 +33,7 @@ using Uuid = std::array<std::byte, 16>;
 
 std::optional<Uuid> parse_uuid(std::string_view text);
 std::string format_uuid(const Uuid& value);
+Uuid combine_uuids(const Uuid& first, const Uuid& second);
 
 struct UseCircuitCode {
     std::uint32_t circuit_code{};

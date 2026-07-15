@@ -37,6 +37,7 @@ struct RegionSettings {
 
 struct ViewerSession {
     std::string session_id;
+    std::string secure_session_id;
     std::string agent_id;
     std::uint32_t circuit_code{};
     std::string destination_region_id;

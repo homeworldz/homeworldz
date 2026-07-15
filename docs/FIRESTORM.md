@@ -300,7 +300,10 @@ Editing a worn shape or clothing item produces a new wearable asset before the
 viewer updates the inventory item's asset reference. HomeWorldz accepts the
 narrow legacy asset-transaction packets Firestorm still uses for this binary
 upload, including bounded multi-packet `xfer`, but keeps AISv3 as the inventory
-authority. The Grid relinks only an owned, modifiable clothing or body-part
+authority. Transfer UUIDs use the protocol-defined MD5 combination of the
+transaction and private secure-session UUID; the secure value is exposed only
+to authenticated region services and is never logged. The Grid relinks only
+an owned, modifiable clothing or body-part
 item, and only to an asset whose recorded creator is the editing avatar. The
 inventory item's original creator is preserved while the new asset records its
 actual uploader. Viewer acceptance of wearable edit persistence remains

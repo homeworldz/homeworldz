@@ -119,7 +119,15 @@ func (a *API) sessionByID(w http.ResponseWriter, r *http.Request) {
 		} else if err != nil {
 			writeJSON(w, http.StatusInternalServerError, Error{Code: "identity_store_error", Message: "session validation failed"})
 		} else {
-			writeJSON(w, http.StatusOK, session)
+			writeJSON(w, http.StatusOK, struct {
+				ID                  string    `json:"id"`
+				UserID              string    `json:"userId"`
+				ExpiresAt           time.Time `json:"expiresAt"`
+				SecureSessionID     string    `json:"secureSessionId"`
+				ViewerCircuitCode   uint32    `json:"viewerCircuitCode,omitempty"`
+				DestinationRegionID string    `json:"destinationRegionId,omitempty"`
+			}{session.ID, session.UserID, session.ExpiresAt, session.SecureID,
+				session.ViewerCircuitCode, session.DestinationRegionID})
 		}
 	case http.MethodDelete:
 		if err := a.identity.RevokeSession(r.Context(), id); errors.Is(err, identity.ErrSessionNotFound) {
