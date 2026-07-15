@@ -669,6 +669,16 @@ int main() {
               << ",\"message\":\"physics terrain initialized\",\"samples\":"
               << terrain_heightmap->size() << ",\"synchronized\":"
               << (physics_terrain_ready ? "true" : "false") << "}" << std::endl;
+    const auto collision_ground_height = [&](const homeworldz::scene::Vector3& position) {
+        if (physics_world && physics_terrain != 0) {
+            constexpr double ray_origin_height = 4096.0;
+            constexpr double ray_distance = 8192.0;
+            const auto hit = physics_world->ray_cast_body(
+                physics_terrain, {position.x, position.y, ray_origin_height}, {0, 0, -1}, ray_distance);
+            if (hit) return hit->point.z;
+        }
+        return ground_height(*terrain_heightmap, position);
+    };
     auto previous_tick = std::chrono::steady_clock::now();
     auto next_snapshot = previous_tick + std::chrono::seconds(30);
 
@@ -1654,7 +1664,7 @@ int main() {
                                 const auto geometry = known_geometry == avatar_geometries.end() ?
                                     homeworldz::viewer::AvatarGeometry{} : known_geometry->second;
                                 homeworldz::viewer::AvatarController controller{
-                                    spawn, ground_height(*terrain_heightmap, spawn),
+                                    spawn, collision_ground_height(spawn),
                                     geometry.height, geometry.hip_offset};
                                 const auto initial_position = controller.state().position;
                                 const auto initial_viewer_position = controller.viewer_position();
@@ -2583,7 +2593,7 @@ int main() {
                 avatar.next_presence = now + std::chrono::seconds(30);
             }
             avatar.controller.set_ground_height(
-                ground_height(*terrain_heightmap, avatar.controller.state().position));
+                collision_ground_height(avatar.controller.state().position));
             avatar.controller.step(elapsed);
             if (physics_world && avatar.physics_character != 0) {
                 const auto& controller_state = avatar.controller.state();
