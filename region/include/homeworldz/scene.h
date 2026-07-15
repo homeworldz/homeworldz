@@ -50,6 +50,7 @@ struct Entity {
     std::uint64_t creation_date{};
     Vector3 rotation;
     std::string description;
+    bool avatar_flying{};
 };
 
 struct RayIntersection {

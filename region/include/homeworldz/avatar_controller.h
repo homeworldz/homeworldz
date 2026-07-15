@@ -68,6 +68,7 @@ public:
     void expire_transient_controls();
     void set_avatar_geometry(double height, double hip_offset);
     void set_ground_height(double height);
+    void restore_motion(scene::Vector3 velocity, std::array<float, 3> rotation, bool flying);
     void synchronize_physics(scene::Vector3 position, scene::Vector3 velocity, bool grounded);
     void step(double seconds);
     const AvatarState& state() const { return state_; }

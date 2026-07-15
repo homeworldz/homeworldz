@@ -60,6 +60,7 @@ int main() {
             auto* entity = scene.find(first);
             if (entity == nullptr) return 1;
             entity->velocity.x = 1.0;
+            entity->avatar_flying = true;
             scene.step(1.0);
             storage.save_snapshot(scene);
             metadata = storage.snapshot_metadata();
@@ -70,7 +71,8 @@ int main() {
             const auto* restored_first = restored.find(first);
             const auto* restored_second = restored.find(second);
             if (restored_first == nullptr || restored_first->position.x != 2.0 ||
-                restored_first->velocity.x != 1.0 || restored_second == nullptr ||
+                restored_first->velocity.x != 1.0 || !restored_first->avatar_flying ||
+                restored_second == nullptr ||
                 restored_second->name != "second \"line\"\n" ||
                 restored_second->object_id != primitive->object_id ||
                 restored_second->owner_id != primitive->owner_id ||

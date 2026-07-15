@@ -97,6 +97,18 @@ void AvatarController::set_ground_height(double height) {
     if (std::isfinite(height)) ground_height_ = height;
 }
 
+void AvatarController::restore_motion(
+    scene::Vector3 velocity, std::array<float, 3> rotation, bool flying) {
+    if (std::isfinite(velocity.x) && std::isfinite(velocity.y) && std::isfinite(velocity.z))
+        state_.velocity = velocity;
+    if (std::all_of(rotation.begin(), rotation.end(), [](float value) { return std::isfinite(value); })) {
+        state_.rotation = rotation;
+        body_rotation_ = rotation;
+    }
+    state_.flying = flying;
+    if (flying) state_.grounded = false;
+}
+
 void AvatarController::synchronize_physics(
     scene::Vector3 position, scene::Vector3 velocity, bool grounded) {
     const auto was_grounded = state_.grounded;

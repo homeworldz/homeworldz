@@ -144,6 +144,12 @@ private:
         return value;
     }
 
+    bool boolean() {
+        if (consume("true")) return true;
+        if (consume("false")) return false;
+        fail("expected boolean");
+    }
+
     static int hex_digit(char value) {
         if (value >= '0' && value <= '9') return value - '0';
         if (value >= 'a' && value <= 'f') return value - 'a' + 10;
@@ -290,6 +296,11 @@ private:
         expect_string("description");
         expect(":");
         result.description = string();
+        if (consume("}")) return result;
+        expect(",");
+        expect_string("avatarFlying");
+        expect(":");
+        result.avatar_flying = boolean();
         expect("}");
         return result;
     }
@@ -332,7 +343,8 @@ std::string snapshot_json(const scene::Scene& scene) {
                 ",\"creationDate\":" + std::to_string(entity->creation_date) +
                 ",\"rotation\":[" + std::to_string(entity->rotation.x) + ',' +
                 std::to_string(entity->rotation.y) + ',' + std::to_string(entity->rotation.z) +
-                "],\"description\":" + api::json_string(entity->description) + '}';
+                "],\"description\":" + api::json_string(entity->description) +
+                ",\"avatarFlying\":" + (entity->avatar_flying ? "true" : "false") + '}';
     }
     return json + "]}";
 }

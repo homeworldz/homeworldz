@@ -1695,6 +1695,12 @@ int main() {
                                 homeworldz::viewer::AvatarController controller{
                                     spawn, collision_ground_height(spawn),
                                     geometry.height, geometry.hip_offset};
+                                if (persisted) controller.restore_motion(
+                                    persisted->velocity,
+                                    {static_cast<float>(persisted->rotation.x),
+                                     static_cast<float>(persisted->rotation.y),
+                                     static_cast<float>(persisted->rotation.z)},
+                                    persisted->avatar_flying);
                                 const auto initial_position = controller.state().position;
                                 const auto initial_viewer_position = controller.viewer_position();
                                 response.position = {static_cast<float>(initial_position.x),
@@ -1709,6 +1715,8 @@ int main() {
                                     live.physics_character = physics_world->create_character({
                                         entity, live.controller.state().position, 0.3,
                                         live.controller.state().height, 0.4});
+                                    physics_world->set_character_velocity(
+                                        live.physics_character, live.controller.state().velocity);
                                 }
                                 if (viewer_grid && registration)
                                     static_cast<void>(viewer_grid->update_presence(name, registration->region_id()));
@@ -2674,6 +2682,10 @@ int main() {
             if (auto* entity = scene.find(avatar.entity_id)) {
                 entity->position = avatar.controller.state().position;
                 entity->velocity = avatar.controller.state().velocity;
+                entity->rotation = {avatar.controller.state().rotation[0],
+                                    avatar.controller.state().rotation[1],
+                                    avatar.controller.state().rotation[2]};
+                entity->avatar_flying = avatar.controller.state().flying;
             }
             const auto& state = avatar.controller.state();
             const auto viewer_position = avatar.controller.viewer_position();

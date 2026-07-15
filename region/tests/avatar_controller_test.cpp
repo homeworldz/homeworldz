@@ -97,5 +97,9 @@ int main() {
         edge_avatar.state().position.z != 30 || edge_avatar.state().velocity.z != 3 ||
         edge_avatar.state().grounded)
         return 17;
+    edge_avatar.restore_motion({4, 5, 6}, {0, 0, 0.5F}, true);
+    if (!edge_avatar.state().flying || edge_avatar.state().grounded ||
+        edge_avatar.state().velocity.x != 4 || edge_avatar.state().rotation[2] != 0.5F)
+        return 18;
     return 0;
 }
