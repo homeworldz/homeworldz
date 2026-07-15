@@ -65,6 +65,7 @@ public:
                               double hip_offset = 0.0, double region_width = 256.0,
                               double region_height = 256.0);
     void apply(const AgentUpdate& update);
+    void expire_transient_controls();
     void set_avatar_geometry(double height, double hip_offset);
     void set_ground_height(double height);
     void step(double seconds);

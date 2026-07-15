@@ -79,6 +79,13 @@ void AvatarController::apply(const AgentUpdate& update) {
     state_.draw_distance = update.draw_distance;
 }
 
+void AvatarController::expire_transient_controls() {
+    constexpr auto transient_controls = control_forward | control_back | control_left | control_right |
+                                        control_up | control_down | control_fast_forward |
+                                        control_fast_left | control_fast_up;
+    controls_ &= ~transient_controls;
+}
+
 void AvatarController::set_avatar_geometry(double height, double hip_offset) {
     if (!std::isfinite(height)) return;
     state_.height = std::clamp(height, 1.0, 3.0);

@@ -68,7 +68,14 @@ struct LiveAvatar {
     std::chrono::steady_clock::time_point next_transform{};
     homeworldz::scene::Vector3 last_sent_position{};
     std::uint8_t ping_id{};
+    std::chrono::steady_clock::time_point last_agent_update{};
+    std::uint32_t last_agent_update_sequence{};
+    bool has_agent_update{};
 };
+
+bool sequence_is_newer(std::uint32_t candidate, std::uint32_t current) {
+    return static_cast<std::int32_t>(candidate - current) > 0;
+}
 
 struct QueuedTexturePacket {
     std::string asset_id;
@@ -2402,8 +2409,14 @@ int main() {
                         const auto update = homeworldz::viewer::decode_agent_update(packet->payload);
                         const auto avatar = avatars.find(endpoint);
                         if (update && avatar != avatars.end() && update->agent_id == identity->agent_id &&
-                            update->session_id == identity->session_id)
+                            update->session_id == identity->session_id &&
+                            (!avatar->second.has_agent_update || sequence_is_newer(
+                                packet->sequence, avatar->second.last_agent_update_sequence))) {
                             avatar->second.controller.apply(*update);
+                            avatar->second.last_agent_update = now;
+                            avatar->second.last_agent_update_sequence = packet->sequence;
+                            avatar->second.has_agent_update = true;
+                        }
                         const auto chat = homeworldz::viewer::decode_chat_from_viewer(packet->payload);
                         if (chat && avatar != avatars.end() && chat->agent_id == identity->agent_id &&
                             chat->session_id == identity->session_id && chat->channel == 0 &&
@@ -2454,6 +2467,9 @@ int main() {
         const auto elapsed = std::chrono::duration<double>(now - previous_tick).count();
         simulation.advance(elapsed);
         for (auto& [endpoint, avatar] : avatars) {
+            if (avatar.has_agent_update &&
+                now - avatar.last_agent_update > std::chrono::seconds(1))
+                avatar.controller.expire_transient_controls();
             if (now >= avatar.next_ping) {
                 if (const auto ping = circuits.send(endpoint,
                         homeworldz::viewer::encode_start_ping_check(++avatar.ping_id), false, now))

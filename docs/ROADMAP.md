@@ -42,7 +42,7 @@ acceptance tests pass.
   back to viewers.
 - [ ] Complete viewer-visible walking, turning, jumping, stopping, flight
   toggling, ascent, and descent without requiring a relog.
-- [ ] Add animation-state selection and synchronization for standing, walking,
+- [x] Add animation-state selection and synchronization for standing, walking,
   running, jumping, falling, flying, hovering, and landing.
 - [ ] Reconcile viewer prediction with the authoritative region position without
   visible snapping or drift.

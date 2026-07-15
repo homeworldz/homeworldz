@@ -28,6 +28,9 @@ int main() {
         avatar.state().camera_center[1] != 2.F || avatar.state().rotation != update.body_rotation)
         return 3;
     if (avatar.movement_animation() != homeworldz::viewer::MovementAnimation::walk) return 11;
+    avatar.expire_transient_controls();
+    avatar.step(0.1);
+    if (avatar.state().velocity.x != 0.0 || avatar.state().velocity.y != 0.0) return 15;
 
     update.control_flags = homeworldz::viewer::control_up;
     avatar.apply(update);

@@ -574,3 +574,15 @@ a hard-coded 256 m boundary. Live Firestorm acceptance passed on 2026-07-15:
 eastward and northward movement stopped at the hard viewer-visible coordinate
 of `256` (the viewer rounds the internal `255.7` m capsule center), with no
 continued motion to an invalid `257+` local coordinate.
+
+Authoritative locomotion animation selection passed live Firestorm acceptance
+on 2026-07-15. The region selects the canonical stand, walk, run, jump, fall,
+fly, hover, hover-up, hover-down, and land animations from authoritative
+controller state and broadcasts transitions with the avatar as their source.
+Jim Tarber's standing, movement, jumping, flight, and landing animations were
+visibly smooth and correct. That session also exposed one initially retained
+forward input. `AgentUpdate` is an unreliable UDP snapshot, so the region now
+rejects older per-avatar packet sequences and expires transient directional
+controls after one second without a fresh update, while retaining persistent
+flight mode. This prevents a lost key-release snapshot from carrying an avatar
+indefinitely and awaits a repeat live-session check.
