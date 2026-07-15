@@ -56,9 +56,11 @@ acceptance tests pass.
   heightfield immediately after viewer edits.
 - [x] Sample terrain continuously for provisional grounding rather than
   retaining only the height at the login position.
-- [ ] Support terrain walking, slopes, steps, falling, jumping, landing, flight,
+- [x] Support terrain walking, slopes, steps, falling, jumping, landing, flight,
   and collision-safe motion.
-- [ ] Collide avatars with static and dynamic scene objects while preserving
+- [x] Collide avatars with static scene objects while preserving practical
+  viewer movement behavior.
+- [ ] Collide avatars with dynamic scene objects while preserving
   practical viewer movement behavior.
 - [ ] Persist and restore position, orientation, velocity, flight state, and
   grounded state safely.

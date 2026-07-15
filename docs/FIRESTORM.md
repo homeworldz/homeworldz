@@ -597,7 +597,7 @@ forward/release, repeated direction changes, and movement down toward the lower
 shoreline all behaved correctly, with no continued, alternating, or visibly
 mis-predicted motion.
 
-The production Jolt avatar-capsule mirror passed live Firestorm acceptance on
+The initial production Jolt avatar-capsule mirror passed live Firestorm acceptance on
 2026-07-15. The region initialized Jolt through the engine-independent
 `physics::World` boundary, created a shape-height-derived capsule for Jim
 Tarber, synchronized it on the bounded fixed-step clock, and retained stable
@@ -615,11 +615,22 @@ grid, and region restart, the region reported `region-state` as its terrain
 source, the spike remained visible, and walking over it produced the expected
 avatar-height changes.
 
-Jolt terrain grounding passed live Firestorm acceptance on 2026-07-15. The
+Jolt terrain grounding passed its initial live Firestorm acceptance on 2026-07-15. The
 region mirrors all 65,536 authoritative samples into a correctly oriented Jolt
 heightfield at startup, replaces that collision body after viewer terrain edits,
-and obtains the controller's support height through a targeted physics ray cast.
+and initially obtained the controller's support height through a targeted physics ray cast.
 Jim Tarber walked over and stopped on the persisted spike, then flew and landed
 nearby without a visible regression. The HomeWorldz controller still owns
-movement policy while Jolt now supplies the terrain collision geometry; a full
-Jolt character-controller cutover remains separate work.
+movement policy while Jolt supplies the collision geometry.
+
+The production `CharacterVirtual` cutover passed live Firestorm acceptance on
+2026-07-15. Persisted and newly edited static prims are mirrored into Jolt with
+their scale and quaternion rotation. A vertical, appearance-height-derived,
+bottom-origin capsule follows HomeWorldz velocity policy while Jolt resolves its
+position and grounded state. Firestorm stepped smoothly onto the 0.25 m
+`Physics1`, remained stable after walking or falling onto it, landed stably on
+terrain, and was blocked by the live-resized 1.5 m `Physics2`. The acceptance
+also covered the required fixes for Z-up capsule orientation, Jolt's
+radius-based supporting plane, and clearing requested downward velocity from
+the viewer-visible state while supported; no easing through platforms or
+camera-wide bounce jitter remained.
