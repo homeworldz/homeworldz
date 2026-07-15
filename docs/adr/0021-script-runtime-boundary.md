@@ -1,6 +1,6 @@
 # ADR 0021: Script Runtime Boundary
 
-Status: Proposed
+Status: Accepted
 
 HomeWorldz will expose an LSL-compatible source language and event model to
 viewer-created content, but the authoritative scene and persistence formats
@@ -9,31 +9,24 @@ opaque module consumed through the C++ script engine boundary. The boundary
 owns identities, event queues, deterministic execution fuel, logical memory
 limits, host commands, diagnostics, and explicit persistent snapshots.
 
-Scripts execute only when the region scheduler grants a slice. Host functions
-enqueue validated commands for the authoritative scene loop rather than
-mutating scene state from runtime threads. Network, filesystem, clocks, random
-sources, and other ambient operating-system capabilities are unavailable
-unless HomeWorldz supplies a narrow host function. Persistence and region
-handoff occur at event boundaries using versioned engine snapshots; native VM
-stacks are not scene data.
+Scripts execute cooperatively on the authoritative region thread only when the
+region scheduler grants a bounded instruction slice. Host functions perform
+bounded work or begin nonblocking region operations; scripts cannot access
+network, filesystem, clocks, random sources, or other ambient operating-system
+capabilities directly.
 
-The recommended initial backend is Wasmtime running Core WebAssembly modules
-without WASI. Its maintained C/C++ embedding API, tier-one Windows x64 support,
-deterministic fuel, epoch interruption, and explicit linear-memory controls fit
-the region's safety and packaging requirements. Fuel is the reproducible quota;
-epoch interruption is only an emergency wall-clock guard. The LSL compiler and
-HomeWorldz host ABI remain ours, so a different WebAssembly engine or a custom
-bytecode interpreter can replace Wasmtime without changing scene objects.
+The initial and default backend is a purpose-built C++ bytecode interpreter.
+It uses explicit VM stacks and a handwritten LSL compiler without ANTLR or
+another parser-generator dependency. The language target is Second Life LSL
+plus Halcyon/InWorldz extensions; OpenSimulator-only extensions are excluded.
 
-The remaining decision is whether to accept Wasmtime's larger packaged runtime
-and JIT/AOT complexity now, or begin with a smaller custom interpreter and pay
-the implementation and security cost of maintaining a VM. No backend dependency
-will be added until this ADR is accepted.
+Runtime state is serializable after every completed bytecode instruction, not
+only at event boundaries. Compact versioned snapshots transfer with attachments,
+vehicles, and objects so destination regions can restore execution without a
+native stack or third-party VM representation. See [SCRIPTING.md](../SCRIPTING.md)
+for scheduling, resource, compatibility, and crossing requirements.
 
 ## References
 
-- [Wasmtime C/C++ embedding API](https://docs.wasmtime.dev/c-api/)
-- [Wasmtime platform support](https://docs.wasmtime.dev/stability-platform-support.html)
-- [Wasmtime deterministic fuel and epoch interruption](https://docs.wasmtime.dev/examples-interrupting-wasm.html)
 - [Second Life LSL states and events](https://wiki.secondlife.com/wiki/State)
 - [Second Life LSL memory limits](https://create.secondlife.com/script/lsl-reference/functions/llsetmemorylimit/)

@@ -123,3 +123,4 @@ Without a service token, the region runs without grid registration.
 - [Implementation plan](docs/PLAN.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Physics evaluation](docs/PHYSICS.md)
+- [Scripting architecture](docs/SCRIPTING.md)

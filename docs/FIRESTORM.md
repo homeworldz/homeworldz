@@ -158,9 +158,10 @@ event array with a monotonically increasing queue ID. UDP startup enforces
 returning `AgentMovementComplete`.
 
 After movement completes, authenticated `AgentUpdate` packets drive the
-authoritative avatar controller. It retains viewer camera axes and draw
-distance, resolves walking and running relative to body orientation, applies
-jump gravity and grounding, and supports fly-mode vertical controls.
+provisional avatar controller. It retains viewer camera axes and draw distance,
+resolves movement relative to body orientation, and persists the resulting
+position. Continuous authoritative transform updates, visible flight toggling,
+terrain-aware grounding, and a physics capsule remain pending.
 
 Once movement completes, the region streams all 256 flat 16-by-16 terrain
 patches in bounded reliable batches and sends a full static volume-primitive

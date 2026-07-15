@@ -46,7 +46,12 @@ than runtime dependencies.
 - [x] Implement viewer UDP circuits, packet codecs, acknowledgements, throttles,
   and timeouts.
 - [x] Implement region handshake, seed capability, and required event delivery.
-- [x] Implement avatar movement, flying, jumping, and camera state.
+- [x] Decode avatar movement, flying, jumping, and camera inputs and persist the
+  resulting provisional avatar state.
+- [ ] Stream continuous authoritative avatar transforms and flight state back
+  to Firestorm.
+- [ ] Add a Jolt-backed avatar capsule with terrain walking, grounding, flight,
+  and collision-safe movement.
 - [x] Implement nearby chat, terrain, and static object updates.
 - [x] Implement local texture and asset fetch.
 - [x] Verify persistence, restart, disconnect, and reconnect.
@@ -69,7 +74,10 @@ than runtime dependencies.
   lightness mapped to the 0-to-128-metre height range; reject JPEG terrain.
 - [x] Object rez, edit, take, delete, permissions, and persistence.
 - [x] Define the engine-independent script runtime boundary.
-- [ ] Select and implement the initial script runtime backend.
+- [x] Select a single-threaded custom C++ bytecode interpreter for Second Life
+  LSL plus Halcyon/InWorldz extensions, excluding OpenSim extensions.
+- [ ] Implement scripting after avatar synchronization, basic avatar physics,
+  and the attachment/crossing transaction skeleton are accepted.
 - [ ] Teleport and cross-region avatar/object handoff.
 - [ ] Evaluate and implement exactly three OpenSimulator-compatible region
   sizes: 1x1 (256 metres), 2x2 (512 metres), and 4x4 (1024 metres), without
