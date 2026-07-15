@@ -16,6 +16,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -378,6 +379,15 @@ void apply_material_contact_defaults(homeworldz::scene::Entity& entity) {
     const auto material = homeworldz::physics::material_properties(entity.material);
     entity.physics_friction = material.friction;
     entity.physics_restitution = material.restitution;
+}
+
+const std::vector<std::byte>& default_prim_texture_entry() {
+    static const auto entry = [] {
+        const auto plywood = homeworldz::viewer::parse_uuid("89556747-24cb-43ed-920b-47caed15465f");
+        if (!plywood) throw std::logic_error("default plywood texture UUID is invalid");
+        return homeworldz::viewer::default_texture_entry(*plywood);
+    }();
+    return entry;
 }
 
 void apply_extra_physics(
@@ -2620,6 +2630,7 @@ int main() {
                                     entity->creator_id = owner_id;
                                     entity->scale = {object_add->scale[0], object_add->scale[1], object_add->scale[2]};
                                     entity->material = object_add->material;
+                                    entity->texture_entry = default_prim_texture_entry();
                                     apply_material_contact_defaults(*entity);
                                     entity->creation_date = static_cast<std::uint64_t>(
                                         std::chrono::duration_cast<std::chrono::seconds>(

@@ -1,5 +1,6 @@
 #include "homeworldz/viewer_protocol.h"
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstring>
@@ -791,6 +792,21 @@ bool object_interaction_codecs() {
            decoded_grab->grab_position == std::array<float, 3>{100.0F, 101.0F, 24.0F} &&
            decoded_grab->time_since_last == 25;
 }
+
+bool default_primitive_texture() {
+    const auto plywood = *parse_uuid("89556747-24cb-43ed-920b-47caed15465f");
+    const auto entry = default_texture_entry(plywood);
+    if (entry.size() != 63 || !std::equal(plywood.begin(), plywood.end(), entry.begin())) return false;
+    const auto expected_tail = bytes({
+        0x00,                         // texture overrides
+        0x00, 0x00, 0x00, 0x00,     // inverted white
+        0x00,                         // color overrides
+        0x00, 0x00, 0x80, 0x3f, 0x00, // U repeat and overrides
+        0x00, 0x00, 0x80, 0x3f, 0x00  // V repeat and overrides
+    });
+    return std::equal(expected_tail.begin(), expected_tail.end(), entry.begin() + 16) &&
+           std::all_of(entry.begin() + 32, entry.end(), [](std::byte value) { return value == std::byte{}; });
+}
 }
 
 int main() {
@@ -808,6 +824,7 @@ int main() {
     if (!static_object_codec()) return 11;
     if (!object_flag_codec()) return 14;
     if (!object_interaction_codecs()) return 15;
+    if (!default_primitive_texture()) return 16;
     if (decode_packet(std::array<std::byte, 2>{})) return 12;
     return 0;
 }

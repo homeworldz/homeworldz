@@ -1758,6 +1758,29 @@ std::vector<std::byte> encode_static_object_update(std::uint64_t region_handle, 
     return output;
 }
 
+std::vector<std::byte> default_texture_entry(const Uuid& texture_id) {
+    std::vector<std::byte> output;
+    output.reserve(63);
+    output.insert(output.end(), texture_id.begin(), texture_id.end());
+    output.push_back(std::byte{}); // no per-face texture UUID overrides
+    output.insert(output.end(), 4, std::byte{}); // inverted white RGBA
+    output.push_back(std::byte{}); // no per-face color overrides
+    append_f32(output, 1.0F);
+    output.push_back(std::byte{}); // no per-face U repeat overrides
+    append_f32(output, 1.0F);
+    output.push_back(std::byte{}); // no per-face V repeat overrides
+    for (int field = 0; field < 3; ++field) {
+        output.insert(output.end(), 2, std::byte{}); // U offset, V offset, rotation
+        output.push_back(std::byte{}); // no per-face overrides
+    }
+    for (int field = 0; field < 3; ++field) {
+        output.push_back(std::byte{}); // material, media, glow
+        output.push_back(std::byte{}); // no per-face overrides
+    }
+    output.insert(output.end(), 16, std::byte{}); // no render material UUID
+    return output;
+}
+
 std::vector<std::byte> encode_avatar_object_update(std::uint64_t region_handle, std::uint32_t local_id,
                                                    const Uuid& agent_id,
                                                    std::array<float, 3> position,

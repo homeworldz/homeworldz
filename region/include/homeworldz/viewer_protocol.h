@@ -416,6 +416,10 @@ struct StaticObject {
     std::vector<std::byte> texture_entry;
 };
 
+// Builds the canonical TextureEntry defaults for a newly created primitive:
+// white tint, 1x repeats, zero offsets/rotation, and no per-face overrides.
+std::vector<std::byte> default_texture_entry(const Uuid& texture_id);
+
 std::vector<std::byte> encode_use_circuit_code(const UseCircuitCode& message);
 std::optional<UseCircuitCode> decode_use_circuit_code(std::span<const std::byte> payload);
 std::vector<std::byte> encode_region_handshake(const RegionHandshake& message);
