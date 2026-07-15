@@ -5,6 +5,7 @@
 #include <Jolt/Core/JobSystemThreadPool.h>
 #include <Jolt/Core/TempAllocator.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
+#include <Jolt/Physics/Body/BodyFilter.h>
 #include <Jolt/Physics/Collision/CastResult.h>
 #include <Jolt/Physics/Collision/RayCast.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
@@ -233,6 +234,28 @@ public:
         if (found == native_to_body_.end()) return std::nullopt;
         const auto point = ray.GetPointOnRay(hit.mFraction);
         return RayHit{found->second, vec(point), {}, hit.mFraction};
+    }
+
+    std::optional<RayHit> ray_cast_body(BodyId id, scene::Vector3 origin,
+                                        scene::Vector3 direction,
+                                        double maximum_distance) const override {
+        const auto target = bodies_.find(id);
+        if (target == bodies_.end()) return std::nullopt;
+        class TargetBodyFilter final : public JPH::BodyFilter {
+        public:
+            explicit TargetBodyFilter(JPH::BodyID target) : target_(target) {}
+            bool ShouldCollide(const JPH::BodyID& candidate) const override {
+                return candidate == target_;
+            }
+        private:
+            JPH::BodyID target_;
+        } filter(target->second.native);
+        JPH::RRayCast ray{
+            JPH::RVec3(vec(origin)), vec(direction).Normalized() * static_cast<float>(maximum_distance)};
+        JPH::RayCastResult hit;
+        if (!system_.GetNarrowPhaseQuery().CastRay(ray, hit, {}, {}, filter)) return std::nullopt;
+        const auto point = ray.GetPointOnRay(hit.mFraction);
+        return RayHit{id, vec(point), {}, hit.mFraction};
     }
 
     TransferState capture(std::span<const BodyId> ids) const override {

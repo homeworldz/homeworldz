@@ -44,8 +44,14 @@ bool jolt_heightfield_test() {
         for (std::uint32_t x = 0; x < terrain.sample_count; ++x)
             terrain.samples[y * terrain.sample_count + x] = static_cast<float>(y);
     const auto body = world->create_heightfield(terrain);
-    const auto hit = world->ray_cast({2, 6, 20}, {0, 0, -1}, 30);
-    return body != 0 && hit && hit->body == body && std::abs(hit->point.z - 6.0) < 0.1;
+    homeworldz::physics::BodyDefinition obstacle;
+    obstacle.entity_id = 100;
+    obstacle.position = {2, 6, 10};
+    const auto obstacle_body = world->create_body(obstacle);
+    const auto nearest = world->ray_cast({2, 6, 20}, {0, 0, -1}, 30);
+    const auto hit = world->ray_cast_body(body, {2, 6, 20}, {0, 0, -1}, 30);
+    return body != 0 && obstacle_body != 0 && nearest && nearest->body == obstacle_body && hit &&
+           hit->body == body && std::abs(hit->point.z - 6.0) < 0.1;
 }
 }
 

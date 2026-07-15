@@ -97,6 +97,8 @@ public:
     virtual std::span<const Contact> contacts() const = 0;
     virtual std::optional<RayHit> ray_cast(scene::Vector3 origin, scene::Vector3 direction,
                                            double maximum_distance) const = 0;
+    virtual std::optional<RayHit> ray_cast_body(BodyId, scene::Vector3, scene::Vector3,
+                                                double) const { return std::nullopt; }
 
     virtual TransferState capture(std::span<const BodyId> bodies) const = 0;
     virtual void restore(const TransferState& state) = 0;

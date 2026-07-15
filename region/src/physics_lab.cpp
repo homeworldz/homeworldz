@@ -52,6 +52,10 @@ public:
     std::span<const physics::Contact> contacts() const override { return inner_->contacts(); }
     std::optional<physics::RayHit> ray_cast(scene::Vector3 origin, scene::Vector3 direction,
         double distance) const override { return inner_->ray_cast(origin, direction, distance); }
+    std::optional<physics::RayHit> ray_cast_body(physics::BodyId id, scene::Vector3 origin,
+        scene::Vector3 direction, double distance) const override {
+        return inner_->ray_cast_body(id, origin, direction, distance);
+    }
     physics::TransferState capture(std::span<const physics::BodyId> bodies) const override { return inner_->capture(bodies); }
     void restore(const physics::TransferState& state) override { inner_->restore(state); }
 private:
