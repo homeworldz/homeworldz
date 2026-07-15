@@ -27,6 +27,7 @@
 #include "homeworldz/grid_client.h"
 #include "homeworldz/http_response.h"
 #include "homeworldz/object_asset.h"
+#include "homeworldz/physics_adapters.h"
 #include "homeworldz/region_config.h"
 #include "homeworldz/region_storage.h"
 #include "homeworldz/scene.h"
@@ -73,6 +74,7 @@ struct LiveAvatar {
     std::chrono::steady_clock::time_point last_agent_update{};
     std::uint32_t last_agent_update_sequence{};
     bool has_agent_update{};
+    homeworldz::physics::CharacterId physics_character{};
 };
 
 bool sequence_is_newer(std::uint32_t candidate, std::uint32_t current) {
@@ -631,6 +633,14 @@ int main() {
         throw std::runtime_error("no verified asset replica was available");
     };
     homeworldz::simulation::FixedStepLoop simulation(scene);
+#ifdef HOMEWORLDZ_PHYSICS_ADAPTERS_AVAILABLE
+    auto physics_world = homeworldz::physics::make_jolt_world();
+    std::cout << "{\"level\":\"info\",\"message\":\"production physics initialized\","
+                 "\"backend\":\"jolt\"}" << std::endl;
+#else
+    std::unique_ptr<homeworldz::physics::World> physics_world;
+    std::cout << "{\"level\":\"warning\",\"message\":\"production physics unavailable\"}" << std::endl;
+#endif
     auto previous_tick = std::chrono::steady_clock::now();
     auto next_snapshot = previous_tick + std::chrono::seconds(30);
 
@@ -1096,6 +1106,9 @@ int main() {
                                 static_cast<void>(viewer_grid->revoke_viewer_session(session_id));
                             }
                             if (viewer_sessions) viewer_sessions->invalidate(session_id);
+                            if (const auto live = avatars.find(endpoint); live != avatars.end() &&
+                                physics_world && live->second.physics_character != 0)
+                                physics_world->remove_character(live->second.physics_character);
                             avatars.erase(endpoint);
                             avatar_geometries.erase(endpoint);
                             avatar_animations.erase(endpoint);
@@ -1287,9 +1300,17 @@ int main() {
                             appearance->session_id == identity->session_id) {
                             if (const auto geometry = homeworldz::viewer::avatar_geometry(*appearance)) {
                                 avatar_geometries[endpoint] = *geometry;
-                                if (const auto live = avatars.find(endpoint); live != avatars.end())
+                                if (const auto live = avatars.find(endpoint); live != avatars.end()) {
                                     live->second.controller.set_avatar_geometry(
                                         geometry->height, geometry->hip_offset);
+                                    if (physics_world) {
+                                        if (live->second.physics_character != 0)
+                                            physics_world->remove_character(live->second.physics_character);
+                                        live->second.physics_character = physics_world->create_character({
+                                            live->second.entity_id, live->second.controller.state().position,
+                                            0.3, geometry->height, 0.4});
+                                    }
+                                }
                                 std::cout << "{\"level\":\"info\",\"message\":\"avatar geometry updated\","
                                              "\"height\":" << geometry->height << ",\"hipOffset\":"
                                           << geometry->hip_offset << ",\"visualParams\":"
@@ -1616,6 +1637,12 @@ int main() {
                                     std::move(controller), entity, name,
                                     now + std::chrono::seconds(5), now + std::chrono::seconds(30),
                                     now + std::chrono::milliseconds(100), initial_viewer_position});
+                                if (physics_world) {
+                                    auto& live = avatars.at(endpoint);
+                                    live.physics_character = physics_world->create_character({
+                                        entity, live.controller.state().position, 0.3,
+                                        live.controller.state().height, 0.4});
+                                }
                                 if (viewer_grid && registration)
                                     static_cast<void>(viewer_grid->update_presence(name, registration->region_id()));
                             }
@@ -2479,7 +2506,7 @@ int main() {
             else ++iterator;
         }
         const auto elapsed = std::chrono::duration<double>(now - previous_tick).count();
-        simulation.advance(elapsed);
+        const auto fixed_steps = simulation.advance(elapsed);
         for (auto& [endpoint, avatar] : avatars) {
             if (avatar.has_agent_update &&
                 now - avatar.last_agent_update > std::chrono::seconds(1))
@@ -2497,6 +2524,12 @@ int main() {
             avatar.controller.set_ground_height(
                 ground_height(terrain_heightmap, avatar.controller.state().position));
             avatar.controller.step(elapsed);
+            if (physics_world && avatar.physics_character != 0) {
+                const auto& controller_state = avatar.controller.state();
+                physics_world->set_character_state(avatar.physics_character,
+                    {0, avatar.entity_id, controller_state.position, controller_state.velocity, {}, false});
+                physics_world->set_character_velocity(avatar.physics_character, controller_state.velocity);
+            }
             const auto desired_animation = avatar.controller.movement_animation();
             const auto desired_id = homeworldz::viewer::parse_uuid(
                 homeworldz::viewer::movement_animation_id(desired_animation));
@@ -2576,6 +2609,9 @@ int main() {
                 }
             }
         }
+        if (physics_world)
+            for (std::size_t step = 0; step < fixed_steps; ++step)
+                physics_world->step(simulation.step_seconds());
         previous_tick = now;
         if (now >= next_snapshot) {
             try {

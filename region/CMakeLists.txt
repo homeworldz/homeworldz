@@ -20,6 +20,7 @@ target_link_libraries(homeworldz-region-core PUBLIC homeworldz-sqlite)
 if(HOMEWORLDZ_PHYSICS_ADAPTERS_AVAILABLE)
   target_sources(homeworldz-region-core PRIVATE src/jolt_world.cpp src/physx_world.cpp)
   target_link_libraries(homeworldz-region-core PUBLIC Jolt::Jolt unofficial::omniverse-physx-sdk::sdk)
+  target_compile_definitions(homeworldz-region-core PUBLIC HOMEWORLDZ_PHYSICS_ADAPTERS_AVAILABLE=1)
 endif()
 
 add_executable(homeworldz-region src/main.cpp)

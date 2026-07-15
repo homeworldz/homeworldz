@@ -32,6 +32,10 @@ public:
         const auto found = characters_.find(id);
         return found == characters_.end() ? std::nullopt : std::optional(found->second);
     }
+    void set_character_state(homeworldz::physics::CharacterId id,
+                             const homeworldz::physics::BodyState& state) override {
+        characters_.at(id) = state;
+    }
     void set_character_velocity(homeworldz::physics::CharacterId id, homeworldz::scene::Vector3 velocity) override {
         characters_.at(id).linear_velocity = velocity;
     }
