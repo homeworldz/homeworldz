@@ -107,6 +107,23 @@ Jolt is best if HomeWorldz wants a modern, open, game-oriented physics engine
 with a lower integration burden than PhysX and is willing to tune behavior
 against Firestorm/OpenSim expectations.
 
+### Mesh collision representation
+
+Rendering meshes do not double as implicit collision meshes. Mesh assets carry
+or reference a portable, validated collision source from which each physics
+adapter builds a native cached shape. Static scene geometry may use a triangle
+mesh. Dynamic objects use convex hulls or compounds of convex hulls, while
+basic prims continue to use native analytic shapes.
+
+Animated, skinned, and deforming meshes use an immutable collision capture for
+each instantiated object. Rigid-body transforms move the capture, but visual
+vertex deformation does not rebuild it every frame. Attachments are
+non-colliding by default; a future collision-enabled attachment would rigidly
+carry the same captured representation. Physics caches are keyed by source and
+engine version and remain disposable so Jolt and PhysX can prepare the same
+authoritative content independently. See
+[`ADR 0023`](adr/0023-portable-mesh-collision-representations.md).
+
 ## Bullet
 
 Bullet is a long-running open-source physics SDK with a permissive zlib license

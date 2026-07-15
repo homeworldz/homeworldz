@@ -258,6 +258,10 @@ acceptance tests pass.
 
 - [ ] Complete viewer building workflows for linksets, materials, mesh, sculpt,
   animation, sound, gesture, notecard, landmark, and script content.
+- [ ] Store portable mesh collision sources separately from visual LODs; build
+  validated static triangle shapes or dynamic convex compounds through the
+  selected physics adapter, with immutable collision capture for deforming
+  meshes and non-colliding attachments by default.
 - [ ] Implement uploads, validation, dependencies, creator attribution, asset
   replication, and inventory creation for each supported asset type.
 - [ ] Add outfit creation and editing beyond the initial default-avatar flow.

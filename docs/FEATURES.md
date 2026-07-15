@@ -108,6 +108,17 @@ using native physics-plugin capabilities. A single `llSetVehicleType` call is
 intended to activate a usable named preset; standard vehicle parameters then
 refine its behavior without exposing Jolt- or PhysX-specific APIs to scripts.
 
+### Static-capture mesh collision
+
+HomeWorldz plans to keep visual mesh geometry separate from a portable physics
+representation. Static geometry may use validated triangle collision meshes;
+dynamic mesh objects use convex hulls or compound hulls. Animated, skinned, or
+deforming visuals retain a static collision capture while the object moves as
+a rigid body, rather than rebuilding collision geometry with every visual
+deformation. Attachments remain non-colliding by default. Engine-specific Jolt
+and PhysX cooked shapes are caches, not authoritative assets. See
+[`ADR 0023`](adr/0023-portable-mesh-collision-representations.md).
+
 ### AIS-first viewer inventory
 
 HomeWorldz requires Second Life AIS v3 for supported viewer-facing inventory
