@@ -37,7 +37,7 @@ bool valid_request_id(std::string_view value) {
     return true;
 }
 
-std::string request_header(std::string_view request, std::string_view wanted_name) {
+std::string parse_request_header(std::string_view request, std::string_view wanted_name) {
     auto position = request.find("\r\n");
     if (position == std::string_view::npos) return {};
     position += 2;
@@ -91,12 +91,16 @@ void parse_request_line(std::string_view request, std::string& method, std::stri
 } // namespace
 
 std::optional<std::size_t> request_content_length(std::string_view request) {
-    const auto value = request_header(request, "Content-Length");
+    const auto value = parse_request_header(request, "Content-Length");
     if (value.empty()) return 0;
     std::size_t length{};
     const auto parsed = std::from_chars(value.data(), value.data() + value.size(), length);
     if (parsed.ec != std::errc{} || parsed.ptr != value.data() + value.size()) return std::nullopt;
     return length;
+}
+
+std::string request_header_value(std::string_view request, std::string_view name) {
+    return parse_request_header(request, name);
 }
 
 Response response_for_content(std::string_view request, int status_code,
@@ -107,9 +111,10 @@ Response response_for_content(std::string_view request, int status_code,
     std::string_view status = "HTTP/1.1 500 Internal Server Error\r\n";
     if (status_code == 200) status = "HTTP/1.1 200 OK\r\n";
     else if (status_code == 400) status = "HTTP/1.1 400 Bad Request\r\n";
+    else if (status_code == 401) status = "HTTP/1.1 401 Unauthorized\r\n";
     else if (status_code == 404) status = "HTTP/1.1 404 Not Found\r\n";
     else if (status_code == 405) status = "HTTP/1.1 405 Method Not Allowed\r\n";
-    auto request_id = request_header(request, request_id_header);
+    auto request_id = parse_request_header(request, request_id_header);
     if (!valid_request_id(request_id)) request_id = new_request_id();
     auto content = std::string(status) + "Content-Type: " + std::string(content_type) +
                    "\r\nConnection: close\r\n" + std::string(request_id_header) + ": " + request_id +
@@ -143,7 +148,7 @@ Response response_for(std::string_view request) {
         additional_headers = "Allow: GET\r\n";
         body = api::to_json(api::Error{"method_not_allowed", "only GET is supported"});
     }
-    auto request_id = request_header(request, request_id_header);
+    auto request_id = parse_request_header(request, request_id_header);
     if (!valid_request_id(request_id)) request_id = new_request_id();
     auto content = std::string(status) + std::string(additional_headers) +
                    "Content-Type: application/json\r\nConnection: close\r\n" +

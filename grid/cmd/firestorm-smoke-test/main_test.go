@@ -1,12 +1,56 @@
 package main
 
 import (
+	"context"
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 )
+
+func TestValidateAssetFederation(t *testing.T) {
+	content := []byte("federated asset")
+	hash := sha256.Sum256(content)
+	const assetID = "11111111-1111-4111-8111-111111111111"
+	const token = "test-service-token"
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer "+token {
+			if r.Header.Get("Authorization") == "" && strings.HasPrefix(r.URL.Path, "/region/") {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			t.Errorf("authorization = %q", r.Header.Get("Authorization"))
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		switch r.URL.Path {
+		case "/grid/api/v1/assets/" + assetID:
+			_ = json.NewEncoder(w).Encode(assetFederationMetadata{
+				ID: assetID, SHA256: fmt.Sprintf("%x", hash), Size: int64(len(content)),
+				Locations: []struct {
+					Endpoint string `json:"endpoint"`
+					Origin   bool   `json:"origin"`
+				}{{Endpoint: server.URL + "/region", Origin: true}},
+			})
+		case "/region/api/v1/assets/" + assetID:
+			_, _ = w.Write(content)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	if err := validateAssetFederation(
+		context.Background(), server.URL+"/grid", server.URL+"/region", token, assetID); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestLoadSmokeConfig(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "smoke-test.ini")

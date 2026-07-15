@@ -305,6 +305,18 @@ bool Client::create_object_inventory_item(std::string_view user_id, const Object
                .status_code == 201;
 }
 
+bool Client::register_asset(std::string_view asset_id, std::string_view creator_id,
+                            std::string_view sha256, std::uint64_t size,
+                            std::string_view endpoint, bool origin) {
+    const auto body = "{\"id\":" + api::json_string(asset_id) +
+                      ",\"creatorUserId\":" + api::json_string(creator_id) +
+                      ",\"sha256\":" + api::json_string(sha256) +
+                      ",\"size\":" + std::to_string(size) +
+                      ",\"endpoint\":" + api::json_string(endpoint) +
+                      ",\"origin\":" + (origin ? "true" : "false") + '}';
+    return transport_->send("POST", "/api/v1/assets", body).status_code == 201;
+}
+
 std::optional<InventoryItem> Client::copy_library_item(std::string_view user_id,
                                                        std::string_view source_item_id,
                                                        std::string_view destination_folder_id,

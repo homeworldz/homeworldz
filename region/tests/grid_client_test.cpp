@@ -131,6 +131,15 @@ int main() {
             R"("creatorUserId":"77777777-7777-4777-8777-777777777777")") == std::string::npos ||
         transport->requests.back().body.find(R"("basePermissions":647168)") == std::string::npos ||
         transport->requests.back().body.find(R"("name":"Primitive")") == std::string::npos) return 1;
+    if (!client.register_asset(
+            "66666666-6666-4666-8666-666666666666",
+            "77777777-7777-4777-8777-777777777777",
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            332, "http://region.example:42001", true) ||
+        transport->requests.back().path != "/api/v1/assets" ||
+        transport->requests.back().body.find(R"("size":332)") == std::string::npos ||
+        transport->requests.back().body.find(R"("origin":true)") == std::string::npos)
+        return 1;
     const auto copied = client.copy_library_item(
         session->agent_id, "d5e46210-b9d1-11dc-95ff-0800200c9a66",
         "00000000-0000-0000-0000-000000000000", "");

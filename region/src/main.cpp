@@ -276,6 +276,15 @@ std::optional<std::pair<std::string, std::string>> viewer_asset_request(std::str
     return std::pair{std::string(session), std::string(asset)};
 }
 
+std::optional<std::string> internal_asset_request(std::string_view path) {
+    constexpr std::string_view prefix = "/api/v1/assets/";
+    if (!path.starts_with(prefix)) return std::nullopt;
+    const auto asset_id = path.substr(prefix.size());
+    if (asset_id.empty() || asset_id.find('/') != std::string_view::npos ||
+        !homeworldz::viewer::parse_uuid(asset_id)) return std::nullopt;
+    return std::string(asset_id);
+}
+
 std::optional<std::pair<std::string, std::string>> baked_upload_data_request(std::string_view path) {
     constexpr std::string_view prefix = "/caps/upload-baked-data/";
     if (!path.starts_with(prefix)) return std::nullopt;
@@ -501,6 +510,19 @@ int main() {
             std::cout << "{\"level\":\"info\",\"message\":\"region assets imported\",\"count\":"
                       << imported_assets << "}" << std::endl;
         }
+        if (viewer_grid) {
+            const auto assets = storage->list_assets();
+            for (const auto& asset : assets) {
+                if (!viewer_grid->register_asset(asset.viewer_id, asset.creator_id, asset.sha256,
+                                                 asset.size, region_public_endpoint, true)) {
+                    throw std::runtime_error("register local asset origin failed");
+                }
+            }
+            if (!assets.empty()) {
+                std::cout << "{\"level\":\"info\",\"message\":\"region asset origins registered\",\"count\":"
+                          << assets.size() << "}" << std::endl;
+            }
+        }
         if (storage->load_snapshot(scene)) {
             std::cout << "{\"level\":\"info\",\"message\":\"scene snapshot restored\",\"revision\":"
                       << scene.revision() << ",\"entities\":" << scene.size() << "}" << std::endl;
@@ -603,6 +625,32 @@ int main() {
                 if (received_request) {
                     const std::string_view request(*received_request);
                     auto response = homeworldz::http::response_for(request);
+                    if (const auto asset_id = internal_asset_request(response.path)) {
+                        const auto authorization = homeworldz::http::request_header_value(request, "Authorization");
+                        if (response.method != "GET") {
+                            response = homeworldz::http::response_for_content(
+                                request, 405, "application/json",
+                                homeworldz::api::to_json(homeworldz::api::Error{
+                                    "method_not_allowed", "only GET is supported"}));
+                        } else if (service_token.empty() || authorization != "Bearer " + service_token) {
+                            response = homeworldz::http::response_for_content(
+                                request, 401, "application/json",
+                                homeworldz::api::to_json(homeworldz::api::Error{
+                                    "unauthorized", "a valid grid service token is required"}));
+                        } else {
+                            try {
+                                const auto asset = storage->read_asset(*asset_id);
+                                response = homeworldz::http::response_for_content(
+                                    request, 200, "application/octet-stream",
+                                    std::string(reinterpret_cast<const char*>(asset.data()), asset.size()));
+                            } catch (const std::exception&) {
+                                response = homeworldz::http::response_for_content(
+                                    request, 404, "application/json",
+                                    homeworldz::api::to_json(homeworldz::api::Error{
+                                        "asset_not_found", "asset was not found"}));
+                            }
+                        }
+                    }
                     auto session_id = capability_session(response.path, "/caps/seed/");
                     const bool seed = !session_id.empty();
                     if (!seed) session_id = capability_session(response.path, "/caps/event/");
@@ -717,10 +765,17 @@ int main() {
                                 const auto content = std::span(
                                     reinterpret_cast<const std::byte*>(body.data()), body.size());
                                 const auto asset_id = homeworldz::viewer::baked_texture_asset_id(content);
-                                storage->store_asset(asset_id, authorized_agent_id, content);
-                                response = homeworldz::http::response_for_content(
-                                    request, 200, "application/llsd+xml",
-                                    homeworldz::viewer::baked_texture_complete_xml(asset_id));
+                                const auto metadata = storage->store_asset(
+                                    asset_id, authorized_agent_id, content);
+                                const bool registered = !viewer_grid || viewer_grid->register_asset(
+                                    metadata.viewer_id, metadata.creator_id, metadata.sha256,
+                                    metadata.size, region_public_endpoint, true);
+                                response = registered
+                                    ? homeworldz::http::response_for_content(
+                                          request, 200, "application/llsd+xml",
+                                          homeworldz::viewer::baked_texture_complete_xml(asset_id))
+                                    : homeworldz::http::response_for_content(
+                                          request, 500, "application/llsd+xml", "<llsd><undef/></llsd>");
                                 std::cout << "{\"level\":\"info\",\"message\":\"baked texture stored\","
                                              "\"assetId\":" << homeworldz::api::json_string(asset_id)
                                           << ",\"bytes\":" << body.size() << "}" << std::endl;
@@ -758,8 +813,13 @@ int main() {
                                 const auto& upload = pending->second;
                                 const auto content = std::span(
                                     reinterpret_cast<const std::byte*>(body.data()), body.size());
-                                storage->store_asset(upload.asset_id, authorized_agent_id, content);
-                                const bool item_created = viewer_grid && viewer_grid->create_texture_inventory_item(
+                                const auto metadata = storage->store_asset(
+                                    upload.asset_id, authorized_agent_id, content);
+                                const bool asset_registered = viewer_grid && viewer_grid->register_asset(
+                                    metadata.viewer_id, metadata.creator_id, metadata.sha256,
+                                    metadata.size, region_public_endpoint, true);
+                                const bool item_created = asset_registered &&
+                                    viewer_grid->create_texture_inventory_item(
                                     authorized_agent_id, homeworldz::grid::TextureInventoryItem{
                                         upload.item_id, authorized_agent_id, upload.request.folder_id,
                                         upload.asset_id, upload.request.name, upload.request.description,
@@ -1761,8 +1821,12 @@ int main() {
                                         reinterpret_cast<const std::byte*>(content_text.data()), content_text.size());
                                     bool item_created = false;
                                     try {
-                                        storage->store_asset(asset_id, entity->creator_id, content);
-                                        item_created = viewer_grid && viewer_grid->create_object_inventory_item(
+                                        const auto metadata = storage->store_asset(
+                                            asset_id, entity->creator_id, content);
+                                        const bool asset_registered = viewer_grid && viewer_grid->register_asset(
+                                            metadata.viewer_id, metadata.creator_id, metadata.sha256,
+                                            metadata.size, region_public_endpoint, true);
+                                        item_created = asset_registered && viewer_grid->create_object_inventory_item(
                                             user_id, homeworldz::grid::ObjectInventoryItem{
                                                 item_id, entity->creator_id, destination_id, asset_id,
                                                 entity->name, entity->description, entity->base_permissions,

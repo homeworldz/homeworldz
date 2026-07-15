@@ -7,6 +7,11 @@ grid. Registering an existing UUID is idempotent only when its SHA-256 hash,
 byte size, and creator UUID match. A conflicting registration is rejected; a
 region must allocate a new asset UUID for different bytes or provenance.
 
+Databases created before creator provenance was recorded may replace the null
+UUID's “unknown creator” value once with a known creator, but only when the
+asset UUID, content hash, and size are unchanged. Known provenance cannot be
+replaced.
+
 Asset blobs remain region-local under ADR 0014. The grid stores federation
 metadata rather than blob bytes: asset UUID, creator UUID, SHA-256, size, and
 one or more stable region asset endpoints. A region registers an origin after

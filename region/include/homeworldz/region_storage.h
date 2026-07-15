@@ -42,6 +42,7 @@ public:
                                                   std::uint8_t texture_index) const;
     std::size_t import_asset_directory(const std::filesystem::path& directory,
                                        std::string_view creator_id);
+    std::vector<AssetMetadata> list_assets() const;
     std::optional<AssetMetadata> find_asset(std::string_view viewer_id) const;
     std::vector<std::byte> read_asset(std::string_view viewer_id) const;
 

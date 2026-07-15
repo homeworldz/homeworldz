@@ -119,6 +119,12 @@ int main() {
     passed &= homeworldz::http::request_content_length(
                   "POST /caps/seed/id HTTP/1.1\r\ncontent-length: 8192\r\n\r\n") == 8192;
     passed &= homeworldz::http::request_content_length("GET /ready HTTP/1.1\r\n\r\n") == 0;
+    passed &= homeworldz::http::request_header_value(
+                  "GET /asset HTTP/1.1\r\nauthorization: Bearer secret\r\n\r\n", "Authorization") ==
+              "Bearer secret";
+    const auto unauthorized = homeworldz::http::response_for_content(
+        "GET /asset HTTP/1.1\r\n\r\n", 401, "application/json", "{}");
+    passed &= contains(unauthorized.content, "HTTP/1.1 401 Unauthorized");
     passed &= !homeworldz::http::request_content_length(
                    "POST /caps/seed/id HTTP/1.1\r\nContent-Length: invalid\r\n\r\n");
     const auto seed = homeworldz::viewer::seed_capability_xml(

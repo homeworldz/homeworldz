@@ -92,6 +92,23 @@ int main() {
             const auto mapping = storage.find_asset("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
             if (!mapping || mapping->sha256 != first_asset.sha256 ||
                 mapping->creator_id != "11111111-1111-4111-8111-111111111111") return 1;
+            const auto migrated_content = std::array{std::byte{0x01}, std::byte{0x02}};
+            const auto unknown_asset = storage.store_asset(
+                "88888888-8888-4888-8888-888888888888",
+                "00000000-0000-0000-0000-000000000000", migrated_content);
+            const auto known_asset = storage.store_asset(
+                unknown_asset.viewer_id, "33333333-3333-4333-8333-333333333333", migrated_content);
+            if (known_asset.creator_id != "33333333-3333-4333-8333-333333333333" ||
+                storage.find_asset(unknown_asset.viewer_id)->creator_id != known_asset.creator_id) return 1;
+            const auto assets = storage.list_assets();
+            const auto contains_asset = [&assets](const homeworldz::storage::AssetMetadata& wanted) {
+                return std::any_of(assets.begin(), assets.end(), [&wanted](const auto& asset) {
+                    return asset.viewer_id == wanted.viewer_id && asset.creator_id == wanted.creator_id &&
+                           asset.sha256 == wanted.sha256 && asset.size == wanted.size;
+                });
+            };
+            if (assets.size() != 4 || !contains_asset(first_asset) || !contains_asset(second_asset) ||
+                !contains_asset(known_asset)) return 1;
             bool invalid_creator_rejected = false;
             try {
                 storage.store_asset("ffffffff-ffff-4fff-8fff-ffffffffffff", "not-a-uuid", content);

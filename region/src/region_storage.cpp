@@ -442,9 +442,32 @@ AssetMetadata RegionStorage::store_asset(std::string viewer_id, std::string crea
     AssetMetadata metadata{
         std::move(viewer_id), std::move(creator_id), crypto::sha256_hex(content), content.size()};
     if (const auto existing = find_asset(metadata.viewer_id)) {
+        constexpr std::string_view unknown_creator = "00000000-0000-0000-0000-000000000000";
+        if (existing->creator_id == unknown_creator && metadata.creator_id != unknown_creator &&
+            existing->sha256 == metadata.sha256 && existing->size == metadata.size) {
+            sqlite3_stmt* statement = nullptr;
+            if (sqlite3_prepare_v2(database_,
+                                   "UPDATE asset_mappings SET creator_id = ? "
+                                   "WHERE viewer_id = ? AND creator_id = ?",
+                                   -1, &statement, nullptr) != SQLITE_OK)
+                throw std::runtime_error(sqlite3_errmsg(database_));
+            sqlite3_bind_text(statement, 1, metadata.creator_id.c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(statement, 2, metadata.viewer_id.c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(statement, 3, unknown_creator.data(),
+                              static_cast<int>(unknown_creator.size()), SQLITE_STATIC);
+            const auto result = sqlite3_step(statement);
+            sqlite3_finalize(statement);
+            if (result != SQLITE_DONE) throw std::runtime_error(sqlite3_errmsg(database_));
+            return metadata;
+        }
         if (existing->creator_id != metadata.creator_id || existing->sha256 != metadata.sha256 ||
             existing->size != metadata.size)
-            throw std::invalid_argument("asset viewer ID is already mapped to different content or provenance");
+            throw std::invalid_argument("asset viewer ID " + metadata.viewer_id +
+                                        " is already mapped to creator " + existing->creator_id +
+                                        ", hash " + existing->sha256 + ", size " +
+                                        std::to_string(existing->size) + "; attempted creator " +
+                                        metadata.creator_id + ", hash " + metadata.sha256 + ", size " +
+                                        std::to_string(metadata.size));
         return *existing;
     }
     const auto relative = std::filesystem::path("assets") / metadata.sha256.substr(0, 2) / metadata.sha256.substr(2);
@@ -547,6 +570,27 @@ std::optional<AssetMetadata> RegionStorage::find_asset(std::string_view viewer_i
     }
     sqlite3_finalize(statement);
     return metadata;
+}
+
+std::vector<AssetMetadata> RegionStorage::list_assets() const {
+    sqlite3_stmt* statement = nullptr;
+    if (sqlite3_prepare_v2(database_,
+                           "SELECT viewer_id, creator_id, sha256, size FROM asset_mappings ORDER BY viewer_id",
+                           -1, &statement, nullptr) != SQLITE_OK) {
+        throw std::runtime_error(sqlite3_errmsg(database_));
+    }
+    std::vector<AssetMetadata> assets;
+    int result = SQLITE_ROW;
+    while ((result = sqlite3_step(statement)) == SQLITE_ROW) {
+        assets.push_back(AssetMetadata{
+            reinterpret_cast<const char*>(sqlite3_column_text(statement, 0)),
+            reinterpret_cast<const char*>(sqlite3_column_text(statement, 1)),
+            reinterpret_cast<const char*>(sqlite3_column_text(statement, 2)),
+            static_cast<std::uint64_t>(sqlite3_column_int64(statement, 3))});
+    }
+    sqlite3_finalize(statement);
+    if (result != SQLITE_DONE) throw std::runtime_error(sqlite3_errmsg(database_));
+    return assets;
 }
 
 std::vector<std::byte> RegionStorage::read_asset(std::string_view viewer_id) const {

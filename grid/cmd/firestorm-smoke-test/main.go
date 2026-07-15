@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -14,6 +15,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -24,9 +26,20 @@ import (
 )
 
 const (
-	gridURL   = "http://127.0.0.1:42000"
-	regionURL = "http://127.0.0.1:42001"
+	gridURL                = "http://127.0.0.1:42000"
+	regionURL              = "http://127.0.0.1:42001"
+	federationProbeAssetID = "00000000-0000-1111-9999-000000000010"
 )
+
+type assetFederationMetadata struct {
+	ID        string `json:"id"`
+	SHA256    string `json:"sha256"`
+	Size      int64  `json:"size"`
+	Locations []struct {
+		Endpoint string `json:"endpoint"`
+		Origin   bool   `json:"origin"`
+	} `json:"locations"`
+}
 
 type options struct {
 	firstName     string
@@ -164,6 +177,9 @@ func run(ctx context.Context, opts options) error {
 	if err := waitReady(ctx, regionURL+"/ready", region); err != nil {
 		return fmt.Errorf("region did not become ready (inspect %s): %w", logDirectory, err)
 	}
+	if err := validateAssetFederation(ctx, gridURL, regionURL, serviceToken, federationProbeAssetID); err != nil {
+		return fmt.Errorf("validate asset federation: %w", err)
+	}
 
 	fmt.Println("HomeWorldz grid and region are ready on loopback.")
 	if opts.validateOnly {
@@ -202,6 +218,78 @@ func run(ctx context.Context, opts options) error {
 	}
 	if err := waitForViewer(ctx, viewer, opts.firestormPath); err != nil {
 		return fmt.Errorf("Firestorm exited: %w", err)
+	}
+	return nil
+}
+
+func validateAssetFederation(ctx context.Context, gridBase, regionBase, serviceToken, assetID string) error {
+	request := func(url string) (*http.Response, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Authorization", "Bearer "+serviceToken)
+		return http.DefaultClient.Do(req)
+	}
+	metadataResponse, err := request(strings.TrimRight(gridBase, "/") + "/api/v1/assets/" + assetID)
+	if err != nil {
+		return fmt.Errorf("request grid metadata: %w", err)
+	}
+	defer metadataResponse.Body.Close()
+	if metadataResponse.StatusCode != http.StatusOK {
+		return fmt.Errorf("grid metadata status %s", metadataResponse.Status)
+	}
+	var metadata assetFederationMetadata
+	if err := json.NewDecoder(metadataResponse.Body).Decode(&metadata); err != nil {
+		return fmt.Errorf("decode grid metadata: %w", err)
+	}
+	if metadata.ID != assetID || metadata.Size <= 0 || len(metadata.SHA256) != 64 {
+		return errors.New("grid returned invalid asset metadata")
+	}
+	foundOrigin := false
+	for _, location := range metadata.Locations {
+		if strings.TrimRight(location.Endpoint, "/") == strings.TrimRight(regionBase, "/") && location.Origin {
+			foundOrigin = true
+			break
+		}
+	}
+	if !foundOrigin {
+		return errors.New("grid metadata did not include the expected region origin")
+	}
+	assetURL := strings.TrimRight(regionBase, "/") + "/api/v1/assets/" + assetID
+	unauthorizedRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, assetURL, nil)
+	if err != nil {
+		return fmt.Errorf("create unauthorized region asset request: %w", err)
+	}
+	unauthorizedResponse, err := http.DefaultClient.Do(unauthorizedRequest)
+	if err != nil {
+		return fmt.Errorf("request region asset without credentials: %w", err)
+	}
+	unauthorizedResponse.Body.Close()
+	if unauthorizedResponse.StatusCode != http.StatusUnauthorized {
+		return fmt.Errorf("region asset request without credentials returned %s", unauthorizedResponse.Status)
+	}
+	assetResponse, err := request(assetURL)
+	if err != nil {
+		return fmt.Errorf("request region asset: %w", err)
+	}
+	defer assetResponse.Body.Close()
+	if assetResponse.StatusCode != http.StatusOK {
+		return fmt.Errorf("region asset status %s", assetResponse.Status)
+	}
+	content, err := io.ReadAll(io.LimitReader(assetResponse.Body, metadata.Size+1))
+	if err != nil {
+		return fmt.Errorf("read region asset: %w", err)
+	}
+	if int64(len(content)) != metadata.Size {
+		return fmt.Errorf("region asset size %d does not match metadata %d", len(content), metadata.Size)
+	}
+	hash := sha256.Sum256(content)
+	if fmt.Sprintf("%x", hash) != metadata.SHA256 {
+		return errors.New("region asset SHA-256 does not match grid metadata")
+	}
+	if length := assetResponse.Header.Get("Content-Length"); length != "" && length != strconv.FormatInt(metadata.Size, 10) {
+		return errors.New("region asset Content-Length does not match grid metadata")
 	}
 	return nil
 }
