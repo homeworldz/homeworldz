@@ -22,6 +22,7 @@ inline constexpr std::uint32_t control_fly = 0x00002000;
 struct AvatarState {
     scene::Vector3 position{128.0, 128.0, 25.0};
     scene::Vector3 velocity{};
+    std::array<float, 3> rotation{};
     bool flying{};
     bool grounded{true};
     std::array<float, 3> camera_center{};

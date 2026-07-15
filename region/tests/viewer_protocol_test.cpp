@@ -591,7 +591,10 @@ bool static_object_codec() {
         return false;
     const auto agent = *parse_uuid("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");
     const auto avatar = encode_avatar_object_update(0x0102030405060708ULL, 42, agent, {128.F, 128.F, 25.F});
-    return avatar.size() == encoded.size() && avatar[37] == std::byte{47} && avatar[38] == std::byte{4} &&
+    const auto moving_avatar = encode_avatar_object_update(
+        0x0102030405060708ULL, 42, agent, {128.F, 128.F, 25.F}, {1.F, 2.F, 3.F}, {0.F, 0.F, 0.5F});
+    return avatar.size() == encoded.size() && moving_avatar.size() == avatar.size() &&
+           moving_avatar != avatar && avatar[37] == std::byte{47} && avatar[38] == std::byte{4} &&
            std::equal(agent.begin(), agent.end(), avatar.begin() + 17);
 }
 }

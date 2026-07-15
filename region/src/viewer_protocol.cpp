@@ -1353,7 +1353,8 @@ std::vector<std::byte> encode_static_object_update(std::uint64_t region_handle, 
     for (const auto value : object.scale) append_f32(output, value);
     std::vector<std::byte> transform;
     for (const auto value : object.position) append_f32(transform, value);
-    for (int index = 0; index < 6; ++index) append_f32(transform, 0.0F); // velocity, acceleration
+    for (const auto value : object.velocity) append_f32(transform, value);
+    for (const auto value : object.acceleration) append_f32(transform, value);
     for (const auto value : object.rotation) append_f32(transform, value);
     for (int index = 0; index < 3; ++index) append_f32(transform, 0.0F); // angular velocity
     if (!append_binary(output, transform, 1)) return {};
@@ -1385,7 +1386,9 @@ std::vector<std::byte> encode_static_object_update(std::uint64_t region_handle, 
 
 std::vector<std::byte> encode_avatar_object_update(std::uint64_t region_handle, std::uint32_t local_id,
                                                    const Uuid& agent_id,
-                                                   std::array<float, 3> position) {
+                                                   std::array<float, 3> position,
+                                                   std::array<float, 3> velocity,
+                                                   std::array<float, 3> rotation) {
     StaticObject avatar;
     avatar.local_id = local_id;
     avatar.id = agent_id;
@@ -1393,6 +1396,8 @@ std::vector<std::byte> encode_avatar_object_update(std::uint64_t region_handle, 
     avatar.pcode = 47; // avatar
     avatar.material = 4; // flesh
     avatar.position = position;
+    avatar.velocity = velocity;
+    avatar.rotation = rotation;
     avatar.scale = {0.45F, 0.60F, 1.90F};
     return encode_static_object_update(region_handle, avatar);
 }

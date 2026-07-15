@@ -65,6 +65,8 @@ struct LiveAvatar {
     std::string user_id;
     std::chrono::steady_clock::time_point next_ping{};
     std::chrono::steady_clock::time_point next_presence{};
+    std::chrono::steady_clock::time_point next_transform{};
+    homeworldz::scene::Vector3 last_sent_position{};
     std::uint8_t ping_id{};
 };
 
@@ -1277,7 +1279,8 @@ int main() {
                                                      static_cast<float>(spawn.z)};
                                 avatars.emplace(endpoint, LiveAvatar{
                                     homeworldz::viewer::AvatarController{spawn, ground_height(terrain_heightmap, spawn)}, entity, name,
-                                    now + std::chrono::seconds(5), now + std::chrono::seconds(30), 0});
+                                    now + std::chrono::seconds(5), now + std::chrono::seconds(30),
+                                    now + std::chrono::milliseconds(100), spawn, 0});
                                 if (viewer_grid && registration)
                                     static_cast<void>(viewer_grid->update_presence(name, registration->region_id()));
                             }
@@ -2136,6 +2139,34 @@ int main() {
             if (auto* entity = scene.find(avatar.entity_id)) {
                 entity->position = avatar.controller.state().position;
                 entity->velocity = avatar.controller.state().velocity;
+            }
+            const auto& state = avatar.controller.state();
+            const auto dx = state.position.x - avatar.last_sent_position.x;
+            const auto dy = state.position.y - avatar.last_sent_position.y;
+            const auto dz = state.position.z - avatar.last_sent_position.z;
+            if ((dx * dx + dy * dy + dz * dz) > 0.001 && now >= avatar.next_transform) {
+                const auto agent_id = homeworldz::viewer::parse_uuid(avatar.user_id);
+                if (agent_id) {
+                    const auto region_handle =
+                        (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
+                        static_cast<std::uint32_t>(region_grid_y * 256);
+                    const std::array<float, 3> position{
+                        static_cast<float>(state.position.x), static_cast<float>(state.position.y),
+                        static_cast<float>(state.position.z)};
+                    const std::array<float, 3> velocity{
+                        static_cast<float>(state.velocity.x), static_cast<float>(state.velocity.y),
+                        static_cast<float>(state.velocity.z)};
+                    const auto update = homeworldz::viewer::encode_avatar_object_update(
+                        region_handle, static_cast<std::uint32_t>(avatar.entity_id), *agent_id,
+                        position, velocity, state.rotation);
+                    for (const auto& recipient_entry : avatars) {
+                        const auto& recipient_endpoint = recipient_entry.first;
+                        if (const auto outgoing = circuits.send(recipient_endpoint, update, false, now, true))
+                            static_cast<void>(send_udp(viewer_server, recipient_endpoint, *outgoing));
+                    }
+                    avatar.last_sent_position = state.position;
+                    avatar.next_transform = now + std::chrono::milliseconds(100);
+                }
             }
         }
         previous_tick = now;

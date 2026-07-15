@@ -320,6 +320,8 @@ struct StaticObject {
     std::uint8_t pcode{9};
     std::uint8_t material{3};
     std::array<float, 3> position{132.0F, 128.0F, 26.0F};
+    std::array<float, 3> velocity{};
+    std::array<float, 3> acceleration{};
     std::array<float, 3> rotation{};
     std::array<float, 3> scale{2.0F, 2.0F, 2.0F};
 };
@@ -381,7 +383,9 @@ std::vector<std::byte> encode_static_object_update(std::uint64_t region_handle,
                                                    const StaticObject& object);
 std::vector<std::byte> encode_avatar_object_update(std::uint64_t region_handle, std::uint32_t local_id,
                                                    const Uuid& agent_id,
-                                                   std::array<float, 3> position);
+                                                   std::array<float, 3> position,
+                                                   std::array<float, 3> velocity = {},
+                                                   std::array<float, 3> rotation = {});
 std::vector<std::byte> encode_packet_ack(std::span<const std::uint32_t> sequences);
 std::optional<std::vector<std::uint32_t>> decode_packet_ack(std::span<const std::byte> payload);
 
