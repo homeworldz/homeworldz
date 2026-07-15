@@ -171,8 +171,11 @@ and treats the avatar root as the center of that height, so the support point is
 it moves; following the loaded terrain was accepted on 2026-07-15. The
 viewer-facing position separately applies Halcyon's appearance-derived hip
 offset, while the authoritative physics center remains unchanged. Acceptance
-of stopped and moving foot placement with that correction and the production
-Jolt capsule remain pending.
+of stopped and moving foot placement with that correction passed on
+2026-07-15. On a grounded transition into flight, the provisional controller
+also mirrors Halcyon's 2 m/s upward impulse with short damping, producing
+approximately 0.5 metres of lift without teleporting the avatar. Viewer
+acceptance of that launch and the production Jolt capsule remain pending.
 
 Once movement completes, the region streams all 256 flat 16-by-16 terrain
 patches in bounded reliable batches and sends a full static volume-primitive

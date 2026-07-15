@@ -48,7 +48,17 @@ int main() {
                            homeworldz::viewer::control_fast_up;
     avatar.apply(update);
     avatar.step(0.25);
-    if (!avatar.state().flying || avatar.state().velocity.z != 8.0 || avatar.state().position.z != 29.0)
+    if (!avatar.state().flying || avatar.state().velocity.z != 10.0 || avatar.state().position.z != 29.5)
         return 7;
+
+    homeworldz::viewer::AvatarController launch_avatar;
+    update.control_flags = homeworldz::viewer::control_fly;
+    launch_avatar.apply(update);
+    const auto launch_start = launch_avatar.state().position.z;
+    for (int index = 0; index < 150; ++index) launch_avatar.step(0.01);
+    const auto launch_rise = launch_avatar.state().position.z - launch_start;
+    if (!launch_avatar.state().flying || launch_avatar.state().grounded ||
+        launch_rise < 0.49 || launch_rise > 0.53 || std::abs(launch_avatar.state().velocity.z) > 0.01)
+        return 8;
     return 0;
 }

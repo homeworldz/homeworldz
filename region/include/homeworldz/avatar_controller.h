@@ -57,6 +57,7 @@ public:
 private:
     AvatarState state_;
     double ground_height_;
+    double flight_lift_velocity_{};
     std::uint32_t controls_{};
     std::array<float, 3> body_rotation_{};
 };

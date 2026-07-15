@@ -41,7 +41,17 @@ void AvatarController::apply(const AgentUpdate& update) {
     controls_ = update.control_flags;
     body_rotation_ = update.body_rotation;
     state_.rotation = update.body_rotation;
-    state_.flying = (controls_ & control_fly) != 0;
+    const auto flying = (controls_ & control_fly) != 0;
+    if (flying && !state_.flying && state_.grounded) {
+        // Halcyon launches a grounded avatar into flight with a 2 m/s vertical
+        // impulse. Exponential damping approximates the flight controller's
+        // settling behavior until Jolt owns the character capsule.
+        flight_lift_velocity_ = 2.0;
+        state_.grounded = false;
+    } else if (!flying) {
+        flight_lift_velocity_ = 0.0;
+    }
+    state_.flying = flying;
     state_.camera_center = update.camera_center;
     state_.camera_at = update.camera_at;
     state_.camera_left = update.camera_left;
@@ -91,7 +101,9 @@ void AvatarController::step(double seconds) {
     state_.velocity.y = (forward_y * forward + left_y * left) * speed;
     if (state_.flying) {
         const double vertical = ((controls_ & control_up) ? 1.0 : 0.0) - ((controls_ & control_down) ? 1.0 : 0.0);
-        state_.velocity.z = vertical * speed;
+        state_.velocity.z = vertical * speed + flight_lift_velocity_;
+        flight_lift_velocity_ *= std::exp(-4.0 * seconds);
+        if (flight_lift_velocity_ < 0.01) flight_lift_velocity_ = 0.0;
         state_.grounded = false;
     } else {
         if ((controls_ & control_up) && state_.grounded) {
