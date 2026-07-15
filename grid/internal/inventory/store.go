@@ -61,6 +61,7 @@ type Store interface {
 	CreateItem(context.Context, Item) (Item, error)
 	CreateItems(context.Context, []Item) ([]Item, error)
 	UpdateItem(context.Context, Item) (Item, error)
+	UpdateItemAsset(context.Context, string, string, string) (Item, error)
 	DeleteItem(context.Context, string, string) (Item, error)
 	EnsureItem(context.Context, Item) (bool, error)
 	ListItems(context.Context, string) ([]Item, error)
@@ -557,6 +558,51 @@ func (s *PostgresStore) UpdateItem(ctx context.Context, item Item) (Item, error)
 	if err := tx.Commit(); err != nil {
 		return Item{}, fmt.Errorf("commit inventory item update: %w", err)
 	}
+	return item, nil
+}
+
+func (s *PostgresStore) UpdateItemAsset(ctx context.Context, ownerID, itemID, assetID string) (Item, error) {
+	if ownerID == "" || itemID == "" || assetID == "" {
+		return Item{}, ErrInvalidItem
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Item{}, fmt.Errorf("begin inventory item asset update: %w", err)
+	}
+	defer tx.Rollback()
+	var item Item
+	if err := tx.QueryRowContext(ctx, `SELECT id, owner_user_id, COALESCE(creator_user_id::text, $3),
+		folder_id, asset_id, asset_type, inventory_type, name, description, flags, base_permissions,
+		current_permissions, everyone_permissions, next_permissions, sale_type, sale_price, created_at
+		FROM inventory_items WHERE id = $1 AND owner_user_id = $2 FOR UPDATE`,
+		itemID, ownerID, zeroUUID).Scan(&item.ID, &item.OwnerUserID, &item.CreatorUserID,
+		&item.FolderID, &item.AssetID, &item.AssetType, &item.InventoryType, &item.Name,
+		&item.Description, &item.Flags, &item.BasePermissions, &item.CurrentPermissions,
+		&item.EveryonePermissions, &item.NextPermissions, &item.SaleType, &item.SalePrice,
+		&item.CreatedAt); errors.Is(err, sql.ErrNoRows) {
+		return Item{}, ErrItemNotFound
+	} else if err != nil {
+		return Item{}, fmt.Errorf("find inventory item for asset update: %w", err)
+	}
+	if (item.AssetType != 5 && item.AssetType != 13) || item.InventoryType != 18 ||
+		item.CurrentPermissions&0x00004000 == 0 {
+		return Item{}, ErrInvalidItem
+	}
+	if item.AssetID == assetID {
+		return item, nil
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE inventory_items SET asset_id = $3, updated_at = now()
+		WHERE id = $1 AND owner_user_id = $2`, itemID, ownerID, assetID); err != nil {
+		return Item{}, fmt.Errorf("update inventory item asset: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE inventory_folders SET version = version + 1,
+		updated_at = now() WHERE id = $1 AND owner_user_id = $2`, item.FolderID, ownerID); err != nil {
+		return Item{}, fmt.Errorf("update inventory item asset folder version: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return Item{}, fmt.Errorf("commit inventory item asset update: %w", err)
+	}
+	item.AssetID = assetID
 	return item, nil
 }
 

@@ -571,6 +571,49 @@ bool animation_codecs() {
            encoded.back() == std::byte{};
 }
 
+bool wearable_asset_codecs() {
+    const auto agent = parse_uuid("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");
+    const auto session = parse_uuid("11111111-2222-4333-8444-555555555555");
+    const auto transaction = parse_uuid("99999999-8888-4777-8666-555555555555");
+    if (!agent || !session || !transaction) return false;
+    auto upload = bytes({0xff, 0xff, 0x01, 0x4d});
+    upload.insert(upload.end(), transaction->begin(), transaction->end());
+    upload.insert(upload.end(), {std::byte{13}, std::byte{}, std::byte{},
+                                 std::byte{3}, std::byte{}, std::byte{1}, std::byte{2}, std::byte{3}});
+    const auto decoded_upload = decode_asset_upload_request(upload);
+    const auto complete = encode_asset_upload_complete(*agent, 13, true);
+    if (!decoded_upload || decoded_upload->transaction_id != *transaction ||
+        decoded_upload->asset_type != 13 || decoded_upload->data != bytes({1, 2, 3}) ||
+        complete.size() != 22 || complete[3] != std::byte{0x4e} || complete.back() != std::byte{1})
+        return false;
+
+    auto update = bytes({0xff, 0xff, 0x01, 0x0a});
+    update.insert(update.end(), agent->begin(), agent->end());
+    update.insert(update.end(), session->begin(), session->end());
+    update.insert(update.end(), 16, std::byte{}); // agent-data transaction
+    update.push_back(std::byte{1});
+    const auto block = update.size();
+    update.resize(block + 132, std::byte{});
+    std::copy(session->begin(), session->end(), update.begin() + block); // item ID
+    std::copy(transaction->begin(), transaction->end(), update.begin() + block + 105);
+    update.insert(update.end(), {std::byte{6}, std::byte{'S'}, std::byte{'h'}, std::byte{'a'},
+                                 std::byte{'p'}, std::byte{'e'}, std::byte{},
+                                 std::byte{1}, std::byte{}});
+    update.insert(update.end(), 8, std::byte{});
+    const auto decoded_update = decode_update_inventory_asset(update);
+    const auto request_xfer = encode_request_xfer(0x0102030405060708ULL, *agent, 13);
+    auto send_xfer = bytes({18, 8, 7, 6, 5, 4, 3, 2, 1, 3, 0, 0, 0, 3, 0, 9, 8, 7});
+    const auto decoded_xfer = decode_send_xfer_packet(send_xfer);
+    const auto confirmed = encode_confirm_xfer_packet(0x0102030405060708ULL, 3);
+    return decoded_update && decoded_update->agent_id == *agent &&
+           decoded_update->session_id == *session && decoded_update->item_id == *session &&
+           decoded_update->transaction_id == *transaction && request_xfer.size() == 35 &&
+           request_xfer[3] == std::byte{0x9c} && decoded_xfer &&
+           decoded_xfer->id == 0x0102030405060708ULL && decoded_xfer->packet == 3 &&
+           decoded_xfer->data == bytes({9, 8, 7}) && confirmed.size() == 13 &&
+           confirmed[0] == std::byte{19};
+}
+
 bool chat_codecs() {
     const auto agent = parse_uuid("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");
     const auto session = parse_uuid("11111111-2222-4333-8444-555555555555");
@@ -639,9 +682,10 @@ int main() {
     if (!circuit_registry()) return 5;
     if (!agent_update_codec()) return 6;
     if (!animation_codecs()) return 7;
-    if (!chat_codecs()) return 8;
-    if (!flat_terrain_codec()) return 9;
-    if (!static_object_codec()) return 10;
-    if (decode_packet(std::array<std::byte, 2>{})) return 11;
+    if (!wearable_asset_codecs()) return 8;
+    if (!chat_codecs()) return 9;
+    if (!flat_terrain_codec()) return 10;
+    if (!static_object_codec()) return 11;
+    if (decode_packet(std::array<std::byte, 2>{})) return 12;
     return 0;
 }

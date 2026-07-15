@@ -81,6 +81,13 @@ func TestPostgresSystemFolderLifecycle(t *testing.T) {
 	if updated, err := store.EnsureItem(ctx, item); err != nil || !updated {
 		t.Fatalf("changed ensure item updated = %v, error = %v", updated, err)
 	}
+	editedWearableAssetID, _ := identifier.NewUUID()
+	editedWearable, err := store.UpdateItemAsset(ctx, userID, itemID, editedWearableAssetID)
+	if err != nil || editedWearable.AssetID != editedWearableAssetID ||
+		editedWearable.CreatorUserID != userID {
+		t.Fatalf("update wearable asset = %#v, error = %v", editedWearable, err)
+	}
+	replacementAssetID = editedWearableAssetID
 	uploadedItemID, _ := identifier.NewUUID()
 	uploadedAssetID, _ := identifier.NewUUID()
 	uploaded := Item{ID: uploadedItemID, OwnerUserID: userID, CreatorUserID: userID,

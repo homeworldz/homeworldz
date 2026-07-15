@@ -1225,6 +1225,97 @@ std::vector<std::byte> encode_avatar_animation(const AvatarAnimation& message) {
     return output;
 }
 
+std::optional<AssetUploadRequest> decode_asset_upload_request(std::span<const std::byte> payload) {
+    constexpr std::array<std::byte, 4> message_id{
+        std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x4d}};
+    if (payload.size() < 25 ||
+        !std::equal(message_id.begin(), message_id.end(), payload.begin()))
+        return std::nullopt;
+    const auto size = std::to_integer<std::size_t>(payload[23]) |
+                      (std::to_integer<std::size_t>(payload[24]) << 8);
+    if (payload.size() != 25 + size) return std::nullopt;
+    AssetUploadRequest result;
+    std::copy_n(payload.begin() + 4, 16, result.transaction_id.begin());
+    result.asset_type = static_cast<std::int8_t>(std::to_integer<std::uint8_t>(payload[20]));
+    result.temporary = payload[21] != std::byte{};
+    result.store_local = payload[22] != std::byte{};
+    result.data.assign(payload.begin() + 25, payload.end());
+    return result;
+}
+
+std::vector<std::byte> encode_asset_upload_complete(const Uuid& asset_id,
+                                                    std::int8_t asset_type, bool success) {
+    std::vector<std::byte> output{
+        std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x4e}};
+    append_uuid(output, asset_id);
+    output.push_back(static_cast<std::byte>(asset_type));
+    output.push_back(success ? std::byte{1} : std::byte{});
+    return output;
+}
+
+std::optional<UpdateInventoryAsset> decode_update_inventory_asset(
+    std::span<const std::byte> payload) {
+    constexpr std::array<std::byte, 4> message_id{
+        std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x0a}};
+    constexpr std::size_t block_offset = 53;
+    constexpr std::size_t transaction_offset = block_offset + 105;
+    constexpr std::size_t string_offset = block_offset + 132;
+    if (payload.size() < string_offset + 10 ||
+        !std::equal(message_id.begin(), message_id.end(), payload.begin()) ||
+        payload[52] != std::byte{1})
+        return std::nullopt;
+    auto position = string_offset;
+    for (int field = 0; field < 2; ++field) {
+        if (position >= payload.size()) return std::nullopt;
+        const auto size = std::to_integer<std::size_t>(payload[position++]);
+        if (size == 0 || position + size > payload.size() ||
+            payload[position + size - 1] != std::byte{})
+            return std::nullopt;
+        position += size;
+    }
+    if (position + 8 != payload.size()) return std::nullopt;
+    UpdateInventoryAsset result;
+    std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
+    std::copy_n(payload.begin() + block_offset, 16, result.item_id.begin());
+    std::copy_n(payload.begin() + transaction_offset, 16, result.transaction_id.begin());
+    return result;
+}
+
+std::vector<std::byte> encode_request_xfer(std::uint64_t id, const Uuid& asset_id,
+                                           std::int16_t asset_type) {
+    std::vector<std::byte> output{
+        std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x9c}};
+    append_le_u64(output, id);
+    if (!append_variable1(output, "")) return {};
+    output.push_back(std::byte{}); // file path
+    output.push_back(std::byte{}); // delete on completion
+    output.push_back(std::byte{}); // use big packets
+    append_uuid(output, asset_id);
+    append_le_u16(output, static_cast<std::uint16_t>(asset_type));
+    return output;
+}
+
+std::optional<XferPacket> decode_send_xfer_packet(std::span<const std::byte> payload) {
+    if (payload.size() < 15 || payload[0] != std::byte{18}) return std::nullopt;
+    const auto size = std::to_integer<std::size_t>(payload[13]) |
+                      (std::to_integer<std::size_t>(payload[14]) << 8);
+    if (payload.size() != 15 + size) return std::nullopt;
+    XferPacket result;
+    result.id = read_le_u32(payload, 1) |
+                (static_cast<std::uint64_t>(read_le_u32(payload, 5)) << 32);
+    result.packet = read_le_u32(payload, 9);
+    result.data.assign(payload.begin() + 15, payload.end());
+    return result;
+}
+
+std::vector<std::byte> encode_confirm_xfer_packet(std::uint64_t id, std::uint32_t packet) {
+    std::vector<std::byte> output{std::byte{19}};
+    append_le_u64(output, id);
+    append_le_u32(output, packet);
+    return output;
+}
+
 std::optional<RequestImage> decode_request_image(std::span<const std::byte> payload) {
     constexpr std::size_t header_size = 34;
     constexpr std::size_t block_size = 26;

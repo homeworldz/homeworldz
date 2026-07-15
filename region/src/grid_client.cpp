@@ -285,6 +285,13 @@ bool Client::move_inventory_item(std::string_view user_id, std::string_view item
         "/items/" + std::string(item_id), body).status_code == 200;
 }
 
+bool Client::update_inventory_item_asset(std::string_view user_id, std::string_view item_id,
+                                         std::string_view asset_id) {
+    const auto body = "{\"assetId\":" + api::json_string(asset_id) + '}';
+    return transport_->send("PUT", "/api/v1/inventory/" + std::string(user_id) +
+        "/items/" + std::string(item_id) + "/asset", body).status_code == 200;
+}
+
 std::optional<InventoryItem> Client::find_inventory_item(std::string_view user_id,
                                                           std::string_view item_id) {
     const auto response = transport_->send(

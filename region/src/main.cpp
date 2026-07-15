@@ -84,6 +84,22 @@ struct PendingInventoryUpload {
     homeworldz::viewer::NewFileInventoryUpload request;
 };
 
+struct PendingWearableUpload {
+    std::string asset_id;
+    std::int8_t asset_type{};
+};
+
+struct PendingWearableXfer {
+    std::string transaction_id;
+    std::string asset_id;
+    homeworldz::viewer::Uuid asset_uuid{};
+    std::int8_t asset_type{};
+    std::size_t expected_size{};
+    std::size_t packet_size{1000};
+    std::vector<std::byte> data;
+    std::unordered_set<std::uint32_t> received_packets;
+};
+
 void stop(int) { running = false; }
 
 std::string environment_value(const char* name, std::string fallback = {}) {
@@ -679,6 +695,9 @@ int main() {
     std::unordered_map<std::string, std::deque<QueuedTexturePacket>> texture_packets;
     std::unordered_set<std::string> active_texture_transfers;
     std::unordered_map<std::string, PendingInventoryUpload> pending_inventory_uploads;
+    std::unordered_map<std::string, PendingWearableUpload> pending_wearable_uploads;
+    std::unordered_map<std::string, PendingWearableXfer> pending_wearable_xfers;
+    std::uint64_t next_wearable_xfer{1};
 
     std::cout << "{\"level\":\"info\",\"message\":\"region service listening\",\"httpPort\":"
               << configured_port() << ",\"viewerPort\":" << configured_viewer_port() << "}" << std::endl;
@@ -1066,6 +1085,12 @@ int main() {
                             std::erase_if(active_texture_transfers, [&](const std::string& key) {
                                 return key.starts_with(endpoint + '|');
                             });
+                            std::erase_if(pending_wearable_uploads, [&](const auto& entry) {
+                                return entry.first.starts_with(endpoint + '|');
+                            });
+                            std::erase_if(pending_wearable_xfers, [&](const auto& entry) {
+                                return entry.first.starts_with(endpoint + '|');
+                            });
                             circuits.remove(endpoint);
                             std::cout << "{\"level\":\"info\",\"message\":\"viewer logged out\",\"sessionId\":"
                                       << homeworldz::api::json_string(session_id) << "}" << std::endl;
@@ -1290,6 +1315,202 @@ int main() {
                             std::cout << "{\"level\":\"info\",\"message\":\"avatar animation state updated\","
                                          "\"changes\":" << agent_animation->animations.size()
                                       << ",\"active\":" << animations.size() << "}" << std::endl;
+                        }
+                        const auto asset_upload =
+                            homeworldz::viewer::decode_asset_upload_request(packet->payload);
+                        if (asset_upload) {
+                            bool success = false;
+                            bool xfer_started = false;
+                            homeworldz::viewer::Uuid asset_uuid{};
+                            std::string asset_id;
+                            if ((asset_upload->asset_type == 5 || asset_upload->asset_type == 13) &&
+                                !asset_upload->temporary) {
+                                try {
+                                    asset_id = homeworldz::viewer::random_uuid();
+                                    asset_uuid = *homeworldz::viewer::parse_uuid(asset_id);
+                                    const auto transaction_id =
+                                        homeworldz::viewer::format_uuid(asset_upload->transaction_id);
+                                    if (asset_upload->data.empty()) {
+                                        const auto xfer_id = next_wearable_xfer++;
+                                        pending_wearable_xfers.insert_or_assign(
+                                            endpoint + '|' + std::to_string(xfer_id),
+                                            PendingWearableXfer{transaction_id, asset_id, asset_uuid,
+                                                asset_upload->asset_type});
+                                        if (const auto outgoing = circuits.send(endpoint,
+                                                homeworldz::viewer::encode_request_xfer(
+                                                    xfer_id, asset_uuid, asset_upload->asset_type),
+                                                true, now, true)) {
+                                            xfer_started = send_udp(viewer_server, endpoint, *outgoing);
+                                        }
+                                    } else {
+                                        const auto metadata = storage->store_asset(
+                                            asset_id, homeworldz::viewer::format_uuid(identity->agent_id),
+                                            asset_upload->data);
+                                        success = !viewer_grid || viewer_grid->register_asset(
+                                            metadata.viewer_id, metadata.creator_id, metadata.sha256,
+                                            metadata.size, region_public_endpoint, true);
+                                        if (success) {
+                                            pending_wearable_uploads.insert_or_assign(
+                                                endpoint + '|' + transaction_id,
+                                                PendingWearableUpload{asset_id, asset_upload->asset_type});
+                                        }
+                                    }
+                                } catch (const std::exception& error) {
+                                    std::cout << "{\"level\":\"error\",\"message\":\"wearable asset upload failed\","
+                                                 "\"error\":" << homeworldz::api::json_string(error.what())
+                                              << "}" << std::endl;
+                                }
+                            }
+                            if (!xfer_started) {
+                                if (const auto outgoing = circuits.send(endpoint,
+                                        homeworldz::viewer::encode_asset_upload_complete(
+                                            asset_uuid, asset_upload->asset_type, success), true, now, true))
+                                    static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
+                            }
+                            std::cout << "{\"level\":" << (success || xfer_started ? "\"info\"" : "\"warn\"")
+                                      << ",\"message\":\"wearable asset upload "
+                                      << (success ? "stored" : xfer_started ? "transfer requested" : "rejected")
+                                      << "\",\"assetId\":"
+                                      << homeworldz::api::json_string(asset_id) << ",\"bytes\":"
+                                      << asset_upload->data.size() << "}" << std::endl;
+                        }
+                        const auto xfer_packet =
+                            homeworldz::viewer::decode_send_xfer_packet(packet->payload);
+                        if (xfer_packet) {
+                            const auto key = endpoint + '|' + std::to_string(xfer_packet->id);
+                            const auto pending = pending_wearable_xfers.find(key);
+                            if (pending != pending_wearable_xfers.end()) {
+                                auto& transfer = pending->second;
+                                const auto packet_number = xfer_packet->packet & 0x7fffffffU;
+                                const bool complete = (xfer_packet->packet & 0x80000000U) != 0;
+                                bool accepted = false;
+                                if (packet_number == 0 && xfer_packet->data.size() > 4) {
+                                    transfer.expected_size =
+                                        std::to_integer<std::size_t>(xfer_packet->data[0]) |
+                                        (std::to_integer<std::size_t>(xfer_packet->data[1]) << 8) |
+                                        (std::to_integer<std::size_t>(xfer_packet->data[2]) << 16) |
+                                        (std::to_integer<std::size_t>(xfer_packet->data[3]) << 24);
+                                    transfer.packet_size = xfer_packet->data.size() - 4;
+                                    if (transfer.expected_size != 0 &&
+                                        transfer.expected_size <= 4 * 1024 * 1024 &&
+                                        transfer.packet_size <= transfer.expected_size) {
+                                        transfer.data.assign(transfer.expected_size, std::byte{});
+                                        std::copy(xfer_packet->data.begin() + 4, xfer_packet->data.end(),
+                                                  transfer.data.begin());
+                                        accepted = true;
+                                    }
+                                } else if (transfer.expected_size != 0 &&
+                                           xfer_packet->data.size() <= transfer.packet_size) {
+                                    const auto offset = static_cast<std::size_t>(packet_number) *
+                                                        transfer.packet_size;
+                                    if (offset + xfer_packet->data.size() <= transfer.data.size()) {
+                                        std::copy(xfer_packet->data.begin(), xfer_packet->data.end(),
+                                                  transfer.data.begin() + offset);
+                                        accepted = true;
+                                    }
+                                }
+                                if (accepted) {
+                                    transfer.received_packets.insert(packet_number);
+                                    if (const auto outgoing = circuits.send(endpoint,
+                                            homeworldz::viewer::encode_confirm_xfer_packet(
+                                                xfer_packet->id, packet_number), true, now, true))
+                                        static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
+                                }
+                                if (accepted && complete) {
+                                    bool contiguous = true;
+                                    for (std::uint32_t index = 0; index <= packet_number; ++index)
+                                        contiguous = contiguous && transfer.received_packets.contains(index);
+                                    bool stored = false;
+                                    if (contiguous) {
+                                        try {
+                                            const auto metadata = storage->store_asset(
+                                                transfer.asset_id,
+                                                homeworldz::viewer::format_uuid(identity->agent_id),
+                                                transfer.data);
+                                            stored = !viewer_grid || viewer_grid->register_asset(
+                                                metadata.viewer_id, metadata.creator_id, metadata.sha256,
+                                                metadata.size, region_public_endpoint, true);
+                                            if (stored) {
+                                                pending_wearable_uploads.insert_or_assign(
+                                                    endpoint + '|' + transfer.transaction_id,
+                                                    PendingWearableUpload{
+                                                        transfer.asset_id, transfer.asset_type});
+                                            }
+                                        } catch (const std::exception& error) {
+                                            std::cout << "{\"level\":\"error\",\"message\":\"wearable asset transfer failed\","
+                                                         "\"error\":"
+                                                      << homeworldz::api::json_string(error.what()) << "}"
+                                                      << std::endl;
+                                        }
+                                    }
+                                    if (const auto outgoing = circuits.send(endpoint,
+                                            homeworldz::viewer::encode_asset_upload_complete(
+                                                transfer.asset_uuid, transfer.asset_type, stored),
+                                            true, now, true))
+                                        static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
+                                    std::cout << "{\"level\":" << (stored ? "\"info\"" : "\"warn\"")
+                                              << ",\"message\":\"wearable asset transfer "
+                                              << (stored ? "stored" : "rejected") << "\",\"assetId\":"
+                                              << homeworldz::api::json_string(transfer.asset_id)
+                                              << ",\"bytes\":" << transfer.expected_size << "}"
+                                              << std::endl;
+                                    pending_wearable_xfers.erase(pending);
+                                }
+                            }
+                        }
+                        const auto inventory_asset =
+                            homeworldz::viewer::decode_update_inventory_asset(packet->payload);
+                        if (inventory_asset && inventory_asset->agent_id == identity->agent_id &&
+                            inventory_asset->session_id == identity->session_id) {
+                            const auto transaction_id =
+                                homeworldz::viewer::format_uuid(inventory_asset->transaction_id);
+                            const auto pending = pending_wearable_uploads.find(endpoint + '|' + transaction_id);
+                            const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
+                            const auto item_id = homeworldz::viewer::format_uuid(inventory_asset->item_id);
+                            bool updated = false;
+                            if (pending != pending_wearable_uploads.end() && viewer_grid) {
+                                updated = viewer_grid->update_inventory_item_asset(
+                                    user_id, item_id, pending->second.asset_id);
+                                if (updated) {
+                                    if (const auto item = viewer_grid->find_inventory_item(user_id, item_id)) {
+                                        homeworldz::viewer::InventoryItem response_item;
+                                        const auto parsed_item = homeworldz::viewer::parse_uuid(item->item_id);
+                                        const auto creator = homeworldz::viewer::parse_uuid(item->creator_id);
+                                        const auto owner = homeworldz::viewer::parse_uuid(item->owner_id);
+                                        const auto folder = homeworldz::viewer::parse_uuid(item->folder_id);
+                                        const auto asset = homeworldz::viewer::parse_uuid(item->asset_id);
+                                        if (parsed_item && creator && owner && folder && asset) {
+                                            response_item.item_id = *parsed_item;
+                                            response_item.creator_id = *creator;
+                                            response_item.owner_id = *owner;
+                                            response_item.folder_id = *folder;
+                                            response_item.asset_id = *asset;
+                                            response_item.asset_type = static_cast<std::int8_t>(item->asset_type);
+                                            response_item.inventory_type = static_cast<std::int8_t>(item->inventory_type);
+                                            response_item.name = item->name;
+                                            response_item.description = item->description;
+                                            response_item.flags = item->flags;
+                                            response_item.base_permissions = item->base_permissions;
+                                            response_item.current_permissions = item->current_permissions;
+                                            response_item.everyone_permissions = item->everyone_permissions;
+                                            response_item.next_permissions = item->next_permissions;
+                                            response_item.sale_type = static_cast<std::uint8_t>(item->sale_type);
+                                            response_item.sale_price = item->sale_price;
+                                            const homeworldz::viewer::AgentMessage response{
+                                                identity->agent_id, identity->session_id};
+                                            if (const auto outgoing = circuits.send(endpoint,
+                                                    homeworldz::viewer::encode_update_create_inventory_item(
+                                                        response, 0, response_item), true, now, true))
+                                                static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
+                                        }
+                                    }
+                                    pending_wearable_uploads.erase(pending);
+                                }
+                            }
+                            std::cout << "{\"level\":" << (updated ? "\"info\"" : "\"warn\"")
+                                      << ",\"message\":\"wearable inventory asset "
+                                      << (updated ? "updated" : "rejected") << "\",\"itemId\":"
+                                      << homeworldz::api::json_string(item_id) << "}" << std::endl;
                         }
                         const auto image_request = homeworldz::viewer::decode_request_image(packet->payload);
                         if (image_request && image_request->agent_id == identity->agent_id &&

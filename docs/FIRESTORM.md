@@ -296,6 +296,16 @@ mappings are reconciled to the Grid's authoritative creator only when their
 viewer UUID, SHA-256 digest, and byte length all match; a content mismatch
 still fails closed. Viewer acceptance of the fix remains pending.
 
+Editing a worn shape or clothing item produces a new wearable asset before the
+viewer updates the inventory item's asset reference. HomeWorldz accepts the
+narrow legacy asset-transaction packets Firestorm still uses for this binary
+upload, including bounded multi-packet `xfer`, but keeps AISv3 as the inventory
+authority. The Grid relinks only an owned, modifiable clothing or body-part
+item, and only to an asset whose recorded creator is the editing avatar. The
+inventory item's original creator is preserved while the new asset records its
+actual uploader. Viewer acceptance of wearable edit persistence remains
+pending.
+
 The read-only system Library acceptance passed on 2026-07-14. Firestorm showed
 the shared `Library / Clothing / Initial Outfits / Default Avatar` hierarchy
 and all six default wearable items. This Firestorm build requested the Library

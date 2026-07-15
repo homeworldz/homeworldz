@@ -101,6 +101,15 @@ int main() {
             R"("folderId":"ffffffff-ffff-4fff-8fff-ffffffffffff")") == std::string::npos ||
         transport->requests.back().body.find(R"("name":"Renamed Texture")") == std::string::npos)
         return 1;
+    if (!client.update_inventory_item_asset(
+            session->agent_id, "11111111-1111-4111-8111-111111111111",
+            "33333333-3333-4333-8333-333333333333") ||
+        transport->requests.back().method != "PUT" ||
+        transport->requests.back().path != "/api/v1/inventory/" + session->agent_id +
+            "/items/11111111-1111-4111-8111-111111111111/asset" ||
+        transport->requests.back().body.find(
+            R"("assetId":"33333333-3333-4333-8333-333333333333")") == std::string::npos)
+        return 1;
     const auto objects_folder = client.find_system_inventory_folder(session->agent_id, 6);
     if (!objects_folder || *objects_folder != "22222222-2222-4222-8222-222222222222" ||
         transport->requests.back().method != "GET" ||

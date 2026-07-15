@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/homeworldz/homeworldz/grid/internal/assetmeta"
 	"github.com/homeworldz/homeworldz/grid/internal/identifier"
 	"github.com/homeworldz/homeworldz/grid/internal/inventory"
 )
@@ -49,7 +50,13 @@ func (a *API) inventoryByUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if strings.HasPrefix(suffix, "items/") {
-		itemID := strings.TrimPrefix(suffix, "items/")
+		itemPath := strings.TrimPrefix(suffix, "items/")
+		if itemID, assetSuffix, found := strings.Cut(itemPath, "/"); found && assetSuffix == "asset" &&
+			validUUID(itemID) {
+			a.inventoryItemAssetByUser(w, r, userID, itemID)
+			return
+		}
+		itemID := itemPath
 		if !validUUID(itemID) || strings.Contains(itemID, "/") {
 			a.notFound(w, r)
 			return
@@ -106,6 +113,50 @@ func (a *API) inventoryByUser(w http.ResponseWriter, r *http.Request) {
 	default:
 		w.Header().Set("Allow", "GET, POST")
 		writeJSON(w, http.StatusMethodNotAllowed, Error{Code: "method_not_allowed", Message: "only GET and POST are supported"})
+	}
+}
+
+type updateInventoryItemAssetRequest struct {
+	AssetID string `json:"assetId"`
+}
+
+func (a *API) inventoryItemAssetByUser(w http.ResponseWriter, r *http.Request, userID, itemID string) {
+	if r.Method != http.MethodPut {
+		w.Header().Set("Allow", http.MethodPut)
+		writeJSON(w, http.StatusMethodNotAllowed, Error{Code: "method_not_allowed", Message: "only PUT is supported"})
+		return
+	}
+	var request updateInventoryItemAssetRequest
+	if !decodeJSON(w, r, &request) || !validUUID(request.AssetID) {
+		return
+	}
+	if a.assets == nil {
+		writeJSON(w, http.StatusServiceUnavailable, Error{Code: "asset_store_unavailable", Message: "asset metadata is unavailable"})
+		return
+	}
+	asset, err := a.assets.Get(r.Context(), request.AssetID)
+	if errors.Is(err, assetmeta.ErrNotFound) {
+		writeJSON(w, http.StatusNotFound, Error{Code: "asset_not_found", Message: "asset was not found"})
+		return
+	}
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, Error{Code: "asset_store_error", Message: "asset metadata could not be loaded"})
+		return
+	}
+	if asset.CreatorUserID != userID {
+		writeJSON(w, http.StatusForbidden, Error{Code: "asset_creator_mismatch", Message: "wearable asset was not created by its uploader"})
+		return
+	}
+	item, err := a.inventory.UpdateItemAsset(r.Context(), userID, itemID, request.AssetID)
+	switch {
+	case errors.Is(err, inventory.ErrInvalidItem):
+		writeJSON(w, http.StatusForbidden, Error{Code: "inventory_item_not_editable", Message: "inventory item cannot accept a wearable asset update"})
+	case errors.Is(err, inventory.ErrItemNotFound):
+		writeJSON(w, http.StatusNotFound, Error{Code: "inventory_item_not_found", Message: "inventory item was not found"})
+	case err != nil:
+		writeJSON(w, http.StatusInternalServerError, Error{Code: "inventory_store_error", Message: "inventory item asset could not be updated"})
+	default:
+		writeJSON(w, http.StatusOK, item)
 	}
 }
 

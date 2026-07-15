@@ -267,6 +267,25 @@ struct AvatarAnimation {
     std::vector<AvatarAnimationEntry> animations;
 };
 
+struct AssetUploadRequest {
+    Uuid transaction_id{};
+    std::int8_t asset_type{};
+    bool temporary{};
+    bool store_local{};
+    std::vector<std::byte> data;
+};
+
+struct UpdateInventoryAsset : AgentMessage {
+    Uuid item_id{};
+    Uuid transaction_id{};
+};
+
+struct XferPacket {
+    std::uint64_t id{};
+    std::uint32_t packet{};
+    std::vector<std::byte> data;
+};
+
 struct ImageRequestBlock {
     Uuid image_id{};
     std::int8_t discard_level{};
@@ -394,6 +413,14 @@ std::vector<std::byte> encode_agent_cached_texture_response(const AgentCachedTex
 std::optional<AgentSetAppearance> decode_agent_set_appearance(std::span<const std::byte> payload);
 std::optional<AgentAnimation> decode_agent_animation(std::span<const std::byte> payload);
 std::vector<std::byte> encode_avatar_animation(const AvatarAnimation& message);
+std::optional<AssetUploadRequest> decode_asset_upload_request(std::span<const std::byte> payload);
+std::vector<std::byte> encode_asset_upload_complete(const Uuid& asset_id,
+                                                    std::int8_t asset_type, bool success);
+std::optional<UpdateInventoryAsset> decode_update_inventory_asset(std::span<const std::byte> payload);
+std::vector<std::byte> encode_request_xfer(std::uint64_t id, const Uuid& asset_id,
+                                           std::int16_t asset_type);
+std::optional<XferPacket> decode_send_xfer_packet(std::span<const std::byte> payload);
+std::vector<std::byte> encode_confirm_xfer_packet(std::uint64_t id, std::uint32_t packet);
 std::optional<RequestImage> decode_request_image(std::span<const std::byte> payload);
 std::vector<std::vector<std::byte>> encode_image_transfer(
     const Uuid& image_id, std::span<const std::byte> content, std::uint32_t start_packet = 0);

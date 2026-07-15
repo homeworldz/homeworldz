@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/homeworldz/homeworldz/grid/internal/assetmeta"
 	"github.com/homeworldz/homeworldz/grid/internal/inventory"
 )
 
@@ -197,6 +198,26 @@ func (s *memoryInventoryStore) UpdateItem(_ context.Context, item inventory.Item
 	return inventory.Item{}, inventory.ErrItemNotFound
 }
 
+func (s *memoryInventoryStore) UpdateItemAsset(_ context.Context, ownerID, itemID, assetID string) (inventory.Item, error) {
+	for index, item := range s.items[ownerID] {
+		if item.ID != itemID {
+			continue
+		}
+		if (item.AssetType != 5 && item.AssetType != 13) || item.InventoryType != 18 ||
+			item.CurrentPermissions&0x00004000 == 0 {
+			return inventory.Item{}, inventory.ErrInvalidItem
+		}
+		s.items[ownerID][index].AssetID = assetID
+		for folderIndex := range s.folders[ownerID] {
+			if s.folders[ownerID][folderIndex].ID == item.FolderID {
+				s.folders[ownerID][folderIndex].Version++
+			}
+		}
+		return s.items[ownerID][index], nil
+	}
+	return inventory.Item{}, inventory.ErrItemNotFound
+}
+
 func (s *memoryInventoryStore) DeleteItem(_ context.Context, userID, itemID string) (inventory.Item, error) {
 	for itemIndex, item := range s.items[userID] {
 		if item.ID != itemID {
@@ -372,6 +393,31 @@ func TestCreateObjectInventoryItemEndpoint(t *testing.T) {
 		"/api/v1/inventory/"+userID+"/items/"+created.ID, "", http.StatusOK)
 	if fetched.ID != created.ID || fetched.AssetID != created.AssetID || fetched.CreatorUserID != creatorID {
 		t.Fatalf("fetched object inventory item = %#v", fetched)
+	}
+}
+
+func TestUpdateWearableInventoryAssetEndpoint(t *testing.T) {
+	const userID = "20000000-0000-4000-8000-000000000001"
+	const itemID = "40000000-0000-4000-8000-000000000012"
+	const assetID = "50000000-0000-4000-8000-000000000012"
+	store := &memoryInventoryStore{folders: make(map[string][]inventory.Folder),
+		items: make(map[string][]inventory.Item)}
+	_, _ = store.EnsureSystemFolders(context.Background(), userID)
+	store.items[userID] = []inventory.Item{{
+		ID: itemID, OwnerUserID: userID, CreatorUserID: inventory.LibraryOwnerID,
+		FolderID: inventory.SystemFolderID(userID, 13), AssetID: "50000000-0000-4000-8000-000000000011",
+		AssetType: 13, InventoryType: 18, Name: "Default Shape",
+		BasePermissions: 0x7fffffff, CurrentPermissions: 0x7fffffff,
+	}}
+	assets := &memoryAssetStore{assets: map[string]assetmeta.Asset{
+		assetID: {ID: assetID, CreatorUserID: userID, SHA256: "aa", Size: 100},
+	}}
+	handler := New(checker{}, "test", Options{ServiceToken: "secret", Inventory: store, Assets: assets})
+	updated := requestRegion[inventory.Item](t, handler, http.MethodPut,
+		"/api/v1/inventory/"+userID+"/items/"+itemID+"/asset",
+		`{"assetId":"`+assetID+`"}`, http.StatusOK)
+	if updated.AssetID != assetID || updated.CreatorUserID != inventory.LibraryOwnerID {
+		t.Fatalf("updated wearable item = %#v", updated)
 	}
 }
 
