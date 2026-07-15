@@ -613,6 +613,13 @@ region persisted sub-metre heights in its region-local `terrain.f32` state
 rather than overwriting the packaged RAW default. After a complete viewer,
 grid, and region restart, the region reported `region-state` as its terrain
 source, the spike remained visible, and walking over it produced the expected
-avatar-height changes. At this acceptance point, the provisional avatar
-controller samples the authoritative edited heightmap and mirrors its resolved
-capsule into Jolt; Jolt terrain collision itself remains the next step.
+avatar-height changes.
+
+Jolt terrain grounding passed live Firestorm acceptance on 2026-07-15. The
+region mirrors all 65,536 authoritative samples into a correctly oriented Jolt
+heightfield at startup, replaces that collision body after viewer terrain edits,
+and obtains the controller's support height through a targeted physics ray cast.
+Jim Tarber walked over and stopped on the persisted spike, then flew and landed
+nearby without a visible regression. The HomeWorldz controller still owns
+movement policy while Jolt now supplies the terrain collision geometry; a full
+Jolt character-controller cutover remains separate work.
