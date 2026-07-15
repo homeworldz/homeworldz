@@ -390,6 +390,19 @@ std::optional<InventoryItem> Client::copy_library_item(std::string_view user_id,
     return inventory_item_from_json(response.body, user_id);
 }
 
+std::optional<InventoryItem> Client::copy_inventory_item(std::string_view user_id,
+                                                         std::string_view source_item_id,
+                                                         std::string_view destination_folder_id,
+                                                         std::string_view new_name) {
+    const auto body = "{\"sourceItemId\":" + api::json_string(source_item_id) +
+                      ",\"destinationFolderId\":" + api::json_string(destination_folder_id) +
+                      ",\"name\":" + api::json_string(new_name) + '}';
+    const auto response = transport_->send(
+        "POST", "/api/v1/inventory/" + std::string(user_id) + "/copy-item", body);
+    if (response.status_code != 201) return std::nullopt;
+    return inventory_item_from_json(response.body, user_id);
+}
+
 std::optional<ViewerSession> ViewerSessionCache::validate(
     std::string_view session_id, std::chrono::steady_clock::time_point now) {
     const auto key = std::string(session_id);

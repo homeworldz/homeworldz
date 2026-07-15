@@ -542,3 +542,11 @@ it to Trash and rezzing the original Objects item restored `Tall rotated box`.
 After a complete service and viewer restart, the rezzed Prim1 retained its
 description, size, rotation, Anyone Move and next-owner masks; its source item
 remained in Objects and the deleted intermediate item remained in Trash.
+
+Firestorm continues to send the legacy UDP `CopyInventoryItem` message for
+personal item copy/paste even when AISv3 capabilities are advertised. The
+region therefore provides a narrow compatibility adapter for that message:
+it authenticates the agent and source owner, asks the grid inventory service
+to create the copy, enforces the source's Copy bit (`0x00008000`), and returns
+`UpdateCreateInventoryItem`. AIS-backed grid storage remains authoritative;
+the region does not maintain a parallel inventory.

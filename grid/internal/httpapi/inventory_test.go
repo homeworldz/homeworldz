@@ -447,3 +447,44 @@ func TestCopyLibraryInventoryItemEndpoint(t *testing.T) {
 		t.Fatalf("missing library copy error = %#v", missing)
 	}
 }
+
+func TestCopyPersonalInventoryItemEndpoint(t *testing.T) {
+	const userID = "20000000-0000-4000-8000-000000000001"
+	const sourceID = "40000000-0000-4000-8000-000000000020"
+	store := &memoryInventoryStore{folders: make(map[string][]inventory.Folder), items: make(map[string][]inventory.Item)}
+	_, _ = store.EnsureSystemFolders(context.Background(), userID)
+	objectsID := inventory.SystemFolderID(userID, 6)
+	source := inventory.Item{
+		ID: sourceID, OwnerUserID: userID, CreatorUserID: "30000000-0000-4000-8000-000000000001",
+		FolderID: objectsID, AssetID: "50000000-0000-4000-8000-000000000020",
+		AssetType: 6, InventoryType: 6, Name: "Prim1", Description: "Tall box", Flags: 7,
+		BasePermissions: 0x0009e000, CurrentPermissions: 0x0009e000,
+		EveryonePermissions: 0x00080000, NextPermissions: 0x00086000, SaleType: 1, SalePrice: 25,
+	}
+	store.items[userID] = []inventory.Item{source}
+	handler := New(checker{}, "test", Options{ServiceToken: "secret", Inventory: store})
+	created := requestRegion[inventory.Item](t, handler, http.MethodPost,
+		"/api/v1/inventory/"+userID+"/copy-item",
+		`{"sourceItemId":"`+sourceID+`","destinationFolderId":"`+objectsID+`","name":"Prim1 copy"}`,
+		http.StatusCreated)
+	if created.ID == "" || created.ID == source.ID || created.OwnerUserID != userID ||
+		created.CreatorUserID != source.CreatorUserID || created.FolderID != objectsID ||
+		created.AssetID != source.AssetID || created.AssetType != source.AssetType ||
+		created.InventoryType != source.InventoryType || created.Name != "Prim1 copy" ||
+		created.Description != source.Description || created.Flags != source.Flags ||
+		created.BasePermissions != source.BasePermissions ||
+		created.CurrentPermissions != source.CurrentPermissions ||
+		created.EveryonePermissions != source.EveryonePermissions ||
+		created.NextPermissions != source.NextPermissions || created.SaleType != source.SaleType ||
+		created.SalePrice != source.SalePrice {
+		t.Fatalf("copied personal inventory item = %#v", created)
+	}
+	store.items[userID][0].CurrentPermissions &^= 0x00008000
+	denied := requestRegion[Error](t, handler, http.MethodPost,
+		"/api/v1/inventory/"+userID+"/copy-item",
+		`{"sourceItemId":"`+sourceID+`","destinationFolderId":"`+objectsID+`","name":""}`,
+		http.StatusForbidden)
+	if denied.Code != "inventory_item_not_copyable" {
+		t.Fatalf("no-copy error = %#v", denied)
+	}
+}

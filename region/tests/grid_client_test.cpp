@@ -20,6 +20,8 @@ public:
         requests.push_back({std::string(method), std::string(path), std::string(body)});
         if (method == "POST" && path.ends_with("/copy-library-item"))
             return {201, R"({"id":"11111111-1111-4111-8111-111111111111","ownerUserId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","creatorUserId":"00000000-0000-0000-0000-000000000002","folderId":"22222222-2222-4222-8222-222222222222","assetId":"33333333-3333-4333-8333-333333333333","assetType":5,"inventoryType":18,"name":"Default Shirt","description":"","flags":4,"basePermissions":2147483647,"currentPermissions":2147483647,"everyonePermissions":2147483647,"nextPermissions":2147483647,"saleType":0,"salePrice":0})"};
+        if (method == "POST" && path.ends_with("/copy-item"))
+            return {201, R"({"id":"88888888-8888-4888-8888-888888888888","ownerUserId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","creatorUserId":"77777777-7777-4777-8777-777777777777","folderId":"55555555-5555-4555-8555-555555555555","assetId":"66666666-6666-4666-8666-666666666666","assetType":6,"inventoryType":6,"name":"Prim1 copy","description":"Tall box","flags":0,"basePermissions":647168,"currentPermissions":647168,"everyonePermissions":0,"nextPermissions":581632,"saleType":0,"salePrice":0})"};
         if (method == "POST") return {201, R"({"id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"})"};
         if (method == "PUT") return {200, R"({"id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"})"};
         if (method == "DELETE") return {204, {}};
@@ -166,6 +168,16 @@ int main() {
         copied->base_permissions != 2147483647 || copied->name != "Default Shirt" ||
         transport->requests.back().path != "/api/v1/inventory/" + session->agent_id + "/copy-library-item" ||
         transport->requests.back().body.find(R"("sourceItemId":"d5e46210-b9d1-11dc-95ff-0800200c9a66")") == std::string::npos)
+        return 1;
+    const auto personal_copy = client.copy_inventory_item(
+        session->agent_id, "44444444-4444-4444-8444-444444444444",
+        "55555555-5555-4555-8555-555555555555", "Prim1 copy");
+    if (!personal_copy || personal_copy->owner_id != session->agent_id ||
+        personal_copy->creator_id != "77777777-7777-4777-8777-777777777777" ||
+        personal_copy->asset_type != 6 || personal_copy->name != "Prim1 copy" ||
+        transport->requests.back().path != "/api/v1/inventory/" + session->agent_id + "/copy-item" ||
+        transport->requests.back().body.find(
+            R"("sourceItemId":"44444444-4444-4444-8444-444444444444")") == std::string::npos)
         return 1;
     if (!client.update_presence(session->agent_id, session->destination_region_id) ||
         transport->requests.back().method != "PUT" ||

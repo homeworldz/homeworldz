@@ -30,6 +30,10 @@ func (a *API) inventoryByUser(w http.ResponseWriter, r *http.Request) {
 		a.copyLibraryInventoryItem(w, r, userID)
 		return
 	}
+	if suffix == "copy-item" {
+		a.copyInventoryItem(w, r, userID)
+		return
+	}
 	if strings.HasPrefix(suffix, "system-folders/") {
 		folderTypeText := strings.TrimPrefix(suffix, "system-folders/")
 		folderType, err := strconv.Atoi(folderTypeText)
@@ -341,6 +345,75 @@ func (a *API) copyLibraryInventoryItem(w http.ResponseWriter, r *http.Request, u
 	default:
 		w.Header().Set("Location", "/api/v1/inventory/"+userID+"/items/"+item.ID)
 		writeJSON(w, http.StatusCreated, item)
+	}
+}
+
+func (a *API) copyInventoryItem(w http.ResponseWriter, r *http.Request, userID string) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		writeJSON(w, http.StatusMethodNotAllowed, Error{Code: "method_not_allowed", Message: "only POST is supported"})
+		return
+	}
+	var request CopyInventoryItemRequest
+	if !decodeJSON(w, r, &request) {
+		return
+	}
+	if !validUUID(request.SourceItemID) || !validUUID(request.DestinationFolderID) || len(request.Name) > 255 {
+		writeJSON(w, http.StatusBadRequest, Error{Code: "invalid_inventory_copy", Message: "inventory item copy is invalid"})
+		return
+	}
+	items, err := a.inventory.ListItems(r.Context(), userID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, Error{Code: "inventory_store_error", Message: "inventory item could not be loaded"})
+		return
+	}
+	var source inventory.Item
+	for _, item := range items {
+		if item.ID == request.SourceItemID {
+			source = item
+			break
+		}
+	}
+	if source.ID == "" {
+		writeJSON(w, http.StatusNotFound, Error{Code: "inventory_item_not_found", Message: "inventory item was not found"})
+		return
+	}
+	const permissionCopy uint32 = 0x00008000
+	if source.CurrentPermissions&permissionCopy == 0 {
+		writeJSON(w, http.StatusForbidden, Error{Code: "inventory_item_not_copyable", Message: "inventory item does not grant copy permission"})
+		return
+	}
+	destinationID := request.DestinationFolderID
+	if destinationID == "00000000-0000-0000-0000-000000000000" {
+		destinationID = source.FolderID
+	}
+	itemID, err := identifier.NewUUID()
+	if err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, Error{Code: "inventory_id_unavailable", Message: "inventory item ID could not be allocated"})
+		return
+	}
+	name := request.Name
+	if name == "" {
+		name = source.Name
+	}
+	created, err := a.inventory.CreateItem(r.Context(), inventory.Item{
+		ID: itemID, OwnerUserID: userID, CreatorUserID: source.CreatorUserID,
+		FolderID: destinationID, AssetID: source.AssetID, AssetType: source.AssetType,
+		InventoryType: source.InventoryType, Name: name, Description: source.Description,
+		Flags: source.Flags, BasePermissions: source.BasePermissions,
+		CurrentPermissions: source.CurrentPermissions, EveryonePermissions: source.EveryonePermissions,
+		NextPermissions: source.NextPermissions, SaleType: source.SaleType, SalePrice: source.SalePrice,
+	})
+	switch {
+	case errors.Is(err, inventory.ErrItemFolderNotFound):
+		writeJSON(w, http.StatusNotFound, Error{Code: "inventory_folder_not_found", Message: "inventory destination folder was not found"})
+	case errors.Is(err, inventory.ErrInvalidItem):
+		writeJSON(w, http.StatusBadRequest, Error{Code: "invalid_inventory_copy", Message: "inventory item copy is invalid"})
+	case err != nil:
+		writeJSON(w, http.StatusInternalServerError, Error{Code: "inventory_store_error", Message: "inventory item could not be copied"})
+	default:
+		w.Header().Set("Location", "/api/v1/inventory/"+userID+"/items/"+created.ID)
+		writeJSON(w, http.StatusCreated, created)
 	}
 }
 

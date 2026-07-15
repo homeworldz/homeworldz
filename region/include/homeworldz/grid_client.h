@@ -135,6 +135,10 @@ public:
                                                    std::string_view source_item_id,
                                                    std::string_view destination_folder_id,
                                                    std::string_view new_name);
+    std::optional<InventoryItem> copy_inventory_item(std::string_view user_id,
+                                                     std::string_view source_item_id,
+                                                     std::string_view destination_folder_id,
+                                                     std::string_view new_name);
     bool update_presence(std::string_view user_id, std::string_view region_id);
     bool clear_presence(std::string_view user_id);
 

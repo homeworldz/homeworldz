@@ -1168,17 +1168,21 @@ int main() {
                         const auto copy_item =
                             homeworldz::viewer::decode_copy_inventory_item(packet->payload);
                         if (copy_item && copy_item->agent_id == identity->agent_id &&
-                            copy_item->session_id == identity->session_id &&
-                            homeworldz::viewer::format_uuid(copy_item->old_agent_id) == system_creator_id) {
+                            copy_item->session_id == identity->session_id) {
                             const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
                             const auto source_id = homeworldz::viewer::format_uuid(copy_item->old_item_id);
                             const auto destination_id = homeworldz::viewer::format_uuid(copy_item->new_folder_id);
+                            const auto source_owner_id = homeworldz::viewer::format_uuid(copy_item->old_agent_id);
+                            const bool library_copy = source_owner_id == system_creator_id;
                             std::optional<homeworldz::grid::InventoryItem> copied;
                             try {
-                                if (viewer_grid) copied = viewer_grid->copy_library_item(
+                                if (viewer_grid && library_copy) copied = viewer_grid->copy_library_item(
                                     user_id, source_id, destination_id, copy_item->new_name);
+                                else if (viewer_grid && source_owner_id == user_id)
+                                    copied = viewer_grid->copy_inventory_item(
+                                        user_id, source_id, destination_id, copy_item->new_name);
                             } catch (const std::exception& error) {
-                                std::cout << "{\"level\":\"error\",\"message\":\"library inventory copy failed\",\"error\":"
+                                std::cout << "{\"level\":\"error\",\"message\":\"inventory item copy failed\",\"error\":"
                                           << homeworldz::api::json_string(error.what()) << "}" << std::endl;
                             }
                             bool sent = false;
@@ -1221,7 +1225,8 @@ int main() {
                                 }
                             }
                             std::cout << "{\"level\":" << (sent ? "\"info\"" : "\"warn\"")
-                                      << ",\"message\":\"library inventory copy "
+                                      << ",\"message\":\"" << (library_copy ? "library" : "personal")
+                                      << " inventory copy "
                                       << (sent ? "completed" : "rejected") << "\",\"sourceItemId\":"
                                       << homeworldz::api::json_string(source_id) << "}" << std::endl;
                         }
