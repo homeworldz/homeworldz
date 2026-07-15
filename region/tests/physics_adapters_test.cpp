@@ -93,6 +93,16 @@ bool static_scene_mirror_test() {
     if (!mirror.synchronize(*entity) || mirror.body_id(object) == first_body) return false;
     const auto moved_hit = world->ray_cast({8, 1, 10}, {0, 0, -1}, 20);
     if (!moved_hit || moved_hit->body != mirror.body_id(object)) return false;
+    entity->physical = true;
+    entity->position.z = 5;
+    if (!mirror.synchronize(*entity)) return false;
+    const auto dynamic_body = mirror.body_id(object);
+    world->step(0.1);
+    const auto falling = world->body_state(dynamic_body);
+    if (!falling || falling->position.z >= 5 || falling->linear_velocity.z >= 0) return false;
+    entity->phantom = true;
+    if (!mirror.synchronize(*entity) || mirror.body_id(object) != 0) return false;
+    entity->phantom = false;
     scene.remove(object);
     mirror.synchronize(scene);
     return mirror.size() == 0;

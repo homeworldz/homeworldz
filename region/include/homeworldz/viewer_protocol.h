@@ -184,6 +184,14 @@ struct ObjectMaterial : AgentMessage {
     std::vector<ObjectMaterialUpdate> objects;
 };
 
+struct ObjectFlagUpdate : AgentMessage {
+    std::uint32_t local_id{};
+    bool use_physics{};
+    bool temporary{};
+    bool phantom{};
+    bool casts_shadows{};
+};
+
 struct RequestObjectPropertiesFamily : AgentMessage {
     std::uint32_t request_flags{};
     Uuid object_id{};
@@ -415,6 +423,7 @@ std::optional<ObjectDescription> decode_object_description(std::span<const std::
 std::optional<ObjectPermissions> decode_object_permissions(std::span<const std::byte> payload);
 std::optional<ObjectDuplicate> decode_object_duplicate(std::span<const std::byte> payload);
 std::optional<ObjectMaterial> decode_object_material(std::span<const std::byte> payload);
+std::optional<ObjectFlagUpdate> decode_object_flag_update(std::span<const std::byte> payload);
 std::optional<RequestObjectPropertiesFamily> decode_request_object_properties_family(
     std::span<const std::byte> payload);
 std::vector<std::byte> encode_object_properties(std::span<const ObjectProperties> objects);

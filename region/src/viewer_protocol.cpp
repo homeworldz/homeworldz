@@ -67,6 +67,8 @@ constexpr std::array<std::byte, 4> object_duplicate_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x5a}};
 constexpr std::array<std::byte, 4> object_material_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x61}};
+constexpr std::array<std::byte, 4> object_flag_update_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x5e}};
 constexpr std::array<std::byte, 2> request_object_properties_family_id{
     std::byte{0xff}, std::byte{0x05}};
 constexpr std::array<std::byte, 4> uuid_name_request_id{
@@ -1010,6 +1012,25 @@ std::optional<ObjectMaterial> decode_object_material(std::span<const std::byte> 
         result.objects.push_back({
             read_le_u32(payload, offset), std::to_integer<std::uint8_t>(payload[offset + 4])});
     }
+    return result;
+}
+
+std::optional<ObjectFlagUpdate> decode_object_flag_update(std::span<const std::byte> payload) {
+    constexpr std::size_t fixed_size = 45;
+    constexpr std::size_t extra_physics_size = 17;
+    if (payload.size() < fixed_size ||
+        !std::equal(object_flag_update_id.begin(), object_flag_update_id.end(), payload.begin()))
+        return std::nullopt;
+    const auto count = std::to_integer<std::size_t>(payload[44]);
+    if (payload.size() != fixed_size + count * extra_physics_size) return std::nullopt;
+    ObjectFlagUpdate result;
+    std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
+    result.local_id = read_le_u32(payload, 36);
+    result.use_physics = payload[40] != std::byte{};
+    result.temporary = payload[41] != std::byte{};
+    result.phantom = payload[42] != std::byte{};
+    result.casts_shadows = payload[43] != std::byte{};
     return result;
 }
 

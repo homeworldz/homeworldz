@@ -43,6 +43,7 @@ struct BodyState {
     scene::Vector3 angular_velocity;
     bool sleeping{};
     bool grounded{};
+    std::array<double, 4> rotation{0.0, 0.0, 0.0, 1.0};
 };
 
 struct CharacterDefinition {

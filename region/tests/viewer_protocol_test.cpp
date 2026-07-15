@@ -715,6 +715,20 @@ bool static_object_codec() {
            moving_avatar != avatar && avatar[37] == std::byte{47} && avatar[38] == std::byte{4} &&
            std::equal(agent.begin(), agent.end(), avatar.begin() + 17);
 }
+
+bool object_flag_codec() {
+    const auto agent = *parse_uuid("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");
+    const auto session = *parse_uuid("11111111-2222-4333-8444-555555555555");
+    std::vector<std::byte> payload{std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x5e}};
+    payload.insert(payload.end(), agent.begin(), agent.end());
+    payload.insert(payload.end(), session.begin(), session.end());
+    payload.insert(payload.end(), {std::byte{0x2a}, std::byte{}, std::byte{}, std::byte{},
+                                   std::byte{1}, std::byte{}, std::byte{1}, std::byte{1}, std::byte{}});
+    const auto decoded = decode_object_flag_update(payload);
+    return decoded && decoded->agent_id == agent && decoded->session_id == session &&
+           decoded->local_id == 42 && decoded->use_physics && !decoded->temporary &&
+           decoded->phantom && decoded->casts_shadows;
+}
 }
 
 int main() {
@@ -730,6 +744,7 @@ int main() {
     if (!chat_codecs()) return 9;
     if (!flat_terrain_codec()) return 10;
     if (!static_object_codec()) return 11;
+    if (!object_flag_codec()) return 14;
     if (decode_packet(std::array<std::byte, 2>{})) return 12;
     return 0;
 }

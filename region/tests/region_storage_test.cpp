@@ -31,6 +31,8 @@ int main() {
         primitive->rotation = {0.25, 0.5, 0.125};
         primitive->description = "storage test primitive";
         primitive->material = 4;
+        primitive->physical = true;
+        primitive->phantom = true;
         std::filesystem::create_directories(path);
         sqlite3* legacy_database = nullptr;
         if (sqlite3_open((path / "region.db").string().c_str(), &legacy_database) != SQLITE_OK) return 1;
@@ -82,6 +84,7 @@ int main() {
                 restored_second->scale.y != 0.75 || restored_second->rotation.x != 0.25 ||
                 restored_second->rotation.y != 0.5 ||
                 restored_second->description != "storage test primitive" || restored_second->material != 4 ||
+                !restored_second->physical || !restored_second->phantom ||
                 restored.create("next") != 3) return 1;
 
             const std::array content{std::byte{0x00}, std::byte{0x7f}, std::byte{0xff}, std::byte{0x42}};

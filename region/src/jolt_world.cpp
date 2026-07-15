@@ -166,16 +166,19 @@ public:
         const auto found = bodies_.find(id);
         if (found == bodies_.end()) return std::nullopt;
         const auto& interface = system_.GetBodyInterface();
+        const auto rotation = interface.GetRotation(found->second.native);
         return BodyState{id, found->second.entity, vec(interface.GetPosition(found->second.native)),
             vec(interface.GetLinearVelocity(found->second.native)),
-            vec(interface.GetAngularVelocity(found->second.native)), !interface.IsActive(found->second.native)};
+            vec(interface.GetAngularVelocity(found->second.native)), !interface.IsActive(found->second.native), false,
+            {rotation.GetX(), rotation.GetY(), rotation.GetZ(), rotation.GetW()}};
     }
 
     void set_body_state(const BodyState& state) override {
         const auto found = bodies_.find(state.body_id);
         if (found == bodies_.end()) return;
         auto& interface = system_.GetBodyInterface();
-        interface.SetPosition(found->second.native, vec(state.position), JPH::EActivation::Activate);
+        interface.SetPositionAndRotation(found->second.native, vec(state.position), quat(state.rotation),
+                                         JPH::EActivation::Activate);
         interface.SetLinearAndAngularVelocity(found->second.native, vec(state.linear_velocity), vec(state.angular_velocity));
         if (state.sleeping) interface.DeactivateBody(found->second.native);
     }

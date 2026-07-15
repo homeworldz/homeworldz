@@ -301,6 +301,16 @@ private:
         expect_string("avatarFlying");
         expect(":");
         result.avatar_flying = boolean();
+        if (consume("}")) return result;
+        expect(",");
+        expect_string("physical");
+        expect(":");
+        result.physical = boolean();
+        if (consume("}")) return result;
+        expect(",");
+        expect_string("phantom");
+        expect(":");
+        result.phantom = boolean();
         expect("}");
         return result;
     }
@@ -344,7 +354,9 @@ std::string snapshot_json(const scene::Scene& scene) {
                 ",\"rotation\":[" + std::to_string(entity->rotation.x) + ',' +
                 std::to_string(entity->rotation.y) + ',' + std::to_string(entity->rotation.z) +
                 "],\"description\":" + api::json_string(entity->description) +
-                ",\"avatarFlying\":" + (entity->avatar_flying ? "true" : "false") + '}';
+                ",\"avatarFlying\":" + (entity->avatar_flying ? "true" : "false") +
+                ",\"physical\":" + (entity->physical ? "true" : "false") +
+                ",\"phantom\":" + (entity->phantom ? "true" : "false") + '}';
     }
     return json + "]}";
 }

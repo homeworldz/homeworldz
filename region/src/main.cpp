@@ -383,6 +383,8 @@ std::optional<homeworldz::viewer::StaticObject> static_object_from_entity(
     constexpr std::uint32_t object_move = 0x00000100;
     constexpr std::uint32_t object_transfer = 0x00020000;
     constexpr std::uint32_t object_owner_modify = 0x10000000;
+    constexpr std::uint32_t object_physics = 0x00000001;
+    constexpr std::uint32_t object_phantom = 0x00000400;
     if (entity.object_id.empty() || entity.id > (std::numeric_limits<std::uint32_t>::max)())
         return std::nullopt;
     const auto object_id = homeworldz::viewer::parse_uuid(entity.object_id);
@@ -395,6 +397,8 @@ std::optional<homeworldz::viewer::StaticObject> static_object_from_entity(
     const bool is_owner = entity.owner_id == recipient_id;
     const auto permissions = is_owner ? entity.owner_permissions : entity.everyone_permissions;
     object.update_flags = object_any_owner;
+    if (entity.physical) object.update_flags |= object_physics;
+    if (entity.phantom) object.update_flags |= object_phantom;
     if ((permissions & homeworldz::scene::permission_modify) != 0) object.update_flags |= object_modify;
     if ((permissions & homeworldz::scene::permission_copy) != 0) object.update_flags |= object_copy;
     if ((permissions & homeworldz::scene::permission_move) != 0) object.update_flags |= object_move;
@@ -711,6 +715,7 @@ int main() {
     };
     auto previous_tick = std::chrono::steady_clock::now();
     auto next_snapshot = previous_tick + std::chrono::seconds(30);
+    auto next_dynamic_sync = previous_tick;
 
     const auto server = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (server == invalid_socket) return 1;
@@ -2292,6 +2297,50 @@ int main() {
                                           << originals.size() << "}" << std::endl;
                             }
                         }
+                        const auto object_flags =
+                            homeworldz::viewer::decode_object_flag_update(packet->payload);
+                        if (object_flags && object_flags->agent_id == identity->agent_id &&
+                            object_flags->session_id == identity->session_id) {
+                            auto* entity = scene.find(object_flags->local_id);
+                            const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
+                            if (entity && entity->owner_id == user_id &&
+                                (entity->owner_permissions & homeworldz::scene::permission_modify) != 0) {
+                                const auto original_physical = entity->physical;
+                                const auto original_phantom = entity->phantom;
+                                entity->physical = object_flags->use_physics;
+                                entity->phantom = object_flags->phantom;
+                                bool persisted = false;
+                                try {
+                                    storage->save_snapshot(scene);
+                                    persisted = true;
+                                } catch (const std::exception& error) {
+                                    entity->physical = original_physical;
+                                    entity->phantom = original_phantom;
+                                    std::cout << "{\"level\":\"error\",\"message\":\"primitive flags persistence failed\",\"error\":"
+                                              << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+                                }
+                                if (persisted) {
+                                    synchronize_physics_object(*entity);
+                                    const auto region_handle =
+                                        (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
+                                        static_cast<std::uint32_t>(region_grid_y * 256);
+                                    for (const auto& [recipient_endpoint, recipient] : avatars) {
+                                        const auto object = static_object_from_entity(*entity, recipient.user_id);
+                                        if (!object) continue;
+                                        if (const auto sent = circuits.send(recipient_endpoint,
+                                                homeworldz::viewer::encode_static_object_update(
+                                                    region_handle, *object), true, now, true))
+                                            static_cast<void>(send_udp(
+                                                viewer_server, recipient_endpoint, *sent));
+                                    }
+                                    std::cout << "{\"level\":\"info\",\"message\":\"primitive flags updated\",\"entityId\":"
+                                              << entity->id << ",\"physical\":"
+                                              << (entity->physical ? "true" : "false")
+                                              << ",\"phantom\":"
+                                              << (entity->phantom ? "true" : "false") << "}" << std::endl;
+                                }
+                            }
+                        }
                         const auto object_add = homeworldz::viewer::decode_object_add(packet->payload);
                         if (object_add && object_add->agent_id == identity->agent_id &&
                             object_add->session_id == identity->session_id) {
@@ -2806,6 +2855,31 @@ int main() {
         if (physics_world)
             for (std::size_t step = 0; step < fixed_steps; ++step)
                 physics_world->step(simulation.step_seconds());
+        if (physics_world && physics_scene && now >= next_dynamic_sync) {
+            const auto region_handle =
+                (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
+                static_cast<std::uint32_t>(region_grid_y * 256);
+            for (const auto& [entity_id, current] : scene.entities()) {
+                if (!current.physical || current.phantom || current.object_id.empty()) continue;
+                const auto body_id = physics_scene->body_id(entity_id);
+                const auto state = physics_world->body_state(body_id);
+                if (!state) continue;
+                auto* entity = scene.find(entity_id);
+                if (!entity) continue;
+                entity->position = state->position;
+                entity->velocity = state->linear_velocity;
+                entity->rotation = {state->rotation[0], state->rotation[1], state->rotation[2]};
+                for (const auto& [recipient_endpoint, recipient] : avatars) {
+                    const auto object = static_object_from_entity(*entity, recipient.user_id);
+                    if (!object) continue;
+                    if (const auto sent = circuits.send(recipient_endpoint,
+                            homeworldz::viewer::encode_static_object_update(
+                                region_handle, *object), false, now, true))
+                        static_cast<void>(send_udp(viewer_server, recipient_endpoint, *sent));
+                }
+            }
+            next_dynamic_sync = now + std::chrono::milliseconds(100);
+        }
         previous_tick = now;
         if (now >= next_snapshot) {
             try {

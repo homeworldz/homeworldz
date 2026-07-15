@@ -116,16 +116,21 @@ public:
             angular = vec(dynamic->getAngularVelocity());
             sleeping = dynamic->isSleeping();
         }
-        return BodyState{id, found->second.entity, vec(found->second.actor->getGlobalPose().p), linear, angular, sleeping};
+        const auto pose = found->second.actor->getGlobalPose();
+        return BodyState{id, found->second.entity, vec(pose.p), linear, angular, sleeping, false,
+                         {pose.q.x, pose.q.y, pose.q.z, pose.q.w}};
     }
 
     void set_body_state(const BodyState& state) override {
         const auto found = bodies_.find(state.body_id);
         if (found == bodies_.end()) return;
-        found->second.actor->setGlobalPose(physx::PxTransform(vec(state.position)));
+        const auto pose = physx::PxTransform(vec(state.position), physx::PxQuat(
+            static_cast<float>(state.rotation[0]), static_cast<float>(state.rotation[1]),
+            static_cast<float>(state.rotation[2]), static_cast<float>(state.rotation[3])));
+        found->second.actor->setGlobalPose(pose);
         if (auto* dynamic = found->second.actor->is<physx::PxRigidDynamic>()) {
             if (dynamic->getRigidBodyFlags().isSet(physx::PxRigidBodyFlag::eKINEMATIC))
-                dynamic->setKinematicTarget(physx::PxTransform(vec(state.position)));
+                dynamic->setKinematicTarget(pose);
             else {
                 dynamic->setLinearVelocity(vec(state.linear_velocity));
                 dynamic->setAngularVelocity(vec(state.angular_velocity));

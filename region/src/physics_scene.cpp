@@ -7,14 +7,15 @@
 namespace homeworldz::physics {
 
 bool StaticSceneMirror::synchronize(const scene::Entity& entity) {
-    if (entity.object_id.empty()) return remove(entity.id);
+    if (entity.object_id.empty() || entity.phantom) return remove(entity.id);
     BodyDefinition definition;
     definition.entity_id = entity.id;
-    definition.motion = MotionType::Static;
+    definition.motion = entity.physical ? MotionType::Dynamic : MotionType::Static;
     definition.shape.type = ShapeType::Box;
     definition.shape.half_extents = {
         entity.scale.x * 0.5, entity.scale.y * 0.5, entity.scale.z * 0.5};
     definition.position = entity.position;
+    definition.velocity = entity.velocity;
     const auto squared = entity.rotation.x * entity.rotation.x +
                          entity.rotation.y * entity.rotation.y +
                          entity.rotation.z * entity.rotation.z;
@@ -31,7 +32,7 @@ bool StaticSceneMirror::synchronize(const scene::Entity& entity) {
 void StaticSceneMirror::synchronize(const scene::Scene& scene) {
     std::unordered_set<scene::EntityId> present;
     for (const auto& [entity_id, entity] : scene.entities()) {
-        if (entity.object_id.empty()) continue;
+        if (entity.object_id.empty() || entity.phantom) continue;
         present.insert(entity_id);
         synchronize(entity);
     }

@@ -51,6 +51,8 @@ struct Entity {
     Vector3 rotation;
     std::string description;
     bool avatar_flying{};
+    bool physical{};
+    bool phantom{};
 };
 
 struct RayIntersection {
