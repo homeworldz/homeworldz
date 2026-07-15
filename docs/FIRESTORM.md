@@ -650,3 +650,23 @@ at viewer Z approximately `28`, still flying and facing the previous direction
 above the persisted `Platform`; its edited `2 x 2 x 0.5` scale also remained.
 Grounded contact is deliberately recomputed from Jolt rather than persisted as
 potentially stale state.
+
+Initial dynamic prim physics passed live Firestorm acceptance on 2026-07-15.
+The viewer's `ObjectFlagUpdate` Physical and Phantom state is authenticated,
+persisted in the authoritative scene, and mirrored as dynamic or excluded Jolt
+collision bodies. `Dynamic1`, a wide flat box placed above two owned static
+boxes (`Collision1` and `Collision2`) and the edited terrain spike, fell under
+gravity, visibly deflected and rotated through the static contacts, reacted to
+the terrain shape, and settled with zero velocity. The region streamed its
+position and quaternion rotation to Firestorm at 10 Hz. A complete viewer,
+grid, and region restart retained the settled transform and enabled Physical
+state while both collision boxes remained fixed. The reusable pre-test scene
+is retained locally as `var/regression-states/dynamic-prim-collision-start.json`.
+
+This test also identified and removed the historical synthetic welcome prim.
+That object had been injected directly into the login packet stream with a
+placeholder UUID, no valid owner, no authoritative scene record, and no
+physics body; it was therefore non-editable and non-colliding. Future contact
+tests use only persisted scene entities. A separate follow-up should determine
+whether Firestorm defers Physical changes while the edit window remains open or
+merely suppresses selected-object transform display until the editor closes.

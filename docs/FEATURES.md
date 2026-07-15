@@ -73,6 +73,10 @@ eventual production support. A region selects one engine implementation while
 the authoritative scene, persistence, and transfer contracts remain common.
 The common physics contract uses the same right-handed, Z-up coordinates as
 regions and viewers; adapters must not expose an engine-native vertical axis.
+The current Jolt production path includes synchronized terrain heightfields,
+appearance-sized avatar capsules, static prim collision, and viewer-toggled
+dynamic box bodies with persisted Physical/Phantom flags and streamed linear
+and angular motion.
 
 ### AIS-first viewer inventory
 
