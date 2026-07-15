@@ -570,4 +570,7 @@ hair, but exposed a pre-crossing boundary error: Jim Tarber returned at local
 the movement controller confines the full horizontal avatar capsule to the
 configured region dimensions and clears outward velocity at an edge. Region
 dimensions are controller inputs so future 2x2 and 4x4 regions are not tied to
-a hard-coded 256 m boundary.
+a hard-coded 256 m boundary. Live Firestorm acceptance passed on 2026-07-15:
+eastward and northward movement stopped at the hard viewer-visible coordinate
+of `256` (the viewer rounds the internal `255.7` m capsule center), with no
+continued motion to an invalid `257+` local coordinate.
