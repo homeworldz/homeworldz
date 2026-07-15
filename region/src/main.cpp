@@ -28,6 +28,7 @@
 #include "homeworldz/http_response.h"
 #include "homeworldz/object_asset.h"
 #include "homeworldz/physics_adapters.h"
+#include "homeworldz/physics_scene.h"
 #include "homeworldz/region_config.h"
 #include "homeworldz/region_storage.h"
 #include "homeworldz/scene.h"
@@ -669,6 +670,19 @@ int main() {
               << ",\"message\":\"physics terrain initialized\",\"samples\":"
               << terrain_heightmap->size() << ",\"synchronized\":"
               << (physics_terrain_ready ? "true" : "false") << "}" << std::endl;
+    std::unique_ptr<homeworldz::physics::StaticSceneMirror> physics_scene;
+    if (physics_world) {
+        try {
+            physics_scene = std::make_unique<homeworldz::physics::StaticSceneMirror>(*physics_world);
+            physics_scene->synchronize(scene);
+            std::cout << "{\"level\":\"info\",\"message\":\"static scene physics synchronized\","
+                         "\"bodies\":" << physics_scene->size() << "}" << std::endl;
+        } catch (const std::exception& error) {
+            physics_scene.reset();
+            std::cerr << "{\"level\":\"error\",\"message\":\"static scene physics synchronization failed\","
+                         "\"error\":" << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+        }
+    }
     const auto collision_ground_height = [&](const homeworldz::scene::Vector3& position) {
         if (physics_world && physics_terrain != 0) {
             constexpr double ray_origin_height = 4096.0;
