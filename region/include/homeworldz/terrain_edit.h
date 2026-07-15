@@ -9,7 +9,8 @@
 
 namespace homeworldz::terrain {
 
-using Heightmap = std::array<float, 256 * 256>;
+inline constexpr std::size_t width = 256;
+using Heightmap = std::array<float, width * width>;
 
 std::unique_ptr<Heightmap> load_state(const std::filesystem::path& path);
 bool save_state(const std::filesystem::path& path, const Heightmap& heightmap);

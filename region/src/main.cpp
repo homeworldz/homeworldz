@@ -646,6 +646,29 @@ int main() {
     std::unique_ptr<homeworldz::physics::World> physics_world;
     std::cout << "{\"level\":\"warning\",\"message\":\"production physics unavailable\"}" << std::endl;
 #endif
+    homeworldz::physics::BodyId physics_terrain{};
+    const auto synchronize_physics_terrain = [&]() {
+        if (!physics_world) return false;
+        try {
+            homeworldz::physics::HeightFieldDefinition definition;
+            definition.samples.assign(terrain_heightmap->begin(), terrain_heightmap->end());
+            definition.sample_count = static_cast<std::uint32_t>(homeworldz::terrain::width);
+            const auto replacement = physics_world->create_heightfield(definition);
+            if (replacement == 0) return false;
+            if (physics_terrain != 0) physics_world->remove_body(physics_terrain);
+            physics_terrain = replacement;
+            return true;
+        } catch (const std::exception& error) {
+            std::cerr << "{\"level\":\"error\",\"message\":\"physics terrain synchronization failed\","
+                         "\"error\":" << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+            return false;
+        }
+    };
+    const auto physics_terrain_ready = synchronize_physics_terrain();
+    std::cout << "{\"level\":" << (physics_terrain_ready ? "\"info\"" : "\"warning\"")
+              << ",\"message\":\"physics terrain initialized\",\"samples\":"
+              << terrain_heightmap->size() << ",\"synchronized\":"
+              << (physics_terrain_ready ? "true" : "false") << "}" << std::endl;
     auto previous_tick = std::chrono::steady_clock::now();
     auto next_snapshot = previous_tick + std::chrono::seconds(30);
 
@@ -2469,6 +2492,7 @@ int main() {
                             if (!changed.empty()) {
                                 const auto persisted = homeworldz::terrain::save_state(
                                     terrain_state_path, *terrain_heightmap);
+                                const auto physics_synchronized = synchronize_physics_terrain();
                                 constexpr std::size_t patches_per_packet = 16;
                                 for (const auto& [recipient_endpoint, recipient] : avatars) {
                                     static_cast<void>(recipient);
@@ -2487,9 +2511,11 @@ int main() {
                                 std::cout << "{\"level\":" << (persisted ? "\"info\"" : "\"error\"")
                                           << ",\"message\":\"terrain edit applied\",\"action\":"
                                           << static_cast<unsigned>(terrain_edit->action)
-                                          << ",\"patches\":" << changed.size()
-                                          << ",\"persisted\":" << (persisted ? "true" : "false") << "}"
-                                          << std::endl;
+                                           << ",\"patches\":" << changed.size()
+                                           << ",\"persisted\":" << (persisted ? "true" : "false")
+                                           << ",\"physicsSynchronized\":"
+                                           << (physics_synchronized ? "true" : "false") << "}"
+                                           << std::endl;
                             }
                         }
                         const auto chat = homeworldz::viewer::decode_chat_from_viewer(packet->payload);
