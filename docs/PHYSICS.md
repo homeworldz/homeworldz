@@ -231,6 +231,9 @@ alongside position and rotation. This lets Firestorm dead-reckon between the
 region's 10 Hz object updates instead of easing each update from an incorrectly
 reported zero velocity, which otherwise makes the last part of a fall look
 artificially cushioned.
+Live Firestorm acceptance on 2026-07-15 confirmed that streaming authoritative
+linear velocity removed the pronounced slow, sponge-like deceleration at the
+end of a physical prim's fall.
 
 This distinction is also the basis for vehicles: scripted forces, impulses,
 motors, and constraints act on physics-engine mass and inertia rather than a
