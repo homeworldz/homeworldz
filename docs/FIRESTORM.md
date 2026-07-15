@@ -685,3 +685,10 @@ Primitive texture-entry persistence passed live Firestorm acceptance on
 after a complete region and viewer restart. The region stores and restores the
 opaque viewer texture entry rather than reconstructing only its default face,
 which preserves both per-face texture UUIDs and tint data.
+
+The standard Blank (`5748decc-f629-461c-9a36-a35a221fe21f`) and Plywood
+(`89556747-24cb-43ed-920b-47caed15465f`) assets passed live Library acceptance
+on 2026-07-15. After incrementing the Textures catalog version to invalidate
+Firestorm's cached folder, both appeared directly under Library → Textures.
+Their region-backed asset mappings retain `HomeWorldz Library` as their
+importing creator provenance.
