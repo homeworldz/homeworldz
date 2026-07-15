@@ -159,7 +159,12 @@ bool jolt_character_step_test() {
            std::abs(landed->linear_velocity.z) < 0.001;
 }
 
-double jolt_character_push_displacement(double body_mass) {
+struct CharacterPushResult {
+    double body_displacement;
+    double character_x;
+};
+
+CharacterPushResult jolt_character_push_result(double body_mass) {
     using namespace homeworldz;
     auto world = physics::make_jolt_world();
     physics::BodyDefinition floor;
@@ -185,14 +190,19 @@ double jolt_character_push_displacement(double body_mass) {
     const auto character = world->create_character(avatar);
     world->set_character_velocity(character, {2, 0, 0});
     for (int tick = 0; tick < 120; ++tick) world->step(1.0 / 60.0);
-    const auto state = world->body_state(cube_id);
-    return state ? state->position.x - 1.0 : -1.0;
+    const auto body = world->body_state(cube_id);
+    const auto avatar_state = world->character_state(character);
+    return {body ? body->position.x - 1.0 : -1.0,
+            avatar_state ? avatar_state->position.x : -1.0};
 }
 
 bool jolt_character_mass_response_test() {
-    const auto light = jolt_character_push_displacement(125.0);
-    const auto heavy = jolt_character_push_displacement(5000.0);
-    return light > 0.04 && heavy >= 0.0 && heavy < 0.005;
+    const auto light = jolt_character_push_result(125.0);
+    const auto heavy = jolt_character_push_result(5000.0);
+    return light.body_displacement > 0.04 &&
+           light.character_x + 0.4 < 1.0 + light.body_displacement &&
+           heavy.body_displacement >= 0.0 && heavy.body_displacement < 0.005 &&
+           heavy.character_x + 0.4 < 1.0 + heavy.body_displacement;
 }
 
 bool jolt_flying_hover_test() {

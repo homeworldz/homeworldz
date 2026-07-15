@@ -231,6 +231,13 @@ Jolt still solves the response from object mass, friction, inertia, and contact
 geometry. A future region option may disable avatar-driven dynamic-object
 motion, and a rigid-body character remains a possible evaluation path.
 
+Static and dynamic obstacles take different stair paths. A low static obstacle
+within the avatar's step height uses Jolt stair walking. A dynamic body remains
+in the ordinary contact solver instead of being automatically climbed, allowing
+mass-relative force transfer before the avatar can pass it. This mirrors the
+practical Halcyon distinction between traversable steps and blocking or
+movable physical objects without placing object-specific logic in the region.
+
 ### Required Scenarios
 
 - Avatar walking on flat terrain, slopes, ramps, stairs, and mesh surfaces.

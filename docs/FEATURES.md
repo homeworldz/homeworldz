@@ -82,6 +82,8 @@ Avatar contact with dynamic objects is resolved natively by Jolt. The virtual
 character's horizontal contact-force ceiling is derived from avatar mass and a
 maximum push acceleration, preserving a strong relative response between
 small movable prims and multi-tonne bodies without region-side push impulses.
+Low static obstacles retain stair climbing, while dynamic obstacles stay in
+Jolt's contact solver rather than being automatically stepped over.
 
 The planned vehicle layer preserves the Second Life/Halcyon LSL model while
 using native physics-plugin capabilities. A single `llSetVehicleType` call is

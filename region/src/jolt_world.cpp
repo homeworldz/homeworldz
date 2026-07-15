@@ -273,12 +273,7 @@ public:
         contacts_.clear();
         for (auto& [id, entry] : characters_) {
             static_cast<void>(id);
-            JPH::CharacterVirtual::ExtendedUpdateSettings settings;
-            settings.mStickToFloorStepDown = entry.flying ? JPH::Vec3::sZero() : JPH::Vec3{0, 0, -0.5F};
-            settings.mWalkStairsStepUp = entry.flying ? JPH::Vec3::sZero() :
-                JPH::Vec3{0, 0, static_cast<float>(entry.step_height)};
-            entry.character->ExtendedUpdate(
-                static_cast<float>(seconds), {0, 0, -9.81F}, settings, {}, {}, {}, {}, allocator_);
+            update_character(entry, static_cast<float>(seconds));
         }
         system_.Update(static_cast<float>(seconds), 1, &allocator_, &jobs_);
     }
@@ -327,6 +322,58 @@ public:
     }
 
 private:
+    void update_character(JoltCharacter& entry, float seconds) {
+        auto& character = *entry.character;
+        const JPH::Vec3 gravity{0, 0, -9.81F};
+        const JPH::Vec3 stick_down = entry.flying ? JPH::Vec3::sZero() : JPH::Vec3{0, 0, -0.5F};
+        const JPH::Vec3 step_up = entry.flying ? JPH::Vec3::sZero() :
+            JPH::Vec3{0, 0, static_cast<float>(entry.step_height)};
+        character.StartTrackingContactChanges();
+        const auto desired_velocity = character.GetLinearVelocity();
+        character.SetLinearVelocity(character.CancelVelocityTowardsSteepSlopes(desired_velocity));
+        const auto old_position = character.GetPosition();
+        auto ground_to_air = character.IsSupported();
+        character.Update(seconds, gravity, {}, {}, {}, {}, allocator_);
+        if (character.IsSupported()) ground_to_air = false;
+        if (ground_to_air && !stick_down.IsNearZero()) {
+            const auto vertical_velocity = JPH::Vec3(character.GetPosition() - old_position)
+                .Dot(JPH::Vec3::sAxisZ()) / seconds;
+            if (vertical_velocity <= 1.0e-6F)
+                character.StickToFloor(stick_down, {}, {}, {}, {}, allocator_);
+        }
+
+        const auto hit_dynamic_body = std::any_of(
+            character.GetActiveContacts().begin(), character.GetActiveContacts().end(),
+            [](const JPH::CharacterVirtual::Contact& contact) {
+                return contact.mHadCollision &&
+                       contact.mMotionTypeB == JPH::EMotionType::Dynamic;
+            });
+        if (!step_up.IsNearZero() && !hit_dynamic_body) {
+            auto desired_step = desired_velocity * seconds;
+            desired_step -= desired_step.Dot(JPH::Vec3::sAxisZ()) * JPH::Vec3::sAxisZ();
+            const auto desired_length = desired_step.Length();
+            if (desired_length > 0.0F) {
+                auto achieved_step = JPH::Vec3(character.GetPosition() - old_position);
+                achieved_step -= achieved_step.Dot(JPH::Vec3::sAxisZ()) * JPH::Vec3::sAxisZ();
+                const auto forward = desired_step / desired_length;
+                achieved_step = std::max(0.0F, achieved_step.Dot(forward)) * forward;
+                const auto achieved_length = achieved_step.Length();
+                if (achieved_length + 1.0e-4F < desired_length &&
+                    character.CanWalkStairs(desired_velocity)) {
+                    const auto step_forward = forward * std::max(0.02F, desired_length - achieved_length);
+                    auto step_test = -character.GetGroundNormal();
+                    step_test -= step_test.Dot(JPH::Vec3::sAxisZ()) * JPH::Vec3::sAxisZ();
+                    step_test = step_test.NormalizedOr(forward);
+                    if (step_test.Dot(forward) < std::cos(75.0F * 3.14159265358979323846F / 180.0F))
+                        step_test = forward;
+                    character.WalkStairs(seconds, step_up, step_forward, step_test * 0.15F, {},
+                                         {}, {}, {}, {}, allocator_);
+                }
+            }
+        }
+        character.FinishTrackingContactChanges();
+    }
+
     BroadPhaseLayers broad_layers_;
     ObjectBroadPhaseFilter broad_filter_;
     ObjectPairFilter pair_filter_;
