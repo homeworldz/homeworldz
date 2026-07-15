@@ -596,3 +596,11 @@ fresh-region repeat on 2026-07-15: immediate
 forward/release, repeated direction changes, and movement down toward the lower
 shoreline all behaved correctly, with no continued, alternating, or visibly
 mis-predicted motion.
+
+The production Jolt avatar-capsule mirror passed live Firestorm acceptance on
+2026-07-15. The region initialized Jolt through the engine-independent
+`physics::World` boundary, created a shape-height-derived capsule for Jim
+Tarber, synchronized it on the bounded fixed-step clock, and retained stable
+login, terrain following, walking, stopping, jumping, and flight behavior.
+No viewer-visible regression was detected. Authoritative scene identity and
+persistence remain owned by HomeWorldz rather than by Jolt.
