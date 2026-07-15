@@ -52,6 +52,8 @@ struct CharacterDefinition {
     double radius{0.35};
     double height{1.8};
     double step_height{0.4};
+    double mass{70.0};
+    double maximum_horizontal_acceleration{30.0};
 };
 
 struct HeightFieldDefinition {

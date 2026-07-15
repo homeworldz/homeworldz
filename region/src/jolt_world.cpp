@@ -221,6 +221,9 @@ public:
         settings.mSupportingVolume = JPH::Plane(
             JPH::Vec3::sAxisZ(), -static_cast<float>(definition.radius));
         settings.mShape = make_character_shape(definition.radius, definition.height);
+        settings.mMass = static_cast<float>(std::max(1.0, definition.mass));
+        settings.mMaxStrength = static_cast<float>(std::max(
+            0.0, definition.mass * definition.maximum_horizontal_acceleration));
         const scene::Vector3 feet{
             definition.position.x, definition.position.y,
             definition.position.z - definition.height * 0.5};

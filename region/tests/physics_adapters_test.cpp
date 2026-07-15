@@ -159,6 +159,42 @@ bool jolt_character_step_test() {
            std::abs(landed->linear_velocity.z) < 0.001;
 }
 
+double jolt_character_push_displacement(double body_mass) {
+    using namespace homeworldz;
+    auto world = physics::make_jolt_world();
+    physics::BodyDefinition floor;
+    floor.entity_id = 200;
+    floor.shape.half_extents = {10, 10, 0.5};
+    floor.position = {0, 0, -0.5};
+    floor.friction = 0.6;
+    world->create_body(floor);
+    physics::BodyDefinition cube;
+    cube.entity_id = 201;
+    cube.motion = physics::MotionType::Dynamic;
+    cube.shape.half_extents = {0.25, 0.25, 0.25};
+    cube.position = {1.0, 0, 0.25};
+    cube.mass = body_mass;
+    cube.friction = 0.6;
+    const auto cube_id = world->create_body(cube);
+    physics::CharacterDefinition avatar;
+    avatar.entity_id = 202;
+    avatar.position = {0, 0, 0.9};
+    avatar.radius = 0.3;
+    avatar.height = 1.8;
+    avatar.step_height = 0.4;
+    const auto character = world->create_character(avatar);
+    world->set_character_velocity(character, {2, 0, 0});
+    for (int tick = 0; tick < 120; ++tick) world->step(1.0 / 60.0);
+    const auto state = world->body_state(cube_id);
+    return state ? state->position.x - 1.0 : -1.0;
+}
+
+bool jolt_character_mass_response_test() {
+    const auto light = jolt_character_push_displacement(125.0);
+    const auto heavy = jolt_character_push_displacement(5000.0);
+    return light > 0.04 && heavy >= 0.0 && heavy < 0.005;
+}
+
 bool jolt_flying_hover_test() {
     auto world = homeworldz::physics::make_jolt_world();
     homeworldz::physics::BodyDefinition platform;
@@ -180,6 +216,7 @@ int main() {
     if (!static_scene_mirror_test()) return 1;
     if (!jolt_character_collision_test()) return 1;
     if (!jolt_character_step_test()) return 1;
+    if (!jolt_character_mass_response_test()) return 1;
     if (!jolt_flying_hover_test()) return 1;
     if (!smoke_test(homeworldz::physics::make_jolt_world())) return 1;
     if (!smoke_test(homeworldz::physics::make_physx_world())) return 1;

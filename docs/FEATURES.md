@@ -78,6 +78,11 @@ appearance-sized avatar capsules, static prim collision, and viewer-toggled
 dynamic box bodies with persisted Physical/Phantom flags and streamed linear
 and angular motion.
 
+Avatar contact with dynamic objects is resolved natively by Jolt. The virtual
+character's horizontal contact-force ceiling is derived from avatar mass and a
+maximum push acceleration, preserving a strong relative response between
+small movable prims and multi-tonne bodies without region-side push impulses.
+
 The planned vehicle layer preserves the Second Life/Halcyon LSL model while
 using native physics-plugin capabilities. A single `llSetVehicleType` call is
 intended to activate a usable named preset; standard vehicle parameters then

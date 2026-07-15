@@ -219,13 +219,17 @@ This distinction is also the basis for vehicles: scripted forces, impulses,
 motors, and constraints act on physics-engine mass and inertia rather than a
 parallel approximation in region or script code.
 
-Jolt's current virtual-character controller separates character mass from a
-maximum horizontal push force: mass contributes downward force when standing
-on an object, but it does not provide full rigid-body momentum in horizontal
-contacts. HomeWorldz does not add synthetic region-side push impulses. Before
-enabling avatar-driven object motion, compare a rigid-body character approach
-against the accepted virtual-character walking, stepping, flight, and terrain
-behavior, and expose any intentional avatar-push policy as a region option.
+Jolt's virtual-character controller separates character mass from maximum
+horizontal contact force: mass contributes downward force when standing on an
+object, while the force ceiling bounds how strongly a non-rigid character can
+affect horizontal contacts. HomeWorldz derives that ceiling from character mass
+and a configured maximum push acceleration rather than adding synthetic
+region-side impulses. The initial 70 kg character and 30 m/s2 ceiling produce a
+maximum 2100 N contact force. In the adapter regression scenario this moves a
+125 kg sliding cube about 5 cm, while a 5000 kg body moves less than 0.002 mm.
+Jolt still solves the response from object mass, friction, inertia, and contact
+geometry. A future region option may disable avatar-driven dynamic-object
+motion, and a rigid-body character remains a possible evaluation path.
 
 ### Required Scenarios
 
