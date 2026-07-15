@@ -686,9 +686,19 @@ after a complete region and viewer restart. The region stores and restores the
 opaque viewer texture entry rather than reconstructing only its default face,
 which preserves both per-face texture UUIDs and tint data.
 
-The standard Blank (`5748decc-f629-461c-9a36-a35a221fe21f`) and Plywood
-(`89556747-24cb-43ed-920b-47caed15465f`) assets passed live Library acceptance
+The standard Blank (`5748decc-f629-461c-9a36-a35a221fe21f`), Plywood
+(`89556747-24cb-43ed-920b-47caed15465f`), Transparent
+(`8dcd4a48-2d37-4909-9f78-f7a9eb4ef903`), and Media
+(`8b5fec65-8d8d-9dc5-cda8-8fdf2716e361`) assets passed live Library acceptance
 on 2026-07-15. After incrementing the Textures catalog version to invalidate
-Firestorm's cached folder, both appeared directly under Library → Textures.
+Firestorm's cached folder, all four appeared directly under Library → Textures.
 Their region-backed asset mappings retain `HomeWorldz Library` as their
 importing creator provenance.
+
+New-prim texture initialization also passed live acceptance. Because the
+viewer `ObjectAdd` message does not contain a texture entry, HomeWorldz assigns
+the canonical Plywood texture with white tint, unit repeats, and no per-face
+overrides. Two newly created boxes visibly used Plywood, and their complete
+63-byte default texture entries were present in the authoritative snapshot.
+Editing an existing prim's texture or tint remains independent and must not
+change the default used by later prim creation.
