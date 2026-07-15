@@ -633,7 +633,7 @@ int main() {
         throw std::runtime_error("no verified asset replica was available");
     };
     homeworldz::simulation::FixedStepLoop simulation(scene);
-#ifdef HOMEWORLDZ_PHYSICS_ADAPTERS_AVAILABLE
+#ifdef HOMEWORLDZ_JOLT_AVAILABLE
     auto physics_world = homeworldz::physics::make_jolt_world();
     std::cout << "{\"level\":\"info\",\"message\":\"production physics initialized\","
                  "\"backend\":\"jolt\"}" << std::endl;
