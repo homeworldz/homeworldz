@@ -41,6 +41,9 @@ public:
     std::optional<physics::BodyState> character_state(physics::CharacterId id) const override { return inner_->character_state(id); }
     void set_character_state(physics::CharacterId id, const physics::BodyState& state) override { inner_->set_character_state(id, state); }
     void set_character_velocity(physics::CharacterId id, scene::Vector3 value) override { inner_->set_character_velocity(id, value); }
+    void set_character_flying(physics::CharacterId id, bool value) override {
+        inner_->set_character_flying(id, value);
+    }
     void step(double seconds) override {
         const auto start = std::chrono::steady_clock::now();
         inner_->step(seconds);

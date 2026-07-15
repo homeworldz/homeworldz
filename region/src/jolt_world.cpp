@@ -118,6 +118,7 @@ struct JoltCharacter {
     scene::EntityId entity{};
     double height{1.8};
     double step_height{0.4};
+    bool flying{};
 };
 
 class JoltWorld final : public World {
@@ -225,7 +226,7 @@ public:
             JPH::Quat::sIdentity(), &system_));
         const auto id = next_character_++;
         characters_.emplace(id, JoltCharacter{
-            std::move(character), definition.entity_id, definition.height, definition.step_height});
+            std::move(character), definition.entity_id, definition.height, definition.step_height, false});
         return id;
     }
     bool remove_character(CharacterId id) override {
@@ -257,14 +258,19 @@ public:
         if (const auto found = characters_.find(id); found != characters_.end())
             found->second.character->SetLinearVelocity(vec(velocity));
     }
+    void set_character_flying(CharacterId id, bool flying) override {
+        if (const auto found = characters_.find(id); found != characters_.end())
+            found->second.flying = flying;
+    }
 
     void step(double seconds) override {
         contacts_.clear();
         for (auto& [id, entry] : characters_) {
             static_cast<void>(id);
             JPH::CharacterVirtual::ExtendedUpdateSettings settings;
-            settings.mStickToFloorStepDown = {0, 0, -0.5F};
-            settings.mWalkStairsStepUp = {0, 0, static_cast<float>(entry.step_height)};
+            settings.mStickToFloorStepDown = entry.flying ? JPH::Vec3::sZero() : JPH::Vec3{0, 0, -0.5F};
+            settings.mWalkStairsStepUp = entry.flying ? JPH::Vec3::sZero() :
+                JPH::Vec3{0, 0, static_cast<float>(entry.step_height)};
             entry.character->ExtendedUpdate(
                 static_cast<float>(seconds), {0, 0, -9.81F}, settings, {}, {}, {}, {}, allocator_);
         }

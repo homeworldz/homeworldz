@@ -1706,6 +1706,13 @@ int main() {
                                 response.position = {static_cast<float>(initial_position.x),
                                                      static_cast<float>(initial_position.y),
                                                      static_cast<float>(initial_position.z)};
+                                const auto& rotation = controller.state().rotation;
+                                const double qx = rotation[0], qy = rotation[1], qz = rotation[2];
+                                const auto qw = std::sqrt((std::max)(
+                                    0.0, 1.0 - qx * qx - qy * qy - qz * qz));
+                                response.look_at = {
+                                    static_cast<float>(1.0 - 2.0 * (qy * qy + qz * qz)),
+                                    static_cast<float>(2.0 * (qx * qy + qw * qz)), 0.0F};
                                 avatars.emplace(endpoint, LiveAvatar{
                                     std::move(controller), entity, name,
                                     now + std::chrono::seconds(5), now + std::chrono::seconds(30),
@@ -1717,6 +1724,8 @@ int main() {
                                         live.controller.state().height, 0.4});
                                     physics_world->set_character_velocity(
                                         live.physics_character, live.controller.state().velocity);
+                                    physics_world->set_character_flying(
+                                        live.physics_character, live.controller.state().flying);
                                 }
                                 if (viewer_grid && registration)
                                     static_cast<void>(viewer_grid->update_presence(name, registration->region_id()));
@@ -2644,6 +2653,8 @@ int main() {
             if (physics_world && avatar.physics_character != 0) {
                 const auto& controller_state = avatar.controller.state();
                 physics_world->set_character_velocity(avatar.physics_character, controller_state.velocity);
+                physics_world->set_character_flying(
+                    avatar.physics_character, controller_state.flying);
             }
             const auto desired_animation = avatar.controller.movement_animation();
             const auto desired_id = homeworldz::viewer::parse_uuid(

@@ -95,6 +95,7 @@ public:
     virtual std::optional<BodyState> character_state(CharacterId id) const = 0;
     virtual void set_character_state(CharacterId id, const BodyState& state) = 0;
     virtual void set_character_velocity(CharacterId id, scene::Vector3 velocity) = 0;
+    virtual void set_character_flying(CharacterId, bool) {}
 
     virtual void step(double seconds) = 0;
     virtual std::span<const Contact> contacts() const = 0;

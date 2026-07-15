@@ -148,6 +148,21 @@ bool jolt_character_step_test() {
     return landed && landed->grounded && std::abs(landed->position.z - 0.9) < 0.01 &&
            std::abs(landed->linear_velocity.z) < 0.001;
 }
+
+bool jolt_flying_hover_test() {
+    auto world = homeworldz::physics::make_jolt_world();
+    homeworldz::physics::BodyDefinition platform;
+    platform.entity_id = 1;
+    platform.shape.half_extents = {2, 2, 0.125};
+    platform.position = {0, 0, 1.125};
+    world->create_body(platform);
+    const auto character = world->create_character({2, {0, 0, 2.6}, 0.3, 1.8, 0.4});
+    world->set_character_flying(character, true);
+    world->set_character_velocity(character, {});
+    for (int tick = 0; tick < 300; ++tick) world->step(1.0 / 60.0);
+    const auto state = world->character_state(character);
+    return state && std::abs(state->position.z - 2.6) < 0.001;
+}
 }
 
 int main() {
@@ -155,6 +170,7 @@ int main() {
     if (!static_scene_mirror_test()) return 1;
     if (!jolt_character_collision_test()) return 1;
     if (!jolt_character_step_test()) return 1;
+    if (!jolt_flying_hover_test()) return 1;
     if (!smoke_test(homeworldz::physics::make_jolt_world())) return 1;
     if (!smoke_test(homeworldz::physics::make_physx_world())) return 1;
     return 0;
