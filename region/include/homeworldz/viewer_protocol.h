@@ -332,6 +332,23 @@ struct AgentUpdate : AgentMessage {
     std::uint8_t flags{};
 };
 
+struct ModifyLandArea {
+    std::int32_t local_id{};
+    float west{};
+    float south{};
+    float east{};
+    float north{};
+};
+
+struct ModifyLand : AgentMessage {
+    std::uint8_t action{};
+    std::uint8_t brush_size{};
+    float seconds{};
+    float height{};
+    std::vector<ModifyLandArea> areas;
+    std::vector<float> extended_brush_sizes;
+};
+
 struct ChatFromViewer : AgentMessage {
     std::string message;
     std::uint8_t type{};
@@ -426,6 +443,7 @@ std::optional<RequestImage> decode_request_image(std::span<const std::byte> payl
 std::vector<std::vector<std::byte>> encode_image_transfer(
     const Uuid& image_id, std::span<const std::byte> content, std::uint32_t start_packet = 0);
 std::optional<AgentUpdate> decode_agent_update(std::span<const std::byte> payload);
+std::optional<ModifyLand> decode_modify_land(std::span<const std::byte> payload);
 std::optional<ChatFromViewer> decode_chat_from_viewer(std::span<const std::byte> payload);
 std::vector<std::byte> encode_chat_from_simulator(const ChatFromSimulator& message);
 std::vector<std::byte> encode_flat_terrain(std::span<const TerrainPatch> patches, float height);

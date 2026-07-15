@@ -551,6 +551,40 @@ bool agent_update_codec() {
            update->draw_distance == 128.0F && update->control_flags == 0x2001;
 }
 
+bool modify_land_codec() {
+    const auto agent = parse_uuid("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");
+    const auto session = parse_uuid("11111111-2222-4333-8444-555555555555");
+    if (!agent || !session) return false;
+    auto payload = bytes({0xff, 0xff, 0x00, 0x7c});
+    payload.insert(payload.end(), agent->begin(), agent->end());
+    payload.insert(payload.end(), session->begin(), session->end());
+    payload.resize(72, std::byte{});
+    payload[36] = std::byte{1};
+    payload[37] = std::byte{2};
+    write_f32(payload, 38, 0.5F);
+    write_f32(payload, 42, 24.0F);
+    payload[46] = std::byte{1};
+    payload[47] = std::byte{0xff};
+    payload[48] = std::byte{0xff};
+    payload[49] = std::byte{0xff};
+    payload[50] = std::byte{0xff};
+    write_f32(payload, 51, 100.0F);
+    write_f32(payload, 55, 101.0F);
+    write_f32(payload, 59, 100.0F);
+    write_f32(payload, 63, 101.0F);
+    payload[67] = std::byte{1};
+    write_f32(payload, 68, 4.0F);
+    const auto decoded = decode_modify_land(payload);
+    if (!decoded || decoded->agent_id != *agent || decoded->session_id != *session ||
+        decoded->action != 1 || decoded->brush_size != 2 || decoded->seconds != 0.5F ||
+        decoded->height != 24.0F || decoded->areas.size() != 1 ||
+        decoded->areas[0].local_id != -1 || decoded->areas[0].west != 100.0F ||
+        decoded->areas[0].north != 101.0F || decoded->extended_brush_sizes != std::vector<float>{4.0F})
+        return false;
+    payload.pop_back();
+    return !decode_modify_land(payload);
+}
+
 bool animation_codecs() {
     const auto agent = parse_uuid("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");
     const auto session = parse_uuid("11111111-2222-4333-8444-555555555555");
@@ -690,6 +724,7 @@ int main() {
     if (!resend_throttle_and_timeout()) return 4;
     if (!circuit_registry()) return 5;
     if (!agent_update_codec()) return 6;
+    if (!modify_land_codec()) return 13;
     if (!animation_codecs()) return 7;
     if (!wearable_asset_codecs()) return 8;
     if (!chat_codecs()) return 9;

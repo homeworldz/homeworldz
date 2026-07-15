@@ -24,6 +24,8 @@ constexpr std::array<std::byte, 4> agent_movement_complete_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0xfa}};
 constexpr std::array<std::byte, 4> chat_from_viewer_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x50}};
+constexpr std::array<std::byte, 4> modify_land_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x7c}};
 constexpr std::array<std::byte, 4> chat_from_simulator_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x8b}};
 constexpr std::array<std::byte, 4> logout_request_id{
@@ -1454,6 +1456,52 @@ std::optional<AgentUpdate> decode_agent_update(std::span<const std::byte> payloa
     result.draw_distance = read_f32(payload, 106);
     result.control_flags = read_le_u32(payload, 110);
     result.flags = std::to_integer<std::uint8_t>(payload[114]);
+    return result;
+}
+
+std::optional<ModifyLand> decode_modify_land(std::span<const std::byte> payload) {
+    constexpr std::size_t fixed_size = 47;
+    constexpr std::size_t area_size = 20;
+    if (payload.size() < fixed_size + 1 ||
+        !std::equal(modify_land_id.begin(), modify_land_id.end(), payload.begin()))
+        return std::nullopt;
+    ModifyLand result;
+    std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
+    result.action = std::to_integer<std::uint8_t>(payload[36]);
+    result.brush_size = std::to_integer<std::uint8_t>(payload[37]);
+    result.seconds = read_f32(payload, 38);
+    result.height = read_f32(payload, 42);
+    if (!std::isfinite(result.seconds) || !std::isfinite(result.height)) return std::nullopt;
+    std::size_t offset = fixed_size;
+    const auto area_count = std::to_integer<std::size_t>(payload[46]);
+    if (area_count == 0 || area_count > 64 ||
+        offset + area_count * area_size + 1 > payload.size())
+        return std::nullopt;
+    result.areas.reserve(area_count);
+    for (std::size_t index = 0; index < area_count; ++index) {
+        ModifyLandArea area;
+        area.local_id = static_cast<std::int32_t>(read_le_u32(payload, offset));
+        area.west = read_f32(payload, offset + 4);
+        area.south = read_f32(payload, offset + 8);
+        area.east = read_f32(payload, offset + 12);
+        area.north = read_f32(payload, offset + 16);
+        if (!std::isfinite(area.west) || !std::isfinite(area.south) ||
+            !std::isfinite(area.east) || !std::isfinite(area.north))
+            return std::nullopt;
+        result.areas.push_back(area);
+        offset += area_size;
+    }
+    const auto extended_count = std::to_integer<std::size_t>(payload[offset++]);
+    if (extended_count > 64 || offset + extended_count * sizeof(float) != payload.size())
+        return std::nullopt;
+    result.extended_brush_sizes.reserve(extended_count);
+    for (std::size_t index = 0; index < extended_count; ++index) {
+        const auto radius = read_f32(payload, offset);
+        if (!std::isfinite(radius)) return std::nullopt;
+        result.extended_brush_sizes.push_back(radius);
+        offset += sizeof(float);
+    }
     return result;
 }
 
