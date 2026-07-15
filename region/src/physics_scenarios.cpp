@@ -48,7 +48,8 @@ ScenarioResult avatar(const WorldFactory& factory) {
     const auto character = world->create_character({2, {0, 0, 1}});
     world->set_character_velocity(character, {2, 0, 0});
     advance(*world, 30);
-    const bool passed = world->remove_character(character);
+    const auto state = world->character_state(character);
+    const bool passed = state && state->position.x > 0.25 && world->remove_character(character);
     return {"avatar-controller", passed, passed ? "character moved and was removed" : "character lifecycle failed", 2, 30};
 }
 

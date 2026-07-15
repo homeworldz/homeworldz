@@ -38,6 +38,7 @@ public:
     void apply_impulse(physics::BodyId id, scene::Vector3 impulse) override { inner_->apply_impulse(id, impulse); }
     physics::CharacterId create_character(const physics::CharacterDefinition& value) override { return inner_->create_character(value); }
     bool remove_character(physics::CharacterId id) override { return inner_->remove_character(id); }
+    std::optional<physics::BodyState> character_state(physics::CharacterId id) const override { return inner_->character_state(id); }
     void set_character_velocity(physics::CharacterId id, scene::Vector3 value) override { inner_->set_character_velocity(id, value); }
     void step(double seconds) override {
         const auto start = std::chrono::steady_clock::now();

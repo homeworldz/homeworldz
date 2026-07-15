@@ -147,20 +147,29 @@ public:
         const auto found = characters_.find(id);
         if (found == characters_.end()) return false;
         remove_body(found->second);
+        character_velocities_.erase(id);
         characters_.erase(found);
         return true;
     }
+    std::optional<BodyState> character_state(CharacterId id) const override {
+        const auto found = characters_.find(id);
+        return found == characters_.end() ? std::nullopt : body_state(found->second);
+    }
     void set_character_velocity(CharacterId id, scene::Vector3 velocity) override {
-        const auto character = characters_.find(id);
-        if (character == characters_.end()) return;
-        const auto body = bodies_.find(character->second);
-        if (body == bodies_.end()) return;
-        if (auto* dynamic = body->second.actor->is<physx::PxRigidDynamic>())
-            dynamic->setKinematicTarget(physx::PxTransform(dynamic->getGlobalPose().p + vec(velocity) * (1.0f / 60.0f)));
+        if (characters_.contains(id)) character_velocities_[id] = velocity;
     }
 
     void step(double seconds) override {
         contacts_.clear();
+        for (const auto& [character_id, velocity] : character_velocities_) {
+            const auto character = characters_.find(character_id);
+            if (character == characters_.end()) continue;
+            const auto body = bodies_.find(character->second);
+            if (body == bodies_.end()) continue;
+            if (auto* dynamic = body->second.actor->is<physx::PxRigidDynamic>())
+                dynamic->setKinematicTarget(physx::PxTransform(
+                    dynamic->getGlobalPose().p + vec(velocity) * static_cast<float>(seconds)));
+        }
         scene_->simulate(static_cast<float>(seconds));
         scene_->fetchResults(true);
     }
@@ -193,6 +202,7 @@ private:
     std::unordered_map<BodyId, PhysxBody> bodies_;
     std::unordered_map<const physx::PxRigidActor*, BodyId> actor_to_body_;
     std::unordered_map<CharacterId, BodyId> characters_;
+    std::unordered_map<CharacterId, scene::Vector3> character_velocities_;
     std::vector<Contact> contacts_;
 };
 

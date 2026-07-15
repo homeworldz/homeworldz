@@ -172,6 +172,10 @@ public:
         characters_.erase(found);
         return true;
     }
+    std::optional<BodyState> character_state(CharacterId id) const override {
+        const auto found = characters_.find(id);
+        return found == characters_.end() ? std::nullopt : body_state(found->second);
+    }
     void set_character_velocity(CharacterId id, scene::Vector3 velocity) override {
         if (const auto found = characters_.find(id); found != characters_.end()) {
             auto state = body_state(found->second);

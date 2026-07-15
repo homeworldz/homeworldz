@@ -81,6 +81,7 @@ public:
 
     virtual CharacterId create_character(const CharacterDefinition& definition) = 0;
     virtual bool remove_character(CharacterId id) = 0;
+    virtual std::optional<BodyState> character_state(CharacterId id) const = 0;
     virtual void set_character_velocity(CharacterId id, scene::Vector3 velocity) = 0;
 
     virtual void step(double seconds) = 0;
