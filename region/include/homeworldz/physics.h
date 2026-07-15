@@ -50,6 +50,13 @@ struct CharacterDefinition {
     double step_height{0.4};
 };
 
+struct HeightFieldDefinition {
+    scene::EntityId entity_id{};
+    std::vector<float> samples;
+    std::uint32_t sample_count{};
+    double spacing{1.0};
+};
+
 struct Contact {
     BodyId first{};
     BodyId second{};
@@ -78,6 +85,7 @@ public:
     virtual std::optional<BodyState> body_state(BodyId id) const = 0;
     virtual void set_body_state(const BodyState& state) = 0;
     virtual void apply_impulse(BodyId id, scene::Vector3 impulse) = 0;
+    virtual BodyId create_heightfield(const HeightFieldDefinition&) { return 0; }
 
     virtual CharacterId create_character(const CharacterDefinition& definition) = 0;
     virtual bool remove_character(CharacterId id) = 0;

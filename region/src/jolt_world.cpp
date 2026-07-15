@@ -9,6 +9,7 @@
 #include <Jolt/Physics/Collision/RayCast.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
+#include <Jolt/Physics/Collision/Shape/HeightFieldShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/RegisterTypes.h>
@@ -155,6 +156,33 @@ public:
     void apply_impulse(BodyId id, scene::Vector3 impulse) override {
         if (const auto found = bodies_.find(id); found != bodies_.end())
             system_.GetBodyInterface().AddImpulse(found->second.native, vec(impulse));
+    }
+
+    BodyId create_heightfield(const HeightFieldDefinition& definition) override {
+        const auto count = definition.sample_count;
+        if (count < 4 || definition.samples.size() != static_cast<std::size_t>(count) * count ||
+            !std::isfinite(definition.spacing) || definition.spacing <= 0.0)
+            throw std::invalid_argument("invalid Jolt heightfield definition");
+        std::vector<float> reversed(definition.samples.size());
+        for (std::uint32_t y = 0; y < count; ++y)
+            std::copy_n(definition.samples.begin() + static_cast<std::size_t>(count - 1 - y) * count,
+                        count, reversed.begin() + static_cast<std::size_t>(y) * count);
+        JPH::HeightFieldShapeSettings shape_settings(
+            reversed.data(), JPH::Vec3::sZero(),
+            {static_cast<float>(definition.spacing), 1.0F, static_cast<float>(definition.spacing)}, count);
+        const auto shape = shape_settings.Create();
+        if (shape.HasError()) throw std::runtime_error(shape.GetError().c_str());
+        const auto rotation = JPH::Quat::sRotation(JPH::Vec3::sAxisX(), JPH::DegreesToRadians(90.0F));
+        const JPH::RVec3 position{
+            0.0F, static_cast<float>(static_cast<double>(count - 1) * definition.spacing), 0.0F};
+        JPH::BodyCreationSettings settings(
+            shape.Get(), position, rotation, JPH::EMotionType::Static, Layers::static_body);
+        const auto native = system_.GetBodyInterface().CreateAndAddBody(settings, JPH::EActivation::DontActivate);
+        if (native.IsInvalid()) throw std::runtime_error("Jolt could not create a heightfield");
+        const auto id = next_body_++;
+        bodies_.emplace(id, JoltBody{native, definition.entity_id});
+        native_to_body_.emplace(native.GetIndexAndSequenceNumber(), id);
+        return id;
     }
 
     CharacterId create_character(const CharacterDefinition& definition) override {

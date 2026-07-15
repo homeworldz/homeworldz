@@ -33,9 +33,24 @@ bool smoke_test(std::unique_ptr<homeworldz::physics::World> world) {
     if (!restored || std::abs(restored->position.z - 8) > 0.01) return false;
     return world->ray_cast({0, 0, 10}, {0, 0, -1}, 20).has_value();
 }
+
+bool jolt_heightfield_test() {
+    auto world = homeworldz::physics::make_jolt_world();
+    homeworldz::physics::HeightFieldDefinition terrain;
+    terrain.entity_id = 99;
+    terrain.sample_count = 8;
+    terrain.samples.resize(64);
+    for (std::uint32_t y = 0; y < terrain.sample_count; ++y)
+        for (std::uint32_t x = 0; x < terrain.sample_count; ++x)
+            terrain.samples[y * terrain.sample_count + x] = static_cast<float>(y);
+    const auto body = world->create_heightfield(terrain);
+    const auto hit = world->ray_cast({2, 6, 20}, {0, 0, -1}, 30);
+    return body != 0 && hit && hit->body == body && std::abs(hit->point.z - 6.0) < 0.1;
+}
 }
 
 int main() {
+    if (!jolt_heightfield_test()) return 1;
     if (!smoke_test(homeworldz::physics::make_jolt_world())) return 1;
     if (!smoke_test(homeworldz::physics::make_physx_world())) return 1;
     return 0;
