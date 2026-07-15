@@ -637,3 +637,16 @@ also covered the required fixes for Z-up capsule orientation, Jolt's
 radius-based supporting plane, and clearing requested downward velocity from
 the viewer-visible state while supported; no easing through platforms or
 camera-wide bounce jitter remained.
+
+Avatar motion restart persistence passed live Firestorm acceptance on
+2026-07-15. The region snapshot retained Jim Tarber's local X/Y position,
+airborne Z position, body rotation, velocity, and flight state. During login,
+the grid obtained the saved look vector from the destination region rather than
+advertising an east-facing default, and the region protected restored flight
+through Firestorm's initialization packets. A controller initialization bug
+that treated every restored spawn as grounded and snapped it to terrain was
+also corrected. After a complete viewer, grid, and region restart, Jim returned
+at viewer Z approximately `28`, still flying and facing the previous direction
+above the persisted `Platform`; its edited `2 x 2 x 0.5` scale also remained.
+Grounded contact is deliberately recomputed from Jolt rather than persisted as
+potentially stale state.

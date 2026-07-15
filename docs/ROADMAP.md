@@ -62,8 +62,8 @@ acceptance tests pass.
   viewer movement behavior.
 - [ ] Collide avatars with dynamic scene objects while preserving
   practical viewer movement behavior.
-- [ ] Persist and restore position, orientation, velocity, flight state, and
-  grounded state safely.
+- [x] Persist and restore position, orientation, velocity, and flight state;
+  safely recompute grounded contact from Jolt on entry.
 
 ### Core inventory, assets, and objects
 

@@ -50,7 +50,7 @@ than runtime dependencies.
   resulting provisional avatar state.
 - [x] Stream continuous authoritative avatar transforms and flight state back
   to Firestorm.
-- [ ] Add a Jolt-backed avatar capsule with terrain walking, grounding, flight,
+- [x] Add a Jolt-backed avatar capsule with terrain walking, grounding, flight,
   and collision-safe movement.
 - [x] Implement nearby chat, terrain, and static object updates.
 - [x] Implement local texture and asset fetch.
