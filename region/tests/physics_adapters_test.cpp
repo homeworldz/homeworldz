@@ -31,6 +31,15 @@ bool smoke_test(std::unique_ptr<homeworldz::physics::World> world) {
     world->restore({{moved}});
     const auto restored = world->body_state(id);
     if (!restored || std::abs(restored->position.z - 8) > 0.01) return false;
+    physics::BodyDefinition rotated;
+    rotated.entity_id = 3;
+    rotated.shape.half_extents = {2, 0.25, 0.25};
+    rotated.position = {5, 0, 1};
+    constexpr double half_sqrt_two = 0.7071067811865476;
+    rotated.rotation = {0, 0, half_sqrt_two, half_sqrt_two};
+    const auto rotated_id = world->create_body(rotated);
+    const auto rotated_hit = world->ray_cast({5, 1, 10}, {0, 0, -1}, 20);
+    if (!rotated_hit || rotated_hit->body != rotated_id) return false;
     return world->ray_cast({0, 0, 10}, {0, 0, -1}, 20).has_value();
 }
 

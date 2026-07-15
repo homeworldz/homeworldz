@@ -71,6 +71,12 @@ JPH::Vec3 vec(scene::Vector3 value) {
 }
 scene::Vector3 vec(JPH::Vec3Arg value) { return {value.GetX(), value.GetY(), value.GetZ()}; }
 
+JPH::Quat quat(const std::array<double, 4>& value) {
+    const JPH::Quat result{static_cast<float>(value[0]), static_cast<float>(value[1]),
+                           static_cast<float>(value[2]), static_cast<float>(value[3])};
+    return result.Normalized();
+}
+
 JPH::ShapeRefC make_shape(const Shape& shape) {
     switch (shape.type) {
     case ShapeType::Sphere:
@@ -107,7 +113,7 @@ public:
 
     BodyId create_body(const BodyDefinition& definition) override {
         JPH::BodyCreationSettings settings(make_shape(definition.shape), vec(definition.position),
-            JPH::Quat::sIdentity(), motion(definition.motion),
+            quat(definition.rotation), motion(definition.motion),
             definition.motion == MotionType::Static ? Layers::static_body : Layers::moving_body);
         settings.mFriction = static_cast<float>(definition.friction);
         settings.mRestitution = static_cast<float>(definition.restitution);

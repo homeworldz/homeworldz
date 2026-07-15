@@ -43,7 +43,10 @@ public:
     }
 
     BodyId create_body(const BodyDefinition& definition) override {
-        const physx::PxTransform transform(vec(definition.position));
+        const physx::PxTransform transform(
+            vec(definition.position), physx::PxQuat(
+                static_cast<float>(definition.rotation[0]), static_cast<float>(definition.rotation[1]),
+                static_cast<float>(definition.rotation[2]), static_cast<float>(definition.rotation[3])).getNormalized());
         physx::PxRigidActor* actor = nullptr;
         if (definition.motion == MotionType::Static) actor = physics_->createRigidStatic(transform);
         else {

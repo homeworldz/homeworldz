@@ -2,6 +2,7 @@
 
 #include "homeworldz/scene.h"
 
+#include <array>
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -31,6 +32,7 @@ struct BodyDefinition {
     double mass{1.0};
     double friction{0.5};
     double restitution{};
+    std::array<double, 4> rotation{0.0, 0.0, 0.0, 1.0};
 };
 
 struct BodyState {
