@@ -33,6 +33,7 @@
 #include "homeworldz/scene.h"
 #include "homeworldz/sha256.h"
 #include "homeworldz/simulation_loop.h"
+#include "homeworldz/terrain_edit.h"
 #include "homeworldz/viewer_capabilities.h"
 #include "homeworldz/viewer_protocol.h"
 
@@ -130,28 +131,26 @@ std::string environment_value(const char* name, std::string fallback = {}) {
     return fallback;
 }
 
-std::optional<std::array<float, 256 * 256>> load_raw_heightmap(const std::filesystem::path& path) {
+std::unique_ptr<homeworldz::terrain::Heightmap> load_raw_heightmap(const std::filesystem::path& path) {
     std::ifstream input(path, std::ios::binary | std::ios::ate);
-    if (!input || input.tellg() != 256 * 256) return std::nullopt;
+    if (!input || input.tellg() != 256 * 256) return {};
     input.seekg(0);
     std::array<unsigned char, 256 * 256> source{};
     input.read(reinterpret_cast<char*>(source.data()), source.size());
-    if (!input) return std::nullopt;
-    std::array<float, 256 * 256> result{};
-    std::transform(source.begin(), source.end(), result.begin(),
+    if (!input) return {};
+    auto result = std::make_unique<homeworldz::terrain::Heightmap>();
+    std::transform(source.begin(), source.end(), result->begin(),
                    [](unsigned char height) { return static_cast<float>(height); });
     return result;
 }
 
-homeworldz::scene::Vector3 default_spawn(
-    const std::optional<std::array<float, 256 * 256>>& heightmap) {
-    if (!heightmap) return {128.0, 128.0, 25.0};
+homeworldz::scene::Vector3 default_spawn(const homeworldz::terrain::Heightmap& heightmap) {
     std::size_t selected_x = 128;
     std::size_t selected_y = 128;
     std::size_t selected_distance = (std::numeric_limits<std::size_t>::max)();
     for (std::size_t y = 16; y < 240; ++y) {
         for (std::size_t x = 16; x < 240; ++x) {
-            const auto height = (*heightmap)[y * 256 + x];
+            const auto height = heightmap[y * 256 + x];
             if (height < 24.0F) continue;
             const auto dx = static_cast<std::int64_t>(x) - 128;
             const auto dy = static_cast<std::int64_t>(y) - 128;
@@ -163,16 +162,15 @@ homeworldz::scene::Vector3 default_spawn(
             }
         }
     }
-    const auto height = (*heightmap)[selected_y * 256 + selected_x];
+    const auto height = heightmap[selected_y * 256 + selected_x];
     return {static_cast<double>(selected_x), static_cast<double>(selected_y), height + 1.0};
 }
 
-double ground_height(const std::optional<std::array<float, 256 * 256>>& heightmap,
-                     const homeworldz::scene::Vector3& position) {
-    if (!heightmap) return 25.0;
+double ground_height(const homeworldz::terrain::Heightmap& heightmap,
+                      const homeworldz::scene::Vector3& position) {
     const auto x = std::clamp(static_cast<int>(position.x), 0, 255);
     const auto y = std::clamp(static_cast<int>(position.y), 0, 255);
-    return (*heightmap)[static_cast<std::size_t>(y) * 256 + x];
+    return heightmap[static_cast<std::size_t>(y) * 256 + x];
 }
 
 int environment_int(const char* name, int fallback, int minimum, int maximum) {
@@ -496,15 +494,22 @@ int main() {
         "HOMEWORLDZ_REGION_PUBLIC_ENDPOINT", "http://localhost:" + std::to_string(configured_port()));
     const auto grid_public_endpoint = environment_value(
         "HOMEWORLDZ_GRID_PUBLIC_URL", environment_value("HOMEWORLDZ_GRID_URL", "http://localhost:42000"));
-    const auto terrain_heightmap = load_raw_heightmap(environment_value(
+    const auto region_data_path = std::filesystem::path(
+        environment_value("HOMEWORLDZ_REGION_DATA_PATH", "var/region"));
+    const auto terrain_state_path = region_data_path / "terrain.f32";
+    const auto default_heightmap = load_raw_heightmap(environment_value(
         "HOMEWORLDZ_REGION_TERRAIN_PATH", "assets/region/terrain/plateau-square.raw"));
-    if (terrain_heightmap) {
-        std::cout << "{\"level\":\"info\",\"message\":\"default terrain heightmap loaded\"}" << std::endl;
-    } else {
-        std::cout << "{\"level\":\"warning\",\"message\":\"default terrain heightmap unavailable; using flat terrain\"}"
-                  << std::endl;
-    }
-    const auto initial_spawn = default_spawn(terrain_heightmap);
+    auto revert_heightmap = default_heightmap ?
+        std::make_unique<homeworldz::terrain::Heightmap>(*default_heightmap) :
+        std::make_unique<homeworldz::terrain::Heightmap>();
+    if (!default_heightmap) revert_heightmap->fill(25.0F);
+    auto terrain_heightmap = homeworldz::terrain::load_state(terrain_state_path);
+    if (!terrain_heightmap)
+        terrain_heightmap = std::make_unique<homeworldz::terrain::Heightmap>(*revert_heightmap);
+    std::cout << "{\"level\":\"info\",\"message\":\"terrain heightmap loaded\",\"source\":\""
+              << (std::filesystem::exists(terrain_state_path) ? "region-state" :
+                  (default_heightmap ? "packaged-default" : "flat-fallback")) << "\"}" << std::endl;
+    const auto initial_spawn = default_spawn(*terrain_heightmap);
     std::unique_ptr<homeworldz::grid::RegistrationLifecycle> registration;
     std::unique_ptr<homeworldz::grid::Client> viewer_grid;
     std::unique_ptr<homeworldz::grid::ViewerSessionCache> viewer_sessions;
@@ -544,7 +549,7 @@ int main() {
     std::unique_ptr<homeworldz::storage::RegionStorage> storage;
     try {
         storage = std::make_unique<homeworldz::storage::RegionStorage>(
-            environment_value("HOMEWORLDZ_REGION_DATA_PATH", "var/region"));
+            region_data_path);
         const auto imported_assets = storage->import_asset_directory(
             environment_value("HOMEWORLDZ_REGION_ASSET_PATH", "assets/region"), system_creator_id);
         if (imported_assets != 0) {
@@ -1626,7 +1631,7 @@ int main() {
                                 const auto geometry = known_geometry == avatar_geometries.end() ?
                                     homeworldz::viewer::AvatarGeometry{} : known_geometry->second;
                                 homeworldz::viewer::AvatarController controller{
-                                    spawn, ground_height(terrain_heightmap, spawn),
+                                    spawn, ground_height(*terrain_heightmap, spawn),
                                     geometry.height, geometry.hip_offset};
                                 const auto initial_position = controller.state().position;
                                 const auto initial_viewer_position = controller.viewer_position();
@@ -1677,9 +1682,8 @@ int main() {
                             for (std::uint8_t y = 0; y < 16; ++y) {
                                 std::array<homeworldz::viewer::TerrainPatch, 16> row{};
                                 for (std::uint8_t x = 0; x < 16; ++x) row[x] = {x, y};
-                                const auto terrain_payload = terrain_heightmap ?
-                                    homeworldz::viewer::encode_terrain(row, *terrain_heightmap) :
-                                    homeworldz::viewer::encode_flat_terrain(row, 25.0F);
+                                const auto terrain_payload =
+                                    homeworldz::viewer::encode_terrain(row, *terrain_heightmap);
                                 if (const auto terrain = circuits.send(endpoint, terrain_payload, true, now))
                                     static_cast<void>(send_udp(viewer_server, endpoint, *terrain));
                             }
@@ -2161,7 +2165,7 @@ int main() {
                                     object_add->ray_end[0], object_add->ray_end[1], object_add->ray_end[2]};
                                 placement = homeworldz::scene::Vector3{
                                     ray_end.x, ray_end.y,
-                                    ground_height(terrain_heightmap, ray_end) + object_add->scale[2] * 0.5};
+                                    ground_height(*terrain_heightmap, ray_end) + object_add->scale[2] * 0.5};
                             } else if (valid_scale) {
                                 const auto target_id = homeworldz::viewer::format_uuid(object_add->ray_target_id);
                                 const homeworldz::scene::Entity* target = nullptr;
@@ -2360,7 +2364,7 @@ int main() {
                                             rez->ray_end[0], rez->ray_end[1], rez->ray_end[2]};
                                         placement = homeworldz::scene::Vector3{
                                             ray_end.x, ray_end.y,
-                                            ground_height(terrain_heightmap, ray_end) + asset->scale.z * 0.5};
+                                            ground_height(*terrain_heightmap, ray_end) + asset->scale.z * 0.5};
                                     } else if (asset) {
                                         const auto target_id = homeworldz::viewer::format_uuid(rez->ray_target_id);
                                         const homeworldz::scene::Entity* target = nullptr;
@@ -2387,7 +2391,7 @@ int main() {
                                                 rez->ray_end[0], rez->ray_end[1], rez->ray_end[2]};
                                             placement = homeworldz::scene::Vector3{
                                                 ray_end.x, ray_end.y,
-                                                ground_height(terrain_heightmap, ray_end) + asset->scale.z * 0.5};
+                                                ground_height(*terrain_heightmap, ray_end) + asset->scale.z * 0.5};
                                         }
                                     }
                                     const bool valid_position = placement &&
@@ -2457,6 +2461,37 @@ int main() {
                             avatar->second.last_agent_update_sequence = packet->sequence;
                             avatar->second.has_agent_update = true;
                         }
+                        const auto terrain_edit = homeworldz::viewer::decode_modify_land(packet->payload);
+                        if (terrain_edit && terrain_edit->agent_id == identity->agent_id &&
+                            terrain_edit->session_id == identity->session_id) {
+                            const auto changed = homeworldz::terrain::apply(
+                                *terrain_heightmap, *revert_heightmap, *terrain_edit);
+                            if (!changed.empty()) {
+                                const auto persisted = homeworldz::terrain::save_state(
+                                    terrain_state_path, *terrain_heightmap);
+                                constexpr std::size_t patches_per_packet = 16;
+                                for (const auto& [recipient_endpoint, recipient] : avatars) {
+                                    static_cast<void>(recipient);
+                                    for (std::size_t offset = 0; offset < changed.size();
+                                         offset += patches_per_packet) {
+                                        const auto count = (std::min)(patches_per_packet, changed.size() - offset);
+                                        const auto terrain_payload = homeworldz::viewer::encode_terrain(
+                                            std::span<const homeworldz::viewer::TerrainPatch>(
+                                                changed.data() + offset, count), *terrain_heightmap);
+                                        if (const auto outgoing = circuits.send(
+                                                recipient_endpoint, terrain_payload, true, now))
+                                            static_cast<void>(send_udp(
+                                                viewer_server, recipient_endpoint, *outgoing));
+                                    }
+                                }
+                                std::cout << "{\"level\":" << (persisted ? "\"info\"" : "\"error\"")
+                                          << ",\"message\":\"terrain edit applied\",\"action\":"
+                                          << static_cast<unsigned>(terrain_edit->action)
+                                          << ",\"patches\":" << changed.size()
+                                          << ",\"persisted\":" << (persisted ? "true" : "false") << "}"
+                                          << std::endl;
+                            }
+                        }
                         const auto chat = homeworldz::viewer::decode_chat_from_viewer(packet->payload);
                         if (chat && avatar != avatars.end() && chat->agent_id == identity->agent_id &&
                             chat->session_id == identity->session_id && chat->channel == 0 &&
@@ -2522,7 +2557,7 @@ int main() {
                 avatar.next_presence = now + std::chrono::seconds(30);
             }
             avatar.controller.set_ground_height(
-                ground_height(terrain_heightmap, avatar.controller.state().position));
+                ground_height(*terrain_heightmap, avatar.controller.state().position));
             avatar.controller.step(elapsed);
             if (physics_world && avatar.physics_character != 0) {
                 const auto& controller_state = avatar.controller.state();

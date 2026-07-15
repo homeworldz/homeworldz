@@ -10,6 +10,7 @@ add_library(homeworldz-region-core
   src/scene.cpp
   src/sha256.cpp
   src/simulation_loop.cpp)
+target_sources(homeworldz-region-core PRIVATE src/terrain_edit.cpp)
 target_sources(homeworldz-region-core PRIVATE src/viewer_protocol.cpp)
 target_sources(homeworldz-region-core PRIVATE src/viewer_capabilities.cpp)
 target_include_directories(homeworldz-region-core PUBLIC include)
@@ -74,6 +75,10 @@ add_test(NAME region-viewer-protocol COMMAND homeworldz-viewer-protocol-tests)
 add_executable(homeworldz-avatar-controller-tests tests/avatar_controller_test.cpp)
 target_link_libraries(homeworldz-avatar-controller-tests PRIVATE homeworldz-region-core)
 add_test(NAME region-avatar-controller COMMAND homeworldz-avatar-controller-tests)
+
+add_executable(homeworldz-terrain-edit-tests tests/terrain_edit_test.cpp)
+target_link_libraries(homeworldz-terrain-edit-tests PRIVATE homeworldz-region-core)
+add_test(NAME region-terrain-edit COMMAND homeworldz-terrain-edit-tests)
 
 add_executable(homeworldz-script-runtime-tests tests/script_runtime_test.cpp)
 target_link_libraries(homeworldz-script-runtime-tests PRIVATE homeworldz-region-core)
