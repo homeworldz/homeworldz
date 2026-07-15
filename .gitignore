@@ -12,3 +12,5 @@ config/*.ini
 *.db-wal
 grid/homeworldz-grid
 grid/homeworldz-grid.exe
+
+.DS_Store
