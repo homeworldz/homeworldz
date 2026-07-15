@@ -629,7 +629,10 @@ their scale and quaternion rotation. A vertical, appearance-height-derived,
 bottom-origin capsule follows HomeWorldz velocity policy while Jolt resolves its
 position and grounded state. Firestorm stepped smoothly onto the 0.25 m
 `Physics1`, remained stable after walking or falling onto it, landed stably on
-terrain, and was blocked by the live-resized 1.5 m `Physics2`. The acceptance
+terrain, and was blocked by the live-resized 1.5 m `Physics2`. Foot alignment on
+top of `Physics1` was described as more precise than prior Second Life,
+Halcyon, or OpenSimulator experience. This contact alignment is therefore a
+regression constraint, not merely a visual detail. The acceptance
 also covered the required fixes for Z-up capsule orientation, Jolt's
 radius-based supporting plane, and clearing requested downward velocity from
 the viewer-visible state while supported; no easing through platforms or
