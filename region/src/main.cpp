@@ -1429,6 +1429,9 @@ int main() {
                                         live->second.physics_character = physics_world->create_character({
                                             live->second.entity_id, live->second.controller.state().position,
                                             0.3, geometry->height, 0.4});
+                                        physics_world->set_character_flying(
+                                            live->second.physics_character,
+                                            live->second.controller.state().flying);
                                     }
                                 }
                                 std::cout << "{\"level\":\"info\",\"message\":\"avatar geometry updated\","

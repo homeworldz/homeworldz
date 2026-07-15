@@ -14,6 +14,10 @@ int main() {
         calculated_geometry->hip_offset >= 0.0)
         return 2;
 
+    homeworldz::viewer::AvatarController airborne{{202.0, 144.0, 27.873474}, 22.0, 1.77149};
+    if (airborne.state().grounded || std::abs(airborne.state().position.z - 27.873474) > 1e-9)
+        return 19;
+
     homeworldz::viewer::AvatarController avatar;
     homeworldz::viewer::AgentUpdate update;
     update.control_flags = homeworldz::viewer::control_forward;

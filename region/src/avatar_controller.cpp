@@ -51,6 +51,10 @@ AvatarController::AvatarController(scene::Vector3 spawn, double ground_height, d
     constexpr double capsule_radius = 0.3;
     state_.position.x = std::clamp(state_.position.x, capsule_radius, region_width_ - capsule_radius);
     state_.position.y = std::clamp(state_.position.y, capsule_radius, region_height_ - capsule_radius);
+    // The default state is grounded for a default-constructed avatar, but a
+    // restored spawn may be airborne. Geometry must not snap that spawn to
+    // terrain before support is evaluated below.
+    state_.grounded = false;
     set_avatar_geometry(avatar_height, hip_offset);
     const auto support_height = ground_height_ + state_.height * 0.5;
     if (state_.position.z <= support_height) state_.position.z = support_height;
