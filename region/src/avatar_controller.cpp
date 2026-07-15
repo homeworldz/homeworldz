@@ -29,8 +29,12 @@ std::optional<AvatarGeometry> avatar_geometry(const AgentSetAppearance& appearan
 }
 
 AvatarController::AvatarController(scene::Vector3 spawn, double ground_height, double avatar_height,
-                                   double hip_offset)
-    : state_{spawn}, ground_height_(ground_height) {
+                                   double hip_offset, double region_width, double region_height)
+    : state_{spawn}, ground_height_(ground_height),
+      region_width_(std::max(region_width, 1.0)), region_height_(std::max(region_height, 1.0)) {
+    constexpr double capsule_radius = 0.3;
+    state_.position.x = std::clamp(state_.position.x, capsule_radius, region_width_ - capsule_radius);
+    state_.position.y = std::clamp(state_.position.y, capsule_radius, region_height_ - capsule_radius);
     set_avatar_geometry(avatar_height, hip_offset);
     const auto support_height = ground_height_ + state_.height * 0.5;
     if (state_.position.z <= support_height) state_.position.z = support_height;
@@ -115,6 +119,15 @@ void AvatarController::step(double seconds) {
     state_.position.x += state_.velocity.x * seconds;
     state_.position.y += state_.velocity.y * seconds;
     state_.position.z += state_.velocity.z * seconds;
+    // Region crossing is not implemented yet. Keep the full horizontal
+    // capsule in this region rather than persisting an invalid local position.
+    constexpr double capsule_radius = 0.3;
+    const auto bounded_x = std::clamp(state_.position.x, capsule_radius, region_width_ - capsule_radius);
+    const auto bounded_y = std::clamp(state_.position.y, capsule_radius, region_height_ - capsule_radius);
+    if (bounded_x != state_.position.x) state_.velocity.x = 0.0;
+    if (bounded_y != state_.position.y) state_.velocity.y = 0.0;
+    state_.position.x = bounded_x;
+    state_.position.y = bounded_y;
     if (!state_.flying && state_.position.z <= support_height) {
         state_.position.z = support_height;
         state_.velocity.z = 0.0;

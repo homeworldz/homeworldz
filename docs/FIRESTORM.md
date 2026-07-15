@@ -563,3 +563,11 @@ protocol's variable field and means the source name must be retained.
 Personal Objects-item copy/paste passed live Firestorm acceptance on
 2026-07-15: copying Prim1 created a distinct inventory item through the Grid,
 and the region returned it through the viewer's registered callback.
+
+The same persistence restart confirmed the copied Prim1, male shape, and brown
+hair, but exposed a pre-crossing boundary error: Jim Tarber returned at local
+`257, 251`, outside a 256 m region. Until region crossings are implemented,
+the movement controller confines the full horizontal avatar capsule to the
+configured region dimensions and clears outward velocity at an edge. Region
+dimensions are controller inputs so future 2x2 and 4x4 regions are not tied to
+a hard-coded 256 m boundary.

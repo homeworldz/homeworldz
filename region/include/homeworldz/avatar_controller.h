@@ -46,7 +46,8 @@ class AvatarController {
 public:
     explicit AvatarController(scene::Vector3 spawn = {128.0, 128.0, 25.0},
                               double ground_height = 25.0, double avatar_height = 1.56,
-                              double hip_offset = 0.0);
+                              double hip_offset = 0.0, double region_width = 256.0,
+                              double region_height = 256.0);
     void apply(const AgentUpdate& update);
     void set_avatar_geometry(double height, double hip_offset);
     void set_ground_height(double height);
@@ -57,6 +58,8 @@ public:
 private:
     AvatarState state_;
     double ground_height_;
+    double region_width_;
+    double region_height_;
     double flight_lift_velocity_{};
     std::uint32_t controls_{};
     std::array<float, 3> body_rotation_{};

@@ -60,5 +60,18 @@ int main() {
     if (!launch_avatar.state().flying || launch_avatar.state().grounded ||
         launch_rise < 0.49 || launch_rise > 0.53 || std::abs(launch_avatar.state().velocity.z) > 0.01)
         return 8;
+
+    homeworldz::viewer::AvatarController edge_avatar{{257.0, -1.0, 25.0}, 25.0, 1.56, 0.0,
+                                                       256.0, 256.0};
+    if (std::abs(edge_avatar.state().position.x - 255.7) > 1e-9 ||
+        std::abs(edge_avatar.state().position.y - 0.3) > 1e-9)
+        return 9;
+    update.control_flags = homeworldz::viewer::control_forward;
+    update.body_rotation = {0.F, 0.F, 0.F};
+    edge_avatar.apply(update);
+    edge_avatar.step(0.25);
+    if (std::abs(edge_avatar.state().position.x - 255.7) > 1e-9 ||
+        edge_avatar.state().velocity.x != 0.0)
+        return 10;
     return 0;
 }
