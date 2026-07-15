@@ -97,11 +97,16 @@ void AvatarController::set_ground_height(double height) {
     if (std::isfinite(height)) ground_height_ = height;
 }
 
-void AvatarController::synchronize_physics(scene::Vector3 position, scene::Vector3 velocity) {
+void AvatarController::synchronize_physics(
+    scene::Vector3 position, scene::Vector3 velocity, bool grounded) {
+    const auto was_grounded = state_.grounded;
     if (std::isfinite(position.x) && std::isfinite(position.y) && std::isfinite(position.z))
         state_.position = position;
     if (std::isfinite(velocity.x) && std::isfinite(velocity.y) && std::isfinite(velocity.z))
         state_.velocity = velocity;
+    state_.grounded = grounded;
+    physics_grounding_ = true;
+    if (!was_grounded && grounded) landing_animation_remaining_ = 0.4;
 }
 
 scene::Vector3 AvatarController::viewer_position() const {
@@ -130,7 +135,7 @@ void AvatarController::step(double seconds) {
     seconds = std::clamp(seconds, 0.0, 0.25);
     landing_animation_remaining_ = std::max(0.0, landing_animation_remaining_ - seconds);
     const auto support_height = ground_height_ + state_.height * 0.5;
-    if (!state_.flying && state_.grounded) {
+    if (!physics_grounding_ && !state_.flying && state_.grounded) {
         if (state_.position.z > support_height + 0.25)
             state_.grounded = false;
         else
@@ -175,7 +180,7 @@ void AvatarController::step(double seconds) {
     if (bounded_y != state_.position.y) state_.velocity.y = 0.0;
     state_.position.x = bounded_x;
     state_.position.y = bounded_y;
-    if (!state_.flying && state_.position.z <= support_height) {
+    if (!physics_grounding_ && !state_.flying && state_.position.z <= support_height) {
         if (!state_.grounded) landing_animation_remaining_ = 0.4;
         state_.position.z = support_height;
         state_.velocity.z = 0.0;

@@ -42,6 +42,7 @@ struct BodyState {
     scene::Vector3 linear_velocity;
     scene::Vector3 angular_velocity;
     bool sleeping{};
+    bool grounded{};
 };
 
 struct CharacterDefinition {

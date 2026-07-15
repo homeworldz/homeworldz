@@ -68,7 +68,7 @@ public:
     void expire_transient_controls();
     void set_avatar_geometry(double height, double hip_offset);
     void set_ground_height(double height);
-    void synchronize_physics(scene::Vector3 position, scene::Vector3 velocity);
+    void synchronize_physics(scene::Vector3 position, scene::Vector3 velocity, bool grounded);
     void step(double seconds);
     const AvatarState& state() const { return state_; }
     scene::Vector3 viewer_position() const;
@@ -83,6 +83,7 @@ private:
     std::uint32_t controls_{};
     std::array<float, 3> body_rotation_{};
     double landing_animation_remaining_{};
+    bool physics_grounding_{};
 };
 
 } // namespace homeworldz::viewer

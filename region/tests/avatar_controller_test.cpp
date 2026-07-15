@@ -92,9 +92,10 @@ int main() {
     if (std::abs(edge_avatar.state().position.x - 255.7) > 1e-9 ||
         edge_avatar.state().velocity.x != 0.0)
         return 10;
-    edge_avatar.synchronize_physics({12, 13, 30}, {1, 2, 3});
+    edge_avatar.synchronize_physics({12, 13, 30}, {1, 2, 3}, false);
     if (edge_avatar.state().position.x != 12 || edge_avatar.state().position.y != 13 ||
-        edge_avatar.state().position.z != 30 || edge_avatar.state().velocity.z != 3)
+        edge_avatar.state().position.z != 30 || edge_avatar.state().velocity.z != 3 ||
+        edge_avatar.state().grounded)
         return 17;
     return 0;
 }

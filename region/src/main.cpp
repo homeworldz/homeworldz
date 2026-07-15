@@ -2615,7 +2615,8 @@ int main() {
         for (auto& [endpoint, avatar] : avatars) {
             if (physics_world && avatar.physics_character != 0)
                 if (const auto state = physics_world->character_state(avatar.physics_character))
-                    avatar.controller.synchronize_physics(state->position, state->linear_velocity);
+                    avatar.controller.synchronize_physics(
+                        state->position, state->linear_velocity, state->grounded);
             if (avatar.has_agent_update &&
                 now - avatar.last_agent_update > std::chrono::seconds(1))
                 avatar.controller.expire_transient_controls();

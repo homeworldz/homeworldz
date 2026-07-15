@@ -225,7 +225,8 @@ public:
         const auto found = characters_.find(id);
         if (found == characters_.end()) return std::nullopt;
         return BodyState{id, found->second.entity, vec(found->second.character->GetPosition()),
-                         vec(found->second.character->GetLinearVelocity()), {}, false};
+                         vec(found->second.character->GetLinearVelocity()), {}, false,
+                         found->second.character->IsSupported()};
     }
     void set_character_state(CharacterId id, const BodyState& state) override {
         const auto found = characters_.find(id);

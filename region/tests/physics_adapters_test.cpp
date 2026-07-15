@@ -116,12 +116,32 @@ bool jolt_character_collision_test() {
     const auto state = world->character_state(character);
     return state && state->position.x > 0.1 && state->position.x < 0.65;
 }
+
+bool jolt_character_step_test() {
+    auto world = homeworldz::physics::make_jolt_world();
+    homeworldz::physics::BodyDefinition floor;
+    floor.entity_id = 1;
+    floor.shape.half_extents = {4, 4, 0.5};
+    floor.position = {0, 0, -0.5};
+    world->create_body(floor);
+    homeworldz::physics::BodyDefinition step;
+    step.entity_id = 2;
+    step.shape.half_extents = {1, 1, 0.125};
+    step.position = {1.5, 0, 0.125};
+    world->create_body(step);
+    const auto character = world->create_character({3, {0, 0, 0.9}, 0.3, 1.8, 0.4});
+    world->set_character_velocity(character, {2, 0, 0});
+    for (int tick = 0; tick < 45; ++tick) world->step(1.0 / 60.0);
+    const auto state = world->character_state(character);
+    return state && state->position.x > 1.0 && state->position.z > 1.05 && state->grounded;
+}
 }
 
 int main() {
     if (!jolt_heightfield_test()) return 1;
     if (!static_scene_mirror_test()) return 1;
     if (!jolt_character_collision_test()) return 1;
+    if (!jolt_character_step_test()) return 1;
     if (!smoke_test(homeworldz::physics::make_jolt_world())) return 1;
     if (!smoke_test(homeworldz::physics::make_physx_world())) return 1;
     return 0;
