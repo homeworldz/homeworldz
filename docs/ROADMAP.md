@@ -60,7 +60,7 @@ acceptance tests pass.
   and collision-safe motion.
 - [x] Collide avatars with static scene objects while preserving practical
   viewer movement behavior.
-- [ ] Collide avatars with dynamic scene objects while preserving
+- [x] Collide avatars with dynamic scene objects while preserving
   practical viewer movement behavior.
 - [x] Persist and restore position, orientation, velocity, and flight state;
   safely recompute grounded contact from Jolt on entry.

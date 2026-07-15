@@ -237,6 +237,10 @@ in the ordinary contact solver instead of being automatically climbed, allowing
 mass-relative force transfer before the avatar can pass it. This mirrors the
 practical Halcyon distinction between traversable steps and blocking or
 movable physical objects without placing object-specific logic in the region.
+Live Firestorm acceptance on 2026-07-15 confirmed that a 0.5 m physical cube
+can be pushed roughly a metre by sustained avatar contact without being
+launched or destabilized, while a 1 x 1 x 1 m physical cube remains effectively
+stationary and causes the avatar to bounce off or walk around it.
 
 ### Required Scenarios
 

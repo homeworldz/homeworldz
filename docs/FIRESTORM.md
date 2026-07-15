@@ -663,6 +663,15 @@ grid, and region restart retained the settled transform and enabled Physical
 state while both collision boxes remained fixed. The reusable pre-test scene
 is retained locally as `var/regression-states/dynamic-prim-collision-start.json`.
 
+Avatar contact with physical prims passed initial live Firestorm acceptance on
+2026-07-15. After the character-controller maximum horizontal contact force was
+derived from avatar mass and a configured maximum push acceleration, `Dynamic3`,
+a 0.5 m physical cube, slid about one metre under a sustained avatar push
+without being launched. `Dynamic4`, a 1 x 1 x 1 m physical cube, stayed
+effectively stationary; the avatar bounced off it or walked around it at
+angles. Low static objects still behaved as steps, while dynamic objects used
+ordinary Jolt contact resolution.
+
 This test also identified and removed the historical synthetic welcome prim.
 That object had been injected directly into the login packet stream with a
 placeholder UUID, no valid owner, no authoritative scene record, and no
