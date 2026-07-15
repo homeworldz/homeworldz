@@ -22,6 +22,8 @@ struct ObjectAsset {
     double physics_restitution{0.5};
     double physics_gravity_multiplier{1.0};
     std::vector<std::byte> texture_entry;
+    std::uint8_t path_curve{0x10};
+    std::uint8_t profile_curve{0x01};
 };
 
 std::optional<ObjectAsset> parse_object_asset(std::span<const std::byte> content);

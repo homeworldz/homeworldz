@@ -93,6 +93,10 @@ std::optional<ObjectAsset> parse_object_asset(std::span<const std::byte> content
     auto physics_restitution = number_after(text, R"("physicsRestitution":)", position);
     position = 0;
     auto physics_gravity_multiplier = number_after(text, R"("physicsGravityMultiplier":)", position);
+    position = 0;
+    auto path_curve = number_after(text, R"("pathCurve":)", position);
+    position = 0;
+    auto profile_curve = number_after(text, R"("profileCurve":)", position);
     const auto texture_entry_hex = string_after(text, R"("textureEntry":")");
     if (!scale || !rotation || !description || !material ||
         scale->x <= 0.0 || scale->y <= 0.0 || scale->z <= 0.0 ||
@@ -104,19 +108,25 @@ std::optional<ObjectAsset> parse_object_asset(std::span<const std::byte> content
     if (!physics_friction) physics_friction = 0.6;
     if (!physics_restitution) physics_restitution = 0.5;
     if (!physics_gravity_multiplier) physics_gravity_multiplier = 1.0;
+    if (!path_curve) path_curve = 0x10;
+    if (!profile_curve) profile_curve = 0x01;
     if (*physics_shape_type < 0.0 || *physics_shape_type > 2.0 ||
         std::floor(*physics_shape_type) != *physics_shape_type ||
         *physics_density < 1.0 || *physics_density > 22587.0 ||
         *physics_friction < 0.0 || *physics_friction > 255.0 ||
         *physics_restitution < 0.0 || *physics_restitution > 1.0 ||
-        *physics_gravity_multiplier < -1.0 || *physics_gravity_multiplier > 28.0)
+        *physics_gravity_multiplier < -1.0 || *physics_gravity_multiplier > 28.0 ||
+        *path_curve < 0.0 || *path_curve > 255.0 || std::floor(*path_curve) != *path_curve ||
+        *profile_curve < 0.0 || *profile_curve > 255.0 ||
+        std::floor(*profile_curve) != *profile_curve)
         return std::nullopt;
     auto texture_entry = texture_entry_hex
         ? bytes_from_hex(*texture_entry_hex) : std::optional<std::vector<std::byte>>{{}};
     if (!texture_entry) return std::nullopt;
     return ObjectAsset{*scale, *rotation, static_cast<std::uint8_t>(*material), *description,
         static_cast<std::uint8_t>(*physics_shape_type), *physics_density, *physics_friction,
-        *physics_restitution, *physics_gravity_multiplier, std::move(*texture_entry)};
+        *physics_restitution, *physics_gravity_multiplier, std::move(*texture_entry),
+        static_cast<std::uint8_t>(*path_curve), static_cast<std::uint8_t>(*profile_curve)};
 }
 
 } // namespace homeworldz::asset

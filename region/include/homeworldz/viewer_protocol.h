@@ -414,6 +414,8 @@ struct StaticObject {
     std::array<float, 3> rotation{};
     std::array<float, 3> scale{2.0F, 2.0F, 2.0F};
     std::vector<std::byte> texture_entry;
+    std::uint8_t path_curve{0x10};
+    std::uint8_t profile_curve{0x01};
 };
 
 // Builds the canonical TextureEntry defaults for a newly created primitive:

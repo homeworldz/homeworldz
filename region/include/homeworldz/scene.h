@@ -60,6 +60,8 @@ struct Entity {
     double physics_friction{0.6};
     double physics_restitution{0.5};
     double physics_gravity_multiplier{1.0};
+    std::uint8_t path_curve{0x10};
+    std::uint8_t profile_curve{0x01};
 };
 
 struct RayIntersection {

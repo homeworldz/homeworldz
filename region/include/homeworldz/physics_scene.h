@@ -17,6 +17,7 @@ struct MaterialProperties {
 // Second Life-compatible defaults for PRIM_MATERIAL_* values 0x00-0x07.
 MaterialProperties material_properties(std::uint8_t material);
 double box_mass(scene::Vector3 scale, double density);
+double ellipsoid_mass(scene::Vector3 scale, double density);
 
 class StaticSceneMirror {
 public:

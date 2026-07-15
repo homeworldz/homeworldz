@@ -374,6 +374,19 @@ private:
         expect_string("textureEntry");
         expect(":");
         result.texture_entry = bytes_from_hex(string());
+        if (consume("}")) return result;
+        expect(",");
+        expect_string("pathCurve");
+        expect(":");
+        const auto path_curve = unsigned_integer();
+        if (path_curve > 255) fail("path curve is outside the supported range");
+        result.path_curve = static_cast<std::uint8_t>(path_curve);
+        expect(",");
+        expect_string("profileCurve");
+        expect(":");
+        const auto profile_curve = unsigned_integer();
+        if (profile_curve > 255) fail("profile curve is outside the supported range");
+        result.profile_curve = static_cast<std::uint8_t>(profile_curve);
         expect("}");
         return result;
     }
@@ -426,7 +439,9 @@ std::string snapshot_json(const scene::Scene& scene) {
                 ",\"physicsRestitution\":" + std::to_string(entity->physics_restitution) +
                 ",\"physicsGravityMultiplier\":" +
                     std::to_string(entity->physics_gravity_multiplier) +
-                ",\"textureEntry\":" + api::json_string(bytes_to_hex(entity->texture_entry)) + '}';
+                ",\"textureEntry\":" + api::json_string(bytes_to_hex(entity->texture_entry)) +
+                ",\"pathCurve\":" + std::to_string(entity->path_curve) +
+                ",\"profileCurve\":" + std::to_string(entity->profile_curve) + '}';
     }
     return json + "]}";
 }

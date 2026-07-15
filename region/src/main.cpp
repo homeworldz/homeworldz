@@ -440,6 +440,8 @@ std::optional<homeworldz::viewer::StaticObject> static_object_from_entity(
     object.scale = {static_cast<float>(entity.scale.x), static_cast<float>(entity.scale.y),
                     static_cast<float>(entity.scale.z)};
     object.texture_entry = entity.texture_entry;
+    object.path_curve = entity.path_curve;
+    object.profile_curve = entity.profile_curve;
     return object;
 }
 
@@ -466,6 +468,8 @@ std::string object_asset_json(const homeworldz::scene::Entity& entity) {
         ",\"physicsRestitution\":" + std::to_string(entity.physics_restitution) +
         ",\"physicsGravityMultiplier\":" + std::to_string(entity.physics_gravity_multiplier) +
         ",\"textureEntry\":" + homeworldz::api::json_string(texture_entry) +
+        ",\"pathCurve\":" + std::to_string(entity.path_curve) +
+        ",\"profileCurve\":" + std::to_string(entity.profile_curve) +
         ",\"basePermissions\":" + std::to_string(entity.base_permissions) +
         ",\"ownerPermissions\":" + std::to_string(entity.owner_permissions) +
         ",\"groupPermissions\":" + std::to_string(entity.group_permissions) +
@@ -2605,7 +2609,11 @@ int main() {
                                                        object_add->rotation[2] * object_add->rotation[2];
                             const bool valid_rotation = rotation_norm <= 1.001F;
                             const bool supported_box = object_add->pcode == 9 &&
-                                object_add->path_curve == 16 && (object_add->profile_curve & 0x0f) == 1;
+                                object_add->path_curve == 0x10 &&
+                                (object_add->profile_curve & 0x0f) == 0x01;
+                            const bool supported_sphere = object_add->pcode == 9 &&
+                                object_add->path_curve == 0x20 &&
+                                (object_add->profile_curve & 0x0f) == 0x05;
                             std::optional<homeworldz::scene::Vector3> placement;
                             if (valid_scale && object_add->bypass_raycast) {
                                 const homeworldz::scene::Vector3 ray_end{
@@ -2642,7 +2650,8 @@ int main() {
                             bool created = false;
                             std::string object_id;
                             homeworldz::scene::EntityId entity_id{};
-                            if (supported_box && valid_position && valid_rotation && object_add->material <= 7) {
+                            if ((supported_box || supported_sphere) && valid_position && valid_rotation &&
+                                object_add->material <= 7) {
                                 object_id = homeworldz::viewer::random_uuid();
                                 const auto owner_id = homeworldz::viewer::format_uuid(identity->agent_id);
                                 entity_id = scene.create("Primitive", *placement);
@@ -2655,6 +2664,8 @@ int main() {
                                                         object_add->rotation[2]};
                                     entity->material = object_add->material;
                                     entity->physical = (object_add->add_flags & add_use_physics) != 0;
+                                    entity->path_curve = object_add->path_curve;
+                                    entity->profile_curve = object_add->profile_curve;
                                     entity->texture_entry = default_prim_texture_entry();
                                     apply_material_contact_defaults(*entity);
                                     entity->creation_date = static_cast<std::uint64_t>(
@@ -2872,6 +2883,8 @@ int main() {
                                             entity->physics_gravity_multiplier =
                                                 asset->physics_gravity_multiplier;
                                             entity->texture_entry = asset->texture_entry;
+                                            entity->path_curve = asset->path_curve;
+                                            entity->profile_curve = asset->profile_curve;
                                             entity->description = item->description.empty()
                                                 ? asset->description : item->description;
                                             entity->base_permissions = item->base_permissions;

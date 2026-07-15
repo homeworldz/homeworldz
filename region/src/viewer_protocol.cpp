@@ -1734,8 +1734,8 @@ std::vector<std::byte> encode_static_object_update(std::uint64_t region_handle, 
     if (!append_binary(output, transform, 1)) return {};
     append_le_u32(output, 0); // parent
     append_le_u32(output, object.update_flags);
-    output.push_back(std::byte{16}); // straight path
-    output.push_back(std::byte{1}); // square profile
+    output.push_back(static_cast<std::byte>(object.path_curve));
+    output.push_back(static_cast<std::byte>(object.profile_curve));
     append_le_u16(output, 0); append_le_u16(output, 0); // path begin/end
     output.push_back(std::byte{100}); output.push_back(std::byte{100}); // path scale
     for (int index = 0; index < 7; ++index) output.push_back(std::byte{}); // shear through taper

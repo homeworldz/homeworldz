@@ -33,22 +33,34 @@ double box_mass(scene::Vector3 scale, double density) {
     return std::clamp(volume * density, minimum_mass, maximum_mass);
 }
 
+double ellipsoid_mass(scene::Vector3 scale, double density) {
+    constexpr double minimum_mass = 0.001;
+    constexpr double maximum_mass = 100000.0;
+    constexpr double pi_over_six = 0.52359877559829887308;
+    const auto volume = pi_over_six * std::max(0.0, scale.x) *
+                        std::max(0.0, scale.y) * std::max(0.0, scale.z);
+    return std::clamp(volume * density, minimum_mass, maximum_mass);
+}
+
 bool StaticSceneMirror::synchronize(const scene::Entity& entity) {
     if (entity.object_id.empty() || entity.phantom || entity.physics_shape_type == 0x01)
         return remove(entity.id);
     BodyDefinition definition;
     definition.entity_id = entity.id;
     definition.motion = entity.physical ? MotionType::Dynamic : MotionType::Static;
-    definition.shape.type = ShapeType::Box;
+    const bool sphere = entity.path_curve == 0x20 && (entity.profile_curve & 0x0f) == 0x05;
+    definition.shape.type = sphere ? ShapeType::Sphere : ShapeType::Box;
     definition.shape.half_extents = {
         entity.scale.x * 0.5, entity.scale.y * 0.5, entity.scale.z * 0.5};
+    if (sphere)
+        definition.shape.radius = std::min({entity.scale.x, entity.scale.y, entity.scale.z}) * 0.5;
     definition.position = entity.position;
     definition.velocity = entity.velocity;
     const auto properties = material_properties(entity.material);
     const auto density = std::isfinite(entity.physics_density)
         ? std::clamp(entity.physics_density, 1.0, 22587.0)
         : properties.density;
-    definition.mass = box_mass(entity.scale, density);
+    definition.mass = sphere ? ellipsoid_mass(entity.scale, density) : box_mass(entity.scale, density);
     definition.friction = std::isfinite(entity.physics_friction)
         ? std::clamp(entity.physics_friction, 0.0, 255.0)
         : properties.friction;
