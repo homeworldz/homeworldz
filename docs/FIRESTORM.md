@@ -309,7 +309,13 @@ inventory item's original creator is preserved while the new asset records its
 actual uploader. Firestorm performs that relink through an AISv3 item `PATCH`:
 it replaces `asset_id` with the upload transaction in `hash_id`, which the
 Grid resolves with the same secure-session combination before accepting the
-new asset. Viewer acceptance of wearable edit persistence remains pending.
+new asset. Viewer acceptance passed on 2026-07-15: changing the worn shape to
+male survived leaving appearance editing, the uploaded body-part asset was
+linked by a successful AIS patch, and all six full-resolution bakes completed.
+Hair temporarily changed from brown to pale during editing and dark immediately
+afterward, then settled back to brown after a later six-bake refresh. This was
+observed as transient composite-bake rendering; the hair wearable itself was
+not edited or replaced.
 
 The read-only system Library acceptance passed on 2026-07-14. Firestorm showed
 the shared `Library / Clothing / Initial Outfits / Default Avatar` hierarchy
