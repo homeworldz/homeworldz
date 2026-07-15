@@ -219,6 +219,14 @@ This distinction is also the basis for vehicles: scripted forces, impulses,
 motors, and constraints act on physics-engine mass and inertia rather than a
 parallel approximation in region or script code.
 
+Jolt's current virtual-character controller separates character mass from a
+maximum horizontal push force: mass contributes downward force when standing
+on an object, but it does not provide full rigid-body momentum in horizontal
+contacts. HomeWorldz does not add synthetic region-side push impulses. Before
+enabling avatar-driven object motion, compare a rigid-body character approach
+against the accepted virtual-character walking, stepping, flight, and terrain
+behavior, and expose any intentional avatar-push policy as a region option.
+
 ### Required Scenarios
 
 - Avatar walking on flat terrain, slopes, ramps, stairs, and mesh surfaces.
