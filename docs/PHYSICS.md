@@ -217,9 +217,10 @@ Extra Physics and `llSetPhysicsMaterial`, whose SL-compatible range is
 The viewer-facing Extra Physics block is persisted with each scene object:
 physics shape type, density, friction, restitution, and gravity multiplier.
 Density, friction, and restitution are applied when creating the physics body;
-gravity multiplier is stored as authoritative scene state for the plugin
-boundary and later scripted use. `PhysicsShapeType.None` removes the object's
-collision body while leaving the scene object itself present.
+the production Jolt adapter also applies gravity multiplier through Jolt's
+per-body gravity factor. PhysX parity for per-body gravity scaling remains
+pending. `PhysicsShapeType.None` removes the object's collision body while
+leaving the scene object itself present.
 
 This distinction is also the basis for vehicles: scripted forces, impulses,
 motors, and constraints act on physics-engine mass and inertia rather than a

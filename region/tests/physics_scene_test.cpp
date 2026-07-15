@@ -78,11 +78,13 @@ int main() {
     entity.physics_density = 125.0;
     entity.physics_friction = 0.7;
     entity.physics_restitution = 0.25;
+    entity.physics_gravity_multiplier = 1.5;
     if (!mirror.synchronize(entity) || mirror.size() != 1 ||
         world.last_definition.motion != physics::MotionType::Dynamic ||
         !close(world.last_definition.mass, 3000.0) ||
         !close(world.last_definition.friction, 0.7) ||
-        !close(world.last_definition.restitution, 0.25))
+        !close(world.last_definition.restitution, 0.25) ||
+        !close(world.last_definition.gravity_multiplier, 1.5))
         return 3;
 
     const auto original_body = mirror.body_id(entity.id);

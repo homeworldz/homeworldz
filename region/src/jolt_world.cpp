@@ -137,6 +137,7 @@ public:
             definition.motion == MotionType::Static ? Layers::static_body : Layers::moving_body);
         settings.mFriction = static_cast<float>(definition.friction);
         settings.mRestitution = static_cast<float>(definition.restitution);
+        settings.mGravityFactor = static_cast<float>(definition.gravity_multiplier);
         if (definition.motion == MotionType::Dynamic && definition.mass > 0) {
             settings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
             settings.mMassPropertiesOverride.mMass = static_cast<float>(definition.mass);
