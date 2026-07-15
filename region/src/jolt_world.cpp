@@ -239,9 +239,11 @@ public:
         if (found == characters_.end()) return std::nullopt;
         auto position = vec(found->second.character->GetPosition());
         position.z += found->second.height * 0.5;
+        auto velocity = vec(found->second.character->GetLinearVelocity());
+        const auto grounded = found->second.character->IsSupported();
+        if (grounded && velocity.z < 0.0) velocity.z = 0.0;
         return BodyState{id, found->second.entity, position,
-                         vec(found->second.character->GetLinearVelocity()), {}, false,
-                         found->second.character->IsSupported()};
+                         velocity, {}, false, grounded};
     }
     void set_character_state(CharacterId id, const BodyState& state) override {
         const auto found = characters_.find(id);
