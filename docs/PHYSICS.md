@@ -214,6 +214,12 @@ deprecated light material therefore do not have different default weights.
 Distinct object weights belong to the explicit physics-density property used by
 Extra Physics and `llSetPhysicsMaterial`, whose SL-compatible range is
 1-22587 kg/m3. Adapter-level mass limits protect solver stability.
+The viewer-facing Extra Physics block is persisted with each scene object:
+physics shape type, density, friction, restitution, and gravity multiplier.
+Density, friction, and restitution are applied when creating the physics body;
+gravity multiplier is stored as authoritative scene state for the plugin
+boundary and later scripted use. `PhysicsShapeType.None` removes the object's
+collision body while leaving the scene object itself present.
 
 This distinction is also the basis for vehicles: scripted forces, impulses,
 motors, and constraints act on physics-engine mass and inertia rather than a

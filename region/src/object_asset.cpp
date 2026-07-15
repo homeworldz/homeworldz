@@ -69,12 +69,36 @@ std::optional<ObjectAsset> parse_object_asset(std::span<const std::byte> content
     const auto description = string_after(text, R"("description":")");
     std::size_t position = 0;
     const auto material = number_after(text, R"("material":)", position);
+    position = 0;
+    auto physics_shape_type = number_after(text, R"("physicsShapeType":)", position);
+    position = 0;
+    auto physics_density = number_after(text, R"("physicsDensity":)", position);
+    position = 0;
+    auto physics_friction = number_after(text, R"("physicsFriction":)", position);
+    position = 0;
+    auto physics_restitution = number_after(text, R"("physicsRestitution":)", position);
+    position = 0;
+    auto physics_gravity_multiplier = number_after(text, R"("physicsGravityMultiplier":)", position);
     if (!scale || !rotation || !description || !material ||
         scale->x <= 0.0 || scale->y <= 0.0 || scale->z <= 0.0 ||
         scale->x > 64.0 || scale->y > 64.0 || scale->z > 64.0 ||
         *material < 0.0 || *material > 7.0 || std::floor(*material) != *material)
         return std::nullopt;
-    return ObjectAsset{*scale, *rotation, static_cast<std::uint8_t>(*material), *description};
+    if (!physics_shape_type) physics_shape_type = 0.0;
+    if (!physics_density) physics_density = 1000.0;
+    if (!physics_friction) physics_friction = 0.6;
+    if (!physics_restitution) physics_restitution = 0.5;
+    if (!physics_gravity_multiplier) physics_gravity_multiplier = 1.0;
+    if (*physics_shape_type < 0.0 || *physics_shape_type > 2.0 ||
+        std::floor(*physics_shape_type) != *physics_shape_type ||
+        *physics_density < 1.0 || *physics_density > 22587.0 ||
+        *physics_friction < 0.0 || *physics_friction > 255.0 ||
+        *physics_restitution < 0.0 || *physics_restitution > 1.0 ||
+        *physics_gravity_multiplier < -1.0 || *physics_gravity_multiplier > 28.0)
+        return std::nullopt;
+    return ObjectAsset{*scale, *rotation, static_cast<std::uint8_t>(*material), *description,
+        static_cast<std::uint8_t>(*physics_shape_type), *physics_density, *physics_friction,
+        *physics_restitution, *physics_gravity_multiplier};
 }
 
 } // namespace homeworldz::asset

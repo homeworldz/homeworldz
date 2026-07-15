@@ -32,6 +32,7 @@ struct BodyDefinition {
     double mass{1.0};
     double friction{0.5};
     double restitution{};
+    double gravity_multiplier{1.0};
     std::array<double, 4> rotation{0.0, 0.0, 0.0, 1.0};
 };
 

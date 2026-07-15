@@ -374,6 +374,22 @@ std::string simulator_endpoint(std::string_view public_endpoint, int viewer_port
     return std::string(authority) + ':' + std::to_string(viewer_port);
 }
 
+void apply_material_contact_defaults(homeworldz::scene::Entity& entity) {
+    const auto material = homeworldz::physics::material_properties(entity.material);
+    entity.physics_friction = material.friction;
+    entity.physics_restitution = material.restitution;
+}
+
+void apply_extra_physics(
+    homeworldz::scene::Entity& entity, const homeworldz::viewer::ObjectFlagUpdate& update) {
+    entity.physics_shape_type = std::min<std::uint8_t>(update.physics_shape_type, 0x02);
+    entity.physics_density = std::clamp(static_cast<double>(update.density), 1.0, 22587.0);
+    entity.physics_friction = std::clamp(static_cast<double>(update.friction), 0.0, 255.0);
+    entity.physics_restitution = std::clamp(static_cast<double>(update.restitution), 0.0, 1.0);
+    entity.physics_gravity_multiplier =
+        std::clamp(static_cast<double>(update.gravity_multiplier), -1.0, 28.0);
+}
+
 std::optional<homeworldz::viewer::StaticObject> static_object_from_entity(
     const homeworldz::scene::Entity& entity, std::string_view recipient_id) {
     constexpr std::uint32_t object_modify = 0x00000004;
@@ -424,6 +440,11 @@ std::string object_asset_json(const homeworldz::scene::Entity& entity) {
         std::to_string(entity.rotation.z) + "],\"description\":" +
         homeworldz::api::json_string(entity.description) +
         ",\"material\":" + std::to_string(entity.material) +
+        ",\"physicsShapeType\":" + std::to_string(entity.physics_shape_type) +
+        ",\"physicsDensity\":" + std::to_string(entity.physics_density) +
+        ",\"physicsFriction\":" + std::to_string(entity.physics_friction) +
+        ",\"physicsRestitution\":" + std::to_string(entity.physics_restitution) +
+        ",\"physicsGravityMultiplier\":" + std::to_string(entity.physics_gravity_multiplier) +
         ",\"basePermissions\":" + std::to_string(entity.base_permissions) +
         ",\"ownerPermissions\":" + std::to_string(entity.owner_permissions) +
         ",\"groupPermissions\":" + std::to_string(entity.group_permissions) +
@@ -2237,7 +2258,12 @@ int main() {
                         if (object_material && object_material->agent_id == identity->agent_id &&
                             object_material->session_id == identity->session_id) {
                             constexpr std::uint8_t last_supported_material = 0x07;
-                            std::unordered_map<homeworldz::scene::EntityId, std::uint8_t> originals;
+                            struct OriginalMaterial {
+                                std::uint8_t material{};
+                                double friction{};
+                                double restitution{};
+                            };
+                            std::unordered_map<homeworldz::scene::EntityId, OriginalMaterial> originals;
                             std::unordered_set<homeworldz::scene::EntityId> requested_entities;
                             const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
                             for (const auto& update : object_material->objects) {
@@ -2249,8 +2275,11 @@ int main() {
                                     (entity->owner_permissions & homeworldz::scene::permission_modify) == 0 ||
                                     entity->material == update.material)
                                     continue;
-                                originals.try_emplace(entity->id, entity->material);
+                                originals.try_emplace(entity->id, OriginalMaterial{
+                                    entity->material, entity->physics_friction,
+                                    entity->physics_restitution});
                                 entity->material = update.material;
+                                apply_material_contact_defaults(*entity);
                             }
                             bool persisted = false;
                             if (!originals.empty()) {
@@ -2259,7 +2288,11 @@ int main() {
                                     persisted = true;
                                 } catch (const std::exception& error) {
                                     for (const auto& [entity_id, original] : originals) {
-                                        if (auto* entity = scene.find(entity_id)) entity->material = original;
+                                        if (auto* entity = scene.find(entity_id)) {
+                                            entity->material = original.material;
+                                            entity->physics_friction = original.friction;
+                                            entity->physics_restitution = original.restitution;
+                                        }
                                     }
                                     std::cout << "{\"level\":\"error\",\"message\":\"primitive material persistence failed\",\"error\":"
                                               << homeworldz::api::json_string(error.what()) << "}" << std::endl;
@@ -2301,8 +2334,16 @@ int main() {
                                 (entity->owner_permissions & homeworldz::scene::permission_modify) != 0) {
                                 const auto original_physical = entity->physical;
                                 const auto original_phantom = entity->phantom;
+                                const auto original_physics_shape_type = entity->physics_shape_type;
+                                const auto original_physics_density = entity->physics_density;
+                                const auto original_physics_friction = entity->physics_friction;
+                                const auto original_physics_restitution = entity->physics_restitution;
+                                const auto original_physics_gravity_multiplier =
+                                    entity->physics_gravity_multiplier;
                                 entity->physical = object_flags->use_physics;
                                 entity->phantom = object_flags->phantom;
+                                if (object_flags->has_extra_physics)
+                                    apply_extra_physics(*entity, *object_flags);
                                 bool persisted = false;
                                 try {
                                     storage->save_snapshot(scene);
@@ -2310,6 +2351,12 @@ int main() {
                                 } catch (const std::exception& error) {
                                     entity->physical = original_physical;
                                     entity->phantom = original_phantom;
+                                    entity->physics_shape_type = original_physics_shape_type;
+                                    entity->physics_density = original_physics_density;
+                                    entity->physics_friction = original_physics_friction;
+                                    entity->physics_restitution = original_physics_restitution;
+                                    entity->physics_gravity_multiplier =
+                                        original_physics_gravity_multiplier;
                                     std::cout << "{\"level\":\"error\",\"message\":\"primitive flags persistence failed\",\"error\":"
                                               << homeworldz::api::json_string(error.what()) << "}" << std::endl;
                                 }
@@ -2331,7 +2378,15 @@ int main() {
                                               << entity->id << ",\"physical\":"
                                               << (entity->physical ? "true" : "false")
                                               << ",\"phantom\":"
-                                              << (entity->phantom ? "true" : "false") << "}" << std::endl;
+                                              << (entity->phantom ? "true" : "false")
+                                              << ",\"physicsShapeType\":"
+                                              << static_cast<unsigned>(entity->physics_shape_type)
+                                              << ",\"physicsDensity\":" << entity->physics_density
+                                              << ",\"physicsFriction\":" << entity->physics_friction
+                                              << ",\"physicsRestitution\":"
+                                              << entity->physics_restitution
+                                              << ",\"physicsGravityMultiplier\":"
+                                              << entity->physics_gravity_multiplier << "}" << std::endl;
                                 }
                             }
                         }
@@ -2389,6 +2444,7 @@ int main() {
                                     entity->creator_id = owner_id;
                                     entity->scale = {object_add->scale[0], object_add->scale[1], object_add->scale[2]};
                                     entity->material = object_add->material;
+                                    apply_material_contact_defaults(*entity);
                                     entity->creation_date = static_cast<std::uint64_t>(
                                         std::chrono::duration_cast<std::chrono::seconds>(
                                             std::chrono::system_clock::now().time_since_epoch()).count());
@@ -2594,6 +2650,12 @@ int main() {
                                             entity->scale = asset->scale;
                                             entity->rotation = asset->rotation;
                                             entity->material = asset->material;
+                                            entity->physics_shape_type = asset->physics_shape_type;
+                                            entity->physics_density = asset->physics_density;
+                                            entity->physics_friction = asset->physics_friction;
+                                            entity->physics_restitution = asset->physics_restitution;
+                                            entity->physics_gravity_multiplier =
+                                                asset->physics_gravity_multiplier;
                                             entity->description = item->description.empty()
                                                 ? asset->description : item->description;
                                             entity->base_permissions = item->base_permissions;

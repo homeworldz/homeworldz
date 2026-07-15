@@ -1031,6 +1031,18 @@ std::optional<ObjectFlagUpdate> decode_object_flag_update(std::span<const std::b
     result.temporary = payload[41] != std::byte{};
     result.phantom = payload[42] != std::byte{};
     result.casts_shadows = payload[43] != std::byte{};
+    if (count > 0) {
+        constexpr std::size_t extra_offset = fixed_size;
+        result.physics_shape_type = std::to_integer<std::uint8_t>(payload[extra_offset]);
+        result.density = read_f32(payload, extra_offset + 1);
+        result.friction = read_f32(payload, extra_offset + 5);
+        result.restitution = read_f32(payload, extra_offset + 9);
+        result.gravity_multiplier = read_f32(payload, extra_offset + 13);
+        if (!std::isfinite(result.density) || !std::isfinite(result.friction) ||
+            !std::isfinite(result.restitution) || !std::isfinite(result.gravity_multiplier))
+            return std::nullopt;
+        result.has_extra_physics = true;
+    }
     return result;
 }
 

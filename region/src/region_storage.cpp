@@ -1,6 +1,7 @@
 #include "homeworldz/region_storage.h"
 
 #include "homeworldz/api_models.h"
+#include "homeworldz/physics_scene.h"
 #include "homeworldz/sha256.h"
 
 #include <sqlite3.h>
@@ -70,6 +71,13 @@ void replace_file(const std::filesystem::path& source, const std::filesystem::pa
         throw std::runtime_error("replace scene snapshot failed");
     }
 #endif
+}
+
+void apply_snapshot_material_defaults(scene::Entity& entity) {
+    const auto material = physics::material_properties(entity.material);
+    entity.physics_density = material.density;
+    entity.physics_friction = material.friction;
+    entity.physics_restitution = material.restitution;
 }
 
 class SnapshotReader {
@@ -254,6 +262,7 @@ private:
         if (material > 255) fail("material is outside the supported range");
         scene::Entity result{id, std::move(name), position, velocity, std::move(object_id),
                              std::move(owner_id), scale, static_cast<std::uint8_t>(material)};
+        apply_snapshot_material_defaults(result);
         if (consume("}")) {
             result.creator_id = result.owner_id;
             return result;
@@ -311,6 +320,29 @@ private:
         expect_string("phantom");
         expect(":");
         result.phantom = boolean();
+        if (consume("}")) return result;
+        expect(",");
+        expect_string("physicsShapeType");
+        expect(":");
+        const auto physics_shape_type = unsigned_integer();
+        if (physics_shape_type > 255) fail("physics shape type is outside the supported range");
+        result.physics_shape_type = static_cast<std::uint8_t>(physics_shape_type);
+        expect(",");
+        expect_string("physicsDensity");
+        expect(":");
+        result.physics_density = number();
+        expect(",");
+        expect_string("physicsFriction");
+        expect(":");
+        result.physics_friction = number();
+        expect(",");
+        expect_string("physicsRestitution");
+        expect(":");
+        result.physics_restitution = number();
+        expect(",");
+        expect_string("physicsGravityMultiplier");
+        expect(":");
+        result.physics_gravity_multiplier = number();
         expect("}");
         return result;
     }
@@ -356,7 +388,13 @@ std::string snapshot_json(const scene::Scene& scene) {
                 "],\"description\":" + api::json_string(entity->description) +
                 ",\"avatarFlying\":" + (entity->avatar_flying ? "true" : "false") +
                 ",\"physical\":" + (entity->physical ? "true" : "false") +
-                ",\"phantom\":" + (entity->phantom ? "true" : "false") + '}';
+                ",\"phantom\":" + (entity->phantom ? "true" : "false") +
+                ",\"physicsShapeType\":" + std::to_string(entity->physics_shape_type) +
+                ",\"physicsDensity\":" + std::to_string(entity->physics_density) +
+                ",\"physicsFriction\":" + std::to_string(entity->physics_friction) +
+                ",\"physicsRestitution\":" + std::to_string(entity->physics_restitution) +
+                ",\"physicsGravityMultiplier\":" +
+                    std::to_string(entity->physics_gravity_multiplier) + '}';
     }
     return json + "]}";
 }

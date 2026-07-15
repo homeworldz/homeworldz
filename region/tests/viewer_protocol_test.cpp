@@ -723,11 +723,21 @@ bool object_flag_codec() {
     payload.insert(payload.end(), agent.begin(), agent.end());
     payload.insert(payload.end(), session.begin(), session.end());
     payload.insert(payload.end(), {std::byte{0x2a}, std::byte{}, std::byte{}, std::byte{},
-                                   std::byte{1}, std::byte{}, std::byte{1}, std::byte{1}, std::byte{}});
+                                   std::byte{1}, std::byte{}, std::byte{1}, std::byte{1}, std::byte{1},
+                                   std::byte{2}});
+    const auto extra_offset = payload.size();
+    payload.resize(payload.size() + 16);
+    write_f32(payload, extra_offset, 125.0F);
+    write_f32(payload, extra_offset + 4, 0.7F);
+    write_f32(payload, extra_offset + 8, 0.25F);
+    write_f32(payload, extra_offset + 12, 1.5F);
     const auto decoded = decode_object_flag_update(payload);
     return decoded && decoded->agent_id == agent && decoded->session_id == session &&
            decoded->local_id == 42 && decoded->use_physics && !decoded->temporary &&
-           decoded->phantom && decoded->casts_shadows;
+           decoded->phantom && decoded->casts_shadows && decoded->has_extra_physics &&
+           decoded->physics_shape_type == 2 && decoded->density == 125.0F &&
+           decoded->friction == 0.7F && decoded->restitution == 0.25F &&
+           decoded->gravity_multiplier == 1.5F;
 }
 }
 

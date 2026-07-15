@@ -33,6 +33,11 @@ int main() {
         primitive->material = 4;
         primitive->physical = true;
         primitive->phantom = true;
+        primitive->physics_shape_type = 2;
+        primitive->physics_density = 125.0;
+        primitive->physics_friction = 0.7;
+        primitive->physics_restitution = 0.25;
+        primitive->physics_gravity_multiplier = 1.5;
         std::filesystem::create_directories(path);
         sqlite3* legacy_database = nullptr;
         if (sqlite3_open((path / "region.db").string().c_str(), &legacy_database) != SQLITE_OK) return 1;
@@ -85,6 +90,10 @@ int main() {
                 restored_second->rotation.y != 0.5 ||
                 restored_second->description != "storage test primitive" || restored_second->material != 4 ||
                 !restored_second->physical || !restored_second->phantom ||
+                restored_second->physics_shape_type != 2 || restored_second->physics_density != 125.0 ||
+                restored_second->physics_friction != 0.7 ||
+                restored_second->physics_restitution != 0.25 ||
+                restored_second->physics_gravity_multiplier != 1.5 ||
                 restored.create("next") != 3) return 1;
 
             const std::array content{std::byte{0x00}, std::byte{0x7f}, std::byte{0xff}, std::byte{0x42}};

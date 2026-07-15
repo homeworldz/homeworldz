@@ -53,6 +53,11 @@ struct Entity {
     bool avatar_flying{};
     bool physical{};
     bool phantom{};
+    std::uint8_t physics_shape_type{};
+    double physics_density{1000.0};
+    double physics_friction{0.6};
+    double physics_restitution{0.5};
+    double physics_gravity_multiplier{1.0};
 };
 
 struct RayIntersection {

@@ -34,7 +34,8 @@ double box_mass(scene::Vector3 scale, double density) {
 }
 
 bool StaticSceneMirror::synchronize(const scene::Entity& entity) {
-    if (entity.object_id.empty() || entity.phantom) return remove(entity.id);
+    if (entity.object_id.empty() || entity.phantom || entity.physics_shape_type == 0x01)
+        return remove(entity.id);
     BodyDefinition definition;
     definition.entity_id = entity.id;
     definition.motion = entity.physical ? MotionType::Dynamic : MotionType::Static;
@@ -44,9 +45,19 @@ bool StaticSceneMirror::synchronize(const scene::Entity& entity) {
     definition.position = entity.position;
     definition.velocity = entity.velocity;
     const auto properties = material_properties(entity.material);
-    definition.mass = box_mass(entity.scale, properties.density);
-    definition.friction = properties.friction;
-    definition.restitution = properties.restitution;
+    const auto density = std::isfinite(entity.physics_density)
+        ? std::clamp(entity.physics_density, 1.0, 22587.0)
+        : properties.density;
+    definition.mass = box_mass(entity.scale, density);
+    definition.friction = std::isfinite(entity.physics_friction)
+        ? std::clamp(entity.physics_friction, 0.0, 255.0)
+        : properties.friction;
+    definition.restitution = std::isfinite(entity.physics_restitution)
+        ? std::clamp(entity.physics_restitution, 0.0, 1.0)
+        : properties.restitution;
+    definition.gravity_multiplier = std::isfinite(entity.physics_gravity_multiplier)
+        ? std::clamp(entity.physics_gravity_multiplier, -1.0, 28.0)
+        : 1.0;
     const auto squared = entity.rotation.x * entity.rotation.x +
                          entity.rotation.y * entity.rotation.y +
                          entity.rotation.z * entity.rotation.z;
@@ -63,7 +74,8 @@ bool StaticSceneMirror::synchronize(const scene::Entity& entity) {
 void StaticSceneMirror::synchronize(const scene::Scene& scene) {
     std::unordered_set<scene::EntityId> present;
     for (const auto& [entity_id, entity] : scene.entities()) {
-        if (entity.object_id.empty() || entity.phantom) continue;
+        if (entity.object_id.empty() || entity.phantom || entity.physics_shape_type == 0x01)
+            continue;
         present.insert(entity_id);
         synchronize(entity);
     }

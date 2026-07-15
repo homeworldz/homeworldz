@@ -190,6 +190,12 @@ struct ObjectFlagUpdate : AgentMessage {
     bool temporary{};
     bool phantom{};
     bool casts_shadows{};
+    std::uint8_t physics_shape_type{};
+    float density{1000.0F};
+    float friction{0.6F};
+    float restitution{0.5F};
+    float gravity_multiplier{1.0F};
+    bool has_extra_physics{};
 };
 
 struct RequestObjectPropertiesFamily : AgentMessage {

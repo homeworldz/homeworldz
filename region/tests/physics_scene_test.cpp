@@ -75,17 +75,26 @@ int main() {
     entity.physical = true;
     entity.material = 0x02;
     entity.scale = {2.0, 3.0, 4.0};
+    entity.physics_density = 125.0;
+    entity.physics_friction = 0.7;
+    entity.physics_restitution = 0.25;
     if (!mirror.synchronize(entity) || mirror.size() != 1 ||
         world.last_definition.motion != physics::MotionType::Dynamic ||
-        !close(world.last_definition.mass, 24000.0) ||
-        !close(world.last_definition.friction, 0.2) ||
-        !close(world.last_definition.restitution, 0.7))
+        !close(world.last_definition.mass, 3000.0) ||
+        !close(world.last_definition.friction, 0.7) ||
+        !close(world.last_definition.restitution, 0.25))
         return 3;
 
     const auto original_body = mirror.body_id(entity.id);
     entity.material = 0x06;
+    entity.physics_friction = 0.9;
+    entity.physics_restitution = 0.9;
     if (!mirror.synchronize(entity) || mirror.body_id(entity.id) == original_body ||
         world.definitions.contains(original_body) || !close(world.last_definition.friction, 0.9))
         return 4;
+    const auto rubber_body = mirror.body_id(entity.id);
+    entity.physics_shape_type = 0x01;
+    if (!mirror.synchronize(entity) || mirror.size() != 0 || world.definitions.contains(rubber_body))
+        return 5;
     return 0;
 }

@@ -77,6 +77,10 @@ The current Jolt production path includes synchronized terrain heightfields,
 appearance-sized avatar capsules, static prim collision, and viewer-toggled
 dynamic box bodies with persisted Physical/Phantom flags and streamed linear
 and angular motion.
+Viewer Extra Physics values are decoded from `ObjectFlagUpdate` and persisted
+with the scene: physics shape type, density, friction, restitution, and gravity
+multiplier. Density, friction, and restitution feed the physics-body mirror;
+`PhysicsShapeType.None` disables collision for the object.
 
 Avatar contact with dynamic objects is resolved natively by Jolt. The virtual
 character's horizontal contact-force ceiling is derived from avatar mass and a
