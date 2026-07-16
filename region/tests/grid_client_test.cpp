@@ -30,6 +30,8 @@ public:
             return {200, R"({"id":"33333333-3333-4333-8333-333333333333","generation":1,"agentId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","sessionId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","sourceRegionId":"11111111-1111-4111-8111-111111111111","destinationRegionId":"22222222-2222-4222-8222-222222222222","position":{"x":128,"y":64,"z":30},"lookAt":{"x":1,"y":0,"z":0},"flying":true,"state":"activated"})"};
         if (method == "POST" && path.ends_with("/rollback"))
             return {200, R"({"id":"33333333-3333-4333-8333-333333333333","generation":1,"agentId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","sessionId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","sourceRegionId":"11111111-1111-4111-8111-111111111111","destinationRegionId":"22222222-2222-4222-8222-222222222222","position":{"x":128,"y":64,"z":30},"lookAt":{"x":1,"y":0,"z":0},"flying":true,"state":"rolled_back"})"};
+        if (method == "POST" && path.ends_with("/prepare-arrival"))
+            return {200, R"({"status":"accepted"})"};
         if (method == "GET" && path.starts_with("/api/v1/transits/"))
             return {200, R"({"id":"33333333-3333-4333-8333-333333333333","generation":1,"agentId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","sessionId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","sourceRegionId":"11111111-1111-4111-8111-111111111111","destinationRegionId":"22222222-2222-4222-8222-222222222222","position":{"x":128,"y":64,"z":30},"lookAt":{"x":1,"y":0,"z":0},"flying":true,"state":"prepared"})"};
         if (method == "POST" && path.ends_with("/copy-library-item"))
@@ -119,6 +121,9 @@ int main() {
     if (!rolled_back_transit || rolled_back_transit->state != "rolled_back" ||
         transport->requests.back().body.find(R"("reason":"destination unavailable")") == std::string::npos)
         return 1;
+    if (!homeworldz::grid::prepare_avatar_arrival(*transport, transit_request.id) ||
+        transport->requests.back().path !=
+            "/api/v1/transits/" + transit_request.id + "/prepare-arrival") return 1;
     homeworldz::grid::RegistrationLifecycle provisioned_lifecycle(
         client, provisioned_settings, provisioned->id);
     if (!provisioned_lifecycle.start(started) ||

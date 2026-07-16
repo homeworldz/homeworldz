@@ -389,6 +389,35 @@ std::string simulator_endpoint(std::string_view public_endpoint, int viewer_port
     return std::string(authority) + ':' + std::to_string(viewer_port);
 }
 
+std::optional<homeworldz::viewer::SimulatorEventEndpoint> simulator_event_endpoint(
+    std::string_view public_endpoint, int viewer_port) {
+    auto authority = public_endpoint;
+    const auto scheme = authority.find("://");
+    if (scheme != std::string_view::npos) authority.remove_prefix(scheme + 3);
+    const auto slash = authority.find('/');
+    if (slash != std::string_view::npos) authority = authority.substr(0, slash);
+    const auto colon = authority.rfind(':');
+    if (colon != std::string_view::npos) authority = authority.substr(0, colon);
+    const auto host = std::string(authority);
+    if (host.empty() || viewer_port < 1 || viewer_port > 65535) return std::nullopt;
+    addrinfo hints{};
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_DGRAM;
+    addrinfo* addresses{};
+    if (getaddrinfo(host.c_str(), nullptr, &hints, &addresses) != 0) return std::nullopt;
+    std::optional<homeworldz::viewer::SimulatorEventEndpoint> result;
+    for (auto* address = addresses; address; address = address->ai_next) {
+        if (address->ai_family != AF_INET || address->ai_addrlen < sizeof(sockaddr_in)) continue;
+        const auto* ipv4 = reinterpret_cast<const sockaddr_in*>(address->ai_addr);
+        const auto bytes = reinterpret_cast<const std::uint8_t*>(&ipv4->sin_addr.s_addr);
+        result = homeworldz::viewer::SimulatorEventEndpoint{
+            {bytes[0], bytes[1], bytes[2], bytes[3]}, static_cast<std::uint16_t>(viewer_port)};
+        break;
+    }
+    freeaddrinfo(addresses);
+    return result;
+}
+
 void apply_material_contact_defaults(homeworldz::scene::Entity& entity) {
     const auto material = homeworldz::physics::material_properties(entity.material);
     entity.physics_friction = material.friction;
@@ -1414,6 +1443,13 @@ int main(int argc, char* argv[]) {
                             authorized_session = viewer_sessions->validate(session_id);
                             authorized = authorized_session &&
                                          authorized_session->destination_region_id == registration->region_id();
+                            if (!authorized && authorized_session) {
+                                const auto* transit = inbound_transits.authorize(
+                                    authorized_session->agent_id, session_id,
+                                    std::chrono::steady_clock::now());
+                                authorized = transit &&
+                                    transit->destination_region_id == registration->region_id();
+                            }
                             if (authorized) authorized_agent_id = authorized_session->agent_id;
                         }
                         if (authorized && seed) {
@@ -1763,6 +1799,74 @@ int main(int argc, char* argv[]) {
                                 if (const auto outgoing = circuits.send(
                                         endpoint, std::move(response), true, now))
                                     static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
+                            }
+                        }
+                        if (const auto teleport =
+                                homeworldz::viewer::decode_teleport_location_request(packet->payload);
+                            teleport && teleport->agent_id == identity->agent_id &&
+                            teleport->session_id == identity->session_id) {
+                            const auto target = std::find_if(region_neighbors.begin(), region_neighbors.end(),
+                                [&](const homeworldz::grid::RegionNeighbor& neighbor) {
+                                    const auto handle =
+                                        (static_cast<std::uint64_t>(neighbor.grid_x * 256) << 32) |
+                                        static_cast<std::uint32_t>(neighbor.grid_y * 256);
+                                    return handle == teleport->region_handle;
+                                });
+                            const auto fail_teleport = [&](std::string reason) {
+                                if (const auto failed = circuits.send(endpoint,
+                                        homeworldz::viewer::encode_teleport_failed(
+                                            {identity->agent_id, std::move(reason)}), true, now, true))
+                                    static_cast<void>(send_udp(viewer_server, endpoint, *failed));
+                            };
+                            if (target == region_neighbors.end() || !viewer_grid || !registration) {
+                                fail_teleport("Destination region is unavailable");
+                            } else if (const auto simulator = simulator_event_endpoint(
+                                           target->public_endpoint, target->viewer_port)) {
+                                const auto session_id = homeworldz::viewer::format_uuid(identity->session_id);
+                                const auto agent_id = homeworldz::viewer::format_uuid(identity->agent_id);
+                                const auto transit_id = homeworldz::viewer::random_uuid();
+                                bool prepared = false;
+                                try {
+                                    if (const auto start = circuits.send(endpoint,
+                                            homeworldz::viewer::encode_teleport_start({0x00000010U}),
+                                            true, now, true))
+                                        static_cast<void>(send_udp(viewer_server, endpoint, *start));
+                                    const auto avatar = avatars.find(endpoint);
+                                    const bool flying = avatar != avatars.end() &&
+                                        avatar->second.controller.state().flying;
+                                    const homeworldz::grid::AvatarTransitRequest transit_request{
+                                        transit_id, agent_id, session_id, registration->region_id(),
+                                        target->id, teleport->position, teleport->look_at, flying, 30};
+                                    const auto transit = viewer_grid->prepare_avatar_transit(transit_request);
+                                    prepared = transit && transit->state == "prepared";
+                                    if (!prepared) throw std::runtime_error("grid rejected transit preparation");
+                                    auto destination = homeworldz::grid::socket_transport(
+                                        target->public_endpoint, service_token);
+                                    if (!homeworldz::grid::prepare_avatar_arrival(*destination, transit_id))
+                                        throw std::runtime_error("destination rejected transit preparation");
+                                    const auto target_handle =
+                                        (static_cast<std::uint64_t>(target->grid_x * 256) << 32) |
+                                        static_cast<std::uint32_t>(target->grid_y * 256);
+                                    enqueue_viewer_event(session_id,
+                                        homeworldz::viewer::enable_simulator_event_xml(
+                                            target_handle, *simulator));
+                                    enqueue_viewer_event(session_id,
+                                        homeworldz::viewer::teleport_finish_event_xml({
+                                            agent_id, target_handle, *simulator,
+                                            target->public_endpoint + "/caps/seed/" + session_id, 13}));
+                                    std::cout << "{\"level\":\"info\",\"message\":\"avatar teleport signaled\",\"transitId\":"
+                                              << homeworldz::api::json_string(transit_id)
+                                              << ",\"destinationRegionId\":"
+                                              << homeworldz::api::json_string(target->id) << "}" << std::endl;
+                                } catch (const std::exception& error) {
+                                    if (prepared) static_cast<void>(viewer_grid->rollback_avatar_transit(
+                                        transit_id, registration->region_id(), error.what()));
+                                    fail_teleport("Destination region could not prepare the arrival");
+                                    std::cout << "{\"level\":\"error\",\"message\":\"avatar teleport preparation failed\",\"error\":"
+                                              << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+                                }
+                            } else {
+                                fail_teleport("Destination viewer address could not be resolved");
                             }
                         }
                         const auto logout = homeworldz::viewer::decode_logout_request(packet->payload);
@@ -2254,6 +2358,37 @@ int main(int argc, char* argv[]) {
                             complete->agent_id == identity->agent_id &&
                             complete->session_id == identity->session_id &&
                             complete->circuit_code == identity->circuit_code) {
+                            const auto session_id = homeworldz::viewer::format_uuid(identity->session_id);
+                            const auto agent_id = homeworldz::viewer::format_uuid(identity->agent_id);
+                            std::optional<homeworldz::grid::AvatarTransit> arrival;
+                            if (const auto* pending = inbound_transits.authorize(
+                                    agent_id, session_id, now)) {
+                                try {
+                                    const auto activated = viewer_grid && registration ?
+                                        viewer_grid->activate_avatar_transit(
+                                            pending->id, registration->region_id()) : std::nullopt;
+                                    if (!activated || activated->state != "activated")
+                                        throw std::runtime_error("grid rejected transit activation");
+                                    arrival = inbound_transits.consume(session_id, now);
+                                    if (!arrival) throw std::runtime_error("provisional transit expired");
+                                    if (viewer_sessions) viewer_sessions->invalidate(session_id);
+                                    std::cout << "{\"level\":\"info\",\"message\":\"avatar transit activated\",\"transitId\":"
+                                              << homeworldz::api::json_string(arrival->id) << "}" << std::endl;
+                                } catch (const std::exception& error) {
+                                    if (viewer_grid && registration)
+                                        static_cast<void>(viewer_grid->rollback_avatar_transit(
+                                            pending->id, registration->region_id(), error.what()));
+                                    inbound_transits.remove(session_id);
+                                    if (const auto failed = circuits.send(endpoint,
+                                            homeworldz::viewer::encode_teleport_failed(
+                                                {identity->agent_id, "Destination could not activate the arrival"}),
+                                            true, now, true))
+                                        static_cast<void>(send_udp(viewer_server, endpoint, *failed));
+                                    std::cout << "{\"level\":\"error\",\"message\":\"avatar transit activation failed\",\"error\":"
+                                              << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+                                    continue;
+                                }
+                            }
                             homeworldz::viewer::AgentMovementComplete response;
                             response.agent_id = identity->agent_id;
                             response.session_id = identity->session_id;
@@ -2264,7 +2399,7 @@ int main(int argc, char* argv[]) {
                                 std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
                             response.channel_version = "HomeWorldz " + region_version;
                             if (!avatars.contains(endpoint)) {
-                                const auto name = homeworldz::viewer::format_uuid(identity->agent_id);
+                                const auto name = agent_id;
                                 homeworldz::scene::EntityId entity{};
                                 std::vector<homeworldz::scene::EntityId> duplicates;
                                 for (const auto& [candidate_id, candidate] : scene.entities()) {
@@ -2278,15 +2413,30 @@ int main(int argc, char* argv[]) {
                                 }
                                 for (const auto duplicate : duplicates) scene.remove(duplicate);
                                 if (entity == 0) entity = scene.create(name, initial_spawn);
-                                const auto* persisted = scene.find(entity);
-                                const auto spawn = persisted ? persisted->position : initial_spawn;
+                                auto* persisted = scene.find(entity);
+                                const auto arrival_position = arrival ? homeworldz::scene::Vector3{
+                                    arrival->position[0], arrival->position[1], arrival->position[2]} :
+                                    initial_spawn;
+                                const auto spawn = arrival ? arrival_position :
+                                    (persisted ? persisted->position : initial_spawn);
                                 const auto known_geometry = avatar_geometries.find(endpoint);
                                 const auto geometry = known_geometry == avatar_geometries.end() ?
                                     homeworldz::viewer::AvatarGeometry{} : known_geometry->second;
                                 homeworldz::viewer::AvatarController controller{
                                     spawn, collision_ground_height(spawn),
                                     geometry.height, geometry.hip_offset};
-                                if (persisted) controller.restore_motion(
+                                if (arrival) {
+                                    const auto yaw = std::atan2(arrival->look_at[1], arrival->look_at[0]);
+                                    const std::array<float, 3> rotation{
+                                        0.0F, 0.0F, static_cast<float>(std::sin(yaw * 0.5))};
+                                    controller.restore_motion({}, rotation, arrival->flying);
+                                    if (persisted) {
+                                        persisted->position = spawn;
+                                        persisted->velocity = {};
+                                        persisted->rotation = {rotation[0], rotation[1], rotation[2]};
+                                        persisted->avatar_flying = arrival->flying;
+                                    }
+                                } else if (persisted) controller.restore_motion(
                                     persisted->velocity,
                                     {static_cast<float>(persisted->rotation.x),
                                      static_cast<float>(persisted->rotation.y),

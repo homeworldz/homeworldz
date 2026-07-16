@@ -563,6 +563,11 @@ HttpResponse fetch_asset_from(std::string endpoint, std::string service_token,
         "GET", "/api/v1/assets/" + std::string(asset_id), {});
 }
 
+bool prepare_avatar_arrival(Transport& destination, std::string_view transit_id) {
+    return destination.send("POST", "/api/v1/transits/" + std::string(transit_id) +
+        "/prepare-arrival", {}).status_code == 200;
+}
+
 std::optional<InventoryItem> Client::copy_library_item(std::string_view user_id,
                                                        std::string_view source_item_id,
                                                        std::string_view destination_folder_id,

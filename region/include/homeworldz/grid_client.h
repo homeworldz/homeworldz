@@ -206,6 +206,7 @@ private:
 
 HttpResponse fetch_asset_from(std::string endpoint, std::string service_token,
                               std::string_view asset_id);
+bool prepare_avatar_arrival(Transport& destination, std::string_view transit_id);
 
 class ViewerSessionCache {
 public:
