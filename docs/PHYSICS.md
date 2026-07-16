@@ -292,6 +292,14 @@ dragging moved it through the grab controller, and resizing Dynamic4 to
 1 x 0.5 x 0.75 m made ordinary avatar collisions move it as expected from its
 reduced mass.
 
+Canonical sphere prims use native analytic sphere shapes rather than triangle
+collision meshes. Their volume-based mass uses the ellipsoid volume implied by
+the viewer scale; the initial native collision radius is half the smallest
+scale dimension, giving exact collision for uniformly scaled spheres and a
+conservative collision shape for non-uniform ellipsoids. Live Firestorm
+acceptance on 2026-07-15 confirmed sphere creation, dynamic collision, Take,
+and re-rez with shape and Physical state preserved.
+
 ### Required Scenarios
 
 - Avatar walking on flat terrain, slopes, ramps, stairs, and mesh surfaces.

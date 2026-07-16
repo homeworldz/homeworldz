@@ -711,3 +711,20 @@ follow-up object updates. A new box received the viewer's configured texture,
 tint, dimensions, and Physical setting immediately and correctly. Library
 textures can be selected directly for this purpose; copying them into personal
 Inventory is not required.
+
+Standard viewer protocol assets passed live acceptance on 2026-07-15. The
+region served 22 fixed-UUID textures and four UI sounds from the bundled asset
+set; Firestorm fetched the standard textures successfully and played its edit
+interaction sounds. A subsequent legacy-scene repair replaced empty, null, and
+viewer-local `d2114404-dd59-4a4d-8e6c-49359e91bbf0` default faces with Plywood
+while retaining their tint and other face parameters. Nineteen historical
+objects were repaired, and the resulting scene had no invalid default-face
+texture UUIDs. Firestorm rendered the repaired prims correctly.
+
+Canonical sphere creation passed live acceptance on 2026-07-15. Firestorm
+rezzed a sphere with the configured Build defaults and Physical flag; Jolt used
+a native sphere body, and its dynamic collision behavior was correct. The
+object was named `Physical Ball` and taken into Inventory. After object assets
+were extended to retain path/profile geometry and Physical/Phantom flags, a
+second Take and re-rez preserved both the round shape and immediately active
+physical state.
