@@ -750,3 +750,7 @@ parameter block and uses a matching convex wedge; all sides, including the
 sloped face, produced the expected collision. Taking `Prism1` into Inventory
 and re-rezzing it preserved both the wedge shape and Physical state. A complete
 viewer and region restart then retained the rezzed Prism with both properties.
+
+Canonical Pyramid creation passed initial live acceptance on 2026-07-16.
+`Pyramid1` rendered with the expected apex and base, and its five-point Jolt
+convex hull produced natural physical behavior on all four sloped faces.

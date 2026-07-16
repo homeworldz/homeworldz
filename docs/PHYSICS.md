@@ -350,6 +350,11 @@ the slope. Taking `Prism1` into Inventory and re-rezzing it preserved both its
 wedge geometry and Physical state. A subsequent complete viewer and region
 restart retained the rezzed Prism as wedge-shaped and Physical.
 
+Firestorm's canonical Pyramid preset uses raw path scale `[200,200]`, collapsing
+both top axes to an apex. HomeWorldz mirrors it as a five-point convex hull and
+uses one-third-box volume for mass. Live acceptance on 2026-07-16 confirmed
+correct rendering and physical collision on all four sloped faces.
+
 ### Required Scenarios
 
 - Avatar walking on flat terrain, slopes, ramps, stairs, and mesh surfaces.
