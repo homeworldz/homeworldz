@@ -33,6 +33,7 @@
 #include "homeworldz/physics_scene.h"
 #include "homeworldz/region_config.h"
 #include "homeworldz/region_storage.h"
+#include "homeworldz/region_transit.h"
 #include "homeworldz/scene.h"
 #include "homeworldz/sha256.h"
 #include "homeworldz/simulation_loop.h"
@@ -1045,6 +1046,7 @@ int main(int argc, char* argv[]) {
         close_socket(server);
         return 1;
     }
+    homeworldz::region::InboundTransitRegistry inbound_transits;
     homeworldz::viewer::CircuitRegistry circuits([&](const homeworldz::viewer::UseCircuitCode& request) {
         const auto reject = [&](std::string_view reason) {
             std::cout << "{\"level\":\"warn\",\"message\":\"viewer circuit rejected\",\"reason\":"
@@ -1068,11 +1070,15 @@ int main(int argc, char* argv[]) {
         }
         if (!session) return reject("session_not_found");
         if (session->circuit_code != request.circuit_code) return reject("circuit_code_mismatch");
-        if (session->destination_region_id != registration->region_id())
-            return reject("destination_region_mismatch");
         const auto agent = homeworldz::viewer::parse_uuid(session->agent_id);
         if (!agent) return reject("invalid_session_agent");
         if (*agent != request.agent_id) return reject("agent_id_mismatch");
+        if (session->destination_region_id != registration->region_id()) {
+            const auto transit = inbound_transits.authorize(
+                session->agent_id, session->session_id, std::chrono::steady_clock::now());
+            if (!transit || transit->destination_region_id != registration->region_id())
+                return reject("destination_region_mismatch");
+        }
         std::cout << "{\"level\":\"info\",\"message\":\"viewer circuit authorized\",\"circuitCode\":"
                   << request.circuit_code << ",\"sessionId\":"
                   << homeworldz::api::json_string(homeworldz::viewer::format_uuid(request.session_id))
@@ -1222,6 +1228,57 @@ int main(int argc, char* argv[]) {
                             response = homeworldz::http::response_for_content(
                                 request, 200, "application/vnd.homeworldz.heightmap-f32le",
                                 encode_heightmap(*terrain_heightmap));
+                        }
+                    }
+                    constexpr std::string_view arrival_prefix = "/api/v1/transits/";
+                    constexpr std::string_view arrival_suffix = "/prepare-arrival";
+                    if (response.path.starts_with(arrival_prefix) &&
+                        response.path.ends_with(arrival_suffix)) {
+                        const auto transit_id = response.path.substr(
+                            arrival_prefix.size(), response.path.size() -
+                            arrival_prefix.size() - arrival_suffix.size());
+                        const auto authorization =
+                            homeworldz::http::request_header_value(request, "Authorization");
+                        if (response.method != "POST") {
+                            response = homeworldz::http::response_for_content(
+                                request, 405, "application/json",
+                                homeworldz::api::to_json(homeworldz::api::Error{
+                                    "method_not_allowed", "arrival preparation requires POST"}));
+                        } else if (service_token.empty() || authorization != "Bearer " + service_token) {
+                            response = homeworldz::http::response_for_content(
+                                request, 401, "application/json",
+                                homeworldz::api::to_json(homeworldz::api::Error{
+                                    "unauthorized", "a valid grid service token is required"}));
+                        } else if (!homeworldz::viewer::parse_uuid(transit_id) ||
+                                   !viewer_grid || !registration) {
+                            response = homeworldz::http::response_for_content(
+                                request, 404, "application/json",
+                                homeworldz::api::to_json(homeworldz::api::Error{
+                                    "transit_not_found", "avatar transit was not found"}));
+                        } else {
+                            std::optional<homeworldz::grid::AvatarTransit> transit;
+                            try {
+                                transit = viewer_grid->find_avatar_transit(transit_id);
+                                if (transit && transit->state == "prepared" &&
+                                    transit->destination_region_id == registration->region_id())
+                                    transit = viewer_grid->accept_avatar_transit(
+                                        transit_id, registration->region_id());
+                            } catch (const std::exception& error) {
+                                std::cout << "{\"level\":\"error\",\"message\":\"arrival preparation failed\",\"error\":"
+                                          << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+                            }
+                            if (!transit || !inbound_transits.stage(
+                                    *transit, registration->region_id(),
+                                    std::chrono::steady_clock::now())) {
+                                response = homeworldz::http::response_for_content(
+                                    request, 409, "application/json",
+                                    homeworldz::api::to_json(homeworldz::api::Error{
+                                        "transit_not_preparable", "avatar transit could not be prepared"}));
+                            } else {
+                                response = homeworldz::http::response_for_content(
+                                    request, 200, "application/json",
+                                    homeworldz::api::to_json(homeworldz::api::Status{"accepted"}));
+                            }
                         }
                     }
                     if (const auto asset_request = internal_asset_request(response.path)) {
