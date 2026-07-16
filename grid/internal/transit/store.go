@@ -233,13 +233,16 @@ func (s *PostgresStore) Rollback(ctx context.Context, id, regionID, reason strin
 func (s *PostgresStore) transition(ctx context.Context, id, regionID string, from, to State,
 	rollback bool, reason string) (Transit, error) {
 	where := "destination_region_id = $3 AND state = $4"
-	args := []any{id, reason, regionID, from}
+	statePlaceholder := "$5"
+	args := []any{id, reason, regionID, from, to}
 	if rollback {
 		where = "(source_region_id = $3 OR destination_region_id = $3) AND state IN ('prepared','accepted')"
+		statePlaceholder = "$4"
+		args = []any{id, reason, regionID, to}
 	}
-	value, err := scanTransit(s.db.QueryRowContext(ctx, `UPDATE avatar_transits SET state = $5,
+	value, err := scanTransit(s.db.QueryRowContext(ctx, `UPDATE avatar_transits SET state = `+statePlaceholder+`,
 		rollback_reason = $2, updated_at = now() WHERE id = $1 AND `+where+` AND expires_at > now()
-		RETURNING `+transitColumns, append(args, to)...))
+		RETURNING `+transitColumns, args...))
 	if err == nil {
 		return value, nil
 	}
