@@ -620,6 +620,22 @@ bool Client::clear_presence(std::string_view user_id) {
     return status == 204 || status == 404;
 }
 
+bool Client::update_last_location(std::string_view user_id, std::string_view region_id,
+                                  const std::array<float, 3>& position,
+                                  const std::array<float, 3>& look_at, bool flying) {
+    const auto vector_json = [](const std::array<float, 3>& value) {
+        return std::string{"{\"x\":"} + std::to_string(value[0]) +
+               ",\"y\":" + std::to_string(value[1]) +
+               ",\"z\":" + std::to_string(value[2]) + '}';
+    };
+    const auto body = "{\"regionId\":" + api::json_string(region_id) +
+                      ",\"position\":" + vector_json(position) +
+                      ",\"lookAt\":" + vector_json(look_at) +
+                      ",\"flying\":" + (flying ? "true" : "false") + '}';
+    return transport_->send(
+        "PUT", "/api/v1/locations/" + std::string(user_id), body).status_code == 200;
+}
+
 RegistrationLifecycle::RegistrationLifecycle(Client client, RegionSettings settings,
                                                std::string registered_region_id)
     : client_(std::move(client)), settings_(std::move(settings)),

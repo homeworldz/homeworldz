@@ -21,6 +21,27 @@ type Location struct {
 
 type Store interface {
 	Get(context.Context, string) (Location, error)
+	Update(context.Context, Location) (Location, error)
+}
+
+func (s *PostgresStore) Update(ctx context.Context, value Location) (Location, error) {
+	err := s.db.QueryRowContext(ctx, `UPDATE users SET
+		last_region_id=$2, last_position_x=$3, last_position_y=$4, last_position_z=$5,
+		last_look_x=$6, last_look_y=$7, last_look_z=$8, last_flying=$9,
+		last_location_updated_at=now()
+		WHERE id=$1 AND EXISTS (SELECT 1 FROM regions WHERE id=$2)
+		RETURNING last_location_updated_at`,
+		value.UserID, value.RegionID,
+		value.Position[0], value.Position[1], value.Position[2],
+		value.LookAt[0], value.LookAt[1], value.LookAt[2], value.Flying).
+		Scan(&value.UpdatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Location{}, ErrNotFound
+	}
+	if err != nil {
+		return Location{}, fmt.Errorf("update user last location: %w", err)
+	}
+	return value, nil
 }
 
 type PostgresStore struct{ db *sql.DB }

@@ -27,6 +27,10 @@ func (s memoryLocationStore) Get(context.Context, string) (locations.Location, e
 	return s.value, nil
 }
 
+func (s memoryLocationStore) Update(_ context.Context, value locations.Location) (locations.Location, error) {
+	return value, nil
+}
+
 func viewerRequest(first, last, password, start string) string {
 	digest := md5.Sum([]byte(password))
 	start = strings.ReplaceAll(start, "&", "&amp;")

@@ -199,6 +199,9 @@ public:
                                                      std::string_view new_name);
     bool update_presence(std::string_view user_id, std::string_view region_id);
     bool clear_presence(std::string_view user_id);
+    bool update_last_location(std::string_view user_id, std::string_view region_id,
+                              const std::array<float, 3>& position,
+                              const std::array<float, 3>& look_at, bool flying);
 
 private:
     std::shared_ptr<Transport> transport_;

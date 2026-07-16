@@ -255,6 +255,16 @@ int main() {
     if (!client.update_presence(session->agent_id, session->destination_region_id) ||
         transport->requests.back().method != "PUT" ||
         transport->requests.back().path != "/api/v1/presence/" + session->agent_id) return 1;
+    if (!client.update_last_location(
+            session->agent_id, session->destination_region_id,
+            {123.0F, 128.0F, 35.0F}, {-0.5F, 0.866F, 0.0F}, true) ||
+        transport->requests.back().method != "PUT" ||
+        transport->requests.back().path != "/api/v1/locations/" + session->agent_id ||
+        transport->requests.back().body.find(
+            R"("position":{"x":123.000000,"y":128.000000,"z":35.000000})") == std::string::npos ||
+        transport->requests.back().body.find(
+            R"("lookAt":{"x":-0.500000,"y":0.866000,"z":0.000000})") == std::string::npos ||
+        transport->requests.back().body.find(R"("flying":true)") == std::string::npos) return 1;
     if (!client.clear_presence(session->agent_id) || !client.revoke_viewer_session(session->session_id) ||
         transport->requests.back().path != "/api/v1/sessions/" + session->session_id) return 1;
     return 0;

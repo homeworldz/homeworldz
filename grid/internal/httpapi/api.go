@@ -95,6 +95,7 @@ func New(ready ReadinessChecker, version string, options Options) http.Handler {
 	mux.HandleFunc("/api/v1/sessions/", a.sessionByID)
 	mux.HandleFunc("/api/v1/presence", a.presenceRoot)
 	mux.HandleFunc("/api/v1/presence/", a.presenceByUser)
+	mux.HandleFunc("/api/v1/locations/", a.locationByUser)
 	mux.HandleFunc("/api/v1/inventory/", a.inventoryByUser)
 	mux.HandleFunc("/api/v1/assets", a.assetsRoot)
 	mux.HandleFunc("/api/v1/assets/", a.assetByID)

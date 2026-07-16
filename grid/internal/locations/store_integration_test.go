@@ -31,13 +31,15 @@ func TestPostgresGet(t *testing.T) {
 		_, _ = db.Exec("DELETE FROM users WHERE id=$1", user)
 		_, _ = db.Exec("DELETE FROM regions WHERE id=$1", region)
 	})
-	if _, err := db.Exec(`UPDATE users SET last_region_id=$2,
-		last_position_x=128,last_position_y=64,last_position_z=30,
-		last_look_x=1,last_look_y=0,last_look_z=0,last_flying=true,
-		last_location_updated_at=now() WHERE id=$1`, user, region); err != nil {
-		t.Fatal(err)
+	store := NewPostgresStore(db)
+	updated, err := store.Update(context.Background(), Location{
+		UserID: user, RegionID: region, Position: [3]float32{128, 64, 30},
+		LookAt: [3]float32{1, 0, 0}, Flying: true,
+	})
+	if err != nil || updated.UpdatedAt.IsZero() {
+		t.Fatalf("updated location=%#v err=%v", updated, err)
 	}
-	value, err := NewPostgresStore(db).Get(context.Background(), user)
+	value, err := store.Get(context.Background(), user)
 	if err != nil || value.RegionID != region || value.Position != [3]float32{128, 64, 30} || !value.Flying {
 		t.Fatalf("location=%#v err=%v", value, err)
 	}

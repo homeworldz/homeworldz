@@ -91,6 +91,13 @@ type UpdatePresenceRequest struct {
 	RegionID string `json:"regionId"`
 }
 
+type UpdateLocationRequest struct {
+	RegionID string          `json:"regionId"`
+	Position transit.Vector3 `json:"position"`
+	LookAt   transit.Vector3 `json:"lookAt"`
+	Flying   bool            `json:"flying"`
+}
+
 type PresenceList struct {
 	Presence []presence.Presence `json:"presence"`
 }

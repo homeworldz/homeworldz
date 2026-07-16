@@ -1914,6 +1914,24 @@ int main(int argc, char* argv[]) {
                             const auto session_id = homeworldz::viewer::format_uuid(identity->session_id);
                             const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
                             if (viewer_grid) {
+                                if (const auto live = avatars.find(endpoint);
+                                    live != avatars.end() && registration) {
+                                    const auto& state = live->second.controller.state();
+                                    const std::array<float, 3> position{
+                                        static_cast<float>(state.position.x),
+                                        static_cast<float>(state.position.y),
+                                        static_cast<float>(state.position.z)};
+                                    try {
+                                        if (!viewer_grid->update_last_location(
+                                                user_id, registration->region_id(), position,
+                                                live->second.controller.look_direction(), state.flying))
+                                            std::cout << "{\"level\":\"warn\",\"message\":\"last location update rejected during logout\",\"userId\":"
+                                                      << homeworldz::api::json_string(user_id) << "}" << std::endl;
+                                    } catch (const std::exception& error) {
+                                        std::cout << "{\"level\":\"warn\",\"message\":\"last location update failed during logout\",\"error\":"
+                                                  << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+                                    }
+                                }
                                 static_cast<void>(viewer_grid->clear_presence(user_id));
                                 static_cast<void>(viewer_grid->revoke_viewer_session(session_id));
                             }
