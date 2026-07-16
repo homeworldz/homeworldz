@@ -117,17 +117,19 @@ UDP messages from that live topology snapshot. Replies currently cover the
 Region itself and its cardinal neighbors, including coordinates, name, access,
 water height, and local agent count. The initial package advertises a stable
 HomeWorldz JPEG-2000 rendering of the default plateau rather than a null image
-UUID, preventing unrelated cross-grid cache reuse. Terrain-aware per-Region
-tile generation remains future work; the first Grid-wide aggregation path uses
-the packaged plateau tile for every live Region.
+UUID, preventing unrelated cross-grid cache reuse.
 
 Firestorm also consumes the OpenSim `map-server-url` simulator feature for
 world-map imagery. Regions advertise the Grid's public `/map/` base URL, and
 the Grid serves Firestorm's `map-{level}-{x}-{y}-objects.jpg` convention only
 for tiles containing currently leased coordinates. Level 1 is one Region;
 higher levels composite progressively larger powers-of-two areas into 256-pixel
-JPEG tiles. The initial imagery renders the same packaged plateau; the helper
-URI remains the general viewer-services URI and is not the map-image base.
+JPEG tiles. For each live Region, the Grid reads a public 256-by-256
+little-endian float heightfield snapshot, applies water/land/elevation coloring
+and hill shading, and caches the rendered result for one minute. If a Region is
+temporarily unreachable or returns invalid data, composition falls back to the
+packaged plateau. North is rendered at the top. The helper URI remains the
+general viewer-services URI and is not the map-image base.
 
 The Region implements EventQueueGet as a non-blocking 20-second long poll.
 Initial queued events return immediately; an empty response retains only the

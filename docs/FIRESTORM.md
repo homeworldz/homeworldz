@@ -825,3 +825,11 @@ held for 20 seconds without blocking the Region's UDP loop. Idle EventQueue
 responses fell from 776 per minute to 2 in a measured 45-second interval (about
 a 99.7% reduction). Walking, turning, jumping, flying, and landing all remained
 normal while a long poll was pending, and Region CPU remained below 1%.
+
+Live terrain-derived world maps passed Firestorm acceptance on 2026-07-16.
+Welcome and Sandbox initially displayed their matching rounded plateau terrain
+at every map zoom level. To prove the tiles were not packaged placeholders, a
+large X was carved into Welcome with Firestorm's terrain editor. The changed
+heightfield appeared immediately on the world map while Sandbox retained the
+original plateau. This verifies the complete Region terrain snapshot, Grid
+shading/cache/composition, and viewer map-refresh path.

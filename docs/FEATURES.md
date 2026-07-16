@@ -8,6 +8,19 @@ general implementation checklist. Missing compatibility work belongs in
 
 ## Implemented differences
 
+### Live terrain-derived world maps
+
+HomeWorldz world-map tiles are rendered from each running Region's current
+heightfield rather than generated only as an offline or administrator-triggered
+snapshot. Viewer terrain edits can therefore become visible on the world map
+without a separate map-generation job. The Grid colors and shades each live
+heightfield, caches it briefly, and composes adjacent Regions at every viewer
+zoom level. An unreachable Region falls back to a packaged default tile.
+
+Live Firestorm acceptance on 2026-07-16 distinguished two initially identical
+Regions by carving a large X into Welcome. The X appeared immediately on the
+world map while Sandbox remained unchanged.
+
 ### Asset creation provenance
 
 Every HomeWorldz asset metadata record has a required `creator_id` UUID. For a

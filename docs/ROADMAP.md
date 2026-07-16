@@ -191,8 +191,10 @@ acceptance tests pass.
 
 ### World navigation
 
-- [ ] Generate and serve region and world map tiles for all supported region
-  sizes.
+- [x] Generate live terrain-derived Region tiles and compose world-map zoom
+  levels for 1x1 Regions.
+- [ ] Extend Region and world-map tile composition to the planned 2x2 and 4x4
+  Region sizes.
 - [x] Implement viewer map-block and prefix-name discovery for registered live
   regions.
 - [ ] Implement landmark resolution, home location, and teleport routing.
