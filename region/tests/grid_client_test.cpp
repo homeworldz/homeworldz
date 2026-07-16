@@ -22,6 +22,16 @@ public:
             return {200, R"({"id":"22222222-2222-4222-8222-222222222222","name":"Sandbox","gridX":1001,"gridY":1000})"};
         if (method == "GET" && path.ends_with("/neighbors"))
             return {200, R"({"neighbors":[{"direction":"west","region":{"id":"11111111-1111-4111-8111-111111111111","name":"Welcome","gridX":1000,"gridY":1000,"publicEndpoint":"http://grid.example:42011","viewerPort":42012,"leaseExpiresAt":"2026-07-16T12:00:00Z"}}]})"};
+        if (method == "POST" && path == "/api/v1/transits")
+            return {200, R"({"id":"33333333-3333-4333-8333-333333333333","generation":1,"agentId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","sessionId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","sourceRegionId":"11111111-1111-4111-8111-111111111111","destinationRegionId":"22222222-2222-4222-8222-222222222222","state":"prepared"})"};
+        if (method == "POST" && path.ends_with("/accept"))
+            return {200, R"({"id":"33333333-3333-4333-8333-333333333333","generation":1,"agentId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","sessionId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","sourceRegionId":"11111111-1111-4111-8111-111111111111","destinationRegionId":"22222222-2222-4222-8222-222222222222","state":"accepted"})"};
+        if (method == "POST" && path.ends_with("/activate"))
+            return {200, R"({"id":"33333333-3333-4333-8333-333333333333","generation":1,"agentId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","sessionId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","sourceRegionId":"11111111-1111-4111-8111-111111111111","destinationRegionId":"22222222-2222-4222-8222-222222222222","state":"activated"})"};
+        if (method == "POST" && path.ends_with("/rollback"))
+            return {200, R"({"id":"33333333-3333-4333-8333-333333333333","generation":1,"agentId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","sessionId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","sourceRegionId":"11111111-1111-4111-8111-111111111111","destinationRegionId":"22222222-2222-4222-8222-222222222222","state":"rolled_back"})"};
+        if (method == "GET" && path.starts_with("/api/v1/transits/"))
+            return {200, R"({"id":"33333333-3333-4333-8333-333333333333","generation":1,"agentId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","sessionId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","sourceRegionId":"11111111-1111-4111-8111-111111111111","destinationRegionId":"22222222-2222-4222-8222-222222222222","state":"prepared"})"};
         if (method == "POST" && path.ends_with("/copy-library-item"))
             return {201, R"({"id":"11111111-1111-4111-8111-111111111111","ownerUserId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","creatorUserId":"00000000-0000-0000-0000-000000000002","folderId":"22222222-2222-4222-8222-222222222222","assetId":"33333333-3333-4333-8333-333333333333","assetType":5,"inventoryType":18,"name":"Default Shirt","description":"","flags":4,"basePermissions":2147483647,"currentPermissions":2147483647,"everyonePermissions":2147483647,"nextPermissions":2147483647,"saleType":0,"salePrice":0})"};
         if (method == "POST" && path.ends_with("/copy-item"))
@@ -79,6 +89,33 @@ int main() {
         neighbors->front().public_endpoint != "http://grid.example:42011" ||
         transport->requests.back().path !=
             "/api/v1/regions/22222222-2222-4222-8222-222222222222/neighbors") return 1;
+    const homeworldz::grid::AvatarTransitRequest transit_request{
+        "33333333-3333-4333-8333-333333333333",
+        "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "11111111-1111-4111-8111-111111111111",
+        "22222222-2222-4222-8222-222222222222",
+        {128.0F, 64.0F, 30.0F}, {1.0F, 0.0F, 0.0F}, true, 30};
+    const auto prepared_transit = client.prepare_avatar_transit(transit_request);
+    if (!prepared_transit || prepared_transit->state != "prepared" ||
+        prepared_transit->generation != 1 ||
+        transport->requests.back().body.find(R"("position":{"x":128.000000,"y":64.000000,"z":30.000000})") == std::string::npos)
+        return 1;
+    const auto found_transit = client.find_avatar_transit(transit_request.id);
+    if (!found_transit || found_transit->id != transit_request.id ||
+        transport->requests.back().method != "GET") return 1;
+    const auto accepted_transit = client.accept_avatar_transit(
+        transit_request.id, transit_request.destination_region_id);
+    if (!accepted_transit || accepted_transit->state != "accepted" ||
+        transport->requests.back().path != "/api/v1/transits/" + transit_request.id + "/accept") return 1;
+    const auto activated_transit = client.activate_avatar_transit(
+        transit_request.id, transit_request.destination_region_id);
+    if (!activated_transit || activated_transit->state != "activated") return 1;
+    const auto rolled_back_transit = client.rollback_avatar_transit(
+        transit_request.id, transit_request.source_region_id, "destination unavailable");
+    if (!rolled_back_transit || rolled_back_transit->state != "rolled_back" ||
+        transport->requests.back().body.find(R"("reason":"destination unavailable")") == std::string::npos)
+        return 1;
     homeworldz::grid::RegistrationLifecycle provisioned_lifecycle(
         client, provisioned_settings, provisioned->id);
     if (!provisioned_lifecycle.start(started) ||

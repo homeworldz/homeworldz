@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -59,6 +60,28 @@ struct ViewerSession {
     std::string agent_id;
     std::uint32_t circuit_code{};
     std::string destination_region_id;
+};
+
+struct AvatarTransitRequest {
+    std::string id;
+    std::string agent_id;
+    std::string session_id;
+    std::string source_region_id;
+    std::string destination_region_id;
+    std::array<float, 3> position{};
+    std::array<float, 3> look_at{};
+    bool flying{};
+    int lifetime_seconds{30};
+};
+
+struct AvatarTransit {
+    std::string id;
+    std::uint64_t generation{};
+    std::string agent_id;
+    std::string session_id;
+    std::string source_region_id;
+    std::string destination_region_id;
+    std::string state;
 };
 
 struct User {
@@ -135,6 +158,14 @@ public:
 	bool renew_provisioned_lease(std::string_view region_id, int lease_seconds);
 	bool deregister_provisioned(std::string_view region_id);
     std::optional<ViewerSession> validate_viewer_session(std::string_view session_id);
+    std::optional<AvatarTransit> prepare_avatar_transit(const AvatarTransitRequest& request);
+    std::optional<AvatarTransit> find_avatar_transit(std::string_view transit_id);
+    std::optional<AvatarTransit> accept_avatar_transit(
+        std::string_view transit_id, std::string_view destination_region_id);
+    std::optional<AvatarTransit> activate_avatar_transit(
+        std::string_view transit_id, std::string_view destination_region_id);
+    std::optional<AvatarTransit> rollback_avatar_transit(
+        std::string_view transit_id, std::string_view region_id, std::string_view reason);
     std::optional<User> find_user(std::string_view user_id);
     bool revoke_viewer_session(std::string_view session_id);
     bool create_inventory_folder(std::string_view user_id, std::string_view folder_id,

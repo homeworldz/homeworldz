@@ -168,6 +168,23 @@ std::optional<int> json_int(std::string_view body, std::string_view name) {
     return value;
 }
 
+std::optional<AvatarTransit> avatar_transit_from_json(std::string_view body) {
+    AvatarTransit transit;
+    transit.id = json_field(body, "id");
+    transit.agent_id = json_field(body, "agentId");
+    transit.session_id = json_field(body, "sessionId");
+    transit.source_region_id = json_field(body, "sourceRegionId");
+    transit.destination_region_id = json_field(body, "destinationRegionId");
+    transit.state = json_field(body, "state");
+    const auto generation = json_u64(body, "generation");
+    if (transit.id.empty() || transit.agent_id.empty() || transit.session_id.empty() ||
+        transit.source_region_id.empty() || transit.destination_region_id.empty() ||
+        transit.state.empty() || !generation || *generation == 0)
+        return std::nullopt;
+    transit.generation = *generation;
+    return transit;
+}
+
 std::optional<InventoryItem> inventory_item_from_json(std::string_view body,
                                                        std::string_view user_id) {
     InventoryItem item;
@@ -237,6 +254,58 @@ std::optional<RegisteredRegion> Client::register_provisioned_region(
     region.grid_x = *grid_x;
     region.grid_y = *grid_y;
     return region;
+}
+
+std::optional<AvatarTransit> Client::prepare_avatar_transit(const AvatarTransitRequest& request) {
+    const auto vector_json = [](const std::array<float, 3>& value) {
+        return std::string{"{\"x\":"} + std::to_string(value[0]) +
+               ",\"y\":" + std::to_string(value[1]) +
+               ",\"z\":" + std::to_string(value[2]) + '}';
+    };
+    const auto body = "{\"id\":" + api::json_string(request.id) +
+                      ",\"agentId\":" + api::json_string(request.agent_id) +
+                      ",\"sessionId\":" + api::json_string(request.session_id) +
+                      ",\"sourceRegionId\":" + api::json_string(request.source_region_id) +
+                      ",\"destinationRegionId\":" + api::json_string(request.destination_region_id) +
+                      ",\"position\":" + vector_json(request.position) +
+                      ",\"lookAt\":" + vector_json(request.look_at) +
+                      ",\"flying\":" + (request.flying ? "true" : "false") +
+                      ",\"lifetimeSeconds\":" + std::to_string(request.lifetime_seconds) + '}';
+    const auto response = transport_->send("POST", "/api/v1/transits", body);
+    return response.status_code == 200 ? avatar_transit_from_json(response.body) : std::nullopt;
+}
+
+std::optional<AvatarTransit> Client::find_avatar_transit(std::string_view transit_id) {
+    const auto response = transport_->send("GET", "/api/v1/transits/" + std::string(transit_id), {});
+    return response.status_code == 200 ? avatar_transit_from_json(response.body) : std::nullopt;
+}
+
+namespace {
+std::optional<AvatarTransit> change_avatar_transit(
+    const std::shared_ptr<Transport>& transport, std::string_view transit_id,
+    std::string_view action, std::string_view region_id, std::string_view reason = {}) {
+    auto body = "{\"regionId\":" + api::json_string(region_id);
+    if (!reason.empty()) body += ",\"reason\":" + api::json_string(reason);
+    body += '}';
+    const auto response = transport->send(
+        "POST", "/api/v1/transits/" + std::string(transit_id) + '/' + std::string(action), body);
+    return response.status_code == 200 ? avatar_transit_from_json(response.body) : std::nullopt;
+}
+} // namespace
+
+std::optional<AvatarTransit> Client::accept_avatar_transit(
+    std::string_view transit_id, std::string_view destination_region_id) {
+    return change_avatar_transit(transport_, transit_id, "accept", destination_region_id);
+}
+
+std::optional<AvatarTransit> Client::activate_avatar_transit(
+    std::string_view transit_id, std::string_view destination_region_id) {
+    return change_avatar_transit(transport_, transit_id, "activate", destination_region_id);
+}
+
+std::optional<AvatarTransit> Client::rollback_avatar_transit(
+    std::string_view transit_id, std::string_view region_id, std::string_view reason) {
+    return change_avatar_transit(transport_, transit_id, "rollback", region_id, reason);
 }
 
 std::optional<std::vector<RegionNeighbor>> Client::find_region_neighbors(
