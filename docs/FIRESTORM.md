@@ -740,3 +740,10 @@ convincing physical behavior. The object was named `Physical Cylinder`, copied
 in Inventory as `Physical Cylinder 2`, and re-rezzed; the copy retained its
 cylinder geometry and Physical state. A complete viewer and region restart
 then retained the in-world copy as a Physical cylinder.
+
+Canonical Prism creation passed live rendering and physics acceptance on
+2026-07-16. Firestorm encodes this tool preset as a square/line prim with raw
+path scale `[200,100]` and shear `[0xce,0]`, rather than as an equilateral
+triangle profile. HomeWorldz now round-trips the complete classic prim shape
+parameter block and uses a matching convex wedge; all sides, including the
+sloped face, produced the expected collision.

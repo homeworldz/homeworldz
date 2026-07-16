@@ -336,6 +336,13 @@ copy preserved both its cylinder geometry and Physical state. A subsequent
 complete viewer and region restart retained the rezzed copy as a Physical
 cylinder.
 
+Firestorm's canonical Prism preset is a square/line prim with its top X ratio
+collapsed to zero and sheared to one side (`pathScaleX=200`, raw
+`pathShearX=0xce`). HomeWorldz preserves the complete classic prim parameter
+block and builds a matching six-point convex wedge. Live acceptance on
+2026-07-16 confirmed correct rendering and collision on every face, including
+the slope.
+
 ### Required Scenarios
 
 - Avatar walking on flat terrain, slopes, ramps, stairs, and mesh surfaces.

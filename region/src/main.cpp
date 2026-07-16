@@ -1986,7 +1986,7 @@ int main() {
                                 const auto* entity = scene.find(local_id);
                                 if (!entity) continue;
                                 auto& selected = physics_edit_selections[endpoint];
-                                if (entity->physical && entity->owner_id == user_id &&
+                                if (entity->owner_id == user_id &&
                                     (entity->owner_permissions & homeworldz::scene::permission_modify) != 0 &&
                                     selected.insert(entity->id).second) {
                                     ++physics_edit_suspended[entity->id];
