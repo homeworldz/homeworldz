@@ -17,6 +17,7 @@ import (
 	"github.com/homeworldz/homeworldz/grid/internal/presence"
 	"github.com/homeworldz/homeworldz/grid/internal/provisioning"
 	"github.com/homeworldz/homeworldz/grid/internal/regions"
+	"github.com/homeworldz/homeworldz/grid/internal/transit"
 )
 
 type ReadinessChecker interface {
@@ -37,6 +38,7 @@ type API struct {
 	provisioned  *provisioning.Registry
 	terrainHTTP  *http.Client
 	terrainCache terrainTileCache
+	transits     transit.Store
 }
 
 type Options struct {
@@ -51,6 +53,7 @@ type Options struct {
 	Assets            assetmeta.Store
 	Provisioned       *provisioning.Registry
 	TerrainHTTPClient *http.Client
+	Transits          transit.Store
 }
 
 func New(ready ReadinessChecker, version string, options Options) http.Handler {
@@ -59,7 +62,7 @@ func New(ready ReadinessChecker, version string, options Options) http.Handler {
 		regions:  options.Regions, identity: options.Identity, presence: options.Presence,
 		inventory: options.Inventory, assets: options.Assets, serviceToken: options.ServiceToken,
 		provisioned: options.Provisioned, terrainHTTP: options.TerrainHTTPClient,
-		terrainCache: newTerrainTileCache()}
+		terrainCache: newTerrainTileCache(), transits: options.Transits}
 	if a.publicURL == "" {
 		a.publicURL = "http://127.0.0.1:42000"
 	}
@@ -92,6 +95,8 @@ func New(ready ReadinessChecker, version string, options Options) http.Handler {
 	mux.HandleFunc("/api/v1/inventory/", a.inventoryByUser)
 	mux.HandleFunc("/api/v1/assets", a.assetsRoot)
 	mux.HandleFunc("/api/v1/assets/", a.assetByID)
+	mux.HandleFunc("/api/v1/transits", a.transitsRoot)
+	mux.HandleFunc("/api/v1/transits/", a.transitByID)
 	mux.HandleFunc("/", a.notFound)
 	return withRequestID(withRequestLogging(
 		authenticateInternal(mux, options.ServiceToken), options.Logger,

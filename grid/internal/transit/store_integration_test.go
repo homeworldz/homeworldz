@@ -32,7 +32,29 @@ func TestPostgresTransitLifecycle(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	t.Cleanup(func() { _, _ = db.Exec("DELETE FROM avatar_transits WHERE agent_id = $1", ids[1]) })
+	coordinate := int(time.Now().UnixNano() % 1_000_000_000)
+	if _, err := db.ExecContext(ctx, `INSERT INTO users (id, username, password_hash)
+		VALUES ($1, $2, 'integration')`, ids[1], "transit-"+ids[1]); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO regions
+		(id, name, grid_x, grid_y, public_endpoint, viewer_port, lease_expires_at)
+		VALUES ($1,'Transit Source',$3,$3,'http://127.0.0.1:1',1,now()+interval '1 minute'),
+		       ($2,'Transit Destination',$3+1,$3,'http://127.0.0.1:2',2,now()+interval '1 minute')`,
+		ids[3], ids[4], coordinate); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO sessions
+		(id, user_id, expires_at, destination_region_id) VALUES ($1,$2,now()+interval '1 minute',$3)`,
+		ids[2], ids[1], ids[3]); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = db.Exec("DELETE FROM avatar_transits WHERE agent_id = $1", ids[1])
+		_, _ = db.Exec("DELETE FROM sessions WHERE id = $1", ids[2])
+		_, _ = db.Exec("DELETE FROM regions WHERE id IN ($1, $2)", ids[3], ids[4])
+		_, _ = db.Exec("DELETE FROM users WHERE id = $1", ids[1])
+	})
 	store := NewPostgresStore(db)
 	input := Prepare{
 		ID: ids[0], AgentID: ids[1], SessionID: ids[2], SourceRegionID: ids[3],
@@ -65,6 +87,10 @@ func TestPostgresTransitLifecycle(t *testing.T) {
 	activated, err := store.Activate(ctx, prepared.ID, input.DestinationRegionID)
 	if err != nil || activated.State != Activated {
 		t.Fatalf("activated = %#v, error = %v", activated, err)
+	}
+	var destination string
+	if err := db.QueryRowContext(ctx, "SELECT destination_region_id FROM sessions WHERE id = $1", ids[2]).Scan(&destination); err != nil || destination != ids[4] {
+		t.Fatalf("session destination = %q, error = %v", destination, err)
 	}
 	second := input
 	second.ID, _ = identifier.NewUUID()

@@ -177,7 +177,53 @@ func (s *PostgresStore) Accept(ctx context.Context, id, destinationRegionID stri
 }
 
 func (s *PostgresStore) Activate(ctx context.Context, id, destinationRegionID string) (Transit, error) {
-	return s.transition(ctx, id, destinationRegionID, Accepted, Activated, false, "")
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Transit{}, fmt.Errorf("begin transit activation: %w", err)
+	}
+	defer tx.Rollback()
+	current, err := scanTransit(tx.QueryRowContext(ctx,
+		"SELECT "+transitColumns+" FROM avatar_transits WHERE id = $1 FOR UPDATE", id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return Transit{}, ErrNotFound
+	}
+	if err != nil {
+		return Transit{}, fmt.Errorf("lock avatar transit: %w", err)
+	}
+	if current.DestinationRegionID != destinationRegionID {
+		return Transit{}, ErrInvalidTransition
+	}
+	if current.State == Activated {
+		return current, tx.Commit()
+	}
+	if current.State != Accepted {
+		return Transit{}, ErrInvalidTransition
+	}
+	if time.Now().After(current.ExpiresAt) {
+		return Transit{}, ErrExpired
+	}
+	result, err := tx.ExecContext(ctx, `UPDATE sessions SET destination_region_id = $3
+		WHERE id = $1 AND user_id = $2 AND expires_at > now()`,
+		current.SessionID, current.AgentID, current.DestinationRegionID)
+	if err != nil {
+		return Transit{}, fmt.Errorf("move viewer session destination: %w", err)
+	}
+	updated, err := result.RowsAffected()
+	if err != nil {
+		return Transit{}, fmt.Errorf("count moved viewer sessions: %w", err)
+	}
+	if updated != 1 {
+		return Transit{}, ErrInvalidTransition
+	}
+	value, err := scanTransit(tx.QueryRowContext(ctx, `UPDATE avatar_transits
+		SET state = 'activated', updated_at = now() WHERE id = $1 RETURNING `+transitColumns, id))
+	if err != nil {
+		return Transit{}, fmt.Errorf("activate avatar transit: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return Transit{}, fmt.Errorf("commit transit activation: %w", err)
+	}
+	return value, nil
 }
 
 func (s *PostgresStore) Rollback(ctx context.Context, id, regionID, reason string) (Transit, error) {

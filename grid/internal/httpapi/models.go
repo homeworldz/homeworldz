@@ -4,6 +4,7 @@ import (
 	"github.com/homeworldz/homeworldz/grid/internal/inventory"
 	"github.com/homeworldz/homeworldz/grid/internal/presence"
 	"github.com/homeworldz/homeworldz/grid/internal/regions"
+	"github.com/homeworldz/homeworldz/grid/internal/transit"
 )
 
 const APIVersion = "v1"
@@ -56,6 +57,23 @@ type RegionNeighbor struct {
 
 type RegionNeighborList struct {
 	Neighbors []RegionNeighbor `json:"neighbors"`
+}
+
+type PrepareTransitRequest struct {
+	ID                  string          `json:"id"`
+	AgentID             string          `json:"agentId"`
+	SessionID           string          `json:"sessionId"`
+	SourceRegionID      string          `json:"sourceRegionId"`
+	DestinationRegionID string          `json:"destinationRegionId"`
+	Position            transit.Vector3 `json:"position"`
+	LookAt              transit.Vector3 `json:"lookAt"`
+	Flying              bool            `json:"flying"`
+	LifetimeSeconds     int             `json:"lifetimeSeconds"`
+}
+
+type TransitActionRequest struct {
+	RegionID string `json:"regionId"`
+	Reason   string `json:"reason,omitempty"`
 }
 
 type CreateUserRequest struct {

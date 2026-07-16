@@ -21,6 +21,7 @@ import (
 	"github.com/homeworldz/homeworldz/grid/internal/presence"
 	"github.com/homeworldz/homeworldz/grid/internal/provisioning"
 	"github.com/homeworldz/homeworldz/grid/internal/regions"
+	"github.com/homeworldz/homeworldz/grid/internal/transit"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -65,6 +66,7 @@ func main() {
 			Assets:            assetStore(db),
 			Provisioned:       provisionedRegions,
 			TerrainHTTPClient: &http.Client{Timeout: 2 * time.Second},
+			Transits:          transitStore(db),
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
@@ -120,4 +122,11 @@ func assetStore(db *sql.DB) assetmeta.Store {
 		return nil
 	}
 	return assetmeta.NewPostgresStore(db)
+}
+
+func transitStore(db *sql.DB) transit.Store {
+	if db == nil {
+		return nil
+	}
+	return transit.NewPostgresStore(db)
 }
