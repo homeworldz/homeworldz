@@ -2355,7 +2355,10 @@ int main(int argc, char* argv[]) {
                             }
                         }
                         const auto complete = homeworldz::viewer::decode_complete_agent_movement(packet->payload);
-                        if (complete && handshake_replies.contains(endpoint) &&
+                        const auto provisional_arrival = inbound_transits.authorize(
+                            homeworldz::viewer::format_uuid(identity->agent_id),
+                            homeworldz::viewer::format_uuid(identity->session_id), now);
+                        if (complete && (handshake_replies.contains(endpoint) || provisional_arrival) &&
                             complete->agent_id == identity->agent_id &&
                             complete->session_id == identity->session_id &&
                             complete->circuit_code == identity->circuit_code) {
