@@ -2642,15 +2642,16 @@ int main() {
                                                        object_add->rotation[1] * object_add->rotation[1] +
                                                        object_add->rotation[2] * object_add->rotation[2];
                             const bool valid_rotation = rotation_norm <= 1.001F;
-                            const bool unmodified_shape = object_add->path_begin == 0 &&
-                                object_add->path_end == 0 && object_add->path_scale_x == 100 &&
-                                object_add->path_scale_y == 100 && object_add->path_shear_x == 0 &&
-                                object_add->path_shear_y == 0 && object_add->path_twist == 0 &&
+                            const bool canonical_shape_parameters = object_add->path_begin == 0 &&
+                                object_add->path_end == 0 && object_add->path_twist == 0 &&
                                 object_add->path_twist_begin == 0 && object_add->path_radius_offset == 0 &&
                                 object_add->path_taper_x == 0 && object_add->path_taper_y == 0 &&
                                 object_add->path_revolutions == 0 && object_add->path_skew == 0 &&
                                 object_add->profile_begin == 0 && object_add->profile_end == 0 &&
                                 object_add->profile_hollow == 0;
+                            const bool unmodified_shape = canonical_shape_parameters &&
+                                object_add->path_scale_x == 100 && object_add->path_scale_y == 100 &&
+                                object_add->path_shear_x == 0 && object_add->path_shear_y == 0;
                             const bool supported_box = object_add->pcode == 9 &&
                                 object_add->path_curve == 0x10 &&
                                 (object_add->profile_curve & 0x0f) == 0x01 && unmodified_shape;
@@ -2664,7 +2665,14 @@ int main() {
                                 object_add->path_curve == 0x10 &&
                                 (object_add->profile_curve & 0x0f) == 0x01 &&
                                 object_add->path_scale_x == 200 && object_add->path_scale_y == 100 &&
-                                object_add->path_shear_x == 0xce && object_add->path_shear_y == 0;
+                                object_add->path_shear_x == 0xce && object_add->path_shear_y == 0 &&
+                                canonical_shape_parameters;
+                            const bool supported_pyramid = object_add->pcode == 9 &&
+                                object_add->path_curve == 0x10 &&
+                                (object_add->profile_curve & 0x0f) == 0x01 &&
+                                object_add->path_scale_x == 200 && object_add->path_scale_y == 200 &&
+                                object_add->path_shear_x == 0 && object_add->path_shear_y == 0 &&
+                                canonical_shape_parameters;
                             std::optional<homeworldz::scene::Vector3> placement;
                             if (valid_scale && object_add->bypass_raycast) {
                                 const homeworldz::scene::Vector3 ray_end{
@@ -2702,7 +2710,7 @@ int main() {
                             std::string object_id;
                             homeworldz::scene::EntityId entity_id{};
                             if ((supported_box || supported_sphere || supported_cylinder ||
-                                supported_prism) &&
+                                supported_prism || supported_pyramid) &&
                                 valid_position && valid_rotation && object_add->material <= 7) {
                                 object_id = homeworldz::viewer::random_uuid();
                                 const auto owner_id = homeworldz::viewer::format_uuid(identity->agent_id);

@@ -67,7 +67,8 @@ int main() {
         !close(physics::box_mass({100.0, 100.0, 100.0}, 1000.0), 100000.0) ||
         !close(physics::ellipsoid_mass({2.0, 3.0, 4.0}, 1000.0), 12566.3706143592) ||
         !close(physics::cylinder_mass({2.0, 3.0, 4.0}, 1000.0), 18849.5559215388) ||
-        !close(physics::prism_mass({2.0, 3.0, 4.0}, 1000.0), 12000.0))
+        !close(physics::prism_mass({2.0, 3.0, 4.0}, 1000.0), 12000.0) ||
+        !close(physics::pyramid_mass({2.0, 3.0, 4.0}, 1000.0), 8000.0))
         return 2;
 
     RecordingWorld world;
@@ -126,6 +127,17 @@ int main() {
         !close(world.last_definition.shape.hull_points[4].z, 1.5) ||
         !close(world.last_definition.mass, 750.0))
         return 8;
+    entity.path_scale_y = 200;
+    entity.path_shear_x = 0;
+    if (!mirror.synchronize(entity) ||
+        world.last_definition.shape.type != physics::ShapeType::ConvexHull ||
+        world.last_definition.shape.hull_points.size() != 5 ||
+        !close(world.last_definition.shape.hull_points[0].x, -1.0) ||
+        !close(world.last_definition.shape.hull_points[3].y, 1.0) ||
+        !close(world.last_definition.shape.hull_points[4].x, 0.0) ||
+        !close(world.last_definition.shape.hull_points[4].z, 1.5) ||
+        !close(world.last_definition.mass, 500.0))
+        return 9;
     const auto rubber_body = mirror.body_id(entity.id);
     entity.physics_shape_type = 0x01;
     if (!mirror.synchronize(entity) || mirror.size() != 0 || world.definitions.contains(rubber_body))

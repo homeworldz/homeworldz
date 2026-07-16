@@ -62,6 +62,15 @@ double prism_mass(scene::Vector3 scale, double density) {
     return std::clamp(volume * density, minimum_mass, maximum_mass);
 }
 
+double pyramid_mass(scene::Vector3 scale, double density) {
+    constexpr double minimum_mass = 0.001;
+    constexpr double maximum_mass = 100000.0;
+    constexpr double volume_fraction = 1.0 / 3.0;
+    const auto volume = volume_fraction * std::max(0.0, scale.x) *
+                        std::max(0.0, scale.y) * std::max(0.0, scale.z);
+    return std::clamp(volume * density, minimum_mass, maximum_mass);
+}
+
 bool StaticSceneMirror::synchronize(const scene::Entity& entity) {
     if (entity.object_id.empty() || entity.phantom || entity.physics_shape_type == 0x01)
         return remove(entity.id);
@@ -73,9 +82,12 @@ bool StaticSceneMirror::synchronize(const scene::Entity& entity) {
     const bool prism = entity.path_curve == 0x10 && (entity.profile_curve & 0x0f) == 0x01 &&
         entity.path_scale_x == 200 && entity.path_scale_y == 100 &&
         entity.path_shear_x == 0xce && entity.path_shear_y == 0;
+    const bool pyramid = entity.path_curve == 0x10 && (entity.profile_curve & 0x0f) == 0x01 &&
+        entity.path_scale_x == 200 && entity.path_scale_y == 200 &&
+        entity.path_shear_x == 0 && entity.path_shear_y == 0;
     definition.shape.type = sphere ? ShapeType::Sphere :
         (cylinder ? ShapeType::Cylinder :
-        (prism ? ShapeType::ConvexHull : ShapeType::Box));
+        ((prism || pyramid) ? ShapeType::ConvexHull : ShapeType::Box));
     definition.shape.half_extents = {
         entity.scale.x * 0.5, entity.scale.y * 0.5, entity.scale.z * 0.5};
     if (sphere)
@@ -92,6 +104,13 @@ bool StaticSceneMirror::synchronize(const scene::Entity& entity) {
             {-x, -y, -z}, {-x, y, -z}, {x, -y, -z}, {x, y, -z},
             {-x, -y, z}, {-x, y, z}};
     }
+    if (pyramid) {
+        const auto x = entity.scale.x * 0.5;
+        const auto y = entity.scale.y * 0.5;
+        const auto z = entity.scale.z * 0.5;
+        definition.shape.hull_points = {
+            {-x, -y, -z}, {-x, y, -z}, {x, -y, -z}, {x, y, -z}, {0.0, 0.0, z}};
+    }
     definition.position = entity.position;
     definition.velocity = entity.velocity;
     const auto properties = material_properties(entity.material);
@@ -100,7 +119,8 @@ bool StaticSceneMirror::synchronize(const scene::Entity& entity) {
         : properties.density;
     definition.mass = sphere ? ellipsoid_mass(entity.scale, density) :
         (cylinder ? cylinder_mass(entity.scale, density) :
-        (prism ? prism_mass(entity.scale, density) : box_mass(entity.scale, density)));
+        (prism ? prism_mass(entity.scale, density) :
+        (pyramid ? pyramid_mass(entity.scale, density) : box_mass(entity.scale, density))));
     definition.friction = std::isfinite(entity.physics_friction)
         ? std::clamp(entity.physics_friction, 0.0, 255.0)
         : properties.friction;

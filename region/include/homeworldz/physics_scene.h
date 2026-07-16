@@ -20,6 +20,7 @@ double box_mass(scene::Vector3 scale, double density);
 double ellipsoid_mass(scene::Vector3 scale, double density);
 double cylinder_mass(scene::Vector3 scale, double density);
 double prism_mass(scene::Vector3 scale, double density);
+double pyramid_mass(scene::Vector3 scale, double density);
 
 class StaticSceneMirror {
 public:
