@@ -506,6 +506,40 @@ bool message_codecs() {
            resumed_transfer.size() == 1 && resumed_transfer[0] == image_transfer[2];
 }
 
+bool map_codecs() {
+    const auto agent = *parse_uuid("11111111-1111-4111-8111-111111111111");
+    const auto session = *parse_uuid("22222222-2222-4222-8222-222222222222");
+    auto block_payload = bytes({0xff, 0xff, 0x01, 0x97});
+    block_payload.insert(block_payload.end(), agent.begin(), agent.end());
+    block_payload.insert(block_payload.end(), session.begin(), session.end());
+    block_payload.insert(block_payload.end(), {std::byte{4}, std::byte{}, std::byte{}, std::byte{}});
+    block_payload.insert(block_payload.end(), 5, std::byte{});
+    block_payload.insert(block_payload.end(), {
+        std::byte{0xe8}, std::byte{0x03}, std::byte{0xe9}, std::byte{0x03},
+        std::byte{0xe8}, std::byte{0x03}, std::byte{0xe8}, std::byte{0x03}});
+    const auto block = decode_map_block_request(block_payload);
+    if (!block || block->agent_id != agent || block->session_id != session || block->flags != 4 ||
+        block->min_x != 1000 || block->max_x != 1001 || block->min_y != 1000 ||
+        block->max_y != 1000) return false;
+
+    auto name_payload = bytes({0xff, 0xff, 0x01, 0x98});
+    name_payload.insert(name_payload.end(), agent.begin(), agent.end());
+    name_payload.insert(name_payload.end(), session.begin(), session.end());
+    name_payload.insert(name_payload.end(), 9, std::byte{});
+    name_payload.push_back(std::byte{8});
+    for (const char value : std::string("Sandbox\0", 8))
+        name_payload.push_back(static_cast<std::byte>(value));
+    const auto name = decode_map_name_request(name_payload);
+    if (!name || name->name != "Sandbox") return false;
+
+    const std::array<MapBlock, 2> regions{{
+        {1000, 1000, "Welcome"}, {1001, 1000, "Sandbox"}}};
+    const auto reply = encode_map_block_reply(agent, 4, regions);
+    return reply.size() == 97 && reply[3] == std::byte{0x99} && reply[24] == std::byte{2} &&
+           reply[25] == std::byte{0xe8} && reply[26] == std::byte{0x03} &&
+           reply[29] == std::byte{8} && reply[30] == std::byte{'W'};
+}
+
 bool resend_throttle_and_timeout() {
     const auto start = Circuit::Clock::time_point{};
     Circuit circuit(start, 1200, 2s);
@@ -852,6 +886,7 @@ bool default_primitive_texture() {
 int main() {
     if (!packet_round_trip()) return 1;
     if (!message_codecs()) return 2;
+    if (!map_codecs()) return 17;
     if (!reliability()) return 3;
     if (!resend_throttle_and_timeout()) return 4;
     if (!circuit_registry()) return 5;

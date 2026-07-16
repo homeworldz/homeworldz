@@ -112,6 +112,12 @@ crossing is not enabled by discovery alone;
 until the crossing handoff exists, the simulation continues to contain entities
 at every region edge.
 
+The Region answers authenticated viewer `MapBlockRequest` and `MapNameRequest`
+UDP messages from that live topology snapshot. Replies currently cover the
+Region itself and its cardinal neighbors, including coordinates, name, access,
+water height, and local agent count. Map-image UUIDs remain empty until map-tile
+generation and Grid-wide map aggregation are implemented.
+
 Initial development accounts use normalized lowercase usernames and bcrypt
 password hashes. Successful credential checks create random UUID sessions with
 database-controlled expiry; internal clients validate or revoke those sessions

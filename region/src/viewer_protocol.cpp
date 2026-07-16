@@ -81,6 +81,12 @@ constexpr std::array<std::byte, 4> uuid_name_request_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0xeb}};
 constexpr std::array<std::byte, 4> uuid_name_reply_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0xec}};
+constexpr std::array<std::byte, 4> map_block_request_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x97}};
+constexpr std::array<std::byte, 4> map_name_request_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x98}};
+constexpr std::array<std::byte, 4> map_block_reply_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x99}};
 constexpr std::array<std::byte, 4> economy_data_request_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x18}};
 constexpr std::array<std::byte, 4> economy_data_id{
@@ -1240,6 +1246,61 @@ std::vector<std::byte> encode_uuid_name_reply(std::span<const UuidName> names) {
         append_uuid(output, name.id);
         if (!append_variable1(output, name.first_name) || !append_variable1(output, name.last_name))
             return {};
+    }
+    return output;
+}
+
+std::optional<MapBlockRequest> decode_map_block_request(std::span<const std::byte> payload) {
+    constexpr std::size_t size = 53;
+    if (payload.size() != size ||
+        !std::equal(map_block_request_id.begin(), map_block_request_id.end(), payload.begin()))
+        return std::nullopt;
+    MapBlockRequest request;
+    std::copy_n(payload.begin() + 4, 16, request.agent_id.begin());
+    std::copy_n(payload.begin() + 20, 16, request.session_id.begin());
+    request.flags = read_le_u32(payload, 36);
+    request.min_x = read_le_u16(payload, 45);
+    request.max_x = read_le_u16(payload, 47);
+    request.min_y = read_le_u16(payload, 49);
+    request.max_y = read_le_u16(payload, 51);
+    if (request.min_x > request.max_x || request.min_y > request.max_y)
+        return std::nullopt;
+    return request;
+}
+
+std::optional<MapNameRequest> decode_map_name_request(std::span<const std::byte> payload) {
+    constexpr std::size_t fixed_size = 46;
+    if (payload.size() < fixed_size ||
+        !std::equal(map_name_request_id.begin(), map_name_request_id.end(), payload.begin()))
+        return std::nullopt;
+    const auto name_size = std::to_integer<std::size_t>(payload[45]);
+    if (name_size == 0 || payload.size() != fixed_size + name_size) return std::nullopt;
+    MapNameRequest request;
+    std::copy_n(payload.begin() + 4, 16, request.agent_id.begin());
+    std::copy_n(payload.begin() + 20, 16, request.session_id.begin());
+    request.flags = read_le_u32(payload, 36);
+    request.name.assign(reinterpret_cast<const char*>(payload.data() + fixed_size), name_size);
+    while (!request.name.empty() && request.name.back() == '\0') request.name.pop_back();
+    if (request.name.empty() || request.name.find('\0') != std::string::npos) return std::nullopt;
+    return request;
+}
+
+std::vector<std::byte> encode_map_block_reply(const Uuid& agent_id, std::uint32_t flags,
+                                               std::span<const MapBlock> regions) {
+    if (regions.empty() || regions.size() > 255) return {};
+    std::vector<std::byte> output(map_block_reply_id.begin(), map_block_reply_id.end());
+    append_uuid(output, agent_id);
+    append_le_u32(output, flags);
+    output.push_back(static_cast<std::byte>(regions.size()));
+    for (const auto& region : regions) {
+        append_le_u16(output, region.x);
+        append_le_u16(output, region.y);
+        if (!append_variable1(output, region.name)) return {};
+        output.push_back(static_cast<std::byte>(region.access));
+        append_le_u32(output, region.region_flags);
+        output.push_back(static_cast<std::byte>(region.water_height));
+        output.push_back(static_cast<std::byte>(region.agents));
+        append_uuid(output, region.map_image_id);
     }
     return output;
 }

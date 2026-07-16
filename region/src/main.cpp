@@ -1465,6 +1465,62 @@ int main(int argc, char* argv[]) {
                                     homeworldz::viewer::encode_economy_data(), true, now, true))
                                 static_cast<void>(send_udp(viewer_server, endpoint, *economy));
                         }
+                        const auto available_map_regions = [&] {
+                            std::vector<homeworldz::viewer::MapBlock> regions;
+                            if (region_grid_x >= 0 && region_grid_x <= 65535 &&
+                                region_grid_y >= 0 && region_grid_y <= 65535) {
+                                regions.push_back(homeworldz::viewer::MapBlock{
+                                    static_cast<std::uint16_t>(region_grid_x),
+                                    static_cast<std::uint16_t>(region_grid_y), region_name,
+                                    13, 0, 20, static_cast<std::uint8_t>((std::min)(avatars.size(), std::size_t{255}))});
+                            }
+                            for (const auto& neighbor : region_neighbors) {
+                                if (neighbor.grid_x < 0 || neighbor.grid_x > 65535 ||
+                                    neighbor.grid_y < 0 || neighbor.grid_y > 65535) continue;
+                                regions.push_back(homeworldz::viewer::MapBlock{
+                                    static_cast<std::uint16_t>(neighbor.grid_x),
+                                    static_cast<std::uint16_t>(neighbor.grid_y), neighbor.name});
+                            }
+                            return regions;
+                        };
+                        if (const auto request =
+                                homeworldz::viewer::decode_map_block_request(packet->payload);
+                            request && request->agent_id == identity->agent_id &&
+                            request->session_id == identity->session_id) {
+                            auto regions = available_map_regions();
+                            std::erase_if(regions, [&](const auto& region) {
+                                return region.x < request->min_x || region.x > request->max_x ||
+                                       region.y < request->min_y || region.y > request->max_y;
+                            });
+                            auto response = homeworldz::viewer::encode_map_block_reply(
+                                identity->agent_id, request->flags, regions);
+                            if (!response.empty())
+                                if (const auto outgoing = circuits.send(
+                                        endpoint, std::move(response), true, now))
+                                    static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
+                        }
+                        if (const auto request =
+                                homeworldz::viewer::decode_map_name_request(packet->payload);
+                            request && request->agent_id == identity->agent_id &&
+                            request->session_id == identity->session_id) {
+                            auto lowercase = [](std::string value) {
+                                std::transform(value.begin(), value.end(), value.begin(), [](unsigned char character) {
+                                    return static_cast<char>(std::tolower(character));
+                                });
+                                return value;
+                            };
+                            const auto prefix = lowercase(request->name);
+                            auto regions = available_map_regions();
+                            std::erase_if(regions, [&](const auto& region) {
+                                return !lowercase(region.name).starts_with(prefix);
+                            });
+                            auto response = homeworldz::viewer::encode_map_block_reply(
+                                identity->agent_id, request->flags, regions);
+                            if (!response.empty())
+                                if (const auto outgoing = circuits.send(
+                                        endpoint, std::move(response), true, now))
+                                    static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
+                        }
                         if (const auto requested_names =
                                 homeworldz::viewer::decode_uuid_name_request(packet->payload)) {
                             std::vector<homeworldz::viewer::UuidName> names;

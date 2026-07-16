@@ -241,6 +241,30 @@ struct UuidName {
     std::string last_name;
 };
 
+struct MapBlockRequest : AgentMessage {
+    std::uint32_t flags{};
+    std::uint16_t min_x{};
+    std::uint16_t max_x{};
+    std::uint16_t min_y{};
+    std::uint16_t max_y{};
+};
+
+struct MapNameRequest : AgentMessage {
+    std::uint32_t flags{};
+    std::string name;
+};
+
+struct MapBlock {
+    std::uint16_t x{};
+    std::uint16_t y{};
+    std::string name;
+    std::uint8_t access{13};
+    std::uint32_t region_flags{};
+    std::uint8_t water_height{20};
+    std::uint8_t agents{};
+    Uuid map_image_id{};
+};
+
 struct ObjectProperties {
     Uuid object_id{};
     Uuid creator_id{};
@@ -500,6 +524,10 @@ std::vector<std::byte> encode_object_properties_family(
     std::uint32_t request_flags, const ObjectProperties& object);
 std::optional<std::vector<Uuid>> decode_uuid_name_request(std::span<const std::byte> payload);
 std::vector<std::byte> encode_uuid_name_reply(std::span<const UuidName> names);
+std::optional<MapBlockRequest> decode_map_block_request(std::span<const std::byte> payload);
+std::optional<MapNameRequest> decode_map_name_request(std::span<const std::byte> payload);
+std::vector<std::byte> encode_map_block_reply(const Uuid& agent_id, std::uint32_t flags,
+                                               std::span<const MapBlock> regions);
 std::vector<std::byte> encode_update_create_inventory_item(const AgentMessage& message,
                                                            std::uint32_t callback_id,
                                                            const InventoryItem& item);
