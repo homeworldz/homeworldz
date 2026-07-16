@@ -51,6 +51,7 @@ constexpr socket_handle invalid_socket = INVALID_SOCKET;
 static void close_socket(socket_handle socket) { closesocket(socket); }
 #else
 #include <arpa/inet.h>
+#include <netdb.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
