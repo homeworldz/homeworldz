@@ -757,3 +757,6 @@ five-point Jolt convex hull contacted naturally on all four sloped faces.
 Mouse-drag acceptance remains pending after the initial test exposed excessive
 impulse and wrong-direction movement caused by box-mass scaling and an ignored
 object-local grab offset.
+The corrected controller passed repeat live acceptance on 2026-07-16 with
+`Pyramid1` both unrotated and noticeably rotated: it followed mouse drags in
+the requested direction with controlled momentum and no launch behavior.

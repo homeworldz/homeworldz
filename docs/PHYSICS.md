@@ -339,7 +339,8 @@ body embedded in terrain and provoking a violent solver correction.
 An initial pyramid mouse-drag test on 2026-07-16 exposed both grab-controller
 errors above: the small pyramid gained excessive momentum and could move away
 from the drag direction. The controller correction has automated coverage and
-awaits repeat live acceptance with a rotated pyramid.
+passed repeat live acceptance with `Pyramid1` both unrotated and rotated: drag
+direction and momentum were correct in both cases.
 
 The Phase 1 region has no neighbors on any border. Physical body origins are
 therefore constrained to `0..256` on X and Y, with velocity that still points
