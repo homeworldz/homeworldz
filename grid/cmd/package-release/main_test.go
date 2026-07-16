@@ -1,9 +1,13 @@
 package main
 
 import (
+	"archive/tar"
+	"compress/gzip"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestSafeVersion(t *testing.T) {
@@ -16,6 +20,62 @@ func TestSafeVersion(t *testing.T) {
 		if _, err := safeVersion(value); err == nil {
 			t.Fatalf("safeVersion(%q) unexpectedly succeeded", value)
 		}
+	}
+}
+
+func TestWriteTarGZUsesStablePathsAndExecutableModes(t *testing.T) {
+	directory := t.TempDir()
+	binary := filepath.Join(directory, "homeworldz-grid")
+	config := filepath.Join(directory, "grid.ini")
+	if err := os.WriteFile(binary, []byte("binary"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(config, []byte("config"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(directory, "release.tar.gz")
+	if err := writeTarGZ(path, "homeworldz-grid", []archiveEntry{
+		{source: config, name: "config/examples/grid.ini"},
+		{source: binary, name: "homeworldz-grid"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	compressed, err := gzip.NewReader(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	archive := tar.NewReader(compressed)
+	want := map[string]int64{
+		"homeworldz-grid/config/examples/grid.ini": 0o644,
+		"homeworldz-grid/homeworldz-grid":          0o755,
+	}
+	for {
+		header, err := archive.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		mode, found := want[header.Name]
+		if !found {
+			t.Fatalf("unexpected archive entry %q", header.Name)
+		}
+		if header.Mode != mode {
+			t.Fatalf("%s mode = %o, want %o", header.Name, header.Mode, mode)
+		}
+		if !header.ModTime.Equal(time.Unix(0, 0).UTC()) {
+			t.Fatalf("%s has unstable timestamp %s", header.Name, header.ModTime)
+		}
+		delete(want, header.Name)
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing archive entries: %#v", want)
 	}
 }
 

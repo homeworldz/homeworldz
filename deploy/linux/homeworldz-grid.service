@@ -1,0 +1,20 @@
+[Unit]
+Description=HomeWorldz Grid Service
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=homeworldz
+Group=homeworldz
+WorkingDirectory=/opt/homeworldz/grid
+ExecStart=/opt/homeworldz/grid/homeworldz-grid -config /etc/homeworldz/grid
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+
+[Install]
+WantedBy=multi-user.target

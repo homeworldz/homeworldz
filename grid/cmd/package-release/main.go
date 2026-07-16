@@ -1,7 +1,9 @@
 package main
 
 import (
+	"archive/tar"
 	"archive/zip"
+	"compress/gzip"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -23,6 +25,7 @@ type options struct {
 	version          string
 	outputDirectory  string
 	regionExecutable string
+	gridOnly         bool
 }
 
 type archiveEntry struct {
@@ -35,6 +38,7 @@ func main() {
 	flag.StringVar(&opts.version, "version", "", "override the repository VERSION for a preview package")
 	flag.StringVar(&opts.outputDirectory, "output", "dist", "release archive output directory")
 	flag.StringVar(&opts.regionExecutable, "region-executable", "", "path to the native homeworldz-region executable")
+	flag.BoolVar(&opts.gridOnly, "grid-only", false, "build only the grid-owner archive")
 	flag.Parse()
 	if err := run(context.Background(), opts); err != nil {
 		fmt.Fprintln(os.Stderr, "package release:", err)
@@ -43,8 +47,13 @@ func main() {
 }
 
 func run(ctx context.Context, opts options) error {
-	if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
-		return errors.New("native release packaging currently supports windows-amd64")
+	if (runtime.GOOS != "windows" && runtime.GOOS != "linux") || runtime.GOARCH != "amd64" {
+		return errors.New("native release packaging supports windows-amd64 and linux-amd64")
+	}
+	isWindows := runtime.GOOS == "windows"
+	binarySuffix := ""
+	if isWindows {
+		binarySuffix = ".exe"
 	}
 	root, err := repositoryRoot()
 	if err != nil {
@@ -80,9 +89,9 @@ func run(ctx context.Context, opts options) error {
 	}
 
 	gridBins := []struct{ command, name string }{
-		{"./grid/cmd/grid", "homeworldz-grid.exe"},
-		{"./grid/cmd/bootstrap-grid", "bootstrap-grid.exe"},
-		{"./grid/cmd/configure-library", "configure-library.exe"},
+		{"./grid/cmd/grid", "homeworldz-grid" + binarySuffix},
+		{"./grid/cmd/bootstrap-grid", "bootstrap-grid" + binarySuffix},
+		{"./grid/cmd/configure-library", "configure-library" + binarySuffix},
 	}
 	gridEntries := make([]archiveEntry, 0, len(gridBins)+8)
 	for _, binary := range gridBins {
@@ -102,12 +111,32 @@ func run(ctx context.Context, opts options) error {
 		archiveEntry{filepath.Join(root, "docs", "INSTALL-REGION.md"), "INSTALL-REGION.md"},
 		archiveEntry{filepath.Join(root, "docs", "FEATURES.md"), "docs/FEATURES.md"},
 		archiveEntry{filepath.Join(root, "docs", "ROADMAP.md"), "docs/ROADMAP.md"},
+		archiveEntry{filepath.Join(root, "deploy", "linux", "Caddyfile.grid"), "deploy/linux/Caddyfile.grid"},
+		archiveEntry{filepath.Join(root, "deploy", "linux", "homeworldz-grid.service"), "deploy/linux/homeworldz-grid.service"},
 	)
 	gridEntries, err = appendTree(gridEntries, filepath.Join(root, "db", "migrations"), "db/migrations", func(path string) bool {
 		return strings.HasSuffix(path, ".up.sql")
 	})
 	if err != nil {
 		return err
+	}
+	if opts.gridOnly {
+		platform := runtime.GOOS + "-x64"
+		extension := ".tar.gz"
+		writer := writeTarGZ
+		if isWindows {
+			extension = ".zip"
+			writer = writeZIP
+		}
+		gridArchive := filepath.Join(output, "homeworldz-grid-"+version+"-"+platform+extension)
+		if err := writer(gridArchive, "homeworldz-grid", gridEntries); err != nil {
+			return err
+		}
+		if err := writeChecksums(filepath.Join(output, "SHA256SUMS"), []string{gridArchive}); err != nil {
+			return err
+		}
+		fmt.Println(gridArchive)
+		return nil
 	}
 
 	regionExecutable, err := findRegionExecutable(root, opts.regionExecutable)
@@ -116,7 +145,7 @@ func run(ctx context.Context, opts options) error {
 	}
 	regionEntries := []archiveEntry{
 		{versionFile, "VERSION"},
-		{regionExecutable, "homeworldz-region.exe"},
+		{regionExecutable, "homeworldz-region" + binarySuffix},
 		{filepath.Join(root, "config", "examples", "region.ini"), "config/examples/region.ini"},
 		{filepath.Join(root, "config", "examples", "region-personal.ini"), "config/examples/region-personal.ini"},
 		{filepath.Join(root, "config", "examples", "region-cloud.ini"), "config/examples/region-cloud.ini"},
@@ -125,26 +154,36 @@ func run(ctx context.Context, opts options) error {
 		{filepath.Join(root, "docs", "FEATURES.md"), "docs/FEATURES.md"},
 		{filepath.Join(root, "docs", "ROADMAP.md"), "docs/ROADMAP.md"},
 	}
-	for _, dll := range siblingDLLs(regionExecutable) {
-		regionEntries = append(regionEntries, archiveEntry{dll, filepath.Base(dll)})
-	}
-	runtimeEntries, err := visualCRuntimeEntries(ctx)
-	if err != nil {
+	if isWindows {
+		for _, dll := range siblingDLLs(regionExecutable) {
+			regionEntries = append(regionEntries, archiveEntry{dll, filepath.Base(dll)})
+		}
+		runtimeEntries, runtimeErr := visualCRuntimeEntries(ctx)
+		if runtimeErr != nil {
+			return runtimeErr
+		}
+		regionEntries = append(regionEntries, runtimeEntries...)
+	} else if err := validateLinuxDependencies(ctx, regionExecutable); err != nil {
 		return err
 	}
-	regionEntries = append(regionEntries, runtimeEntries...)
 	regionEntries, err = appendTree(regionEntries, filepath.Join(root, "assets", "region"), "assets/region", nil)
 	if err != nil {
 		return err
 	}
 
-	platform := "windows-x64"
-	gridArchive := filepath.Join(output, "homeworldz-grid-"+version+"-"+platform+".zip")
-	regionArchive := filepath.Join(output, "homeworldz-region-"+version+"-"+platform+".zip")
-	if err := writeZIP(gridArchive, "homeworldz-grid", gridEntries); err != nil {
+	platform := runtime.GOOS + "-x64"
+	extension := ".tar.gz"
+	writer := writeTarGZ
+	if isWindows {
+		extension = ".zip"
+		writer = writeZIP
+	}
+	gridArchive := filepath.Join(output, "homeworldz-grid-"+version+"-"+platform+extension)
+	regionArchive := filepath.Join(output, "homeworldz-region-"+version+"-"+platform+extension)
+	if err := writer(gridArchive, "homeworldz-grid", gridEntries); err != nil {
 		return err
 	}
-	if err := writeZIP(regionArchive, "homeworldz-region", regionEntries); err != nil {
+	if err := writer(regionArchive, "homeworldz-region", regionEntries); err != nil {
 		return err
 	}
 	if err := writeChecksums(filepath.Join(output, "SHA256SUMS"), []string{gridArchive, regionArchive}); err != nil {
@@ -195,7 +234,7 @@ func buildGoCommand(ctx context.Context, root, commandPath, destination, version
 	args = append(args, commandPath)
 	command := exec.CommandContext(ctx, "go", args...)
 	command.Dir = root
-	command.Env = append(os.Environ(), "GOOS=windows", "GOARCH=amd64", "CGO_ENABLED=0")
+	command.Env = append(os.Environ(), "GOOS="+runtime.GOOS, "GOARCH=amd64", "CGO_ENABLED=0")
 	output, err := command.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("build %s: %w: %s", commandPath, err, strings.TrimSpace(string(output)))
@@ -213,16 +252,35 @@ func findRegionExecutable(root, supplied string) (string, error) {
 		}
 		return "", fmt.Errorf("region executable %s was not found", supplied)
 	}
-	for _, candidate := range []string{
-		filepath.Join(root, "build", "windows-vcpkg", "region", "Release", "homeworldz-region.exe"),
-		filepath.Join(root, "build", "windows-vcpkg", "region", "Debug", "homeworldz-region.exe"),
-		filepath.Join(root, "build", "default", "region", "homeworldz-region.exe"),
-	} {
+	candidates := []string{
+		filepath.Join(root, "build", "release", "region", "homeworldz-region"),
+		filepath.Join(root, "build", "default", "region", "homeworldz-region"),
+	}
+	if runtime.GOOS == "windows" {
+		candidates = []string{
+			filepath.Join(root, "build", "windows-vcpkg", "region", "Release", "homeworldz-region.exe"),
+			filepath.Join(root, "build", "windows-vcpkg", "region", "Debug", "homeworldz-region.exe"),
+			filepath.Join(root, "build", "default", "region", "homeworldz-region.exe"),
+		}
+	}
+	for _, candidate := range candidates {
 		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
 			return candidate, nil
 		}
 	}
-	return "", errors.New("homeworldz-region.exe was not found; build it or pass -region-executable")
+	return "", errors.New("homeworldz-region executable was not found; build it or pass -region-executable")
+}
+
+func validateLinuxDependencies(ctx context.Context, executable string) error {
+	command := exec.CommandContext(ctx, "ldd", executable)
+	output, err := command.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("inspect Linux region dependencies: %w: %s", err, strings.TrimSpace(string(output)))
+	}
+	if strings.Contains(string(output), "not found") {
+		return fmt.Errorf("Linux region has unresolved shared dependencies: %s", strings.TrimSpace(string(output)))
+	}
+	return nil
 }
 
 func siblingDLLs(executable string) []string {
@@ -315,6 +373,63 @@ func writeZIP(path, root string, entries []archiveEntry) error {
 	}
 	if err := file.Close(); err != nil {
 		return fmt.Errorf("close %s: %w", path, err)
+	}
+	return nil
+}
+
+func writeTarGZ(path, root string, entries []archiveEntry) error {
+	sort.Slice(entries, func(i, j int) bool { return entries[i].name < entries[j].name })
+	file, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("create %s: %w", path, err)
+	}
+	compressed := gzip.NewWriter(file)
+	compressed.Header.ModTime = time.Unix(0, 0).UTC()
+	archive := tar.NewWriter(compressed)
+	for _, entry := range entries {
+		if err := addTarFile(archive, entry.source, root+"/"+entry.name); err != nil {
+			archive.Close()
+			compressed.Close()
+			file.Close()
+			return err
+		}
+	}
+	if err := archive.Close(); err != nil {
+		compressed.Close()
+		file.Close()
+		return fmt.Errorf("finish %s: %w", path, err)
+	}
+	if err := compressed.Close(); err != nil {
+		file.Close()
+		return fmt.Errorf("compress %s: %w", path, err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("close %s: %w", path, err)
+	}
+	return nil
+}
+
+func addTarFile(archive *tar.Writer, source, name string) error {
+	input, err := os.Open(source)
+	if err != nil {
+		return fmt.Errorf("open %s: %w", source, err)
+	}
+	defer input.Close()
+	info, err := input.Stat()
+	if err != nil {
+		return fmt.Errorf("stat %s: %w", source, err)
+	}
+	mode := int64(0o644)
+	base := filepath.Base(name)
+	if base == "homeworldz-grid" || base == "bootstrap-grid" || base == "configure-library" || base == "homeworldz-region" {
+		mode = 0o755
+	}
+	header := &tar.Header{Name: filepath.ToSlash(name), Mode: mode, Size: info.Size(), ModTime: time.Unix(0, 0).UTC(), Typeflag: tar.TypeReg}
+	if err := archive.WriteHeader(header); err != nil {
+		return fmt.Errorf("create archive entry %s: %w", name, err)
+	}
+	if _, err := io.Copy(archive, input); err != nil {
+		return fmt.Errorf("write archive entry %s: %w", name, err)
 	}
 	return nil
 }

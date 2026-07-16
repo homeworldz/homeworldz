@@ -50,6 +50,19 @@ jobs:
       - name: Test (Linux)
         if: runner.os == 'Linux'
         run: ctest --test-dir build -C Debug --output-on-failure
+      - uses: actions/setup-go@v6
+        if: runner.os == 'Linux'
+        with:
+          go-version-file: grid/go.mod
+          cache-dependency-path: grid/go.sum
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          go run ./grid/cmd/package-release \
+            -version ci -output dist \
+            -region-executable build/region/homeworldz-region
+          tar -tzf dist/homeworldz-grid-ci-linux-x64.tar.gz | grep 'homeworldz-grid/homeworldz-grid$'
+          tar -tzf dist/homeworldz-region-ci-linux-x64.tar.gz | grep 'homeworldz-region/homeworldz-region$'
       - name: Build and test (Windows)
         if: runner.os == 'Windows'
         run: .\scripts\build-region.ps1 -Test
@@ -82,12 +95,11 @@ jobs:
         with:
           go-version-file: grid/go.mod
           cache-dependency-path: grid/go.sum
-      - name: Apply initial migration
+      - name: Apply migrations
         run: |
-          psql -h localhost -U homeworldz -d homeworldz -v ON_ERROR_STOP=1 -f db/migrations/000001_initial.up.sql
-          psql -h localhost -U homeworldz -d homeworldz -v ON_ERROR_STOP=1 -f db/migrations/000002_viewer_login.up.sql
-          psql -h localhost -U homeworldz -d homeworldz -v ON_ERROR_STOP=1 -f db/migrations/000003_viewer_circuit.up.sql
-          psql -h localhost -U homeworldz -d homeworldz -v ON_ERROR_STOP=1 -f db/migrations/000004_region_viewer_port.up.sql
+          for migration in db/migrations/*.up.sql; do
+            psql -h localhost -U homeworldz -d homeworldz -v ON_ERROR_STOP=1 -f "$migration"
+          done
       - name: Verify schema
         run: psql -h localhost -U homeworldz -d homeworldz -v ON_ERROR_STOP=1 -c "SELECT version FROM schema_metadata WHERE version IN (1, 2, 3, 4) ORDER BY version"
       - name: Test region lease persistence
@@ -102,7 +114,7 @@ jobs:
       - name: Start grid and verify probes
         shell: bash
         run: |
-          go run ./grid/cmd/grid > grid.log 2>&1 &
+          go run ./grid/cmd/grid -config config/ci > grid.log 2>&1 &
           grid_pid=$!
           trap 'kill "$grid_pid" 2>/dev/null || true; cat grid.log' EXIT
           for attempt in {1..30}; do
@@ -115,20 +127,20 @@ jobs:
           curl --fail --show-error http://localhost:42000/ready
           curl --fail --show-error http://localhost:42000/version
           registration=$(curl --fail --show-error \
-            -H 'Authorization: Bearer homeworldz-ci-token' \
+            -H 'Authorization: Bearer homeworldz-ci-region-key' \
             -H 'Content-Type: application/json' \
-            -d '{"name":"CI Region","gridX":1000,"gridY":1000,"publicEndpoint":"http://localhost:42001","leaseSeconds":60}' \
-            http://localhost:42000/api/v1/regions)
+            -d '{"publicEndpoint":"http://localhost:42001","viewerPort":42002,"leaseSeconds":60}' \
+            http://localhost:42000/api/v1/region-runtime/11111111-1111-4111-8111-111111111111)
           region_id=$(echo "$registration" | jq -r .id)
           curl --fail --show-error \
             -H 'Authorization: Bearer homeworldz-ci-token' \
             http://localhost:42000/api/v1/regions
           curl --fail --show-error -X PUT \
-            -H 'Authorization: Bearer homeworldz-ci-token' \
+            -H 'Authorization: Bearer homeworldz-ci-region-key' \
             -H 'Content-Type: application/json' \
             -d '{"leaseSeconds":120}' \
-            "http://localhost:42000/api/v1/regions/$region_id/lease"
+            "http://localhost:42000/api/v1/region-runtime/$region_id/lease"
           curl --fail --show-error -X DELETE \
-            -H 'Authorization: Bearer homeworldz-ci-token' \
-            "http://localhost:42000/api/v1/regions/$region_id"
+            -H 'Authorization: Bearer homeworldz-ci-region-key' \
+            "http://localhost:42000/api/v1/region-runtime/$region_id"
 

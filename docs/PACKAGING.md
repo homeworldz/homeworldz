@@ -12,19 +12,33 @@ its adjacent dependency DLLs, app-local Microsoft Visual C++ runtime DLLs,
 static region assets, the example region configuration, and
 `INSTALL-REGION.md`.
 
-On a Windows x64 development host with the region already built, run:
+On a Windows or Linux x64 development host with the native region already
+built, run:
 
 ```cmd
 scripts\package-release.cmd -version 0.1.0-preview.1
+```
+
+Linux:
+
+```sh
+go run ./grid/cmd/package-release -version 0.1.0-preview.1 \
+  -region-executable build/release/region/homeworldz-region
 ```
 
 Use `-region-executable` to select a particular CMake output. Archives are
 written to `dist` by default; `-output` changes that directory. The command
 also writes `SHA256SUMS` for transport verification.
 
-Packaging currently targets native Windows x64. Linux x64 archives should use
-the same manifests once native C++ dependency collection and `tar.gz` output
-are implemented. Release automation should build the C++ region in Release
-mode with `-DHOMEWORLDZ_VERSION=<version>` before packaging; the local fallback
-to a Debug executable exists only so developers can validate package
+Grid operators can build the grid-owner archive without a native C++ region
+build by passing `-grid-only`. This is useful when preparing a central grid on
+a minimal Linux host; it does not weaken or alter the resulting grid package.
+
+The tool emits deterministic ZIP files on Windows and deterministic `tar.gz`
+files on Linux. Linux packaging validates the region executable with `ldd` and
+fails when a shared dependency is unresolved; it relies on the distribution's
+glibc, C++ runtime, and SQLite runtime rather than bundling core operating
+system libraries. Release automation should build the C++ region in Release
+mode with `-DHOMEWORLDZ_VERSION=<version>` before packaging; the local Windows
+fallback to a Debug executable exists only so developers can validate package
 composition before a formal release build.

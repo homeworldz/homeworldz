@@ -33,6 +33,10 @@ homeworldz-grid/
       regions.json          # provisioned region identities and access keys
   db/
     migrations/*.up.sql
+  deploy/
+    linux/
+      Caddyfile.grid
+      homeworldz-grid.service
   docs/
     FEATURES.md
     ROADMAP.md
@@ -48,6 +52,8 @@ operator and service account should be able to read files containing secrets.
   PostgreSQL 18.4 is recommended for a new grid.
 - A PostgreSQL administrator login for initial setup.
 - The prebuilt package matching the host operating system and CPU.
+- On Ubuntu, `ca-certificates`, PostgreSQL, and Caddy for the recommended
+  public HTTPS layout.
 
 The packaged grid does not require Go, Node.js, Visual Studio, CMake, `psql`,
 Docker, or a C++ compiler.
@@ -117,8 +123,61 @@ after changing it.
 
 Loopback port 8002 is appropriate when grid, region, and viewer are all on one
 personal computer. It deliberately accepts no remote connections. The cloud
-profile instead binds `0.0.0.0:80` and must be edited to use the grid's DNS
-name, for example `http://sandbox.homeworldz.com`.
+profile binds the grid privately at `127.0.0.1:8002` and advertises
+`https://grid.homeworldz.com`. Caddy owns public ports 80 and 443 and forwards
+HTTPS requests to that loopback listener.
+
+## Install as an Ubuntu service
+
+The Linux archive includes a Caddy site and hardened systemd unit. The
+following layout keeps replaceable program files separate from private
+configuration:
+
+```text
+/opt/homeworldz/grid/       # extracted package files and executables
+/etc/homeworldz/grid/       # grid.ini, db.ini, regions.json
+/etc/caddy/Caddyfile        # public HTTPS endpoint
+```
+
+As an administrator, create the service identity and directories:
+
+```sh
+sudo useradd --system --home /nonexistent --shell /usr/sbin/nologin homeworldz
+sudo install -d -o root -g root -m 0755 /opt/homeworldz/grid
+sudo install -d -o homeworldz -g homeworldz -m 0700 /etc/homeworldz/grid
+```
+
+Extract the contents of the archive's `homeworldz-grid` directory into
+`/opt/homeworldz/grid`.
+
+Install the private cloud examples, then edit both secrets and the provisioned
+region rows before startup:
+
+```sh
+sudo install -o homeworldz -g homeworldz -m 0600 \
+  /opt/homeworldz/grid/config/examples/grid-cloud.ini \
+  /etc/homeworldz/grid/grid.ini
+sudo install -o homeworldz -g homeworldz -m 0600 \
+  /opt/homeworldz/grid/config/examples/regions.json \
+  /etc/homeworldz/grid/regions.json
+sudoedit /etc/homeworldz/grid/grid.ini
+sudoedit /etc/homeworldz/grid/regions.json
+```
+
+Install the service and Caddy configuration:
+
+```sh
+sudo install -o root -g root -m 0644 \
+  /opt/homeworldz/grid/deploy/linux/homeworldz-grid.service \
+  /etc/systemd/system/homeworldz-grid.service
+sudo install -o root -g root -m 0644 \
+  /opt/homeworldz/grid/deploy/linux/Caddyfile.grid /etc/caddy/Caddyfile
+sudo systemctl daemon-reload
+```
+
+The DNS-only A record for `grid.homeworldz.com` must point at the host, and its
+firewall must allow inbound TCP 80 and 443 before Caddy can obtain its
+certificate. Keep PostgreSQL and port 8002 off the public Internet.
 
 ## Create the database
 
@@ -133,7 +192,8 @@ bootstrap-grid.exe
 Linux:
 
 ```sh
-./bootstrap-grid
+sudo -u homeworldz ./bootstrap-grid \
+  -config-dir /etc/homeworldz/grid -migrations db/migrations
 ```
 
 It asks for the PostgreSQL administrator password and twice for the password to
@@ -169,13 +229,13 @@ homeworldz-grid.exe
 Linux:
 
 ```sh
-./homeworldz-grid
+sudo systemctl enable --now homeworldz-grid caddy
 ```
 
-The service reads `config/grid.ini`, `config/db.ini`, and `config/regions.json`.
-Stop it with Ctrl+C;
-it performs a graceful HTTP shutdown. A future installer is expected to add
-Windows-service and systemd integration, but neither is implemented yet.
+The service reads `grid.ini`, `db.ini`, and `regions.json` from the directory
+passed with `-config`; the packaged systemd unit uses `/etc/homeworldz/grid`.
+Stop a foreground process with Ctrl+C or the Ubuntu service with
+`sudo systemctl stop homeworldz-grid`; both perform a graceful HTTP shutdown.
 
 The default operational endpoints are:
 
