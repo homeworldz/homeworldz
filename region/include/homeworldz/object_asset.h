@@ -24,6 +24,8 @@ struct ObjectAsset {
     std::vector<std::byte> texture_entry;
     std::uint8_t path_curve{0x10};
     std::uint8_t profile_curve{0x01};
+    bool physical{};
+    bool phantom{};
 };
 
 std::optional<ObjectAsset> parse_object_asset(std::span<const std::byte> content);

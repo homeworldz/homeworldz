@@ -470,6 +470,8 @@ std::string object_asset_json(const homeworldz::scene::Entity& entity) {
         ",\"textureEntry\":" + homeworldz::api::json_string(texture_entry) +
         ",\"pathCurve\":" + std::to_string(entity.path_curve) +
         ",\"profileCurve\":" + std::to_string(entity.profile_curve) +
+        ",\"physical\":" + (entity.physical ? "true" : "false") +
+        ",\"phantom\":" + (entity.phantom ? "true" : "false") +
         ",\"basePermissions\":" + std::to_string(entity.base_permissions) +
         ",\"ownerPermissions\":" + std::to_string(entity.owner_permissions) +
         ",\"groupPermissions\":" + std::to_string(entity.group_permissions) +
@@ -2885,6 +2887,8 @@ int main() {
                                             entity->texture_entry = asset->texture_entry;
                                             entity->path_curve = asset->path_curve;
                                             entity->profile_curve = asset->profile_curve;
+                                            entity->physical = asset->physical;
+                                            entity->phantom = asset->phantom;
                                             entity->description = item->description.empty()
                                                 ? asset->description : item->description;
                                             entity->base_permissions = item->base_permissions;

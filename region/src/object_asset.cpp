@@ -58,6 +58,15 @@ std::optional<std::string> string_after(std::string_view content, std::string_vi
     return std::nullopt;
 }
 
+std::optional<bool> boolean_after(std::string_view content, std::string_view marker) {
+    const auto marker_position = content.find(marker);
+    if (marker_position == std::string_view::npos) return std::nullopt;
+    const auto start = marker_position + marker.size();
+    if (content.substr(start, 4) == "true") return true;
+    if (content.substr(start, 5) == "false") return false;
+    return std::nullopt;
+}
+
 std::optional<std::vector<std::byte>> bytes_from_hex(std::string_view value) {
     if (value.size() % 2 != 0 || value.size() > 131070) return std::nullopt;
     std::vector<std::byte> result(value.size() / 2);
@@ -97,6 +106,8 @@ std::optional<ObjectAsset> parse_object_asset(std::span<const std::byte> content
     auto path_curve = number_after(text, R"("pathCurve":)", position);
     position = 0;
     auto profile_curve = number_after(text, R"("profileCurve":)", position);
+    auto physical = boolean_after(text, R"("physical":)");
+    auto phantom = boolean_after(text, R"("phantom":)");
     const auto texture_entry_hex = string_after(text, R"("textureEntry":")");
     if (!scale || !rotation || !description || !material ||
         scale->x <= 0.0 || scale->y <= 0.0 || scale->z <= 0.0 ||
@@ -110,6 +121,8 @@ std::optional<ObjectAsset> parse_object_asset(std::span<const std::byte> content
     if (!physics_gravity_multiplier) physics_gravity_multiplier = 1.0;
     if (!path_curve) path_curve = 0x10;
     if (!profile_curve) profile_curve = 0x01;
+    if (!physical) physical = false;
+    if (!phantom) phantom = false;
     if (*physics_shape_type < 0.0 || *physics_shape_type > 2.0 ||
         std::floor(*physics_shape_type) != *physics_shape_type ||
         *physics_density < 1.0 || *physics_density > 22587.0 ||
@@ -126,7 +139,8 @@ std::optional<ObjectAsset> parse_object_asset(std::span<const std::byte> content
     return ObjectAsset{*scale, *rotation, static_cast<std::uint8_t>(*material), *description,
         static_cast<std::uint8_t>(*physics_shape_type), *physics_density, *physics_friction,
         *physics_restitution, *physics_gravity_multiplier, std::move(*texture_entry),
-        static_cast<std::uint8_t>(*path_curve), static_cast<std::uint8_t>(*profile_curve)};
+        static_cast<std::uint8_t>(*path_curve), static_cast<std::uint8_t>(*profile_curve),
+        *physical, *phantom};
 }
 
 } // namespace homeworldz::asset
