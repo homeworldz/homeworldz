@@ -31,8 +31,6 @@ acceptance tests pass.
   baking, and persistent appearance across relogs.
 - [x] Provide a read-only system Library with default avatar and terrain
   content.
-- [ ] Keep avatar appearance stable while moving, flying, sitting, teleporting,
-  and crossing regions.
 
 ### Authoritative avatar movement
 
@@ -155,6 +153,8 @@ acceptance tests pass.
 
 ### Teleports and avatar crossings
 
+- [ ] Keep avatar appearance stable while moving, flying, sitting, teleporting,
+  and crossing Regions.
 - [ ] Build an authenticated, idempotent two-region handoff transaction with a
   transit UUID, generation, prepare, accept, activate, and rollback stages.
 - [ ] Implement local and remote teleports, destination validation, viewer

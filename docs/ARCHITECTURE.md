@@ -327,18 +327,9 @@ the viewer sees and depends on:
 Internal service design should not be constrained by old server-to-server
 protocols.
 
-## Initial Milestone
+## Implementation Roadmap
 
-The first playable architecture milestone should implement a minimal vertical
-slice:
-
-- One Go login/grid service backed by Postgres.
-- One C++ region server.
-- HTTP/JSON service calls between region and grid.
-- Local region scene and asset storage.
-- Jolt or PhysX-backed collision/physics prototype.
-- Firestorm login to a single region.
-- Basic avatar movement, chat, terrain, static objects, and asset fetch.
-
-After that slice works, expand toward inventory, object editing, scripting,
-cross-region transfer, asset federation, and production operations.
+Implementation phases, milestones, completion state, and upcoming work are
+maintained in the [HomeWorldz roadmap](ROADMAP.md). This document describes the
+architectural boundaries and decisions rather than duplicating that evolving
+project status.
