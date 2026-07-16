@@ -105,8 +105,10 @@ An authenticated region can discover the currently leased cardinal neighbors
 of any online region with `GET /api/v1/regions/{uuid}/neighbors`. The Grid
 derives north, east, south, and west adjacency from registered coordinates,
 excludes diagonal and expired leases, and returns results in that deterministic
-order. A Region fetches and validates this topology at startup and retains the
-snapshot in runtime state. Border crossing is not enabled by discovery alone;
+order. A Region fetches and validates this topology at startup, retains the
+snapshot in runtime state, and refreshes it every five seconds so independently
+started or restarted neighbors converge without a required start order. Border
+crossing is not enabled by discovery alone;
 until the crossing handoff exists, the simulation continues to contain entities
 at every region edge.
 

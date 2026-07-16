@@ -630,6 +630,53 @@ int main(int argc, char* argv[]) {
     std::unique_ptr<homeworldz::grid::Client> viewer_grid;
     std::unique_ptr<homeworldz::grid::ViewerSessionCache> viewer_sessions;
     std::vector<homeworldz::grid::RegionNeighbor> region_neighbors;
+    auto next_neighbor_refresh = std::chrono::steady_clock::time_point{};
+    const auto refresh_region_neighbors = [&](bool required) {
+        const auto retry_at = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        try {
+            const auto discovered = viewer_grid ?
+                viewer_grid->find_region_neighbors(provisioned_region_id) : std::nullopt;
+            if (!discovered) {
+                std::cerr << "{\"level\":\"" << (required ? "error" : "warning")
+                          << "\",\"message\":\"region neighbor discovery failed\"}" << std::endl;
+                next_neighbor_refresh = retry_at;
+                return false;
+            }
+            for (const auto& neighbor : *discovered) {
+                int expected_x = region_grid_x;
+                int expected_y = region_grid_y;
+                if (neighbor.direction == "north") ++expected_y;
+                else if (neighbor.direction == "east") ++expected_x;
+                else if (neighbor.direction == "south") --expected_y;
+                else if (neighbor.direction == "west") --expected_x;
+                if (neighbor.grid_x != expected_x || neighbor.grid_y != expected_y) {
+                    std::cerr << "{\"level\":\"" << (required ? "error" : "warning")
+                              << "\",\"message\":\"invalid region neighbor topology\"}" << std::endl;
+                    next_neighbor_refresh = retry_at;
+                    return false;
+                }
+            }
+            const bool changed = region_neighbors != *discovered;
+            region_neighbors = *discovered;
+            if (required || changed) {
+                std::cout << "{\"level\":\"info\",\"message\":\"region neighbors discovered\",\"count\":"
+                          << region_neighbors.size() << ",\"borders\":[";
+                for (std::size_t index = 0; index < region_neighbors.size(); ++index) {
+                    if (index != 0) std::cout << ',';
+                    std::cout << homeworldz::api::json_string(region_neighbors[index].direction);
+                }
+                std::cout << "]}" << std::endl;
+            }
+            next_neighbor_refresh = retry_at;
+            return true;
+        } catch (const std::exception& error) {
+            std::cerr << "{\"level\":\"" << (required ? "error" : "warning")
+                      << "\",\"message\":\"region neighbor discovery failed\",\"error\":"
+                      << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+            next_neighbor_refresh = retry_at;
+            return false;
+        }
+    };
     const auto service_token = configured_value("grid.service_token");
     if (service_token.empty()) {
         std::cerr << "{\"level\":\"error\",\"message\":\"grid service token is required\"}" << std::endl;
@@ -662,37 +709,12 @@ int main(int argc, char* argv[]) {
             region_grid_y = provisioned->grid_y;
             auto viewer_transport = homeworldz::grid::socket_transport(grid_url, service_token);
             viewer_grid = std::make_unique<homeworldz::grid::Client>(std::move(viewer_transport));
-            const auto discovered_neighbors = viewer_grid->find_region_neighbors(provisioned->id);
-            if (!discovered_neighbors) {
-                std::cerr << "{\"level\":\"error\",\"message\":\"region neighbor discovery failed\"}" << std::endl;
+            if (!refresh_region_neighbors(true)) {
 #ifdef _WIN32
                 WSACleanup();
 #endif
                 return 1;
             }
-            for (const auto& neighbor : *discovered_neighbors) {
-                int expected_x = provisioned->grid_x;
-                int expected_y = provisioned->grid_y;
-                if (neighbor.direction == "north") ++expected_y;
-                else if (neighbor.direction == "east") ++expected_x;
-                else if (neighbor.direction == "south") --expected_y;
-                else if (neighbor.direction == "west") --expected_x;
-                if (neighbor.grid_x != expected_x || neighbor.grid_y != expected_y) {
-                    std::cerr << "{\"level\":\"error\",\"message\":\"invalid region neighbor topology\"}" << std::endl;
-#ifdef _WIN32
-                    WSACleanup();
-#endif
-                    return 1;
-                }
-            }
-            region_neighbors = *discovered_neighbors;
-            std::cout << "{\"level\":\"info\",\"message\":\"region neighbors discovered\",\"count\":"
-                      << region_neighbors.size() << ",\"borders\":[";
-            for (std::size_t index = 0; index < region_neighbors.size(); ++index) {
-                if (index != 0) std::cout << ',';
-                std::cout << homeworldz::api::json_string(region_neighbors[index].direction);
-            }
-            std::cout << "]}" << std::endl;
             viewer_sessions = std::make_unique<homeworldz::grid::ViewerSessionCache>(*viewer_grid);
             registration = std::make_unique<homeworldz::grid::RegistrationLifecycle>(
                 std::move(registration_client), std::move(settings), provisioned->id);
@@ -3457,6 +3479,8 @@ int main(int argc, char* argv[]) {
             std::cerr << "{\"level\":\"error\",\"message\":\"region lease renewal failed\"}" << std::endl;
             running = false;
         }
+        if (viewer_grid && now >= next_neighbor_refresh)
+            static_cast<void>(refresh_region_neighbors(false));
     }
     try {
         storage->save_snapshot(scene);

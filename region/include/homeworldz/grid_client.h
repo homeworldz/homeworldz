@@ -50,6 +50,7 @@ struct RegionNeighbor {
     int grid_y{};
     std::string public_endpoint;
     int viewer_port{};
+    bool operator==(const RegionNeighbor&) const = default;
 };
 
 struct ViewerSession {
