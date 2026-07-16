@@ -313,7 +313,12 @@ during that edit records the new state but defers dynamic activation until
 deselection; selecting an already-Physical object follows the same rule.
 `ObjectGrabUpdate` mouse drags apply a bounded,
 mass-scaled impulse through the physics interface toward the viewer's grab
-target. This explicit grab controller is independent of ordinary avatar contact,
+target. The controller converts Firestorm's object-local initial grab offset
+to world space on every update, so it moves the originally clicked point rather
+than incorrectly pulling the object origin to that point. It uses the same
+shape-volume mass supplied to the physics body; using box mass for a pyramid,
+for example, would overdrive its one-third-box-volume body by a factor of three.
+This explicit grab controller is independent of ordinary avatar contact,
 which remains entirely within Jolt's character/body solver.
 Live Firestorm acceptance on 2026-07-15 confirmed all three behaviors: an
 edited physical prim remained suspended until its edit form closed, mouse-hand
@@ -323,6 +328,29 @@ reduced mass.
 The Physical-during-edit transition passed live acceptance on 2026-07-16: the
 prim remained suspended when Physical was enabled and began falling only after
 the edit selection closed.
+
+Before a Physical object is reactivated on edit deselection, the region tests
+the bottom of its rotated world-space bounding box against the highest terrain
+sample beneath that box. A penetrating object is raised to terrain plus a small
+clearance and its stale velocity is cleared before its dynamic body is restored.
+This prevents rotation or resizing in the non-dynamic edit state from waking a
+body embedded in terrain and provoking a violent solver correction.
+
+An initial pyramid mouse-drag test on 2026-07-16 exposed both grab-controller
+errors above: the small pyramid gained excessive momentum and could move away
+from the drag direction. The controller correction has automated coverage and
+awaits repeat live acceptance with a rotated pyramid.
+
+The Phase 1 region has no neighbors on any border. Physical body origins are
+therefore constrained to `0..256` on X and Y, with velocity that still points
+out through a crossed edge cancelled. Avatar movement already applies the same
+single-region bounds. Once neighbor discovery exists, an accepting neighbor at
+that border changes the response from containment to a crossing handoff; a
+missing neighbor continues to contain the entity.
+Persisted Physical objects found outside those bounds during startup are
+constrained before normal simulation resumes. If an escaped object is below
+terrain, the region also raises it with the rotated-bounds clearance rule and
+clears its stale velocity, then persists the recovered state.
 
 Canonical sphere prims use native analytic sphere shapes rather than triangle
 collision meshes. Their volume-based mass uses the ellipsoid volume implied by

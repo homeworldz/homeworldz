@@ -751,6 +751,9 @@ sloped face, produced the expected collision. Taking `Prism1` into Inventory
 and re-rezzing it preserved both the wedge shape and Physical state. A complete
 viewer and region restart then retained the rezzed Prism with both properties.
 
-Canonical Pyramid creation passed initial live acceptance on 2026-07-16.
-`Pyramid1` rendered with the expected apex and base, and its five-point Jolt
-convex hull produced natural physical behavior on all four sloped faces.
+Canonical Pyramid creation passed initial shape and collision acceptance on
+2026-07-16: `Pyramid1` rendered with the expected apex and base, and its
+five-point Jolt convex hull contacted naturally on all four sloped faces.
+Mouse-drag acceptance remains pending after the initial test exposed excessive
+impulse and wrong-direction movement caused by box-mass scaling and an ignored
+object-local grab offset.

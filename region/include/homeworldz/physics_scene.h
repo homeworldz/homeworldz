@@ -21,6 +21,11 @@ double ellipsoid_mass(scene::Vector3 scale, double density);
 double cylinder_mass(scene::Vector3 scale, double density);
 double prism_mass(scene::Vector3 scale, double density);
 double pyramid_mass(scene::Vector3 scale, double density);
+double entity_mass(const scene::Entity& entity);
+scene::Vector3 rotate_vector(scene::Vector3 value, const std::array<double, 4>& rotation);
+scene::Vector3 rotated_box_half_extents(
+    scene::Vector3 scale, const std::array<double, 4>& rotation);
+bool contain_body_without_neighbors(BodyState& state, double region_extent = 256.0);
 
 class StaticSceneMirror {
 public:

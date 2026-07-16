@@ -160,6 +160,15 @@ acceptance tests pass.
 
 ### Object and vehicle crossings
 
+- [ ] Define an off-region disposition for every moving entity: cross an
+  eligible avatar, attachment, vehicle, or object to an accepting neighbor;
+  otherwise bounce/contain it within the source region or return an owned
+  object to inventory. No entity may continue silently outside all region
+  authority.
+- [x] In the single-region phase, assume every border has no neighbor and
+  constrain avatar and physical-object origins to `0..256`, cancelling outward
+  velocity at the crossed edge.
+
 - [ ] Cross individual objects and complete linksets without changing creator,
   owner, permissions, inventory, or physical state.
 - [ ] Cross scripted and unscripted attachments as part of their avatar bundle.

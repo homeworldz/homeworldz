@@ -70,6 +70,24 @@ int main() {
         !close(physics::prism_mass({2.0, 3.0, 4.0}, 1000.0), 12000.0) ||
         !close(physics::pyramid_mass({2.0, 3.0, 4.0}, 1000.0), 8000.0))
         return 2;
+    constexpr double half_root_two = 0.70710678118654752440;
+    const std::array<double, 4> quarter_turn_z{0.0, 0.0, half_root_two, half_root_two};
+    const auto rotated = physics::rotate_vector({1.0, 0.0, 0.0}, quarter_turn_z);
+    const auto rotated_extents =
+        physics::rotated_box_half_extents({2.0, 4.0, 6.0}, quarter_turn_z);
+    if (!close(rotated.x, 0.0) || !close(rotated.y, 1.0) || !close(rotated.z, 0.0) ||
+        !close(rotated_extents.x, 2.0) || !close(rotated_extents.y, 1.0) ||
+        !close(rotated_extents.z, 3.0))
+        return 10;
+    physics::BodyState escaped;
+    escaped.position = {-2.0, 259.0, 20.0};
+    escaped.linear_velocity = {-3.0, 4.0, -5.0};
+    if (!physics::contain_body_without_neighbors(escaped) ||
+        !close(escaped.position.x, 0.0) || !close(escaped.position.y, 256.0) ||
+        !close(escaped.linear_velocity.x, 0.0) || !close(escaped.linear_velocity.y, 0.0) ||
+        !close(escaped.linear_velocity.z, -5.0) ||
+        physics::contain_body_without_neighbors(escaped))
+        return 11;
 
     RecordingWorld world;
     physics::StaticSceneMirror mirror(world);
@@ -136,7 +154,8 @@ int main() {
         !close(world.last_definition.shape.hull_points[3].y, 1.0) ||
         !close(world.last_definition.shape.hull_points[4].x, 0.0) ||
         !close(world.last_definition.shape.hull_points[4].z, 1.5) ||
-        !close(world.last_definition.mass, 500.0))
+        !close(world.last_definition.mass, 500.0) ||
+        !close(physics::entity_mass(entity), world.last_definition.mass))
         return 9;
     const auto rubber_body = mirror.body_id(entity.id);
     entity.physics_shape_type = 0x01;

@@ -834,6 +834,73 @@ int main() {
         }
         return ground_height(*terrain_heightmap, position);
     };
+    const auto raise_physical_object_above_terrain = [&](homeworldz::scene::Entity& entity) {
+        if (!entity.physical) return false;
+        const auto squared = entity.rotation.x * entity.rotation.x +
+                             entity.rotation.y * entity.rotation.y +
+                             entity.rotation.z * entity.rotation.z;
+        const std::array<double, 4> rotation{
+            entity.rotation.x, entity.rotation.y, entity.rotation.z,
+            std::sqrt((std::max)(0.0, 1.0 - squared))};
+        const auto half_extents =
+            homeworldz::physics::rotated_box_half_extents(entity.scale, rotation);
+        const auto minimum_x = std::clamp(
+            static_cast<int>(std::floor(entity.position.x - half_extents.x)), 0, 255);
+        const auto maximum_x = std::clamp(
+            static_cast<int>(std::ceil(entity.position.x + half_extents.x)), 0, 255);
+        const auto minimum_y = std::clamp(
+            static_cast<int>(std::floor(entity.position.y - half_extents.y)), 0, 255);
+        const auto maximum_y = std::clamp(
+            static_cast<int>(std::ceil(entity.position.y + half_extents.y)), 0, 255);
+        double maximum_ground = -std::numeric_limits<double>::infinity();
+        for (int y = minimum_y; y <= maximum_y; ++y)
+            for (int x = minimum_x; x <= maximum_x; ++x)
+                maximum_ground = (std::max)(maximum_ground,
+                    static_cast<double>((*terrain_heightmap)[static_cast<std::size_t>(y) * 256 + x]));
+        constexpr double terrain_clearance = 0.01;
+        const auto required_origin_z = maximum_ground + half_extents.z + terrain_clearance;
+        if (entity.position.z >= required_origin_z) return false;
+        entity.position.z = required_origin_z;
+        entity.velocity = {};
+        return true;
+    };
+    bool recovered_escaped_objects{};
+    std::vector<homeworldz::scene::EntityId> persisted_entity_ids;
+    persisted_entity_ids.reserve(scene.size());
+    for (const auto& [entity_id, entity] : scene.entities()) {
+        static_cast<void>(entity);
+        persisted_entity_ids.push_back(entity_id);
+    }
+    for (const auto entity_id : persisted_entity_ids) {
+        auto* entity = scene.find(entity_id);
+        if (!entity || !entity->physical) continue;
+        const auto original_x = entity->position.x;
+        const auto original_y = entity->position.y;
+        entity->position.x = std::clamp(entity->position.x, 0.0, 256.0);
+        entity->position.y = std::clamp(entity->position.y, 0.0, 256.0);
+        const bool escaped = entity->position.x != original_x || entity->position.y != original_y;
+        if (escaped) {
+            entity->velocity.x = 0.0;
+            entity->velocity.y = 0.0;
+        }
+        const bool raised = (escaped || entity->position.z < -64.0) &&
+            raise_physical_object_above_terrain(*entity);
+        if (!escaped && !raised) continue;
+        recovered_escaped_objects = true;
+        synchronize_physics_object(*entity);
+        std::cout << "{\"level\":\"warning\",\"message\":\"escaped physical object recovered\",\"entityId\":"
+                  << entity->id << ",\"position\":[" << entity->position.x << ','
+                  << entity->position.y << ',' << entity->position.z << "]}" << std::endl;
+    }
+    if (recovered_escaped_objects) {
+        try {
+            storage->save_snapshot(scene);
+        } catch (const std::exception& error) {
+            std::cerr << "{\"level\":\"error\",\"message\":\"escaped object recovery persistence failed\",\"error\":"
+                      << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+            return 1;
+        }
+    }
     auto previous_tick = std::chrono::steady_clock::now();
     auto next_snapshot = previous_tick + std::chrono::seconds(30);
     auto next_dynamic_sync = previous_tick;
@@ -2015,8 +2082,22 @@ int main() {
                                 if (suspended != physics_edit_suspended.end() &&
                                     --suspended->second == 0) {
                                     physics_edit_suspended.erase(suspended);
-                                    if (const auto* entity = scene.find(local_id))
+                                    if (auto* entity = scene.find(local_id)) {
+                                        const auto original_position = entity->position;
+                                        const auto original_velocity = entity->velocity;
+                                        if (raise_physical_object_above_terrain(*entity)) {
+                                            try {
+                                                storage->save_snapshot(scene);
+                                            } catch (const std::exception& error) {
+                                                entity->position = original_position;
+                                                entity->velocity = original_velocity;
+                                                std::cerr << "{\"level\":\"error\",\"message\":\"terrain-safe physics reactivation persistence failed\",\"entityId\":"
+                                                          << entity->id << ",\"error\":"
+                                                          << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+                                            }
+                                        }
                                         synchronize_physics_object(*entity);
+                                    }
                                 }
                             }
                         }
@@ -2039,12 +2120,27 @@ int main() {
                                 if (!state) break;
                                 constexpr double grab_response_seconds = 0.25;
                                 constexpr double maximum_delta_speed = 10.0;
+                                // Firestorm sends the desired world-space position of the
+                                // originally clicked point, plus that point's offset from the
+                                // object origin in object-local coordinates. Preserve the
+                                // offset as the body rotates instead of pulling the origin to
+                                // the surface point.
+                                const homeworldz::scene::Vector3 local_offset{
+                                    grab_update->grab_offset_initial[0],
+                                    grab_update->grab_offset_initial[1],
+                                    grab_update->grab_offset_initial[2]};
+                                const auto world_offset = homeworldz::physics::rotate_vector(
+                                    local_offset, state->rotation);
+                                const homeworldz::scene::Vector3 target_origin{
+                                    grab_update->grab_position[0] - world_offset.x,
+                                    grab_update->grab_position[1] - world_offset.y,
+                                    grab_update->grab_position[2] - world_offset.z};
                                 homeworldz::scene::Vector3 delta_velocity{
-                                    (grab_update->grab_position[0] - state->position.x) /
+                                    (target_origin.x - state->position.x) /
                                         grab_response_seconds - state->linear_velocity.x,
-                                    (grab_update->grab_position[1] - state->position.y) /
+                                    (target_origin.y - state->position.y) /
                                         grab_response_seconds - state->linear_velocity.y,
-                                    (grab_update->grab_position[2] - state->position.z) /
+                                    (target_origin.z - state->position.z) /
                                         grab_response_seconds - state->linear_velocity.z};
                                 const auto delta_speed = std::sqrt(
                                     delta_velocity.x * delta_velocity.x +
@@ -2056,10 +2152,7 @@ int main() {
                                     delta_velocity.y *= scale;
                                     delta_velocity.z *= scale;
                                 }
-                                const auto density = std::isfinite(entity.physics_density)
-                                    ? std::clamp(entity.physics_density, 1.0, 22587.0)
-                                    : homeworldz::physics::material_properties(entity.material).density;
-                                const auto mass = homeworldz::physics::box_mass(entity.scale, density);
+                                const auto mass = homeworldz::physics::entity_mass(entity);
                                 physics_world->apply_impulse(body_id, {
                                     delta_velocity.x * mass, delta_velocity.y * mass,
                                     delta_velocity.z * mass});
@@ -3255,13 +3348,20 @@ int main() {
             for (const auto& [entity_id, current] : scene.entities()) {
                 if (!current.physical || current.phantom || current.object_id.empty()) continue;
                 const auto body_id = physics_scene->body_id(entity_id);
-                const auto state = physics_world->body_state(body_id);
-                if (!state) continue;
+                const auto current_state = physics_world->body_state(body_id);
+                if (!current_state) continue;
+                auto state = *current_state;
+                // Phase 1 has no neighboring regions. Keep body origins within
+                // this region and cancel only velocity still pointing through a
+                // crossed edge. Neighbor discovery will replace this with a
+                // crossing handoff when an accepting neighbor exists.
+                if (homeworldz::physics::contain_body_without_neighbors(state))
+                    physics_world->set_body_state(state);
                 auto* entity = scene.find(entity_id);
                 if (!entity) continue;
-                entity->position = state->position;
-                entity->velocity = state->linear_velocity;
-                entity->rotation = {state->rotation[0], state->rotation[1], state->rotation[2]};
+                entity->position = state.position;
+                entity->velocity = state.linear_velocity;
+                entity->rotation = {state.rotation[0], state.rotation[1], state.rotation[2]};
                 for (const auto& [recipient_endpoint, recipient] : avatars) {
                     const auto object = static_object_from_entity(*entity, recipient.user_id);
                     if (!object) continue;

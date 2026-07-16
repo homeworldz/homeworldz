@@ -71,6 +71,75 @@ double pyramid_mass(scene::Vector3 scale, double density) {
     return std::clamp(volume * density, minimum_mass, maximum_mass);
 }
 
+double entity_mass(const scene::Entity& entity) {
+    const auto density = std::isfinite(entity.physics_density)
+        ? std::clamp(entity.physics_density, 1.0, 22587.0)
+        : material_properties(entity.material).density;
+    const bool sphere = entity.path_curve == 0x20 && (entity.profile_curve & 0x0f) == 0x05;
+    const bool cylinder = entity.path_curve == 0x10 && (entity.profile_curve & 0x0f) == 0x00;
+    const bool prism = entity.path_curve == 0x10 && (entity.profile_curve & 0x0f) == 0x01 &&
+        entity.path_scale_x == 200 && entity.path_scale_y == 100 &&
+        entity.path_shear_x == 0xce && entity.path_shear_y == 0;
+    const bool pyramid = entity.path_curve == 0x10 && (entity.profile_curve & 0x0f) == 0x01 &&
+        entity.path_scale_x == 200 && entity.path_scale_y == 200 &&
+        entity.path_shear_x == 0 && entity.path_shear_y == 0;
+    return sphere ? ellipsoid_mass(entity.scale, density) :
+        (cylinder ? cylinder_mass(entity.scale, density) :
+        (prism ? prism_mass(entity.scale, density) :
+        (pyramid ? pyramid_mass(entity.scale, density) : box_mass(entity.scale, density))));
+}
+
+scene::Vector3 rotate_vector(scene::Vector3 value, const std::array<double, 4>& rotation) {
+    const scene::Vector3 quaternion_vector{rotation[0], rotation[1], rotation[2]};
+    const auto cross = [](scene::Vector3 first, scene::Vector3 second) {
+        return scene::Vector3{
+            first.y * second.z - first.z * second.y,
+            first.z * second.x - first.x * second.z,
+            first.x * second.y - first.y * second.x};
+    };
+    const auto first_cross = cross(quaternion_vector, value);
+    const scene::Vector3 doubled{
+        2.0 * first_cross.x, 2.0 * first_cross.y, 2.0 * first_cross.z};
+    const auto second_cross = cross(quaternion_vector, doubled);
+    return {
+        value.x + rotation[3] * doubled.x + second_cross.x,
+        value.y + rotation[3] * doubled.y + second_cross.y,
+        value.z + rotation[3] * doubled.z + second_cross.z};
+}
+
+scene::Vector3 rotated_box_half_extents(
+    scene::Vector3 scale, const std::array<double, 4>& rotation) {
+    const scene::Vector3 x = rotate_vector({scale.x * 0.5, 0.0, 0.0}, rotation);
+    const scene::Vector3 y = rotate_vector({0.0, scale.y * 0.5, 0.0}, rotation);
+    const scene::Vector3 z = rotate_vector({0.0, 0.0, scale.z * 0.5}, rotation);
+    return {std::abs(x.x) + std::abs(y.x) + std::abs(z.x),
+            std::abs(x.y) + std::abs(y.y) + std::abs(z.y),
+            std::abs(x.z) + std::abs(y.z) + std::abs(z.z)};
+}
+
+bool contain_body_without_neighbors(BodyState& state, double region_extent) {
+    bool constrained{};
+    if (state.position.x < 0.0) {
+        state.position.x = 0.0;
+        state.linear_velocity.x = std::max(0.0, state.linear_velocity.x);
+        constrained = true;
+    } else if (state.position.x > region_extent) {
+        state.position.x = region_extent;
+        state.linear_velocity.x = std::min(0.0, state.linear_velocity.x);
+        constrained = true;
+    }
+    if (state.position.y < 0.0) {
+        state.position.y = 0.0;
+        state.linear_velocity.y = std::max(0.0, state.linear_velocity.y);
+        constrained = true;
+    } else if (state.position.y > region_extent) {
+        state.position.y = region_extent;
+        state.linear_velocity.y = std::min(0.0, state.linear_velocity.y);
+        constrained = true;
+    }
+    return constrained;
+}
+
 bool StaticSceneMirror::synchronize(const scene::Entity& entity) {
     if (entity.object_id.empty() || entity.phantom || entity.physics_shape_type == 0x01)
         return remove(entity.id);
@@ -114,13 +183,7 @@ bool StaticSceneMirror::synchronize(const scene::Entity& entity) {
     definition.position = entity.position;
     definition.velocity = entity.velocity;
     const auto properties = material_properties(entity.material);
-    const auto density = std::isfinite(entity.physics_density)
-        ? std::clamp(entity.physics_density, 1.0, 22587.0)
-        : properties.density;
-    definition.mass = sphere ? ellipsoid_mass(entity.scale, density) :
-        (cylinder ? cylinder_mass(entity.scale, density) :
-        (prism ? prism_mass(entity.scale, density) :
-        (pyramid ? pyramid_mass(entity.scale, density) : box_mass(entity.scale, density))));
+    definition.mass = entity_mass(entity);
     definition.friction = std::isfinite(entity.physics_friction)
         ? std::clamp(entity.physics_friction, 0.0, 255.0)
         : properties.friction;
