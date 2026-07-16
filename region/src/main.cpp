@@ -21,6 +21,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 #include "homeworldz/api_models.h"
 #include "homeworldz/avatar_controller.h"
@@ -113,6 +114,13 @@ struct PendingWearableXfer {
     std::size_t packet_size{1000};
     std::vector<std::byte> data;
     std::unordered_set<std::uint32_t> received_packets;
+};
+
+struct PendingEventResponse {
+    socket_handle client{invalid_socket};
+    homeworldz::http::Response response;
+    std::string session_id;
+    std::chrono::steady_clock::time_point deadline{};
 };
 
 void stop(int) { running = false; }
@@ -1070,6 +1078,7 @@ int main(int argc, char* argv[]) {
     std::unordered_map<std::string, PendingInventoryUpload> pending_inventory_uploads;
     std::unordered_map<std::string, PendingWearableUpload> pending_wearable_uploads;
     std::unordered_map<std::string, PendingWearableXfer> pending_wearable_xfers;
+    std::vector<PendingEventResponse> pending_event_responses;
     std::uint64_t next_wearable_xfer{1};
     const auto clear_viewer_endpoint = [&](const std::string& endpoint, const std::string& session_id) {
         if (const auto live = avatars.find(endpoint); live != avatars.end() &&
@@ -1104,11 +1113,29 @@ int main(int argc, char* argv[]) {
         std::erase_if(pending_wearable_xfers, [&](const auto& entry) {
             return entry.first.starts_with(endpoint + '|');
         });
+        std::erase_if(pending_event_responses, [&](const PendingEventResponse& pending) {
+            if (pending.session_id != session_id) return false;
+            close_socket(pending.client);
+            return true;
+        });
     };
 
     std::cout << "{\"level\":\"info\",\"message\":\"region service listening\",\"httpPort\":"
               << configured_port() << ",\"viewerPort\":" << configured_viewer_port() << "}" << std::endl;
     while (running) {
+        const auto http_now = std::chrono::steady_clock::now();
+        std::erase_if(pending_event_responses, [&](const PendingEventResponse& pending) {
+            if (pending.deadline > http_now) return false;
+            static_cast<void>(send_all(pending.client, pending.response.content));
+            finish_http_response(pending.client);
+            close_socket(pending.client);
+            std::cout << "{\"level\":\"info\",\"message\":\"http request\",\"requestId\":"
+                      << homeworldz::api::json_string(pending.response.request_id)
+                      << ",\"method\":" << homeworldz::api::json_string(pending.response.method)
+                      << ",\"path\":" << homeworldz::api::json_string(pending.response.path)
+                      << ",\"status\":" << pending.response.status_code << "}" << std::endl;
+            return true;
+        });
         fd_set readable;
         FD_ZERO(&readable);
         FD_SET(server, &readable);
@@ -1119,6 +1146,7 @@ int main(int argc, char* argv[]) {
         if (ready > 0 && FD_ISSET(server, &readable)) {
             const auto client = accept(server, nullptr, nullptr);
             if (client != invalid_socket) {
+                bool response_deferred = false;
                 const auto received_request = receive_http_request(client);
                 if (received_request) {
                     const std::string_view request(*received_request);
@@ -1277,6 +1305,12 @@ int main(int argc, char* argv[]) {
                             response = homeworldz::http::response_for_content(
                                 request, 200, "application/llsd+xml",
                                 homeworldz::viewer::event_queue_xml(++event_id, event));
+                            if (!event) {
+                                pending_event_responses.push_back(PendingEventResponse{
+                                    client, response, session_id,
+                                    std::chrono::steady_clock::now() + std::chrono::seconds(20)});
+                                response_deferred = true;
+                            }
                         } else if (authorized && texture && homeworldz::viewer::parse_uuid(texture->second)) {
                             try {
                                 const auto asset = read_federated_asset(texture->second);
@@ -1419,15 +1453,17 @@ int main(int argc, char* argv[]) {
                                 "application/llsd+xml", "<llsd><undef/></llsd>");
                         }
                     }
-                    static_cast<void>(send_all(client, response.content));
-                    finish_http_response(client);
-                    std::cout << "{\"level\":\"info\",\"message\":\"http request\",\"requestId\":"
-                              << homeworldz::api::json_string(response.request_id)
-                              << ",\"method\":" << homeworldz::api::json_string(response.method)
-                              << ",\"path\":" << homeworldz::api::json_string(response.path)
-                              << ",\"status\":" << response.status_code << "}" << std::endl;
+                    if (!response_deferred) {
+                        static_cast<void>(send_all(client, response.content));
+                        finish_http_response(client);
+                        std::cout << "{\"level\":\"info\",\"message\":\"http request\",\"requestId\":"
+                                  << homeworldz::api::json_string(response.request_id)
+                                  << ",\"method\":" << homeworldz::api::json_string(response.method)
+                                  << ",\"path\":" << homeworldz::api::json_string(response.path)
+                                  << ",\"status\":" << response.status_code << "}" << std::endl;
+                    }
                 }
-                close_socket(client);
+                if (!response_deferred) close_socket(client);
             }
         }
         const auto now = std::chrono::steady_clock::now();
@@ -3559,6 +3595,7 @@ int main(int argc, char* argv[]) {
                   << homeworldz::api::json_string(error.what()) << "}" << std::endl;
     }
     if (registration) registration->stop();
+    for (const auto& pending : pending_event_responses) close_socket(pending.client);
     close_socket(viewer_server);
     close_socket(server);
 #ifdef _WIN32

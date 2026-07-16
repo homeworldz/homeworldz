@@ -808,7 +808,8 @@ and `sand`. HomeWorldz now advertises a stable grid-specific map image UUID and
 the Grid serves Firestorm's levelled HTTP map-tile convention. A clean viewer
 session displayed only the two registered regions rather than unrelated cached
 tiles from other grids. Multi-resolution requests also returned a composite
-tile containing both adjacent regions.
+tile containing both adjacent regions. Live visual acceptance confirmed that
+the main map remained correct at every Firestorm zoom level.
 
 Repeated-login UDP circuit replacement passed live acceptance on 2026-07-16.
 After one successful cloud login, Firestorm was forcibly closed and relaunched
