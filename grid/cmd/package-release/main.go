@@ -26,6 +26,7 @@ type options struct {
 	outputDirectory  string
 	regionExecutable string
 	gridOnly         bool
+	targetOS         string
 }
 
 type archiveEntry struct {
@@ -39,6 +40,7 @@ func main() {
 	flag.StringVar(&opts.outputDirectory, "output", "dist", "release archive output directory")
 	flag.StringVar(&opts.regionExecutable, "region-executable", "", "path to the native homeworldz-region executable")
 	flag.BoolVar(&opts.gridOnly, "grid-only", false, "build only the grid-owner archive")
+	flag.StringVar(&opts.targetOS, "target-os", runtime.GOOS, "target operating system: windows or linux")
 	flag.Parse()
 	if err := run(context.Background(), opts); err != nil {
 		fmt.Fprintln(os.Stderr, "package release:", err)
@@ -47,10 +49,16 @@ func main() {
 }
 
 func run(ctx context.Context, opts options) error {
-	if (runtime.GOOS != "windows" && runtime.GOOS != "linux") || runtime.GOARCH != "amd64" {
-		return errors.New("native release packaging supports windows-amd64 and linux-amd64")
+	if opts.targetOS != "windows" && opts.targetOS != "linux" {
+		return errors.New("target OS must be windows or linux")
 	}
-	isWindows := runtime.GOOS == "windows"
+	if runtime.GOARCH != "amd64" {
+		return errors.New("release packaging requires an amd64 build host")
+	}
+	if !opts.gridOnly && opts.targetOS != runtime.GOOS {
+		return errors.New("a full release must target the native host OS; use -grid-only for cross-compilation")
+	}
+	isWindows := opts.targetOS == "windows"
 	binarySuffix := ""
 	if isWindows {
 		binarySuffix = ".exe"
@@ -96,7 +104,7 @@ func run(ctx context.Context, opts options) error {
 	gridEntries := make([]archiveEntry, 0, len(gridBins)+8)
 	for _, binary := range gridBins {
 		destination := filepath.Join(work, binary.name)
-		if err := buildGoCommand(ctx, root, binary.command, destination, version); err != nil {
+		if err := buildGoCommand(ctx, root, binary.command, destination, version, opts.targetOS); err != nil {
 			return err
 		}
 		gridEntries = append(gridEntries, archiveEntry{destination, binary.name})
@@ -121,7 +129,7 @@ func run(ctx context.Context, opts options) error {
 		return err
 	}
 	if opts.gridOnly {
-		platform := runtime.GOOS + "-x64"
+		platform := opts.targetOS + "-x64"
 		extension := ".tar.gz"
 		writer := writeTarGZ
 		if isWindows {
@@ -173,7 +181,7 @@ func run(ctx context.Context, opts options) error {
 		return err
 	}
 
-	platform := runtime.GOOS + "-x64"
+	platform := opts.targetOS + "-x64"
 	extension := ".tar.gz"
 	writer := writeTarGZ
 	if isWindows {
@@ -226,7 +234,7 @@ func repositoryRoot() (string, error) {
 	}
 }
 
-func buildGoCommand(ctx context.Context, root, commandPath, destination, version string) error {
+func buildGoCommand(ctx context.Context, root, commandPath, destination, version, targetOS string) error {
 	args := []string{"build", "-trimpath", "-o", destination}
 	if commandPath == "./grid/cmd/grid" {
 		args = append(args, "-ldflags", "-s -w -X main.version="+version)
@@ -236,7 +244,7 @@ func buildGoCommand(ctx context.Context, root, commandPath, destination, version
 	args = append(args, commandPath)
 	command := exec.CommandContext(ctx, "go", args...)
 	command.Dir = root
-	command.Env = append(os.Environ(), "GOOS="+runtime.GOOS, "GOARCH=amd64", "CGO_ENABLED=0")
+	command.Env = append(os.Environ(), "GOOS="+targetOS, "GOARCH=amd64", "CGO_ENABLED=0")
 	output, err := command.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("build %s: %w: %s", commandPath, err, strings.TrimSpace(string(output)))

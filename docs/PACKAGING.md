@@ -34,6 +34,14 @@ also writes `SHA256SUMS` for transport verification.
 Grid operators can build the grid-owner archive without a native C++ region
 build by passing `-grid-only`. This is useful when preparing a central grid on
 a minimal Linux host; it does not weaken or alter the resulting grid package.
+The static Go grid tools can also be cross-compiled from Windows for Ubuntu:
+
+```cmd
+scripts\package-release.cmd -grid-only -target-os linux
+```
+
+Full packages containing the native C++ region must still be built on their
+target operating system.
 
 The tool emits deterministic ZIP files on Windows and deterministic `tar.gz`
 files on Linux. Linux packaging validates the region executable with `ldd` and
