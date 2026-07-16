@@ -42,7 +42,7 @@ int main() {
         primitive->path_curve = 0x20;
         primitive->profile_curve = 0x05;
         primitive->path_begin = 0x1234;
-        primitive->path_scale_x = 0;
+        primitive->path_scale_x = 200;
         primitive->path_scale_y = 100;
         primitive->path_shear_x = 0xce;
         primitive->path_skew = 7;
@@ -105,7 +105,7 @@ int main() {
                 restored_second->physics_gravity_multiplier != 1.5 ||
                 restored_second->texture_entry != primitive->texture_entry ||
                 restored_second->path_curve != 0x20 || restored_second->profile_curve != 0x05 ||
-                restored_second->path_begin != 0x1234 || restored_second->path_scale_x != 0 ||
+                restored_second->path_begin != 0x1234 || restored_second->path_scale_x != 200 ||
                 restored_second->path_scale_y != 100 || restored_second->path_shear_x != 0xce ||
                 restored_second->path_skew != 7 || restored_second->profile_hollow != 0x5678 ||
                 restored.create("next") != 3) return 1;

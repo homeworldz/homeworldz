@@ -2663,7 +2663,7 @@ int main() {
                             const bool supported_prism = object_add->pcode == 9 &&
                                 object_add->path_curve == 0x10 &&
                                 (object_add->profile_curve & 0x0f) == 0x01 &&
-                                object_add->path_scale_x == 0 && object_add->path_scale_y == 100 &&
+                                object_add->path_scale_x == 200 && object_add->path_scale_y == 100 &&
                                 object_add->path_shear_x == 0xce && object_add->path_shear_y == 0;
                             std::optional<homeworldz::scene::Vector3> placement;
                             if (valid_scale && object_add->bypass_raycast) {

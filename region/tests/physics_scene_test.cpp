@@ -113,7 +113,7 @@ int main() {
         !close(world.last_definition.mass, 1178.09724509617))
         return 7;
     entity.profile_curve = 0x01;
-    entity.path_scale_x = 0;
+    entity.path_scale_x = 200;
     entity.path_scale_y = 100;
     entity.path_shear_x = 0xce;
     entity.path_shear_y = 0;

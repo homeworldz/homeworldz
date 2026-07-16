@@ -71,7 +71,7 @@ bool StaticSceneMirror::synchronize(const scene::Entity& entity) {
     const bool sphere = entity.path_curve == 0x20 && (entity.profile_curve & 0x0f) == 0x05;
     const bool cylinder = entity.path_curve == 0x10 && (entity.profile_curve & 0x0f) == 0x00;
     const bool prism = entity.path_curve == 0x10 && (entity.profile_curve & 0x0f) == 0x01 &&
-        entity.path_scale_x == 0 && entity.path_scale_y == 100 &&
+        entity.path_scale_x == 200 && entity.path_scale_y == 100 &&
         entity.path_shear_x == 0xce && entity.path_shear_y == 0;
     definition.shape.type = sphere ? ShapeType::Sphere :
         (cylinder ? ShapeType::Cylinder :

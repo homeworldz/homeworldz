@@ -185,7 +185,7 @@ bool message_codecs() {
     object_add_payload[57] = std::byte{1};
     object_add_payload[58] = std::byte{0x34};
     object_add_payload[59] = std::byte{0x12};
-    object_add_payload[62] = std::byte{0};
+    object_add_payload[62] = std::byte{200};
     object_add_payload[63] = std::byte{100};
     object_add_payload[64] = std::byte{0xce};
     object_add_payload[72] = std::byte{7};
@@ -421,7 +421,7 @@ bool message_codecs() {
            object_add->session_id == expected.session_id && object_add->group_id == expected.agent_id &&
            object_add->pcode == 9 && object_add->material == 3 && object_add->add_flags == 2 &&
            object_add->path_curve == 16 && object_add->profile_curve == 1 && object_add->bypass_raycast &&
-           object_add->path_begin == 0x1234 && object_add->path_scale_x == 0 &&
+           object_add->path_begin == 0x1234 && object_add->path_scale_x == 200 &&
            object_add->path_scale_y == 100 && object_add->path_shear_x == 0xce &&
            object_add->path_skew == 7 && object_add->profile_hollow == 0x5678 &&
            object_add->ray_start[2] == 30.0F && object_add->ray_end[0] == 132.0F &&
@@ -727,7 +727,7 @@ bool static_object_codec() {
     object.path_curve = 0x20;
     object.profile_curve = 0x05;
     object.path_begin = 0x1234;
-    object.path_scale_x = 0;
+    object.path_scale_x = 200;
     object.path_scale_y = 100;
     object.path_shear_x = 0xce;
     object.path_skew = 7;
@@ -741,7 +741,7 @@ bool static_object_codec() {
         encoded[119] != std::byte{0x02} || encoded[120] != std::byte{0x10} ||
         encoded[121] != std::byte{0x20} || encoded[122] != std::byte{0x05} ||
         encoded[123] != std::byte{0x34} || encoded[124] != std::byte{0x12} ||
-        encoded[127] != std::byte{0} || encoded[128] != std::byte{100} ||
+        encoded[127] != std::byte{200} || encoded[128] != std::byte{100} ||
         encoded[129] != std::byte{0xce} || encoded[137] != std::byte{7} ||
         encoded[142] != std::byte{0x78} || encoded[143] != std::byte{0x56})
         return false;
