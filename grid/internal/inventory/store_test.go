@@ -6,12 +6,13 @@ func TestSystemFoldersAreStableAndComplete(t *testing.T) {
 	const userID = "11111111-2222-4333-8444-555555555555"
 	first := SystemFolders(userID)
 	second := SystemFolders(userID)
-	if len(first) != 21 || len(second) != len(first) {
-		t.Fatalf("system folder count = %d, want 21", len(first))
+	if len(first) != 23 || len(second) != len(first) {
+		t.Fatalf("system folder count = %d, want 23", len(first))
 	}
 	seen := make(map[int]bool)
 	for index, folder := range first {
-		if folder != second[index] || folder.OwnerUserID != userID || seen[folder.TypeDefault] {
+		if folder != second[index] || folder.OwnerUserID != userID ||
+			(seen[folder.TypeDefault] && folder.TypeDefault != 2) {
 			t.Fatalf("invalid system folder %d: %#v", index, folder)
 		}
 		seen[folder.TypeDefault] = true
@@ -19,9 +20,14 @@ func TestSystemFoldersAreStableAndComplete(t *testing.T) {
 			if folder.TypeDefault != 8 || folder.ParentID != zeroUUID {
 				t.Fatalf("invalid root folder: %#v", folder)
 			}
-		} else if folder.ParentID != first[0].ID {
+		} else if folder.Name != "Friends" && folder.Name != "All" && folder.ParentID != first[0].ID {
 			t.Fatalf("folder parent = %q, want %q", folder.ParentID, first[0].ID)
 		}
+	}
+	callingCardsID := SystemFolderID(userID, 2)
+	if first[21].Name != "Friends" || first[21].TypeDefault != 2 || first[21].ParentID != callingCardsID ||
+		first[22].Name != "All" || first[22].TypeDefault != 2 || first[22].ParentID != first[21].ID {
+		t.Fatalf("calling-card hierarchy = %#v", first[21:])
 	}
 }
 

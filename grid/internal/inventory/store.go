@@ -191,6 +191,12 @@ func SystemFolders(userID string) []Folder {
 		folders = append(folders, Folder{SystemFolderID(userID, folder.folderType), userID, rootID,
 			folder.name, folder.folderType, 1})
 	}
+	callingCardsID := SystemFolderID(userID, 2)
+	friendsID := deterministicUUID(userID + "\x00homeworldz-calling-cards-folder\x00friends")
+	allID := deterministicUUID(userID + "\x00homeworldz-calling-cards-folder\x00all")
+	folders = append(folders,
+		Folder{friendsID, userID, callingCardsID, "Friends", 2, 1},
+		Folder{allID, userID, friendsID, "All", 2, 1})
 	return folders
 }
 

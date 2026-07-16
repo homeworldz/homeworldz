@@ -43,7 +43,7 @@ func TestPostgresSystemFolderLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(first) != 21 || len(second) != len(first) {
+	if len(first) != 23 || len(second) != len(first) {
 		t.Fatalf("folder counts = %d, %d", len(first), len(second))
 	}
 	customFolderID, _ := identifier.NewUUID()

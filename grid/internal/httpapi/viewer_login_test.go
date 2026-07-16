@@ -94,7 +94,7 @@ func TestViewerLoginResolvesNamedRegion(t *testing.T) {
 	}
 	rootValues := fields["inventory-root"].Array.Values
 	skeletonValues := fields["inventory-skeleton"].Array.Values
-	if len(rootValues) != 1 || len(skeletonValues) != 21 {
+	if len(rootValues) != 1 || len(skeletonValues) != 23 {
 		t.Fatalf("inventory root or skeleton missing: %#v", fields)
 	}
 	rootID := rootValues[0].fields()["folder_id"].text()
@@ -114,7 +114,7 @@ func TestViewerLoginResolvesNamedRegion(t *testing.T) {
 				parent != "00000000-0000-0000-0000-000000000000" {
 				t.Fatalf("invalid inventory root: %#v", folder)
 			}
-		} else if parent != rootID {
+		} else if folder["name"].text() != "Friends" && folder["name"].text() != "All" && parent != rootID {
 			t.Fatalf("inventory folder %d parent = %q, want %q", index, parent, rootID)
 		}
 	}

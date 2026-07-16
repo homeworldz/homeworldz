@@ -305,7 +305,7 @@ func TestInventoryFoldersEndpoint(t *testing.T) {
 
 	result := requestRegion[InventoryFolderList](t, handler, http.MethodGet,
 		"/api/v1/inventory/"+userID+"/folders", "", http.StatusOK)
-	if len(result.Folders) != 21 || result.Folders[0].TypeDefault != 8 {
+	if len(result.Folders) != 23 || result.Folders[0].TypeDefault != 8 {
 		t.Fatalf("inventory folders = %#v", result.Folders)
 	}
 	objects := requestRegion[inventory.Folder](t, handler, http.MethodGet,
