@@ -764,3 +764,24 @@ The edit-reactivation safety check also passed live acceptance after the same
 Physical pyramid was placed roughly 80–90% below terrain: deselection raised
 it smoothly above the surface without a solver launch. A repeat from well
 underground resolved equally cleanly.
+
+## Cloud deployment acceptance
+
+The first public cloud-grid login passed live Firestorm acceptance on
+2026-07-16. Firestorm discovered and logged into `grid.homeworldz.com` over
+HTTPS without a port suffix, the Grid authenticated Jim Tarber and selected
+the registered Welcome region at `(1000, 1000)`, and the viewer completed the
+direct region HTTP, UDP circuit, capability, event-queue, inventory, presence,
+terrain, and appearance flows. The avatar remained a cloud for approximately
+five seconds while its initial appearance resolved, then rendered normally.
+Avatar movement against the cloud-hosted Jolt region was responsive and
+showed no detectable control or transport lag.
+
+This acceptance used the native Linux region build with Jolt on Ubuntu and a
+separate registered Sandbox region at `(1001, 1000)`. Both region processes
+continued renewing their Grid leases throughout the login. The acceptance
+also exposed two non-blocking cleanup items: Firestorm requested several
+well-known asset UUIDs absent from the fresh cloud asset store, and some
+initial-outfit AIS category writes received HTTP 400 responses while the
+eventual item updates and appearance bake succeeded. These should be resolved
+before treating a fresh cloud account's login as warning-free.
