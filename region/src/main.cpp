@@ -3671,14 +3671,24 @@ int main(int argc, char* argv[]) {
                             update->session_id == identity->session_id &&
                             (!avatar->second.has_agent_update || sequence_is_newer(
                                 packet->sequence, avatar->second.last_agent_update_sequence))) {
+                            const bool first_update = !avatar->second.has_agent_update;
+                            const bool was_flying = avatar->second.controller.state().flying;
+                            const bool grace_active = now < avatar->second.restored_flying_until;
                             auto accepted = *update;
-                            if (now < avatar->second.restored_flying_until &&
-                                avatar->second.controller.state().flying)
+                            if (grace_active && was_flying)
                                 accepted.control_flags |= homeworldz::viewer::control_fly;
                             avatar->second.controller.apply(accepted);
                             avatar->second.last_agent_update = now;
                             avatar->second.last_agent_update_sequence = packet->sequence;
                             avatar->second.has_agent_update = true;
+                            const bool is_flying = avatar->second.controller.state().flying;
+                            if (first_update || was_flying != is_flying)
+                                std::cout << "{\"level\":\"info\",\"message\":\"avatar flight control updated\",\"firstUpdate\":"
+                                          << (first_update ? "true" : "false")
+                                          << ",\"viewerFlying\":"
+                                          << ((update->control_flags & homeworldz::viewer::control_fly) != 0 ? "true" : "false")
+                                          << ",\"graceActive\":" << (grace_active ? "true" : "false")
+                                          << ",\"flying\":" << (is_flying ? "true" : "false") << "}" << std::endl;
                         }
                         const auto terrain_edit = homeworldz::viewer::decode_modify_land(packet->payload);
                         if (terrain_edit && terrain_edit->agent_id == identity->agent_id &&
