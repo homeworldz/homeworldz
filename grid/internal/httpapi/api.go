@@ -241,12 +241,55 @@ func (a *API) regionByID(w http.ResponseWriter, r *http.Request) {
 		a.writeRegionResult(w, region, err)
 		return
 	}
+	if len(parts) == 2 && parts[1] == "neighbors" {
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", http.MethodGet)
+			writeJSON(w, http.StatusMethodNotAllowed, Error{Code: "method_not_allowed", Message: "only GET is supported"})
+			return
+		}
+		a.regionNeighbors(w, r, id)
+		return
+	}
 	if len(parts) == 1 {
 		w.Header().Set("Allow", "GET")
 		writeJSON(w, http.StatusMethodNotAllowed, Error{Code: "method_not_allowed", Message: "only GET is supported"})
 		return
 	}
 	a.notFound(w, r)
+}
+
+func (a *API) regionNeighbors(w http.ResponseWriter, r *http.Request, id string) {
+	source, err := a.regions.Get(r.Context(), id)
+	if err != nil {
+		a.writeRegionResult(w, regions.Region{}, err)
+		return
+	}
+	items, err := a.regions.List(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, Error{Code: "region_store_error", Message: "region discovery failed"})
+		return
+	}
+
+	directions := []struct {
+		name string
+		dx   int
+		dy   int
+	}{
+		{name: "north", dy: 1},
+		{name: "east", dx: 1},
+		{name: "south", dy: -1},
+		{name: "west", dx: -1},
+	}
+	neighbors := make([]RegionNeighbor, 0, len(directions))
+	for _, direction := range directions {
+		for _, candidate := range items {
+			if candidate.GridX == source.GridX+direction.dx && candidate.GridY == source.GridY+direction.dy {
+				neighbors = append(neighbors, RegionNeighbor{Direction: direction.name, Region: candidate})
+				break
+			}
+		}
+	}
+	writeJSON(w, http.StatusOK, RegionNeighborList{Neighbors: neighbors})
 }
 
 func (a *API) writeRegionResult(w http.ResponseWriter, region regions.Region, err error) {

@@ -49,6 +49,15 @@ type RegionList struct {
 	Regions []regions.Region `json:"regions"`
 }
 
+type RegionNeighbor struct {
+	Direction string         `json:"direction"`
+	Region    regions.Region `json:"region"`
+}
+
+type RegionNeighborList struct {
+	Neighbors []RegionNeighbor `json:"neighbors"`
+}
+
 type CreateUserRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`

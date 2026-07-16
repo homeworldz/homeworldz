@@ -129,6 +129,63 @@ func TestRegionDiscoveryIsReadOnly(t *testing.T) {
 	}
 }
 
+func TestRegionNeighborDiscoveryReturnsCardinalLiveRegions(t *testing.T) {
+	store := newMemoryRegionStore()
+	handler := New(checker{}, "test", Options{ServiceToken: "secret", Regions: store})
+	centerID := "11111111-1111-4111-8111-111111111111"
+	registrations := []struct {
+		id   string
+		name string
+		x    int
+		y    int
+	}{
+		{centerID, "Center", 1000, 1000},
+		{"22222222-2222-4222-8222-222222222222", "North", 1000, 1001},
+		{"33333333-3333-4333-8333-333333333333", "East", 1001, 1000},
+		{"44444444-4444-4444-8444-444444444444", "South", 1000, 999},
+		{"55555555-5555-4555-8555-555555555555", "West", 999, 1000},
+		{"66666666-6666-4666-8666-666666666666", "Diagonal", 1001, 1001},
+	}
+	for _, registration := range registrations {
+		_, err := store.RegisterProvisioned(context.Background(), registration.id, regions.Registration{
+			Name: registration.name, GridX: registration.x, GridY: registration.y,
+			PublicEndpoint: "http://" + registration.name + ".example:42001", ViewerPort: 42002,
+			LeaseDuration: 60 * time.Second,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	store.regions["77777777-7777-4777-8777-777777777777"] = regions.Region{
+		ID: "77777777-7777-4777-8777-777777777777", Name: "Expired North",
+		GridX: 1000, GridY: 1001, LeaseExpiresAt: store.now.Add(-time.Second),
+	}
+
+	response := requestRegion[RegionNeighborList](t, handler, http.MethodGet,
+		"/api/v1/regions/"+centerID+"/neighbors", "", http.StatusOK)
+	wantDirections := []string{"north", "east", "south", "west"}
+	wantNames := []string{"North", "East", "South", "West"}
+	if len(response.Neighbors) != len(wantDirections) {
+		t.Fatalf("neighbors = %#v", response.Neighbors)
+	}
+	for index, neighbor := range response.Neighbors {
+		if neighbor.Direction != wantDirections[index] || neighbor.Region.Name != wantNames[index] {
+			t.Fatalf("neighbor %d = %#v", index, neighbor)
+		}
+	}
+
+	methodError := requestRegion[Error](t, handler, http.MethodPost,
+		"/api/v1/regions/"+centerID+"/neighbors", `{}`, http.StatusMethodNotAllowed)
+	if methodError.Code != "method_not_allowed" {
+		t.Fatalf("mutation response = %#v", methodError)
+	}
+	missing := requestRegion[Error](t, handler, http.MethodGet,
+		"/api/v1/regions/88888888-8888-4888-8888-888888888888/neighbors", "", http.StatusNotFound)
+	if missing.Code != "region_not_found" {
+		t.Fatalf("missing response = %#v", missing)
+	}
+}
+
 func TestRegionRegistrationValidationAndAuthentication(t *testing.T) {
 	store := newMemoryRegionStore()
 	handler := New(checker{}, "test", Options{ServiceToken: "secret", Regions: store})
