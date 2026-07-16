@@ -153,12 +153,16 @@ acceptance tests pass.
 
 ### Teleports and avatar crossings
 
-- [ ] Keep avatar appearance stable while moving, flying, sitting, teleporting,
-  and crossing Regions.
-- [ ] Build an authenticated, idempotent two-region handoff transaction with a
+- [x] Keep avatar appearance, inventory, and Current Outfit stable through an
+  explicit teleport between registered Regions.
+- [ ] Keep avatar appearance stable while sitting and crossing Region borders.
+- [x] Build an authenticated, idempotent two-region handoff transaction with a
   transit UUID, generation, prepare, accept, activate, and rollback stages.
-- [ ] Implement local and remote teleports, destination validation, viewer
-  circuit establishment, failure recovery, and arrival placement.
+- [x] Teleport between registered Regions with destination validation, viewer
+  circuit establishment, arrival placement, source retirement, and durable
+  last-location login.
+- [ ] Complete remote-host failure recovery and reconciliation for interrupted
+  teleports.
 - [ ] Cross a walking or flying avatar between adjacent regions while preserving
   appearance, controls, velocity, camera, and session continuity.
 - [ ] Transfer the complete attachment set with the avatar and prevent duplicate

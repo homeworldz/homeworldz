@@ -78,7 +78,9 @@ than runtime dependencies.
   LSL plus Halcyon/InWorldz extensions, excluding OpenSim extensions.
 - [ ] Implement scripting after avatar synchronization, basic avatar physics,
   and the attachment/crossing transaction skeleton are accepted.
-- [ ] Teleport and cross-region avatar/object handoff.
+- [x] Teleport avatars between registered Regions with an authenticated,
+  idempotent handoff and durable last-location login.
+- [ ] Cross-region avatar and object handoff at Region borders.
 - [ ] Evaluate and implement exactly three OpenSimulator-compatible region
   sizes: 1x1 (256 metres), 2x2 (512 metres), and 4x4 (1024 metres), without
   coupling terrain, physics, or scene storage to the initial 1x1 size.
