@@ -2713,7 +2713,17 @@ int main() {
                             std::cout << "{\"level\":" << (created ? "\"info\"" : "\"warn\"")
                                       << ",\"message\":\"primitive creation "
                                       << (created ? "completed" : "rejected") << "\",\"objectId\":"
-                                      << homeworldz::api::json_string(object_id) << "}" << std::endl;
+                                      << homeworldz::api::json_string(object_id)
+                                      << ",\"pcode\":" << static_cast<unsigned>(object_add->pcode)
+                                      << ",\"pathCurve\":" << static_cast<unsigned>(object_add->path_curve)
+                                      << ",\"profileCurve\":" << static_cast<unsigned>(object_add->profile_curve)
+                                      << ",\"material\":" << static_cast<unsigned>(object_add->material)
+                                      << ",\"scale\":[" << object_add->scale[0] << ','
+                                      << object_add->scale[1] << ',' << object_add->scale[2] << ']'
+                                      << ",\"validScale\":" << (valid_scale ? "true" : "false")
+                                      << ",\"validRotation\":" << (valid_rotation ? "true" : "false")
+                                      << ",\"validPosition\":" << (valid_position ? "true" : "false")
+                                      << "}" << std::endl;
                         }
                         const auto derez = homeworldz::viewer::decode_derez_object(packet->payload);
                         if (derez && derez->agent_id == identity->agent_id &&
