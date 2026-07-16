@@ -41,6 +41,12 @@ int main() {
         primitive->texture_entry = {std::byte{0xaa}, std::byte{0xbb}, std::byte{0xcc}};
         primitive->path_curve = 0x20;
         primitive->profile_curve = 0x05;
+        primitive->path_begin = 0x1234;
+        primitive->path_scale_x = 0;
+        primitive->path_scale_y = 100;
+        primitive->path_shear_x = 0xce;
+        primitive->path_skew = 7;
+        primitive->profile_hollow = 0x5678;
         std::filesystem::create_directories(path);
         sqlite3* legacy_database = nullptr;
         if (sqlite3_open((path / "region.db").string().c_str(), &legacy_database) != SQLITE_OK) return 1;
@@ -99,6 +105,9 @@ int main() {
                 restored_second->physics_gravity_multiplier != 1.5 ||
                 restored_second->texture_entry != primitive->texture_entry ||
                 restored_second->path_curve != 0x20 || restored_second->profile_curve != 0x05 ||
+                restored_second->path_begin != 0x1234 || restored_second->path_scale_x != 0 ||
+                restored_second->path_scale_y != 100 || restored_second->path_shear_x != 0xce ||
+                restored_second->path_skew != 7 || restored_second->profile_hollow != 0x5678 ||
                 restored.create("next") != 3) return 1;
 
             const std::array content{std::byte{0x00}, std::byte{0x7f}, std::byte{0xff}, std::byte{0x42}};

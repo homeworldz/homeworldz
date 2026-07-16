@@ -183,6 +183,14 @@ bool message_codecs() {
     object_add_payload[52] = std::byte{0x02};
     object_add_payload[56] = std::byte{16};
     object_add_payload[57] = std::byte{1};
+    object_add_payload[58] = std::byte{0x34};
+    object_add_payload[59] = std::byte{0x12};
+    object_add_payload[62] = std::byte{0};
+    object_add_payload[63] = std::byte{100};
+    object_add_payload[64] = std::byte{0xce};
+    object_add_payload[72] = std::byte{7};
+    object_add_payload[77] = std::byte{0x78};
+    object_add_payload[78] = std::byte{0x56};
     object_add_payload[79] = std::byte{1};
     write_f32(object_add_payload, 80, 128.0F);
     write_f32(object_add_payload, 84, 128.0F);
@@ -413,6 +421,9 @@ bool message_codecs() {
            object_add->session_id == expected.session_id && object_add->group_id == expected.agent_id &&
            object_add->pcode == 9 && object_add->material == 3 && object_add->add_flags == 2 &&
            object_add->path_curve == 16 && object_add->profile_curve == 1 && object_add->bypass_raycast &&
+           object_add->path_begin == 0x1234 && object_add->path_scale_x == 0 &&
+           object_add->path_scale_y == 100 && object_add->path_shear_x == 0xce &&
+           object_add->path_skew == 7 && object_add->profile_hollow == 0x5678 &&
            object_add->ray_start[2] == 30.0F && object_add->ray_end[0] == 132.0F &&
            object_add->scale[1] == 0.75F &&
            derez && derez->agent_id == expected.agent_id && derez->session_id == expected.session_id &&
@@ -715,6 +726,12 @@ bool static_object_codec() {
     object.rotation = {0.25F, 0.0F, 0.0F};
     object.path_curve = 0x20;
     object.profile_curve = 0x05;
+    object.path_begin = 0x1234;
+    object.path_scale_x = 0;
+    object.path_scale_y = 100;
+    object.path_shear_x = 0xce;
+    object.path_skew = 7;
+    object.profile_hollow = 0x5678;
     const auto encoded = encode_static_object_update(0x0102030405060708ULL, object);
     if (encoded.size() <= 220 || encoded[0] != std::byte{12} || encoded[1] != std::byte{8} ||
         encoded[8] != std::byte{1} || encoded[11] != std::byte{1} || encoded[37] != std::byte{9} ||
@@ -723,7 +740,10 @@ bool static_object_codec() {
         encoded[117] != std::byte{0x3c} || encoded[118] != std::byte{0x01} ||
         encoded[119] != std::byte{0x02} || encoded[120] != std::byte{0x10} ||
         encoded[121] != std::byte{0x20} || encoded[122] != std::byte{0x05} ||
-        encoded[136] != std::byte{})
+        encoded[123] != std::byte{0x34} || encoded[124] != std::byte{0x12} ||
+        encoded[127] != std::byte{0} || encoded[128] != std::byte{100} ||
+        encoded[129] != std::byte{0xce} || encoded[137] != std::byte{7} ||
+        encoded[142] != std::byte{0x78} || encoded[143] != std::byte{0x56})
         return false;
     const auto agent = *parse_uuid("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");
     const auto avatar = encode_avatar_object_update(0x0102030405060708ULL, 42, agent, {128.F, 128.F, 25.F});

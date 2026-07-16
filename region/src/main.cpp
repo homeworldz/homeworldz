@@ -442,6 +442,22 @@ std::optional<homeworldz::viewer::StaticObject> static_object_from_entity(
     object.texture_entry = entity.texture_entry;
     object.path_curve = entity.path_curve;
     object.profile_curve = entity.profile_curve;
+    object.path_begin = entity.path_begin;
+    object.path_end = entity.path_end;
+    object.path_scale_x = entity.path_scale_x;
+    object.path_scale_y = entity.path_scale_y;
+    object.path_shear_x = entity.path_shear_x;
+    object.path_shear_y = entity.path_shear_y;
+    object.path_twist = entity.path_twist;
+    object.path_twist_begin = entity.path_twist_begin;
+    object.path_radius_offset = entity.path_radius_offset;
+    object.path_taper_x = entity.path_taper_x;
+    object.path_taper_y = entity.path_taper_y;
+    object.path_revolutions = entity.path_revolutions;
+    object.path_skew = entity.path_skew;
+    object.profile_begin = entity.profile_begin;
+    object.profile_end = entity.profile_end;
+    object.profile_hollow = entity.profile_hollow;
     return object;
 }
 
@@ -470,6 +486,22 @@ std::string object_asset_json(const homeworldz::scene::Entity& entity) {
         ",\"textureEntry\":" + homeworldz::api::json_string(texture_entry) +
         ",\"pathCurve\":" + std::to_string(entity.path_curve) +
         ",\"profileCurve\":" + std::to_string(entity.profile_curve) +
+        ",\"pathBegin\":" + std::to_string(entity.path_begin) +
+        ",\"pathEnd\":" + std::to_string(entity.path_end) +
+        ",\"pathScaleX\":" + std::to_string(entity.path_scale_x) +
+        ",\"pathScaleY\":" + std::to_string(entity.path_scale_y) +
+        ",\"pathShearX\":" + std::to_string(entity.path_shear_x) +
+        ",\"pathShearY\":" + std::to_string(entity.path_shear_y) +
+        ",\"pathTwist\":" + std::to_string(entity.path_twist) +
+        ",\"pathTwistBegin\":" + std::to_string(entity.path_twist_begin) +
+        ",\"pathRadiusOffset\":" + std::to_string(entity.path_radius_offset) +
+        ",\"pathTaperX\":" + std::to_string(entity.path_taper_x) +
+        ",\"pathTaperY\":" + std::to_string(entity.path_taper_y) +
+        ",\"pathRevolutions\":" + std::to_string(entity.path_revolutions) +
+        ",\"pathSkew\":" + std::to_string(entity.path_skew) +
+        ",\"profileBegin\":" + std::to_string(entity.profile_begin) +
+        ",\"profileEnd\":" + std::to_string(entity.profile_end) +
+        ",\"profileHollow\":" + std::to_string(entity.profile_hollow) +
         ",\"physical\":" + (entity.physical ? "true" : "false") +
         ",\"phantom\":" + (entity.phantom ? "true" : "false") +
         ",\"basePermissions\":" + std::to_string(entity.base_permissions) +
@@ -2610,18 +2642,29 @@ int main() {
                                                        object_add->rotation[1] * object_add->rotation[1] +
                                                        object_add->rotation[2] * object_add->rotation[2];
                             const bool valid_rotation = rotation_norm <= 1.001F;
+                            const bool unmodified_shape = object_add->path_begin == 0 &&
+                                object_add->path_end == 0 && object_add->path_scale_x == 100 &&
+                                object_add->path_scale_y == 100 && object_add->path_shear_x == 0 &&
+                                object_add->path_shear_y == 0 && object_add->path_twist == 0 &&
+                                object_add->path_twist_begin == 0 && object_add->path_radius_offset == 0 &&
+                                object_add->path_taper_x == 0 && object_add->path_taper_y == 0 &&
+                                object_add->path_revolutions == 0 && object_add->path_skew == 0 &&
+                                object_add->profile_begin == 0 && object_add->profile_end == 0 &&
+                                object_add->profile_hollow == 0;
                             const bool supported_box = object_add->pcode == 9 &&
                                 object_add->path_curve == 0x10 &&
-                                (object_add->profile_curve & 0x0f) == 0x01;
+                                (object_add->profile_curve & 0x0f) == 0x01 && unmodified_shape;
                             const bool supported_sphere = object_add->pcode == 9 &&
                                 object_add->path_curve == 0x20 &&
-                                (object_add->profile_curve & 0x0f) == 0x05;
+                                (object_add->profile_curve & 0x0f) == 0x05 && unmodified_shape;
                             const bool supported_cylinder = object_add->pcode == 9 &&
                                 object_add->path_curve == 0x10 &&
-                                (object_add->profile_curve & 0x0f) == 0x00;
+                                (object_add->profile_curve & 0x0f) == 0x00 && unmodified_shape;
                             const bool supported_prism = object_add->pcode == 9 &&
                                 object_add->path_curve == 0x10 &&
-                                (object_add->profile_curve & 0x0f) == 0x03;
+                                (object_add->profile_curve & 0x0f) == 0x01 &&
+                                object_add->path_scale_x == 0 && object_add->path_scale_y == 100 &&
+                                object_add->path_shear_x == 0xce && object_add->path_shear_y == 0;
                             std::optional<homeworldz::scene::Vector3> placement;
                             if (valid_scale && object_add->bypass_raycast) {
                                 const homeworldz::scene::Vector3 ray_end{
@@ -2675,6 +2718,22 @@ int main() {
                                     entity->physical = (object_add->add_flags & add_use_physics) != 0;
                                     entity->path_curve = object_add->path_curve;
                                     entity->profile_curve = object_add->profile_curve;
+                                    entity->path_begin = object_add->path_begin;
+                                    entity->path_end = object_add->path_end;
+                                    entity->path_scale_x = object_add->path_scale_x;
+                                    entity->path_scale_y = object_add->path_scale_y;
+                                    entity->path_shear_x = object_add->path_shear_x;
+                                    entity->path_shear_y = object_add->path_shear_y;
+                                    entity->path_twist = object_add->path_twist;
+                                    entity->path_twist_begin = object_add->path_twist_begin;
+                                    entity->path_radius_offset = object_add->path_radius_offset;
+                                    entity->path_taper_x = object_add->path_taper_x;
+                                    entity->path_taper_y = object_add->path_taper_y;
+                                    entity->path_revolutions = object_add->path_revolutions;
+                                    entity->path_skew = object_add->path_skew;
+                                    entity->profile_begin = object_add->profile_begin;
+                                    entity->profile_end = object_add->profile_end;
+                                    entity->profile_hollow = object_add->profile_hollow;
                                     entity->texture_entry = default_prim_texture_entry();
                                     apply_material_contact_defaults(*entity);
                                     entity->creation_date = static_cast<std::uint64_t>(
@@ -2717,6 +2776,10 @@ int main() {
                                       << ",\"pcode\":" << static_cast<unsigned>(object_add->pcode)
                                       << ",\"pathCurve\":" << static_cast<unsigned>(object_add->path_curve)
                                       << ",\"profileCurve\":" << static_cast<unsigned>(object_add->profile_curve)
+                                      << ",\"pathScale\":[" << static_cast<unsigned>(object_add->path_scale_x)
+                                      << ',' << static_cast<unsigned>(object_add->path_scale_y) << ']'
+                                      << ",\"pathShear\":[" << static_cast<unsigned>(object_add->path_shear_x)
+                                      << ',' << static_cast<unsigned>(object_add->path_shear_y) << ']'
                                       << ",\"material\":" << static_cast<unsigned>(object_add->material)
                                       << ",\"scale\":[" << object_add->scale[0] << ','
                                       << object_add->scale[1] << ',' << object_add->scale[2] << ']'
@@ -2904,6 +2967,22 @@ int main() {
                                             entity->texture_entry = asset->texture_entry;
                                             entity->path_curve = asset->path_curve;
                                             entity->profile_curve = asset->profile_curve;
+                                            entity->path_begin = asset->path_begin;
+                                            entity->path_end = asset->path_end;
+                                            entity->path_scale_x = asset->path_scale_x;
+                                            entity->path_scale_y = asset->path_scale_y;
+                                            entity->path_shear_x = asset->path_shear_x;
+                                            entity->path_shear_y = asset->path_shear_y;
+                                            entity->path_twist = asset->path_twist;
+                                            entity->path_twist_begin = asset->path_twist_begin;
+                                            entity->path_radius_offset = asset->path_radius_offset;
+                                            entity->path_taper_x = asset->path_taper_x;
+                                            entity->path_taper_y = asset->path_taper_y;
+                                            entity->path_revolutions = asset->path_revolutions;
+                                            entity->path_skew = asset->path_skew;
+                                            entity->profile_begin = asset->profile_begin;
+                                            entity->profile_end = asset->profile_end;
+                                            entity->profile_hollow = asset->profile_hollow;
                                             entity->physical = asset->physical;
                                             entity->phantom = asset->phantom;
                                             entity->description = item->description.empty()

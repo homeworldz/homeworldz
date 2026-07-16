@@ -54,10 +54,10 @@ double cylinder_mass(scene::Vector3 scale, double density) {
 double prism_mass(scene::Vector3 scale, double density) {
     constexpr double minimum_mass = 0.001;
     constexpr double maximum_mass = 100000.0;
-    // Area of the viewer's unit equilateral-triangle profile after its
-    // 0.5 profile scaling: 3 * sqrt(3) / 16.
-    constexpr double profile_area = 0.32475952641916449254;
-    const auto volume = profile_area * std::max(0.0, scale.x) *
+    // Firestorm's canonical prism is a square extrusion whose top X ratio is
+    // collapsed to zero and sheared to one side: exactly half a box.
+    constexpr double volume_fraction = 0.5;
+    const auto volume = volume_fraction * std::max(0.0, scale.x) *
                         std::max(0.0, scale.y) * std::max(0.0, scale.z);
     return std::clamp(volume * density, minimum_mass, maximum_mass);
 }
@@ -70,7 +70,9 @@ bool StaticSceneMirror::synchronize(const scene::Entity& entity) {
     definition.motion = entity.physical ? MotionType::Dynamic : MotionType::Static;
     const bool sphere = entity.path_curve == 0x20 && (entity.profile_curve & 0x0f) == 0x05;
     const bool cylinder = entity.path_curve == 0x10 && (entity.profile_curve & 0x0f) == 0x00;
-    const bool prism = entity.path_curve == 0x10 && (entity.profile_curve & 0x0f) == 0x03;
+    const bool prism = entity.path_curve == 0x10 && (entity.profile_curve & 0x0f) == 0x01 &&
+        entity.path_scale_x == 0 && entity.path_scale_y == 100 &&
+        entity.path_shear_x == 0xce && entity.path_shear_y == 0;
     definition.shape.type = sphere ? ShapeType::Sphere :
         (cylinder ? ShapeType::Cylinder :
         (prism ? ShapeType::ConvexHull : ShapeType::Box));
@@ -83,14 +85,12 @@ bool StaticSceneMirror::synchronize(const scene::Entity& entity) {
         definition.shape.height = entity.scale.z;
     }
     if (prism) {
-        constexpr double triangle_y = 0.43301270189221932338;
-        const auto x_front = entity.scale.x * 0.5;
-        const auto x_back = entity.scale.x * -0.25;
-        const auto y = entity.scale.y * triangle_y;
+        const auto x = entity.scale.x * 0.5;
+        const auto y = entity.scale.y * 0.5;
         const auto z = entity.scale.z * 0.5;
         definition.shape.hull_points = {
-            {x_front, 0.0, -z}, {x_back, y, -z}, {x_back, -y, -z},
-            {x_front, 0.0, z}, {x_back, y, z}, {x_back, -y, z}};
+            {-x, -y, -z}, {-x, y, -z}, {x, -y, -z}, {x, y, -z},
+            {-x, -y, z}, {-x, y, z}};
     }
     definition.position = entity.position;
     definition.velocity = entity.velocity;

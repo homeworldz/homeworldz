@@ -757,6 +757,22 @@ std::optional<ObjectAdd> decode_object_add(std::span<const std::byte> payload) {
     result.add_flags = read_le_u32(payload, 52);
     result.path_curve = std::to_integer<std::uint8_t>(payload[56]);
     result.profile_curve = std::to_integer<std::uint8_t>(payload[57]);
+    result.path_begin = read_le_u16(payload, 58);
+    result.path_end = read_le_u16(payload, 60);
+    result.path_scale_x = std::to_integer<std::uint8_t>(payload[62]);
+    result.path_scale_y = std::to_integer<std::uint8_t>(payload[63]);
+    result.path_shear_x = std::to_integer<std::uint8_t>(payload[64]);
+    result.path_shear_y = std::to_integer<std::uint8_t>(payload[65]);
+    result.path_twist = std::to_integer<std::uint8_t>(payload[66]);
+    result.path_twist_begin = std::to_integer<std::uint8_t>(payload[67]);
+    result.path_radius_offset = std::to_integer<std::uint8_t>(payload[68]);
+    result.path_taper_x = std::to_integer<std::uint8_t>(payload[69]);
+    result.path_taper_y = std::to_integer<std::uint8_t>(payload[70]);
+    result.path_revolutions = std::to_integer<std::uint8_t>(payload[71]);
+    result.path_skew = std::to_integer<std::uint8_t>(payload[72]);
+    result.profile_begin = read_le_u16(payload, 73);
+    result.profile_end = read_le_u16(payload, 75);
+    result.profile_hollow = read_le_u16(payload, 77);
     result.bypass_raycast = payload[79] != std::byte{};
     result.ray_start = read_vector3(payload, 80);
     result.ray_end = read_vector3(payload, 92);
@@ -1736,12 +1752,22 @@ std::vector<std::byte> encode_static_object_update(std::uint64_t region_handle, 
     append_le_u32(output, object.update_flags);
     output.push_back(static_cast<std::byte>(object.path_curve));
     output.push_back(static_cast<std::byte>(object.profile_curve));
-    append_le_u16(output, 0); append_le_u16(output, 0); // path begin/end
-    output.push_back(std::byte{100}); output.push_back(std::byte{100}); // path scale
-    for (int index = 0; index < 7; ++index) output.push_back(std::byte{}); // shear through taper
-    output.push_back(std::byte{}); // one path revolution: (value * 0.015) + 1.0
-    output.push_back(std::byte{}); // skew
-    append_le_u16(output, 0); append_le_u16(output, 0); append_le_u16(output, 0); // profile
+    append_le_u16(output, object.path_begin);
+    append_le_u16(output, object.path_end);
+    output.push_back(static_cast<std::byte>(object.path_scale_x));
+    output.push_back(static_cast<std::byte>(object.path_scale_y));
+    output.push_back(static_cast<std::byte>(object.path_shear_x));
+    output.push_back(static_cast<std::byte>(object.path_shear_y));
+    output.push_back(static_cast<std::byte>(object.path_twist));
+    output.push_back(static_cast<std::byte>(object.path_twist_begin));
+    output.push_back(static_cast<std::byte>(object.path_radius_offset));
+    output.push_back(static_cast<std::byte>(object.path_taper_x));
+    output.push_back(static_cast<std::byte>(object.path_taper_y));
+    output.push_back(static_cast<std::byte>(object.path_revolutions));
+    output.push_back(static_cast<std::byte>(object.path_skew));
+    append_le_u16(output, object.profile_begin);
+    append_le_u16(output, object.profile_end);
+    append_le_u16(output, object.profile_hollow);
     if (!append_binary(output, object.texture_entry, 2) || !append_binary(output, {}, 1) ||
         !append_binary(output, {}, 2)) return {}; // texture, animation, name/value
     const std::array<std::byte, 1> prim_count{std::byte{1}};

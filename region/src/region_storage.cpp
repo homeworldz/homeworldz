@@ -387,6 +387,39 @@ private:
         const auto profile_curve = unsigned_integer();
         if (profile_curve > 255) fail("profile curve is outside the supported range");
         result.profile_curve = static_cast<std::uint8_t>(profile_curve);
+        if (consume("}")) return result;
+        const auto read_byte_field = [&](std::string_view name) {
+            expect(",");
+            expect_string(name);
+            expect(":");
+            const auto value = unsigned_integer();
+            if (value > 255) fail("primitive shape byte is outside the supported range");
+            return static_cast<std::uint8_t>(value);
+        };
+        const auto read_word_field = [&](std::string_view name) {
+            expect(",");
+            expect_string(name);
+            expect(":");
+            const auto value = unsigned_integer();
+            if (value > 65535) fail("primitive shape word is outside the supported range");
+            return static_cast<std::uint16_t>(value);
+        };
+        result.path_begin = read_word_field("pathBegin");
+        result.path_end = read_word_field("pathEnd");
+        result.path_scale_x = read_byte_field("pathScaleX");
+        result.path_scale_y = read_byte_field("pathScaleY");
+        result.path_shear_x = read_byte_field("pathShearX");
+        result.path_shear_y = read_byte_field("pathShearY");
+        result.path_twist = read_byte_field("pathTwist");
+        result.path_twist_begin = read_byte_field("pathTwistBegin");
+        result.path_radius_offset = read_byte_field("pathRadiusOffset");
+        result.path_taper_x = read_byte_field("pathTaperX");
+        result.path_taper_y = read_byte_field("pathTaperY");
+        result.path_revolutions = read_byte_field("pathRevolutions");
+        result.path_skew = read_byte_field("pathSkew");
+        result.profile_begin = read_word_field("profileBegin");
+        result.profile_end = read_word_field("profileEnd");
+        result.profile_hollow = read_word_field("profileHollow");
         expect("}");
         return result;
     }
@@ -441,7 +474,23 @@ std::string snapshot_json(const scene::Scene& scene) {
                     std::to_string(entity->physics_gravity_multiplier) +
                 ",\"textureEntry\":" + api::json_string(bytes_to_hex(entity->texture_entry)) +
                 ",\"pathCurve\":" + std::to_string(entity->path_curve) +
-                ",\"profileCurve\":" + std::to_string(entity->profile_curve) + '}';
+                ",\"profileCurve\":" + std::to_string(entity->profile_curve) +
+                ",\"pathBegin\":" + std::to_string(entity->path_begin) +
+                ",\"pathEnd\":" + std::to_string(entity->path_end) +
+                ",\"pathScaleX\":" + std::to_string(entity->path_scale_x) +
+                ",\"pathScaleY\":" + std::to_string(entity->path_scale_y) +
+                ",\"pathShearX\":" + std::to_string(entity->path_shear_x) +
+                ",\"pathShearY\":" + std::to_string(entity->path_shear_y) +
+                ",\"pathTwist\":" + std::to_string(entity->path_twist) +
+                ",\"pathTwistBegin\":" + std::to_string(entity->path_twist_begin) +
+                ",\"pathRadiusOffset\":" + std::to_string(entity->path_radius_offset) +
+                ",\"pathTaperX\":" + std::to_string(entity->path_taper_x) +
+                ",\"pathTaperY\":" + std::to_string(entity->path_taper_y) +
+                ",\"pathRevolutions\":" + std::to_string(entity->path_revolutions) +
+                ",\"pathSkew\":" + std::to_string(entity->path_skew) +
+                ",\"profileBegin\":" + std::to_string(entity->profile_begin) +
+                ",\"profileEnd\":" + std::to_string(entity->profile_end) +
+                ",\"profileHollow\":" + std::to_string(entity->profile_hollow) + '}';
     }
     return json + "]}";
 }

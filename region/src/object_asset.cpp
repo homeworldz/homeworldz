@@ -1,5 +1,7 @@
 #include "homeworldz/object_asset.h"
 
+#include <algorithm>
+#include <array>
 #include <charconv>
 #include <cmath>
 #include <string>
@@ -106,6 +108,27 @@ std::optional<ObjectAsset> parse_object_asset(std::span<const std::byte> content
     auto path_curve = number_after(text, R"("pathCurve":)", position);
     position = 0;
     auto profile_curve = number_after(text, R"("profileCurve":)", position);
+    const auto shape_number = [&](std::string_view key, double default_value) {
+        std::size_t shape_position = 0;
+        const auto value = number_after(text, key, shape_position);
+        return value.value_or(default_value);
+    };
+    const auto path_begin = shape_number(R"("pathBegin":)", 0.0);
+    const auto path_end = shape_number(R"("pathEnd":)", 0.0);
+    const auto path_scale_x = shape_number(R"("pathScaleX":)", 100.0);
+    const auto path_scale_y = shape_number(R"("pathScaleY":)", 100.0);
+    const auto path_shear_x = shape_number(R"("pathShearX":)", 0.0);
+    const auto path_shear_y = shape_number(R"("pathShearY":)", 0.0);
+    const auto path_twist = shape_number(R"("pathTwist":)", 0.0);
+    const auto path_twist_begin = shape_number(R"("pathTwistBegin":)", 0.0);
+    const auto path_radius_offset = shape_number(R"("pathRadiusOffset":)", 0.0);
+    const auto path_taper_x = shape_number(R"("pathTaperX":)", 0.0);
+    const auto path_taper_y = shape_number(R"("pathTaperY":)", 0.0);
+    const auto path_revolutions = shape_number(R"("pathRevolutions":)", 0.0);
+    const auto path_skew = shape_number(R"("pathSkew":)", 0.0);
+    const auto profile_begin = shape_number(R"("profileBegin":)", 0.0);
+    const auto profile_end = shape_number(R"("profileEnd":)", 0.0);
+    const auto profile_hollow = shape_number(R"("profileHollow":)", 0.0);
     auto physical = boolean_after(text, R"("physical":)");
     auto phantom = boolean_after(text, R"("phantom":)");
     const auto texture_entry_hex = string_after(text, R"("textureEntry":")");
@@ -133,14 +156,51 @@ std::optional<ObjectAsset> parse_object_asset(std::span<const std::byte> content
         *profile_curve < 0.0 || *profile_curve > 255.0 ||
         std::floor(*profile_curve) != *profile_curve)
         return std::nullopt;
+    const std::array byte_values{path_scale_x, path_scale_y, path_shear_x, path_shear_y,
+        path_twist, path_twist_begin, path_radius_offset, path_taper_x, path_taper_y,
+        path_revolutions, path_skew};
+    const std::array word_values{path_begin, path_end, profile_begin, profile_end, profile_hollow};
+    if (std::any_of(byte_values.begin(), byte_values.end(), [](double value) {
+            return value < 0.0 || value > 255.0 || std::floor(value) != value;
+        }) || std::any_of(word_values.begin(), word_values.end(), [](double value) {
+            return value < 0.0 || value > 65535.0 || std::floor(value) != value;
+        }))
+        return std::nullopt;
     auto texture_entry = texture_entry_hex
         ? bytes_from_hex(*texture_entry_hex) : std::optional<std::vector<std::byte>>{{}};
     if (!texture_entry) return std::nullopt;
-    return ObjectAsset{*scale, *rotation, static_cast<std::uint8_t>(*material), *description,
-        static_cast<std::uint8_t>(*physics_shape_type), *physics_density, *physics_friction,
-        *physics_restitution, *physics_gravity_multiplier, std::move(*texture_entry),
-        static_cast<std::uint8_t>(*path_curve), static_cast<std::uint8_t>(*profile_curve),
-        *physical, *phantom};
+    ObjectAsset result;
+    result.scale = *scale;
+    result.rotation = *rotation;
+    result.material = static_cast<std::uint8_t>(*material);
+    result.description = *description;
+    result.physics_shape_type = static_cast<std::uint8_t>(*physics_shape_type);
+    result.physics_density = *physics_density;
+    result.physics_friction = *physics_friction;
+    result.physics_restitution = *physics_restitution;
+    result.physics_gravity_multiplier = *physics_gravity_multiplier;
+    result.texture_entry = std::move(*texture_entry);
+    result.path_curve = static_cast<std::uint8_t>(*path_curve);
+    result.profile_curve = static_cast<std::uint8_t>(*profile_curve);
+    result.path_begin = static_cast<std::uint16_t>(path_begin);
+    result.path_end = static_cast<std::uint16_t>(path_end);
+    result.path_scale_x = static_cast<std::uint8_t>(path_scale_x);
+    result.path_scale_y = static_cast<std::uint8_t>(path_scale_y);
+    result.path_shear_x = static_cast<std::uint8_t>(path_shear_x);
+    result.path_shear_y = static_cast<std::uint8_t>(path_shear_y);
+    result.path_twist = static_cast<std::uint8_t>(path_twist);
+    result.path_twist_begin = static_cast<std::uint8_t>(path_twist_begin);
+    result.path_radius_offset = static_cast<std::uint8_t>(path_radius_offset);
+    result.path_taper_x = static_cast<std::uint8_t>(path_taper_x);
+    result.path_taper_y = static_cast<std::uint8_t>(path_taper_y);
+    result.path_revolutions = static_cast<std::uint8_t>(path_revolutions);
+    result.path_skew = static_cast<std::uint8_t>(path_skew);
+    result.profile_begin = static_cast<std::uint16_t>(profile_begin);
+    result.profile_end = static_cast<std::uint16_t>(profile_end);
+    result.profile_hollow = static_cast<std::uint16_t>(profile_hollow);
+    result.physical = *physical;
+    result.phantom = *phantom;
+    return result;
 }
 
 } // namespace homeworldz::asset

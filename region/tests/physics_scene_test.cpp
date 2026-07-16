@@ -67,7 +67,7 @@ int main() {
         !close(physics::box_mass({100.0, 100.0, 100.0}, 1000.0), 100000.0) ||
         !close(physics::ellipsoid_mass({2.0, 3.0, 4.0}, 1000.0), 12566.3706143592) ||
         !close(physics::cylinder_mass({2.0, 3.0, 4.0}, 1000.0), 18849.5559215388) ||
-        !close(physics::prism_mass({2.0, 3.0, 4.0}, 1000.0), 7794.22863405995))
+        !close(physics::prism_mass({2.0, 3.0, 4.0}, 1000.0), 12000.0))
         return 2;
 
     RecordingWorld world;
@@ -112,15 +112,19 @@ int main() {
         !close(world.last_definition.shape.height, 3.0) ||
         !close(world.last_definition.mass, 1178.09724509617))
         return 7;
-    entity.profile_curve = 0x03;
+    entity.profile_curve = 0x01;
+    entity.path_scale_x = 0;
+    entity.path_scale_y = 100;
+    entity.path_shear_x = 0xce;
+    entity.path_shear_y = 0;
     if (!mirror.synchronize(entity) ||
         world.last_definition.shape.type != physics::ShapeType::ConvexHull ||
         world.last_definition.shape.hull_points.size() != 6 ||
-        !close(world.last_definition.shape.hull_points[0].x, 1.0) ||
-        !close(world.last_definition.shape.hull_points[1].x, -0.5) ||
-        !close(world.last_definition.shape.hull_points[1].y, 0.866025403784439) ||
-        !close(world.last_definition.shape.hull_points[3].z, 1.5) ||
-        !close(world.last_definition.mass, 487.139289628747))
+        !close(world.last_definition.shape.hull_points[0].x, -1.0) ||
+        !close(world.last_definition.shape.hull_points[1].y, 1.0) ||
+        !close(world.last_definition.shape.hull_points[2].x, 1.0) ||
+        !close(world.last_definition.shape.hull_points[4].z, 1.5) ||
+        !close(world.last_definition.mass, 750.0))
         return 8;
     const auto rubber_body = mirror.body_id(entity.id);
     entity.physics_shape_type = 0x01;

@@ -89,6 +89,22 @@ struct ObjectAdd : AgentMessage {
     std::uint32_t add_flags{};
     std::uint8_t path_curve{};
     std::uint8_t profile_curve{};
+    std::uint16_t path_begin{};
+    std::uint16_t path_end{};
+    std::uint8_t path_scale_x{};
+    std::uint8_t path_scale_y{};
+    std::uint8_t path_shear_x{};
+    std::uint8_t path_shear_y{};
+    std::uint8_t path_twist{};
+    std::uint8_t path_twist_begin{};
+    std::uint8_t path_radius_offset{};
+    std::uint8_t path_taper_x{};
+    std::uint8_t path_taper_y{};
+    std::uint8_t path_revolutions{};
+    std::uint8_t path_skew{};
+    std::uint16_t profile_begin{};
+    std::uint16_t profile_end{};
+    std::uint16_t profile_hollow{};
     std::array<float, 3> ray_start{};
     std::array<float, 3> ray_end{};
     Uuid ray_target_id{};
@@ -416,6 +432,22 @@ struct StaticObject {
     std::vector<std::byte> texture_entry;
     std::uint8_t path_curve{0x10};
     std::uint8_t profile_curve{0x01};
+    std::uint16_t path_begin{};
+    std::uint16_t path_end{};
+    std::uint8_t path_scale_x{100};
+    std::uint8_t path_scale_y{100};
+    std::uint8_t path_shear_x{};
+    std::uint8_t path_shear_y{};
+    std::uint8_t path_twist{};
+    std::uint8_t path_twist_begin{};
+    std::uint8_t path_radius_offset{};
+    std::uint8_t path_taper_x{};
+    std::uint8_t path_taper_y{};
+    std::uint8_t path_revolutions{};
+    std::uint8_t path_skew{};
+    std::uint16_t profile_begin{};
+    std::uint16_t profile_end{};
+    std::uint16_t profile_hollow{};
 };
 
 // Builds the canonical TextureEntry defaults for a newly created primitive:
