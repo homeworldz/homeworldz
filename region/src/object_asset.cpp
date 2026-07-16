@@ -167,7 +167,8 @@ std::optional<ObjectAsset> parse_object_asset(std::span<const std::byte> content
         }))
         return std::nullopt;
     auto texture_entry = texture_entry_hex
-        ? bytes_from_hex(*texture_entry_hex) : std::optional<std::vector<std::byte>>{{}};
+        ? bytes_from_hex(*texture_entry_hex)
+        : std::optional<std::vector<std::byte>>(std::vector<std::byte>{});
     if (!texture_entry) return std::nullopt;
     ObjectAsset result;
     result.scale = *scale;

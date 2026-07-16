@@ -15,6 +15,14 @@ int main() {
         asset->path_scale_y != 100 || asset->path_shear_x != 0xce || !asset->physical || asset->phantom ||
         asset->description != "Round \"prim\"")
         return 1;
+    auto no_texture_json = json;
+    const std::string texture_text = "\"textureEntry\":\"aabbcc\",";
+    const auto texture_field = no_texture_json.find(texture_text);
+    if (texture_field == std::string::npos) return 1;
+    no_texture_json.erase(texture_field, texture_text.size());
+    const auto no_texture = homeworldz::asset::parse_object_asset(std::span(
+        reinterpret_cast<const std::byte*>(no_texture_json.data()), no_texture_json.size()));
+    if (!no_texture || !no_texture->texture_entry.empty()) return 1;
     const std::string invalid = R"({"format":"homeworldz-object-v1","scale":[0,1,1],"rotation":[0,0,0],"description":"","material":3})";
     if (homeworldz::asset::parse_object_asset(
             std::span(reinterpret_cast<const std::byte*>(invalid.data()), invalid.size())))
