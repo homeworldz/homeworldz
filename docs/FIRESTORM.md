@@ -818,3 +818,10 @@ removed the earlier circuit and its endpoint-scoped runtime state, sent a new
 RegionHandshake to the viewer's new UDP endpoint, and completed login normally.
 This prevents an unacknowledged or interrupted logout from leaving the avatar
 blocked indefinitely at `Waiting for region handshake`.
+
+EventQueue long polling passed live cloud acceptance on 2026-07-16. The first
+event still completed login immediately, while subsequent empty requests were
+held for 20 seconds without blocking the Region's UDP loop. Idle EventQueue
+responses fell from 776 per minute to 2 in a measured 45-second interval (about
+a 99.7% reduction). Walking, turning, jumping, flying, and landing all remained
+normal while a long poll was pending, and Region CPU remained below 1%.

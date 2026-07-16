@@ -129,6 +129,12 @@ higher levels composite progressively larger powers-of-two areas into 256-pixel
 JPEG tiles. The initial imagery renders the same packaged plateau; the helper
 URI remains the general viewer-services URI and is not the map-image base.
 
+The Region implements EventQueueGet as a non-blocking 20-second long poll.
+Initial queued events return immediately; an empty response retains only the
+accepted HTTP socket and deadline while the single Region thread continues its
+UDP and simulation work. Logout and authenticated circuit replacement close
+any held response for the superseded session.
+
 Initial development accounts use normalized lowercase usernames and bcrypt
 password hashes. Successful credential checks create random UUID sessions with
 database-controlled expiry; internal clients validate or revoke those sessions
