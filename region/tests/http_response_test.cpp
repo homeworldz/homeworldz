@@ -175,6 +175,12 @@ int main() {
     passed &= contains(teleport_finish, "<key>SeedCapability</key><string>https://region.example/caps/seed/session&amp;amp;id</string>");
     passed &= contains(teleport_finish, "<key>SimAccess</key><integer>13</integer>");
     passed &= contains(teleport_finish, "<key>TeleportFlags</key><integer>16</integer>");
+    const auto flying_finish = homeworldz::viewer::teleport_finish_event_xml({
+        "11111111-2222-4333-8444-555555555555", 0x0102030405060708ULL, event_endpoint,
+        "https://region.example/caps/seed/session", 13,
+        homeworldz::viewer::teleport_flags_via_location |
+            homeworldz::viewer::teleport_flags_is_flying});
+    passed &= contains(flying_finish, "<key>TeleportFlags</key><integer>8208</integer>");
     const auto simulator_features = homeworldz::viewer::simulator_features_xml(
         "C$", "https://grid.example/map/");
     passed &= contains(simulator_features,

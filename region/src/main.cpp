@@ -1849,15 +1849,18 @@ int main(int argc, char* argv[]) {
                                 const auto session_id = homeworldz::viewer::format_uuid(identity->session_id);
                                 const auto agent_id = homeworldz::viewer::format_uuid(identity->agent_id);
                                 const auto transit_id = homeworldz::viewer::random_uuid();
+                                const auto avatar = avatars.find(endpoint);
+                                const bool flying = avatar != avatars.end() &&
+                                    avatar->second.controller.state().flying;
+                                const auto teleport_flags =
+                                    homeworldz::viewer::teleport_flags_via_location |
+                                    (flying ? homeworldz::viewer::teleport_flags_is_flying : 0U);
                                 bool prepared = false;
                                 try {
                                     if (const auto start = circuits.send(endpoint,
-                                            homeworldz::viewer::encode_teleport_start({0x00000010U}),
+                                            homeworldz::viewer::encode_teleport_start({teleport_flags}),
                                             true, now, true))
                                         static_cast<void>(send_udp(viewer_server, endpoint, *start));
-                                    const auto avatar = avatars.find(endpoint);
-                                    const bool flying = avatar != avatars.end() &&
-                                        avatar->second.controller.state().flying;
                                     // TeleportLocationRequest.LookAt is an absolute destination
                                     // point, not a direction. Preserve the live avatar's facing
                                     // across the handoff instead of interpreting that point as a
@@ -1885,7 +1888,7 @@ int main(int argc, char* argv[]) {
                                         homeworldz::viewer::teleport_finish_event_xml({
                                             agent_id, target_handle, *simulator,
                                             target->public_endpoint + "/caps/seed/" + session_id +
-                                                "/" + transit_id, 13}));
+                                                "/" + transit_id, 13, teleport_flags}));
                                     std::cout << "{\"level\":\"info\",\"message\":\"avatar teleport signaled\",\"transitId\":"
                                               << homeworldz::api::json_string(transit_id)
                                               << ",\"destinationRegionId\":"

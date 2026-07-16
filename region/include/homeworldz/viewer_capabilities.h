@@ -9,6 +9,9 @@
 
 namespace homeworldz::viewer {
 
+inline constexpr std::uint32_t teleport_flags_via_location = 0x00000010U;
+inline constexpr std::uint32_t teleport_flags_is_flying = 0x00002000U;
+
 struct EstablishAgentCommunication {
     std::string agent_id;
     std::string simulator_endpoint;
@@ -26,7 +29,7 @@ struct TeleportFinish {
     SimulatorEventEndpoint simulator;
     std::string seed_capability;
     std::uint8_t simulator_access{};
-    std::uint32_t teleport_flags{0x00000010U};
+    std::uint32_t teleport_flags{teleport_flags_via_location};
 };
 
 struct NewFileInventoryUpload {
