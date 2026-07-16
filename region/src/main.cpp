@@ -3710,6 +3710,7 @@ int main(int argc, char* argv[]) {
         }
         const auto elapsed = std::chrono::duration<double>(now - previous_tick).count();
         const auto fixed_steps = simulation.advance(elapsed);
+        std::vector<std::pair<std::string, std::string>> departed_avatars;
         for (auto& [endpoint, avatar] : avatars) {
             if (physics_world && avatar.physics_character != 0)
                 if (const auto state = physics_world->character_state(avatar.physics_character))
@@ -3719,6 +3720,21 @@ int main(int argc, char* argv[]) {
                 now - avatar.last_agent_update > std::chrono::seconds(1))
                 avatar.controller.expire_transient_controls();
             if (now >= avatar.next_ping) {
+                const auto* circuit_identity = circuits.identity(endpoint);
+                const auto session_id = circuit_identity ?
+                    homeworldz::viewer::format_uuid(circuit_identity->session_id) : std::string{};
+                try {
+                    const auto session = circuit_identity && viewer_sessions ?
+                        viewer_sessions->validate(session_id, now) : std::nullopt;
+                    if (!session || !registration ||
+                        session->destination_region_id != registration->region_id()) {
+                        departed_avatars.emplace_back(endpoint, session_id);
+                        continue;
+                    }
+                } catch (const std::exception& error) {
+                    std::cout << "{\"level\":\"warning\",\"message\":\"avatar authority check failed\",\"error\":"
+                              << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+                }
                 if (const auto ping = circuits.send(endpoint,
                         homeworldz::viewer::encode_start_ping_check(++avatar.ping_id), false, now))
                     static_cast<void>(send_udp(viewer_server, endpoint, *ping));
@@ -3819,6 +3835,12 @@ int main(int argc, char* argv[]) {
                     avatar.next_transform = now + std::chrono::milliseconds(100);
                 }
             }
+        }
+        for (const auto& [endpoint, session_id] : departed_avatars) {
+            clear_viewer_endpoint(endpoint, session_id);
+            circuits.remove(endpoint);
+            std::cout << "{\"level\":\"info\",\"message\":\"departed avatar retired\",\"sessionId\":"
+                      << homeworldz::api::json_string(session_id) << "}" << std::endl;
         }
         if (physics_world)
             for (std::size_t step = 0; step < fixed_steps; ++step)
