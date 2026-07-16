@@ -35,19 +35,22 @@ type API struct {
 	assets       assetmeta.Store
 	serviceToken string
 	provisioned  *provisioning.Registry
+	terrainHTTP  *http.Client
+	terrainCache terrainTileCache
 }
 
 type Options struct {
-	ServiceToken  string
-	GridPublicURL string
-	GridName      string
-	Logger        *slog.Logger
-	Regions       regions.Store
-	Identity      identity.Store
-	Presence      presence.Store
-	Inventory     inventory.Store
-	Assets        assetmeta.Store
-	Provisioned   *provisioning.Registry
+	ServiceToken      string
+	GridPublicURL     string
+	GridName          string
+	Logger            *slog.Logger
+	Regions           regions.Store
+	Identity          identity.Store
+	Presence          presence.Store
+	Inventory         inventory.Store
+	Assets            assetmeta.Store
+	Provisioned       *provisioning.Registry
+	TerrainHTTPClient *http.Client
 }
 
 func New(ready ReadinessChecker, version string, options Options) http.Handler {
@@ -55,7 +58,8 @@ func New(ready ReadinessChecker, version string, options Options) http.Handler {
 		gridName: strings.TrimSpace(options.GridName),
 		regions:  options.Regions, identity: options.Identity, presence: options.Presence,
 		inventory: options.Inventory, assets: options.Assets, serviceToken: options.ServiceToken,
-		provisioned: options.Provisioned}
+		provisioned: options.Provisioned, terrainHTTP: options.TerrainHTTPClient,
+		terrainCache: newTerrainTileCache()}
 	if a.publicURL == "" {
 		a.publicURL = "http://127.0.0.1:42000"
 	}

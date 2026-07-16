@@ -1,6 +1,7 @@
 #include <array>
 #include <algorithm>
 #include <atomic>
+#include <bit>
 #include <charconv>
 #include <cctype>
 #include <csignal>
@@ -142,6 +143,19 @@ std::unique_ptr<homeworldz::terrain::Heightmap> load_raw_heightmap(const std::fi
     std::transform(source.begin(), source.end(), result->begin(),
                    [](unsigned char height) { return static_cast<float>(height); });
     return result;
+}
+
+std::string encode_heightmap(const homeworldz::terrain::Heightmap& heightmap) {
+    std::string output;
+    output.reserve(heightmap.size() * sizeof(float));
+    for (const auto height : heightmap) {
+        const auto bits = std::bit_cast<std::uint32_t>(height);
+        output.push_back(static_cast<char>(bits));
+        output.push_back(static_cast<char>(bits >> 8));
+        output.push_back(static_cast<char>(bits >> 16));
+        output.push_back(static_cast<char>(bits >> 24));
+    }
+    return output;
 }
 
 homeworldz::scene::Vector3 default_spawn(const homeworldz::terrain::Heightmap& heightmap) {
@@ -1151,6 +1165,16 @@ int main(int argc, char* argv[]) {
                 if (received_request) {
                     const std::string_view request(*received_request);
                     auto response = homeworldz::http::response_for(request, region_version);
+                    if (response.path == "/map/terrain.raw") {
+                        response = response.method == "GET"
+                            ? homeworldz::http::response_for_content(
+                                  request, 200, "application/vnd.homeworldz.heightmap-f32le",
+                                  encode_heightmap(*terrain_heightmap))
+                            : homeworldz::http::response_for_content(
+                                  request, 405, "application/json",
+                                  homeworldz::api::to_json(homeworldz::api::Error{
+                                      "method_not_allowed", "terrain map endpoint requires GET"}));
+                    }
                     if (const auto asset_request = internal_asset_request(response.path)) {
                         const auto authorization = homeworldz::http::request_header_value(request, "Authorization");
                         const auto expected_method = asset_request->replicate ? "POST" : "GET";
