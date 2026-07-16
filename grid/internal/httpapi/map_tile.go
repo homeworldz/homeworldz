@@ -171,6 +171,7 @@ func (a *API) regionTerrainTile(ctx context.Context, region regions.Region) (ima
 	if err != nil {
 		return nil, false
 	}
+	request.Header.Set("Authorization", "Bearer "+a.serviceToken)
 	response, err := a.terrainHTTP.Do(request)
 	if err != nil {
 		a.cacheTerrainTile(endpoint, nil, now.Add(5*time.Second))

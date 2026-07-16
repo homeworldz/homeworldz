@@ -41,6 +41,10 @@ func TestMapTileFetchesAndCachesLiveRegionTerrain(t *testing.T) {
 	heightmap := encodedHeightmap(90)
 	regionServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests.Add(1)
+		if r.Header.Get("Authorization") != "Bearer secret" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
 		w.Header().Set("Content-Type", "application/vnd.homeworldz.heightmap-f32le")
 		_, _ = w.Write(heightmap)
 	}))

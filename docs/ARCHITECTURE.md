@@ -124,8 +124,9 @@ world-map imagery. Regions advertise the Grid's public `/map/` base URL, and
 the Grid serves Firestorm's `map-{level}-{x}-{y}-objects.jpg` convention only
 for tiles containing currently leased coordinates. Level 1 is one Region;
 higher levels composite progressively larger powers-of-two areas into 256-pixel
-JPEG tiles. For each live Region, the Grid reads a public 256-by-256
-little-endian float heightfield snapshot, applies water/land/elevation coloring
+JPEG tiles. For each live Region, the Grid reads a service-authenticated
+256-by-256 little-endian float heightfield snapshot, applies
+water/land/elevation coloring
 and hill shading, and caches the rendered result for one minute. If a Region is
 temporarily unreachable or returns invalid data, composition falls back to the
 packaged plateau. North is rendered at the top. The helper URI remains the

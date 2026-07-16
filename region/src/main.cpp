@@ -1166,14 +1166,23 @@ int main(int argc, char* argv[]) {
                     const std::string_view request(*received_request);
                     auto response = homeworldz::http::response_for(request, region_version);
                     if (response.path == "/map/terrain.raw") {
-                        response = response.method == "GET"
-                            ? homeworldz::http::response_for_content(
-                                  request, 200, "application/vnd.homeworldz.heightmap-f32le",
-                                  encode_heightmap(*terrain_heightmap))
-                            : homeworldz::http::response_for_content(
-                                  request, 405, "application/json",
-                                  homeworldz::api::to_json(homeworldz::api::Error{
-                                      "method_not_allowed", "terrain map endpoint requires GET"}));
+                        const auto authorization =
+                            homeworldz::http::request_header_value(request, "Authorization");
+                        if (response.method != "GET") {
+                            response = homeworldz::http::response_for_content(
+                                request, 405, "application/json",
+                                homeworldz::api::to_json(homeworldz::api::Error{
+                                    "method_not_allowed", "terrain map endpoint requires GET"}));
+                        } else if (service_token.empty() || authorization != "Bearer " + service_token) {
+                            response = homeworldz::http::response_for_content(
+                                request, 401, "application/json",
+                                homeworldz::api::to_json(homeworldz::api::Error{
+                                    "unauthorized", "a valid grid service token is required"}));
+                        } else {
+                            response = homeworldz::http::response_for_content(
+                                request, 200, "application/vnd.homeworldz.heightmap-f32le",
+                                encode_heightmap(*terrain_heightmap));
+                        }
                     }
                     if (const auto asset_request = internal_asset_request(response.path)) {
                         const auto authorization = homeworldz::http::request_header_value(request, "Authorization");
