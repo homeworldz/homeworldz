@@ -18,6 +18,7 @@ import (
 	"github.com/homeworldz/homeworldz/grid/internal/httpapi"
 	"github.com/homeworldz/homeworldz/grid/internal/identity"
 	"github.com/homeworldz/homeworldz/grid/internal/inventory"
+	"github.com/homeworldz/homeworldz/grid/internal/locations"
 	"github.com/homeworldz/homeworldz/grid/internal/presence"
 	"github.com/homeworldz/homeworldz/grid/internal/provisioning"
 	"github.com/homeworldz/homeworldz/grid/internal/regions"
@@ -67,6 +68,7 @@ func main() {
 			Provisioned:       provisionedRegions,
 			TerrainHTTPClient: &http.Client{Timeout: 2 * time.Second},
 			Transits:          transitStore(db),
+			Locations:         locationStore(db),
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
@@ -108,6 +110,13 @@ func presenceStore(db *sql.DB) presence.Store {
 		return nil
 	}
 	return presence.NewPostgresStore(db)
+}
+
+func locationStore(db *sql.DB) locations.Store {
+	if db == nil {
+		return nil
+	}
+	return locations.NewPostgresStore(db)
 }
 
 func inventoryStore(db *sql.DB) inventory.Store {

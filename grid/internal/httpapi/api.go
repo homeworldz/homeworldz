@@ -14,6 +14,7 @@ import (
 	"github.com/homeworldz/homeworldz/grid/internal/assetmeta"
 	"github.com/homeworldz/homeworldz/grid/internal/identity"
 	"github.com/homeworldz/homeworldz/grid/internal/inventory"
+	"github.com/homeworldz/homeworldz/grid/internal/locations"
 	"github.com/homeworldz/homeworldz/grid/internal/presence"
 	"github.com/homeworldz/homeworldz/grid/internal/provisioning"
 	"github.com/homeworldz/homeworldz/grid/internal/regions"
@@ -39,6 +40,7 @@ type API struct {
 	terrainHTTP  *http.Client
 	terrainCache terrainTileCache
 	transits     transit.Store
+	locations    locations.Store
 }
 
 type Options struct {
@@ -54,6 +56,7 @@ type Options struct {
 	Provisioned       *provisioning.Registry
 	TerrainHTTPClient *http.Client
 	Transits          transit.Store
+	Locations         locations.Store
 }
 
 func New(ready ReadinessChecker, version string, options Options) http.Handler {
@@ -62,7 +65,7 @@ func New(ready ReadinessChecker, version string, options Options) http.Handler {
 		regions:  options.Regions, identity: options.Identity, presence: options.Presence,
 		inventory: options.Inventory, assets: options.Assets, serviceToken: options.ServiceToken,
 		provisioned: options.Provisioned, terrainHTTP: options.TerrainHTTPClient,
-		terrainCache: newTerrainTileCache(), transits: options.Transits}
+		terrainCache: newTerrainTileCache(), transits: options.Transits, locations: options.Locations}
 	if a.publicURL == "" {
 		a.publicURL = "http://127.0.0.1:42000"
 	}

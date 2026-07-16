@@ -215,6 +215,15 @@ func (s *PostgresStore) Activate(ctx context.Context, id, destinationRegionID st
 	if updated != 1 {
 		return Transit{}, ErrInvalidTransition
 	}
+	_, err = tx.ExecContext(ctx, `UPDATE users SET
+		last_region_id=$2, last_position_x=$3, last_position_y=$4, last_position_z=$5,
+		last_look_x=$6, last_look_y=$7, last_look_z=$8, last_flying=$9,
+		last_location_updated_at=now() WHERE id=$1`, current.AgentID, current.DestinationRegionID,
+		current.Position.X, current.Position.Y, current.Position.Z,
+		current.LookAt.X, current.LookAt.Y, current.LookAt.Z, current.Flying)
+	if err != nil {
+		return Transit{}, fmt.Errorf("record transit last location: %w", err)
+	}
 	value, err := scanTransit(tx.QueryRowContext(ctx, `UPDATE avatar_transits
 		SET state = 'activated', updated_at = now() WHERE id = $1 RETURNING `+transitColumns, id))
 	if err != nil {

@@ -184,7 +184,13 @@ func (a *API) viewerLogin(w http.ResponseWriter, r *http.Request) {
 		writeViewerLogin(w, loginFailure("unavailable", "The HomeWorldz grid could not create a session."))
 		return
 	}
-	region, err := resolveDestination(r.Context(), a.regions, fields["start"].text())
+	lastRegionID := ""
+	if a.locations != nil {
+		if location, locationErr := a.locations.Get(r.Context(), session.UserID); locationErr == nil {
+			lastRegionID = location.RegionID
+		}
+	}
+	region, err := resolveDestination(r.Context(), a.regions, fields["start"].text(), lastRegionID)
 	if err != nil {
 		_ = a.identity.RevokeSession(r.Context(), session.ID)
 		writeViewerLogin(w, loginFailure("destination", "No online region matches the requested destination."))
@@ -311,7 +317,7 @@ func (a *API) regionStartState(ctx context.Context, endpoint, userID string) (re
 
 func isFinite(value float64) bool { return !math.IsNaN(value) && !math.IsInf(value, 0) }
 
-func resolveDestination(ctx context.Context, store regions.Store, start string) (regions.Region, error) {
+func resolveDestination(ctx context.Context, store regions.Store, start, lastRegionID string) (regions.Region, error) {
 	items, err := store.List(ctx)
 	if err != nil || len(items) == 0 {
 		return regions.Region{}, regions.ErrNotFound
@@ -327,6 +333,13 @@ func resolveDestination(ctx context.Context, store regions.Store, start string) 
 			}
 		}
 		return regions.Region{}, regions.ErrNotFound
+	}
+	if !strings.EqualFold(start, "home") && lastRegionID != "" {
+		for _, region := range items {
+			if region.ID == lastRegionID {
+				return region, nil
+			}
+		}
 	}
 	return items[0], nil
 }

@@ -14,8 +14,18 @@ import (
 	"time"
 
 	"github.com/homeworldz/homeworldz/grid/internal/inventory"
+	"github.com/homeworldz/homeworldz/grid/internal/locations"
 	"github.com/homeworldz/homeworldz/grid/internal/regions"
 )
+
+type memoryLocationStore struct{ value locations.Location }
+
+func (s memoryLocationStore) Get(context.Context, string) (locations.Location, error) {
+	if s.value.RegionID == "" {
+		return locations.Location{}, locations.ErrNotFound
+	}
+	return s.value, nil
+}
 
 func viewerRequest(first, last, password, start string) string {
 	digest := md5.Sum([]byte(password))
@@ -180,6 +190,27 @@ func TestViewerLoginResolvesNamedRegion(t *testing.T) {
 	if err != nil || session.ViewerCircuitCode == 0 || session.DestinationRegionID != target.ID ||
 		fields["circuit_code"].text() != fmt.Sprint(session.ViewerCircuitCode) {
 		t.Fatalf("viewer circuit was not persisted: session=%#v error=%v", session, err)
+	}
+}
+
+func TestViewerLoginUsesDurableLastRegion(t *testing.T) {
+	identities := newMemoryIdentityStore()
+	user, err := identities.CreateUser(context.Background(), "last.user", "development-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	regionStore := newMemoryRegionStore()
+	_, _ = regionStore.Register(context.Background(), regions.Registration{Name: "Welcome", GridX: 1000, GridY: 1000,
+		PublicEndpoint: "http://welcome.example:42011", ViewerPort: 42012, LeaseDuration: time.Minute})
+	sandbox, _ := regionStore.Register(context.Background(), regions.Registration{Name: "Sandbox", GridX: 1001, GridY: 1000,
+		PublicEndpoint: "http://sandbox.example:42001", ViewerPort: 42002, LeaseDuration: time.Minute})
+	handler := New(checker{}, "test", Options{Identity: identities, Regions: regionStore,
+		Inventory: &memoryInventoryStore{folders: make(map[string][]inventory.Folder)},
+		Locations: memoryLocationStore{value: locations.Location{UserID: user.ID, RegionID: sandbox.ID}}})
+	fields := viewerResponse(t, handler, viewerRequest("Last", "User", "development-password", "last"))
+	if fields["login"].text() != "true" || fields["sim_ip"].text() != "sandbox.example" ||
+		fields["region_x"].text() != "256256" {
+		t.Fatalf("last-location destination = %#v", fields)
 	}
 }
 
