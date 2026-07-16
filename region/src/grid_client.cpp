@@ -168,6 +168,41 @@ std::optional<int> json_int(std::string_view body, std::string_view name) {
     return value;
 }
 
+std::optional<float> json_float(std::string_view body, std::string_view name) {
+    const auto marker = "\"" + std::string(name) + "\":";
+    const auto start = body.find(marker);
+    if (start == std::string_view::npos) return std::nullopt;
+    const auto value_start = start + marker.size();
+    float value{};
+    const auto result = std::from_chars(body.data() + value_start, body.data() + body.size(), value);
+    if (result.ec != std::errc{} || result.ptr == body.data() + value_start) return std::nullopt;
+    return value;
+}
+
+std::optional<std::array<float, 3>> json_vector(std::string_view body, std::string_view name) {
+    const auto marker = "\"" + std::string(name) + "\":{";
+    const auto start = body.find(marker);
+    if (start == std::string_view::npos) return std::nullopt;
+    const auto end = body.find('}', start + marker.size());
+    if (end == std::string_view::npos) return std::nullopt;
+    const auto object = body.substr(start + marker.size(), end - start - marker.size());
+    const auto x = json_float(object, "x");
+    const auto y = json_float(object, "y");
+    const auto z = json_float(object, "z");
+    if (!x || !y || !z) return std::nullopt;
+    return std::array<float, 3>{*x, *y, *z};
+}
+
+std::optional<bool> json_bool(std::string_view body, std::string_view name) {
+    const auto marker = "\"" + std::string(name) + "\":";
+    const auto start = body.find(marker);
+    if (start == std::string_view::npos) return std::nullopt;
+    const auto value = body.substr(start + marker.size());
+    if (value.starts_with("true")) return true;
+    if (value.starts_with("false")) return false;
+    return std::nullopt;
+}
+
 std::optional<AvatarTransit> avatar_transit_from_json(std::string_view body) {
     AvatarTransit transit;
     transit.id = json_field(body, "id");
@@ -177,11 +212,17 @@ std::optional<AvatarTransit> avatar_transit_from_json(std::string_view body) {
     transit.destination_region_id = json_field(body, "destinationRegionId");
     transit.state = json_field(body, "state");
     const auto generation = json_u64(body, "generation");
+    const auto position = json_vector(body, "position");
+    const auto look_at = json_vector(body, "lookAt");
+    const auto flying = json_bool(body, "flying");
     if (transit.id.empty() || transit.agent_id.empty() || transit.session_id.empty() ||
         transit.source_region_id.empty() || transit.destination_region_id.empty() ||
-        transit.state.empty() || !generation || *generation == 0)
+        transit.state.empty() || !generation || *generation == 0 || !position || !look_at || !flying)
         return std::nullopt;
     transit.generation = *generation;
+    transit.position = *position;
+    transit.look_at = *look_at;
+    transit.flying = *flying;
     return transit;
 }
 

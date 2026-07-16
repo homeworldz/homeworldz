@@ -23,15 +23,15 @@ public:
         if (method == "GET" && path.ends_with("/neighbors"))
             return {200, R"({"neighbors":[{"direction":"west","region":{"id":"11111111-1111-4111-8111-111111111111","name":"Welcome","gridX":1000,"gridY":1000,"publicEndpoint":"http://grid.example:42011","viewerPort":42012,"leaseExpiresAt":"2026-07-16T12:00:00Z"}}]})"};
         if (method == "POST" && path == "/api/v1/transits")
-            return {200, R"({"id":"33333333-3333-4333-8333-333333333333","generation":1,"agentId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","sessionId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","sourceRegionId":"11111111-1111-4111-8111-111111111111","destinationRegionId":"22222222-2222-4222-8222-222222222222","state":"prepared"})"};
+            return {200, R"({"id":"33333333-3333-4333-8333-333333333333","generation":1,"agentId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","sessionId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","sourceRegionId":"11111111-1111-4111-8111-111111111111","destinationRegionId":"22222222-2222-4222-8222-222222222222","position":{"x":128,"y":64,"z":30},"lookAt":{"x":1,"y":0,"z":0},"flying":true,"state":"prepared"})"};
         if (method == "POST" && path.ends_with("/accept"))
-            return {200, R"({"id":"33333333-3333-4333-8333-333333333333","generation":1,"agentId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","sessionId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","sourceRegionId":"11111111-1111-4111-8111-111111111111","destinationRegionId":"22222222-2222-4222-8222-222222222222","state":"accepted"})"};
+            return {200, R"({"id":"33333333-3333-4333-8333-333333333333","generation":1,"agentId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","sessionId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","sourceRegionId":"11111111-1111-4111-8111-111111111111","destinationRegionId":"22222222-2222-4222-8222-222222222222","position":{"x":128,"y":64,"z":30},"lookAt":{"x":1,"y":0,"z":0},"flying":true,"state":"accepted"})"};
         if (method == "POST" && path.ends_with("/activate"))
-            return {200, R"({"id":"33333333-3333-4333-8333-333333333333","generation":1,"agentId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","sessionId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","sourceRegionId":"11111111-1111-4111-8111-111111111111","destinationRegionId":"22222222-2222-4222-8222-222222222222","state":"activated"})"};
+            return {200, R"({"id":"33333333-3333-4333-8333-333333333333","generation":1,"agentId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","sessionId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","sourceRegionId":"11111111-1111-4111-8111-111111111111","destinationRegionId":"22222222-2222-4222-8222-222222222222","position":{"x":128,"y":64,"z":30},"lookAt":{"x":1,"y":0,"z":0},"flying":true,"state":"activated"})"};
         if (method == "POST" && path.ends_with("/rollback"))
-            return {200, R"({"id":"33333333-3333-4333-8333-333333333333","generation":1,"agentId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","sessionId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","sourceRegionId":"11111111-1111-4111-8111-111111111111","destinationRegionId":"22222222-2222-4222-8222-222222222222","state":"rolled_back"})"};
+            return {200, R"({"id":"33333333-3333-4333-8333-333333333333","generation":1,"agentId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","sessionId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","sourceRegionId":"11111111-1111-4111-8111-111111111111","destinationRegionId":"22222222-2222-4222-8222-222222222222","position":{"x":128,"y":64,"z":30},"lookAt":{"x":1,"y":0,"z":0},"flying":true,"state":"rolled_back"})"};
         if (method == "GET" && path.starts_with("/api/v1/transits/"))
-            return {200, R"({"id":"33333333-3333-4333-8333-333333333333","generation":1,"agentId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","sessionId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","sourceRegionId":"11111111-1111-4111-8111-111111111111","destinationRegionId":"22222222-2222-4222-8222-222222222222","state":"prepared"})"};
+            return {200, R"({"id":"33333333-3333-4333-8333-333333333333","generation":1,"agentId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","sessionId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","sourceRegionId":"11111111-1111-4111-8111-111111111111","destinationRegionId":"22222222-2222-4222-8222-222222222222","position":{"x":128,"y":64,"z":30},"lookAt":{"x":1,"y":0,"z":0},"flying":true,"state":"prepared"})"};
         if (method == "POST" && path.ends_with("/copy-library-item"))
             return {201, R"({"id":"11111111-1111-4111-8111-111111111111","ownerUserId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","creatorUserId":"00000000-0000-0000-0000-000000000002","folderId":"22222222-2222-4222-8222-222222222222","assetId":"33333333-3333-4333-8333-333333333333","assetType":5,"inventoryType":18,"name":"Default Shirt","description":"","flags":4,"basePermissions":2147483647,"currentPermissions":2147483647,"everyonePermissions":2147483647,"nextPermissions":2147483647,"saleType":0,"salePrice":0})"};
         if (method == "POST" && path.ends_with("/copy-item"))
@@ -99,6 +99,9 @@ int main() {
     const auto prepared_transit = client.prepare_avatar_transit(transit_request);
     if (!prepared_transit || prepared_transit->state != "prepared" ||
         prepared_transit->generation != 1 ||
+        prepared_transit->position != std::array<float, 3>{128.0F, 64.0F, 30.0F} ||
+        prepared_transit->look_at != std::array<float, 3>{1.0F, 0.0F, 0.0F} ||
+        !prepared_transit->flying ||
         transport->requests.back().body.find(R"("position":{"x":128.000000,"y":64.000000,"z":30.000000})") == std::string::npos)
         return 1;
     const auto found_transit = client.find_avatar_transit(transit_request.id);

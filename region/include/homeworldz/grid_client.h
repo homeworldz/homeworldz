@@ -81,6 +81,9 @@ struct AvatarTransit {
     std::string session_id;
     std::string source_region_id;
     std::string destination_region_id;
+    std::array<float, 3> position{};
+    std::array<float, 3> look_at{};
+    bool flying{};
     std::string state;
 };
 
