@@ -760,3 +760,6 @@ object-local grab offset.
 The corrected controller passed repeat live acceptance on 2026-07-16 with
 `Pyramid1` both unrotated and noticeably rotated: it followed mouse drags in
 the requested direction with controlled momentum and no launch behavior.
+The edit-reactivation safety check also passed live acceptance after the same
+Physical pyramid was placed roughly 80–90% below terrain: deselection raised
+it smoothly above the surface without a solver launch.

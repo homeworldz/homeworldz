@@ -335,6 +335,9 @@ sample beneath that box. A penetrating object is raised to terrain plus a small
 clearance and its stale velocity is cleared before its dynamic body is restored.
 This prevents rotation or resizing in the non-dynamic edit state from waking a
 body embedded in terrain and provoking a violent solver correction.
+Live Firestorm acceptance on 2026-07-16 lowered `Pyramid1` roughly 80–90%
+beneath terrain while editing; closing Edit mode raised it smoothly back above
+the surface without launching or visible instability.
 
 An initial pyramid mouse-drag test on 2026-07-16 exposed both grab-controller
 errors above: the small pyramid gained excessive momentum and could move away
