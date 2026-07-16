@@ -15,6 +15,12 @@ the visual triangle mesh is not implicitly used as a dynamic collision body.
 Linksets become compound collision representations assembled from their child
 shapes.
 
+Parametric prims that cannot use an exact native analytic shape are converted
+to portable vertices and convex hulls before reaching an engine adapter. The
+Halcyon `Meshmerizer`/`PrimMesher` and PhysX meshing pipeline are the primary
+compatibility reference for this conversion, including shape-key caching, but
+HomeWorldz does not treat legacy PhysX-cooked bytes as portable content.
+
 Animated, skinned, or otherwise deforming visual meshes use a static capture
 of their collision representation when instantiated. Rigid translation and
 rotation move that captured representation, but visual vertex deformation does

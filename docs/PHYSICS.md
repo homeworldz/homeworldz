@@ -123,6 +123,25 @@ portable shape); it must not substitute a box merely to preserve the object's
 axis-aligned bounds. Rounded end-cap error is preferable to losing the rolling
 circumference when an approximation is unavoidable.
 
+### Halcyon prim-meshing reference
+
+Halcyon's PhysX integration is a useful behavioral and implementation
+reference, but it did not rely on a fixed bundle of pre-cooked shapes. Its
+`ShapeDeterminer` selected native PhysX geometry only for an unmodified box or
+a uniformly scaled sphere. Other parametric prims passed through
+`Meshmerizer`/`PrimMesher`; dynamic objects were then cooked as a single convex
+hull or a decomposition of convex hulls, while suitable static objects could
+use triangle meshes. High-detail circular profiles used 24 sides. Generated
+shapes were cached by a hash of the prim parameters and scale.
+
+HomeWorldz can reuse that architecture and use the BSD-3-Clause Halcyon source
+as a compatibility reference when implementing its C++ portable prim mesher.
+The authoritative output should be engine-independent vertices and hulls.
+PhysX 3 cooked data must not be copied as an asset because cooked formats are
+engine- and version-specific; Jolt and PhysX 5 should independently cook and
+cache the same portable source. Any directly ported Halcyon code must retain
+its required copyright and license notices.
+
 Animated, skinned, and deforming meshes use an immutable collision capture for
 each instantiated object. Rigid-body transforms move the capture, but visual
 vertex deformation does not rebuild it every frame. Attachments are
