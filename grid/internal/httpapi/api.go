@@ -66,6 +66,7 @@ func New(ready ReadinessChecker, version string, options Options) http.Handler {
 	mux.HandleFunc("/get_grid_info", getOnly(a.gridInfo))
 	mux.HandleFunc("/welcome", getOnly(a.welcome))
 	mux.HandleFunc("/assets/homeworldz.svg", getOnly(a.logo))
+	mux.HandleFunc("/map/", getOnly(a.mapTile))
 	mux.HandleFunc("/ping", getOnly(a.ping))
 	mux.HandleFunc("/ready", getOnly(a.readiness))
 	mux.HandleFunc("/version", getOnly(a.buildVersion))

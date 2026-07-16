@@ -153,9 +153,12 @@ int main() {
     passed &= contains(event, "<string>EstablishAgentCommunication</string>");
     passed &= contains(event, "<key>id</key><integer>7</integer>");
     passed &= contains(event, "session&amp;amp;id");
-    const auto simulator_features = homeworldz::viewer::simulator_features_xml();
+    const auto simulator_features = homeworldz::viewer::simulator_features_xml(
+        "C$", "https://grid.example/map/");
     passed &= contains(simulator_features,
                        "<key>OpenSimExtras</key><map><key>currency</key><string>C$</string>");
+    passed &= contains(simulator_features,
+                       "<key>map-server-url</key><string>https://grid.example/map/</string>");
     const auto environment = homeworldz::viewer::environment_settings_xml(
         "11111111-2222-4333-8444-555555555555");
     passed &= contains(environment, "<key>messageID</key><uuid>00000000-0000-0000-0000-000000000000</uuid>");

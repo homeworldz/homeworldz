@@ -186,6 +186,35 @@ func TestRegionNeighborDiscoveryReturnsCardinalLiveRegions(t *testing.T) {
 	}
 }
 
+func TestMapTileIsPublicForAnOnlineRegion(t *testing.T) {
+	store := newMemoryRegionStore()
+	_, err := store.RegisterProvisioned(context.Background(),
+		"11111111-1111-4111-8111-111111111111", regions.Registration{
+			Name: "Welcome", GridX: 1000, GridY: 1000,
+			PublicEndpoint: "http://region.example:42001", ViewerPort: 42002,
+			LeaseDuration: 60 * time.Second,
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := New(checker{}, "test", Options{ServiceToken: "secret", Regions: store})
+	request := httptest.NewRequest(http.MethodGet, "/map/map-1-1000-1000-objects.jpg", nil)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || response.Header().Get("Content-Type") != "image/jpeg" ||
+		len(response.Body.Bytes()) != len(defaultMapTile) {
+		t.Fatalf("map response = %d, %q, %d bytes", response.Code,
+			response.Header().Get("Content-Type"), response.Body.Len())
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "/map/map-1-1002-1000-objects.jpg", nil)
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("offline coordinate status = %d, want 404", response.Code)
+	}
+}
+
 func TestRegionRegistrationValidationAndAuthentication(t *testing.T) {
 	store := newMemoryRegionStore()
 	handler := New(checker{}, "test", Options{ServiceToken: "secret", Regions: store})

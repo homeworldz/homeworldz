@@ -1271,7 +1271,8 @@ int main(int argc, char* argv[]) {
                         } else if (authorized && simulator_features) {
                             response = homeworldz::http::response_for_content(
                                 request, 200, "application/llsd+xml",
-                                homeworldz::viewer::simulator_features_xml());
+                                homeworldz::viewer::simulator_features_xml(
+                                    "C$", grid_public_endpoint + "/map/"));
                         } else if (authorized && environment_settings && registration) {
                             response = homeworldz::http::response_for_content(
                                 request, 200, "application/llsd+xml",

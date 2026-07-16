@@ -26,7 +26,8 @@ std::string seed_capability_xml(std::string_view public_endpoint, std::string_vi
                                 std::string_view session_id);
 std::string event_queue_xml(std::uint64_t id,
                             const std::optional<EstablishAgentCommunication>& event = std::nullopt);
-std::string simulator_features_xml(std::string_view currency = "C$");
+std::string simulator_features_xml(std::string_view currency = "C$",
+                                   std::string_view map_server_url = {});
 std::string environment_settings_xml(std::string_view region_id);
 std::string baked_texture_upload_xml(std::string_view uploader);
 std::string baked_texture_complete_xml(std::string_view asset_id);

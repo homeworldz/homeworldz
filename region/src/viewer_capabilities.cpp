@@ -125,9 +125,10 @@ std::string event_queue_xml(std::uint64_t id, const std::optional<EstablishAgent
            "<key>id</key><integer>" + std::to_string(id) + "</integer></map></llsd>";
 }
 
-std::string simulator_features_xml(std::string_view currency) {
+std::string simulator_features_xml(std::string_view currency, std::string_view map_server_url) {
     return "<?xml version=\"1.0\"?><llsd><map><key>OpenSimExtras</key><map>"
            "<key>currency</key><string>" + xml_escape(currency) +
+           "</string><key>map-server-url</key><string>" + xml_escape(map_server_url) +
            "</string></map></map></llsd>";
 }
 
