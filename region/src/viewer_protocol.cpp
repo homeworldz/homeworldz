@@ -2074,11 +2074,15 @@ std::optional<Packet> CircuitRegistry::receive(std::string_view endpoint, std::s
             return std::nullopt;
         }
         if (!authorized) return std::nullopt;
-        for (const auto& [key, entry] : circuits_) {
-            static_cast<void>(key);
+        for (auto iterator = circuits_.begin(); iterator != circuits_.end();) {
+            const auto& entry = iterator->second;
             if (entry.identity.circuit_code == requested->circuit_code ||
-                entry.identity.session_id == requested->session_id || entry.identity.agent_id == requested->agent_id)
-                return std::nullopt;
+                entry.identity.session_id == requested->session_id || entry.identity.agent_id == requested->agent_id) {
+                replaced_.push_back(ReplacedCircuit{iterator->first, entry.identity});
+                iterator = circuits_.erase(iterator);
+            } else {
+                ++iterator;
+            }
         }
         found = circuits_.emplace(std::string(endpoint), Entry{*requested, Circuit(now)}).first;
     }
@@ -2105,6 +2109,12 @@ std::vector<OutboundDatagram> CircuitRegistry::poll(Clock::time_point now) {
         ++iterator;
     }
     return output;
+}
+
+std::vector<ReplacedCircuit> CircuitRegistry::take_replaced() {
+    auto replaced = std::move(replaced_);
+    replaced_.clear();
+    return replaced;
 }
 
 const UseCircuitCode* CircuitRegistry::identity(std::string_view endpoint) const {

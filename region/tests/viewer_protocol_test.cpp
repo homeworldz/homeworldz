@@ -580,15 +580,21 @@ bool circuit_registry() {
     if (!registry.identity("127.0.0.1:50000") ||
         registry.identity("127.0.0.1:50000")->circuit_code != expected.circuit_code)
         return false;
-    if (registry.receive("127.0.0.1:50001", datagram, start + 1ms) || registry.size() != 1) return false;
+    if (!registry.receive("127.0.0.1:50001", datagram, start + 1ms) || registry.size() != 1 ||
+        registry.identity("127.0.0.1:50000") || !registry.identity("127.0.0.1:50001"))
+        return false;
+    const auto replaced = registry.take_replaced();
+    if (replaced.size() != 1 || replaced.front().endpoint != "127.0.0.1:50000" ||
+        replaced.front().identity.agent_id != expected.agent_id)
+        return false;
     const auto replies = registry.poll(start + 2ms);
-    if (replies.size() != 1 || replies.front().endpoint != "127.0.0.1:50000") return false;
+    if (replies.size() != 1 || replies.front().endpoint != "127.0.0.1:50001") return false;
     const auto reply = decode_packet(replies.front().bytes);
     if (!reply || !decode_packet_ack(reply->payload)) return false;
-    if (!registry.send("127.0.0.1:50000", bytes({7, 8}), true, start + 3ms) ||
+    if (!registry.send("127.0.0.1:50001", bytes({7, 8}), true, start + 3ms) ||
         registry.send("127.0.0.1:50002", bytes({7, 8}), false, start + 3ms))
         return false;
-    if (!registry.remove("127.0.0.1:50000") || registry.remove("127.0.0.1:50000") || registry.size() != 0)
+    if (!registry.remove("127.0.0.1:50001") || registry.remove("127.0.0.1:50001") || registry.size() != 0)
         return false;
     if (!registry.receive("127.0.0.1:50000", datagram, start + 4ms)) return false;
     registry.poll(start + 31s);

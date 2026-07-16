@@ -1071,6 +1071,40 @@ int main(int argc, char* argv[]) {
     std::unordered_map<std::string, PendingWearableUpload> pending_wearable_uploads;
     std::unordered_map<std::string, PendingWearableXfer> pending_wearable_xfers;
     std::uint64_t next_wearable_xfer{1};
+    const auto clear_viewer_endpoint = [&](const std::string& endpoint, const std::string& session_id) {
+        if (const auto live = avatars.find(endpoint); live != avatars.end() &&
+            physics_world && live->second.physics_character != 0)
+            physics_world->remove_character(live->second.physics_character);
+        if (const auto selected = physics_edit_selections.find(endpoint);
+            selected != physics_edit_selections.end()) {
+            for (const auto entity_id : selected->second) {
+                const auto suspended = physics_edit_suspended.find(entity_id);
+                if (suspended == physics_edit_suspended.end()) continue;
+                if (--suspended->second == 0) {
+                    physics_edit_suspended.erase(suspended);
+                    if (const auto* entity = scene.find(entity_id)) synchronize_physics_object(*entity);
+                }
+            }
+            physics_edit_selections.erase(selected);
+        }
+        avatars.erase(endpoint);
+        avatar_geometries.erase(endpoint);
+        avatar_animations.erase(endpoint);
+        next_animation_sequences.erase(endpoint);
+        movement_animations.erase(endpoint);
+        handshake_replies.erase(endpoint);
+        established_events.erase(session_id);
+        texture_packets.erase(endpoint);
+        std::erase_if(active_texture_transfers, [&](const std::string& key) {
+            return key.starts_with(endpoint + '|');
+        });
+        std::erase_if(pending_wearable_uploads, [&](const auto& entry) {
+            return entry.first.starts_with(endpoint + '|');
+        });
+        std::erase_if(pending_wearable_xfers, [&](const auto& entry) {
+            return entry.first.starts_with(endpoint + '|');
+        });
+    };
 
     std::cout << "{\"level\":\"info\",\"message\":\"region service listening\",\"httpPort\":"
               << configured_port() << ",\"viewerPort\":" << configured_viewer_port() << "}" << std::endl;
@@ -1418,7 +1452,13 @@ int main(int argc, char* argv[]) {
                 const auto endpoint = udp_endpoint(sender);
                 if (received > 0 && !endpoint.empty()) {
                 const auto packet = circuits.receive(
-                    endpoint, std::span<const std::byte>(datagram.data(), static_cast<std::size_t>(received)), now);
+                     endpoint, std::span<const std::byte>(datagram.data(), static_cast<std::size_t>(received)), now);
+                for (const auto& replaced : circuits.take_replaced()) {
+                    clear_viewer_endpoint(replaced.endpoint,
+                        homeworldz::viewer::format_uuid(replaced.identity.session_id));
+                    std::cout << "{\"level\":\"info\",\"message\":\"stale viewer circuit replaced\",\"endpoint\":"
+                              << homeworldz::api::json_string(replaced.endpoint) << "}" << std::endl;
+                }
                 if (packet) {
                     const auto identity = circuits.identity(endpoint);
                     if (identity && homeworldz::viewer::decode_use_circuit_code(packet->payload)) {
@@ -1572,39 +1612,7 @@ int main(int argc, char* argv[]) {
                                 static_cast<void>(viewer_grid->revoke_viewer_session(session_id));
                             }
                             if (viewer_sessions) viewer_sessions->invalidate(session_id);
-                            if (const auto live = avatars.find(endpoint); live != avatars.end() &&
-                                physics_world && live->second.physics_character != 0)
-                                physics_world->remove_character(live->second.physics_character);
-                            if (const auto selected = physics_edit_selections.find(endpoint);
-                                selected != physics_edit_selections.end()) {
-                                for (const auto entity_id : selected->second) {
-                                    const auto suspended = physics_edit_suspended.find(entity_id);
-                                    if (suspended == physics_edit_suspended.end()) continue;
-                                    if (--suspended->second == 0) {
-                                        physics_edit_suspended.erase(suspended);
-                                        if (const auto* entity = scene.find(entity_id))
-                                            synchronize_physics_object(*entity);
-                                    }
-                                }
-                                physics_edit_selections.erase(selected);
-                            }
-                            avatars.erase(endpoint);
-                            avatar_geometries.erase(endpoint);
-                            avatar_animations.erase(endpoint);
-                            next_animation_sequences.erase(endpoint);
-                            movement_animations.erase(endpoint);
-                            handshake_replies.erase(endpoint);
-                            established_events.erase(session_id);
-                            texture_packets.erase(endpoint);
-                            std::erase_if(active_texture_transfers, [&](const std::string& key) {
-                                return key.starts_with(endpoint + '|');
-                            });
-                            std::erase_if(pending_wearable_uploads, [&](const auto& entry) {
-                                return entry.first.starts_with(endpoint + '|');
-                            });
-                            std::erase_if(pending_wearable_xfers, [&](const auto& entry) {
-                                return entry.first.starts_with(endpoint + '|');
-                            });
+                            clear_viewer_endpoint(endpoint, session_id);
                             circuits.remove(endpoint);
                             std::cout << "{\"level\":\"info\",\"message\":\"viewer logged out\",\"sessionId\":"
                                       << homeworldz::api::json_string(session_id) << "}" << std::endl;

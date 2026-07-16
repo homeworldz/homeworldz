@@ -609,6 +609,11 @@ struct OutboundDatagram {
     std::vector<std::byte> bytes;
 };
 
+struct ReplacedCircuit {
+    std::string endpoint;
+    UseCircuitCode identity;
+};
+
 class CircuitRegistry {
 public:
     using Clock = Circuit::Clock;
@@ -620,6 +625,7 @@ public:
     std::optional<std::vector<std::byte>> send(std::string_view endpoint, std::vector<std::byte> payload,
                                                bool reliable, Clock::time_point now, bool zero_coded = false);
     std::vector<OutboundDatagram> poll(Clock::time_point now);
+    std::vector<ReplacedCircuit> take_replaced();
     const UseCircuitCode* identity(std::string_view endpoint) const;
     bool remove(std::string_view endpoint);
     std::size_t size() const { return circuits_.size(); }
@@ -632,6 +638,7 @@ private:
 
     Authorizer authorizer_;
     std::unordered_map<std::string, Entry> circuits_;
+    std::vector<ReplacedCircuit> replaced_;
 };
 
 } // namespace homeworldz::viewer
