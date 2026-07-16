@@ -95,13 +95,24 @@ the region service with:
 .\scripts\build-region.ps1 -Test
 ```
 
-On Linux, install the SQLite development package and use the CMake presets:
+On Linux, install the compiler, CMake, Ninja, SQLite development files, and
+the pinned Jolt 5.5 dependency. One reproducible Ubuntu setup uses the
+repository's vcpkg baseline in classic mode so the optional PhysX evaluation
+adapter is not pulled into the production build:
 
 ```sh
-cmake --preset default
-cmake --build --preset default
-ctest --preset default --output-on-failure
+sudo apt-get install build-essential cmake ninja-build libsqlite3-dev pkg-config zip unzip curl
+git clone https://github.com/microsoft/vcpkg.git "$HOME/vcpkg"
+git -C "$HOME/vcpkg" checkout f87344cac03158cbf1467264565f1fd36b382a24
+"$HOME/vcpkg/bootstrap-vcpkg.sh" -disableMetrics
+"$HOME/vcpkg/vcpkg" install --classic joltphysics:x64-linux
+export VCPKG_ROOT="$HOME/vcpkg"
+./scripts/build-region.sh --test
 ```
+
+The script deliberately fails if Jolt is unavailable rather than producing a
+region binary without production physics. Pass `--version VERSION` for a
+release build whose embedded `/version` value must match its package name.
 
 The grid provisions region identity and map placement in `config/regions.json`.
 Start a region with its assigned credentials using `homeworldz-region --config

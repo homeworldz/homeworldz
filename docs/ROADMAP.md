@@ -302,7 +302,7 @@ acceptance tests pass.
 
 ### Grid and region packages
 
-- [ ] Produce separate versioned grid-owner and region-owner packages containing
+- [x] Produce separate versioned grid-owner and region-owner packages containing
   prebuilt executables, runtime dependencies, examples, bootstrap tools, and
   end-user installation guides.
 - [ ] Support clean install, unattended install, upgrade, downgrade where safe,

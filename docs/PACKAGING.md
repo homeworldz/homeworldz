@@ -23,9 +23,14 @@ scripts\package-release.cmd -version 0.1.0-preview.1
 Linux:
 
 ```sh
+export VCPKG_ROOT="$HOME/vcpkg"
+./scripts/build-region.sh --test --version 0.1.0-preview.1
 go run ./grid/cmd/package-release -version 0.1.0-preview.1 \
-  -region-executable build/release/region/homeworldz-region
+  -region-executable build/linux-release/region/homeworldz-region
 ```
+
+The build script requires Jolt and prevents accidentally packaging a
+physics-less Linux region.
 
 Use `-region-executable` to select a particular CMake output. Archives are
 written to `dist` by default; `-output` changes that directory. The command
