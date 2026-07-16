@@ -32,6 +32,6 @@ not identified in the supplied files. HomeWorldz records the stable
 than inventing an author attribution. The source PNG has SHA-256
 `f13dd19bf0c0be1cd9deb84fbb990ca3e6f8a219cc2aa06d6727eea946ca6acb`.
 
-Set `HOMEWORLDZ_REGION_TERRAIN_PATH` to another raw 65,536-byte heightmap to
-override the development default. A missing or invalid file falls back to the
-former flat 25-metre terrain.
+Set `region.terrain_path` in `region.ini` to another raw 65,536-byte heightmap
+to override the development default. A missing or invalid file falls back to
+the former flat 25-metre terrain.

@@ -55,8 +55,8 @@ ports `42001` and `42002` respectively. Loopback defaults avoid exposing local
 development services or requiring Windows Firewall exceptions.
 
 Firestorm discovers the local grid from `http://127.0.0.1:42000/` through the
-standard `/get_grid_info` endpoint. `HOMEWORLDZ_GRID_PUBLIC_URL` overrides the
-URLs advertised to viewers when the grid is exposed at a different address.
+standard `/get_grid_info` endpoint. Set `[server] public_url` in
+`config/grid.ini` when the grid is exposed at a different address.
 
 PostgreSQL lifecycle tests run when `HOMEWORLDZ_TEST_DATABASE_URL` is set and
 otherwise skip cleanly. CI supplies a disposable PostgreSQL service and runs
@@ -103,16 +103,12 @@ cmake --build --preset default
 ctest --preset default --output-on-failure
 ```
 
-To enable development registration with a running grid, set
-`HOMEWORLDZ_GRID_SERVICE_TOKEN` to the grid service token. Optional region
-overrides are `HOMEWORLDZ_GRID_URL`, `HOMEWORLDZ_REGION_NAME`,
-`HOMEWORLDZ_REGION_GRID_X`, `HOMEWORLDZ_REGION_GRID_Y`,
-`HOMEWORLDZ_REGION_PUBLIC_ENDPOINT`, and `HOMEWORLDZ_REGION_LEASE_SECONDS`.
-`HOMEWORLDZ_VIEWER_PORT` selects the viewer UDP listener and defaults to `42002`.
-Set `HOMEWORLDZ_REGION_BIND_ADDRESS` or `HOMEWORLDZ_VIEWER_BIND_ADDRESS` to an
-explicit IPv4 address (or `0.0.0.0`) only when clients on other machines must
-connect; configure narrowly scoped firewall rules separately for that deployment.
-Without a service token, the region runs without grid registration.
+Development registration is configured in `config/region.ini`. Set the grid
+URL and transitional service token there, together with region identity,
+location, endpoints, bind addresses, and ports. Start another configuration
+with `homeworldz-region --config path/to/region.ini`; individual environment
+overrides are intentionally unsupported. Without a service token, the region
+runs without grid registration.
 
 ## Documentation
 

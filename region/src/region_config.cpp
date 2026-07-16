@@ -3,6 +3,7 @@
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
+#include <unordered_set>
 
 namespace homeworldz::config {
 namespace {
@@ -14,23 +15,12 @@ std::string trim(std::string_view value) {
     return std::string(value.substr(first, last - first + 1));
 }
 
-const std::unordered_map<std::string, std::string> setting_names{
-    {"region.name", "HOMEWORLDZ_REGION_NAME"},
-    {"region.grid_x", "HOMEWORLDZ_REGION_GRID_X"},
-    {"region.grid_y", "HOMEWORLDZ_REGION_GRID_Y"},
-    {"region.public_endpoint", "HOMEWORLDZ_REGION_PUBLIC_ENDPOINT"},
-    {"region.http_port", "HOMEWORLDZ_REGION_PORT"},
-    {"region.viewer_port", "HOMEWORLDZ_VIEWER_PORT"},
-    {"region.bind_address", "HOMEWORLDZ_REGION_BIND_ADDRESS"},
-    {"region.viewer_bind_address", "HOMEWORLDZ_VIEWER_BIND_ADDRESS"},
-    {"region.data_path", "HOMEWORLDZ_REGION_DATA_PATH"},
-    {"region.asset_path", "HOMEWORLDZ_REGION_ASSET_PATH"},
-    {"region.terrain_path", "HOMEWORLDZ_REGION_TERRAIN_PATH"},
-    {"region.lease_seconds", "HOMEWORLDZ_REGION_LEASE_SECONDS"},
-    {"grid.url", "HOMEWORLDZ_GRID_URL"},
-    {"grid.public_url", "HOMEWORLDZ_GRID_PUBLIC_URL"},
-    {"grid.service_token", "HOMEWORLDZ_GRID_SERVICE_TOKEN"},
-};
+const std::unordered_set<std::string> setting_names{
+    "region.name", "region.grid_x", "region.grid_y", "region.public_endpoint",
+    "region.http_port", "region.viewer_port", "region.bind_address",
+    "region.viewer_bind_address", "region.data_path", "region.asset_path",
+    "region.terrain_path", "region.lease_seconds", "grid.url",
+    "grid.public_url", "grid.service_token"};
 
 } // namespace
 
@@ -55,21 +45,19 @@ RegionSettings parse_region_ini(std::string_view content) {
         }
         const auto key = trim(std::string_view(cleaned).substr(0, equals));
         const auto value = trim(std::string_view(cleaned).substr(equals + 1));
-        const auto known = setting_names.find(section + '.' + key);
+        const auto setting = section + '.' + key;
+        const auto known = setting_names.find(setting);
         if (known == setting_names.end()) {
             throw std::runtime_error("unknown region setting at line " + std::to_string(line_number));
         }
-        result[known->second] = value;
+        result[setting] = value;
     }
     return result;
 }
 
 RegionSettings load_region_ini(const std::filesystem::path& path) {
     std::ifstream input(path);
-    if (!input) {
-        if (!std::filesystem::exists(path)) return {};
-        throw std::runtime_error("could not open " + path.string());
-    }
+    if (!input) throw std::runtime_error("could not open " + path.string());
     std::ostringstream content;
     content << input.rdbuf();
     if (!input.eof() && input.fail()) throw std::runtime_error("could not read " + path.string());

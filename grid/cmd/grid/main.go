@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"flag"
 	"log/slog"
 	"net/http"
 	"os"
@@ -24,8 +25,10 @@ import (
 var version = "dev"
 
 func main() {
+	configDirectory := flag.String("config", "config", "directory containing grid.ini and db.ini")
+	flag.Parse()
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	settings, err := config.LoadGrid()
+	settings, err := config.LoadGrid(*configDirectory)
 	if err != nil {
 		logger.Error("load configuration", "error", err)
 		os.Exit(1)

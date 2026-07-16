@@ -99,19 +99,23 @@ func TestValidUsername(t *testing.T) {
 	}
 }
 
-func TestEnvironmentWithReplacesStaleValue(t *testing.T) {
-	t.Setenv("HOMEWORLDZ_DATABASE_URL", "stale")
-	result := environmentWith(map[string]string{"HOMEWORLDZ_DATABASE_URL": "current"})
-	count := 0
-	for _, entry := range result {
-		if strings.EqualFold(strings.SplitN(entry, "=", 2)[0], "HOMEWORLDZ_DATABASE_URL") {
-			count++
-			if entry != "HOMEWORLDZ_DATABASE_URL=current" {
-				t.Fatalf("database environment = %q", entry)
-			}
+func TestRuntimeConfigurationUsesFiles(t *testing.T) {
+	directory := t.TempDir()
+	regionPath := filepath.Join(directory, "region.ini")
+	err := writeRuntimeConfiguration(directory, "postgres://file/database", "file-token", regionPath,
+		runtimeRegionSettings{name: "Test Region", gridX: 2, gridY: 3,
+			publicEndpoint: regionURL, httpPort: 42001, viewerPort: 42002,
+			dataPath: "data", assetPath: "assets", terrainPath: "terrain.raw"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{filepath.Join(directory, "grid.ini"), filepath.Join(directory, "db.ini"), regionPath} {
+		if info, err := os.Stat(path); err != nil || info.Size() == 0 {
+			t.Fatalf("runtime configuration %q was not written: %v", path, err)
 		}
 	}
-	if count != 1 {
-		t.Fatalf("database environment count = %d, want 1; parent has %d entries", count, len(os.Environ()))
+	contents, err := os.ReadFile(regionPath)
+	if err != nil || !strings.Contains(string(contents), "name = Test Region") || strings.Contains(string(contents), "HOMEWORLDZ_") {
+		t.Fatalf("unexpected region configuration: %q, %v", contents, err)
 	}
 }

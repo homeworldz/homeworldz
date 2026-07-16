@@ -6,7 +6,6 @@
 #include <csignal>
 #include <chrono>
 #include <cmath>
-#include <cstdlib>
 #include <deque>
 #include <exception>
 #include <filesystem>
@@ -117,19 +116,8 @@ struct PendingWearableXfer {
 
 void stop(int) { running = false; }
 
-std::string environment_value(const char* name, std::string fallback = {}) {
-#ifdef _WIN32
-    char* value = nullptr;
-    std::size_t length = 0;
-    if (_dupenv_s(&value, &length, name) == 0 && value != nullptr) {
-        std::string result(value);
-        std::free(value);
-        return result;
-    }
-#else
-    if (const char* value = std::getenv(name)) return value;
-#endif
-    const auto configured = configured_values.find(name);
+std::string configured_value(std::string_view name, std::string fallback = {}) {
+    const auto configured = configured_values.find(std::string(name));
     if (configured != configured_values.end()) return configured->second;
     return fallback;
 }
@@ -176,29 +164,31 @@ double ground_height(const homeworldz::terrain::Heightmap& heightmap,
     return heightmap[static_cast<std::size_t>(y) * 256 + x];
 }
 
-int environment_int(const char* name, int fallback, int minimum, int maximum) {
-    const auto value = environment_value(name);
+int configured_int(std::string_view name, int fallback, int minimum, int maximum) {
+    const auto value = configured_value(name);
     if (value.empty()) return fallback;
-    const int parsed = std::atoi(value.c_str());
-    return parsed >= minimum && parsed <= maximum ? parsed : fallback;
+    int parsed{};
+    const auto result = std::from_chars(value.data(), value.data() + value.size(), parsed);
+    return result.ec == std::errc{} && result.ptr == value.data() + value.size() &&
+        parsed >= minimum && parsed <= maximum ? parsed : fallback;
 }
 
 int configured_port() {
-    return environment_int("HOMEWORLDZ_REGION_PORT", 42001, 1, 65535);
+    return configured_int("region.http_port", 42001, 1, 65535);
 }
 
 int configured_viewer_port() {
-    return environment_int("HOMEWORLDZ_VIEWER_PORT", 42002, 1, 65535);
+    return configured_int("region.viewer_port", 42002, 1, 65535);
 }
 
-bool configured_bind_address(sockaddr_in& address, const char* environment_name, int port) {
+bool configured_bind_address(sockaddr_in& address, std::string_view setting_name, int port) {
     address = {};
     address.sin_family = AF_INET;
     address.sin_port = htons(static_cast<unsigned short>(port));
-    const auto host = environment_value(environment_name, "127.0.0.1");
+    const auto host = configured_value(setting_name, "127.0.0.1");
     if (inet_pton(AF_INET, host.c_str(), &address.sin_addr) == 1) return true;
     std::cerr << "{\"level\":\"error\",\"message\":\"invalid IPv4 bind address\",\"setting\":"
-              << homeworldz::api::json_string(environment_name) << ",\"address\":"
+              << homeworldz::api::json_string(setting_name) << ",\"address\":"
               << homeworldz::api::json_string(host) << "}" << std::endl;
     return false;
 }
@@ -564,7 +554,20 @@ std::string runtime_version() {
 }
 } // namespace
 
-int main() {
+int main(int argc, char* argv[]) {
+    std::filesystem::path config_path = "config/region.ini";
+    for (int index = 1; index < argc; ++index) {
+        const std::string_view argument = argv[index];
+        if (argument == "--config" && index + 1 < argc) {
+            config_path = argv[++index];
+        } else if (argument == "--help") {
+            std::cout << "Usage: homeworldz-region [--config path-to-region.ini]" << std::endl;
+            return 0;
+        } else {
+            std::cerr << "Unknown or incomplete argument: " << argument << std::endl;
+            return 2;
+        }
+    }
 #ifdef _WIN32
     WSADATA data{};
     if (WSAStartup(MAKEWORD(2, 2), &data) != 0) return 1;
@@ -574,8 +577,6 @@ int main() {
     const auto region_version = runtime_version();
 
     try {
-        const auto config_directory = environment_value("HOMEWORLDZ_CONFIG_DIR", "config");
-        const auto config_path = std::filesystem::path(config_directory) / "region.ini";
         configured_values = homeworldz::config::load_region_ini(config_path);
         if (!configured_values.empty()) {
             std::cout << "{\"level\":\"info\",\"message\":\"region configuration loaded\",\"path\":"
@@ -591,18 +592,18 @@ int main() {
         return 1;
     }
 
-    const auto region_name = environment_value("HOMEWORLDZ_REGION_NAME", "My Region");
-    const auto region_grid_x = environment_int("HOMEWORLDZ_REGION_GRID_X", 1000, 0, 1000000);
-    const auto region_grid_y = environment_int("HOMEWORLDZ_REGION_GRID_Y", 1000, 0, 1000000);
-    const auto region_public_endpoint = environment_value(
-        "HOMEWORLDZ_REGION_PUBLIC_ENDPOINT", "http://localhost:" + std::to_string(configured_port()));
-    const auto grid_public_endpoint = environment_value(
-        "HOMEWORLDZ_GRID_PUBLIC_URL", environment_value("HOMEWORLDZ_GRID_URL", "http://localhost:42000"));
+    const auto region_name = configured_value("region.name", "My Region");
+    const auto region_grid_x = configured_int("region.grid_x", 1000, 0, 1000000);
+    const auto region_grid_y = configured_int("region.grid_y", 1000, 0, 1000000);
+    const auto region_public_endpoint = configured_value(
+        "region.public_endpoint", "http://localhost:" + std::to_string(configured_port()));
+    const auto grid_public_endpoint = configured_value(
+        "grid.public_url", configured_value("grid.url", "http://localhost:42000"));
     const auto region_data_path = std::filesystem::path(
-        environment_value("HOMEWORLDZ_REGION_DATA_PATH", "var/region"));
+        configured_value("region.data_path", "var/region"));
     const auto terrain_state_path = region_data_path / "terrain.f32";
-    const auto default_heightmap = load_raw_heightmap(environment_value(
-        "HOMEWORLDZ_REGION_TERRAIN_PATH", "assets/region/terrain/plateau-square.raw"));
+    const auto default_heightmap = load_raw_heightmap(configured_value(
+        "region.terrain_path", "assets/region/terrain/plateau-square.raw"));
     auto revert_heightmap = default_heightmap ?
         std::make_unique<homeworldz::terrain::Heightmap>(*default_heightmap) :
         std::make_unique<homeworldz::terrain::Heightmap>();
@@ -617,16 +618,16 @@ int main() {
     std::unique_ptr<homeworldz::grid::RegistrationLifecycle> registration;
     std::unique_ptr<homeworldz::grid::Client> viewer_grid;
     std::unique_ptr<homeworldz::grid::ViewerSessionCache> viewer_sessions;
-    const auto service_token = environment_value("HOMEWORLDZ_GRID_SERVICE_TOKEN");
+    const auto service_token = configured_value("grid.service_token");
     if (!service_token.empty()) {
         try {
             homeworldz::grid::RegionSettings settings{
                 region_name, region_grid_x, region_grid_y,
                 region_public_endpoint,
                 configured_viewer_port(),
-                environment_int("HOMEWORLDZ_REGION_LEASE_SECONDS", 60, 10, 300)};
+                configured_int("region.lease_seconds", 60, 10, 300)};
             auto transport = homeworldz::grid::socket_transport(
-                environment_value("HOMEWORLDZ_GRID_URL", "http://localhost:42000"), service_token);
+                configured_value("grid.url", "http://localhost:42000"), service_token);
             homeworldz::grid::Client client(transport);
             viewer_grid = std::make_unique<homeworldz::grid::Client>(std::move(transport));
             viewer_sessions = std::make_unique<homeworldz::grid::ViewerSessionCache>(*viewer_grid);
@@ -655,7 +656,7 @@ int main() {
         storage = std::make_unique<homeworldz::storage::RegionStorage>(
             region_data_path);
         const auto imported_assets = storage->import_asset_directory(
-            environment_value("HOMEWORLDZ_REGION_ASSET_PATH", "assets/region"), system_creator_id);
+            configured_value("region.asset_path", "assets/region"), system_creator_id);
         if (imported_assets != 0) {
             std::cout << "{\"level\":\"info\",\"message\":\"region assets imported\",\"count\":"
                       << imported_assets << "}" << std::endl;
@@ -917,7 +918,7 @@ int main() {
                reinterpret_cast<const char*>(&reuse), sizeof(reuse));
 
     sockaddr_in address{};
-    if (!configured_bind_address(address, "HOMEWORLDZ_REGION_BIND_ADDRESS", configured_port()) ||
+    if (!configured_bind_address(address, "region.bind_address", configured_port()) ||
         bind(server, reinterpret_cast<sockaddr*>(&address), sizeof(address)) != 0 ||
         listen(server, 16) != 0) {
         close_socket(server);
@@ -930,7 +931,7 @@ int main() {
         return 1;
     }
     sockaddr_in viewer_address{};
-    if (!configured_bind_address(viewer_address, "HOMEWORLDZ_VIEWER_BIND_ADDRESS", configured_viewer_port()) ||
+    if (!configured_bind_address(viewer_address, "region.viewer_bind_address", configured_viewer_port()) ||
         bind(viewer_server, reinterpret_cast<sockaddr*>(&viewer_address), sizeof(viewer_address)) != 0) {
         close_socket(viewer_server);
         close_socket(server);

@@ -88,42 +88,11 @@ region executable reads this file directly. In particular, set the region
 name and coordinates, its viewer-reachable public endpoint, the grid URLs, and
 the private service token.
 
-Environment variables override matching INI values. They are useful for
-service managers and automated deployments; an ordinary ZIP installation does
-not need to set them manually. The equivalent Windows Command Prompt settings
-are shown here as a reference:
-
-Windows Command Prompt:
-
-```cmd
-set HOMEWORLDZ_GRID_SERVICE_TOKEN=replace-with-token-from-grid-operator
-set HOMEWORLDZ_GRID_URL=https://grid.example
-set HOMEWORLDZ_GRID_PUBLIC_URL=https://grid.example
-set HOMEWORLDZ_REGION_NAME=My Region
-set HOMEWORLDZ_REGION_GRID_X=1000
-set HOMEWORLDZ_REGION_GRID_Y=1000
-set HOMEWORLDZ_REGION_PUBLIC_ENDPOINT=http://region.example:42001
-set HOMEWORLDZ_REGION_DATA_PATH=D:\HomeWorldz\regions\my-region
-set HOMEWORLDZ_REGION_ASSET_PATH=assets\region
-```
-
-Linux example:
-
-```sh
-export HOMEWORLDZ_GRID_SERVICE_TOKEN='replace-with-token-from-grid-operator'
-export HOMEWORLDZ_GRID_URL='https://grid.example'
-export HOMEWORLDZ_GRID_PUBLIC_URL='https://grid.example'
-export HOMEWORLDZ_REGION_NAME='My Region'
-export HOMEWORLDZ_REGION_GRID_X=1000
-export HOMEWORLDZ_REGION_GRID_Y=1000
-export HOMEWORLDZ_REGION_PUBLIC_ENDPOINT='http://region.example:42001'
-export HOMEWORLDZ_REGION_DATA_PATH='/srv/homeworldz/regions/my-region'
-export HOMEWORLDZ_REGION_ASSET_PATH='assets/region'
-```
-
-`HOMEWORLDZ_GRID_URL` is the grid API destination. The public grid URL is used
-in viewer-facing responses. The public region endpoint must be reachable by
-viewers and its port must match `HOMEWORLDZ_REGION_PORT` when overridden.
+Runtime configuration is file-only. The public grid URL is used in
+viewer-facing responses, and the public region endpoint must be reachable by
+viewers. Service managers should pass a different file explicitly with
+`--config`; they do not construct process environments from individual
+settings.
 
 Without the service token, the process can start for isolated health testing,
 but it does not register and cannot accept authenticated viewer circuits.
@@ -136,13 +105,13 @@ visible:
 Windows:
 
 ```cmd
-homeworldz-region.exe
+homeworldz-region.exe --config config\region.ini
 ```
 
 Linux:
 
 ```sh
-./homeworldz-region
+./homeworldz-region --config config/region.ini
 ```
 
 Run it from the extracted package directory so relative asset and terrain paths
@@ -167,27 +136,26 @@ confirm registration at the assigned coordinates before inviting viewers.
 
 ## Runtime settings
 
-| INI setting | Environment override | Purpose | Default |
-| --- | --- | --- | --- |
-| `region.http_port` | `HOMEWORLDZ_REGION_PORT` | Region HTTP port | `42001` |
-| `region.viewer_port` | `HOMEWORLDZ_VIEWER_PORT` | Viewer UDP port | `42002` |
-| `region.bind_address` | `HOMEWORLDZ_REGION_BIND_ADDRESS` | Region HTTP IPv4 bind address | `127.0.0.1` |
-| `region.viewer_bind_address` | `HOMEWORLDZ_VIEWER_BIND_ADDRESS` | Viewer UDP IPv4 bind address | `127.0.0.1` |
-| `region.name` | `HOMEWORLDZ_REGION_NAME` | Registered region name | `My Region` |
-| `region.grid_x` | `HOMEWORLDZ_REGION_GRID_X` | Assigned grid X coordinate | `1000` |
-| `region.grid_y` | `HOMEWORLDZ_REGION_GRID_Y` | Assigned grid Y coordinate | `1000` |
-| `region.public_endpoint` | `HOMEWORLDZ_REGION_PUBLIC_ENDPOINT` | Viewer-reachable region HTTP URL | `http://localhost:42001` |
-| `region.lease_seconds` | `HOMEWORLDZ_REGION_LEASE_SECONDS` | Registration lease (10–300 seconds) | `60` |
-| `grid.url` | `HOMEWORLDZ_GRID_URL` | Grid API base URL | `http://localhost:42000` |
-| `grid.public_url` | `HOMEWORLDZ_GRID_PUBLIC_URL` | Viewer-facing grid base URL | Grid URL |
-| `grid.service_token` | `HOMEWORLDZ_GRID_SERVICE_TOKEN` | Region authentication secret | Empty |
-| `region.data_path` | `HOMEWORLDZ_REGION_DATA_PATH` | Local scene and uploaded-asset state | `var/region` |
-| `region.asset_path` | `HOMEWORLDZ_REGION_ASSET_PATH` | Static assets imported at startup | `assets/region` |
-| `region.terrain_path` | `HOMEWORLDZ_REGION_TERRAIN_PATH` | 256×256 byte RAW terrain | `assets/region/terrain/plateau-square.raw` |
+| INI setting | Purpose | Default |
+| --- | --- | --- |
+| `region.http_port` | Region HTTP port | `42001` |
+| `region.viewer_port` | Viewer UDP port | `42002` |
+| `region.bind_address` | Region HTTP IPv4 bind address | `127.0.0.1` |
+| `region.viewer_bind_address` | Viewer UDP IPv4 bind address | `127.0.0.1` |
+| `region.name` | Registered region name | `My Region` |
+| `region.grid_x` | Assigned grid X coordinate | `1000` |
+| `region.grid_y` | Assigned grid Y coordinate | `1000` |
+| `region.public_endpoint` | Viewer-reachable region HTTP URL | `http://localhost:42001` |
+| `region.lease_seconds` | Registration lease (10–300 seconds) | `60` |
+| `grid.url` | Grid API base URL | `http://localhost:42000` |
+| `grid.public_url` | Viewer-facing grid base URL | Grid URL |
+| `grid.service_token` | Transitional region authentication secret | Empty |
+| `region.data_path` | Local scene and uploaded-asset state | `var/region` |
+| `region.asset_path` | Static assets imported at startup | `assets/region` |
+| `region.terrain_path` | 256×256 byte RAW terrain | `assets/region/terrain/plateau-square.raw` |
 
 Bind addresses must be IPv4 addresses. Invalid numeric values fall back to
-their defaults. Windows environment changes made through Control Panel are not
-inherited by terminals already open; open a fresh terminal before launch.
+their defaults.
 
 ## Firewall and remote viewers
 

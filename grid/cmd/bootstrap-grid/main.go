@@ -47,7 +47,7 @@ func main() {
 
 	var err error
 	if opts.migrateOnly {
-		err = runConfiguredMigrations(context.Background(), opts.migrations)
+		err = runConfiguredMigrations(context.Background(), opts.migrations, opts.configDir)
 	} else {
 		err = run(context.Background(), opts)
 	}
@@ -57,8 +57,8 @@ func main() {
 	}
 }
 
-func runConfiguredMigrations(ctx context.Context, migrations string) error {
-	settings, err := config.LoadGrid()
+func runConfiguredMigrations(ctx context.Context, migrations, configDirectory string) error {
+	settings, err := config.LoadGrid(configDirectory)
 	if err != nil {
 		return err
 	}

@@ -91,8 +91,8 @@ The minimum observable flow is:
 
 The region loads `assets/region/terrain/plateau-square.raw` as its initial
 256-by-256 metre terrain and advertises the four matching Library terrain
-textures in `RegionHandshake`. `HOMEWORLDZ_REGION_TERRAIN_PATH` may select a
-different raw heightmap; invalid or missing input falls back to flat terrain.
+textures in `RegionHandshake`. The `region.terrain_path` INI setting may select
+a different raw heightmap; invalid or missing input falls back to flat terrain.
 
 ## System Library
 
@@ -146,8 +146,8 @@ snapshots, mesh, objects, and bulk or variable-price uploads remain outside
 this first slice.
 
 Each region registers its viewer UDP port with the grid. Login advertises that
-stored port, while `HOMEWORLDZ_VIEWER_PORT` controls the matching region
-listener (default `42002`). The first reliable `UseCircuitCode` datagram is
+stored port, while `region.viewer_port` controls the matching region listener
+(default `42002`). The first reliable `UseCircuitCode` datagram is
 accepted only when its circuit code, session, agent, and destination region all
 match the grid's live session record.
 

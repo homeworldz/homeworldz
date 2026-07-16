@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"strings"
@@ -20,14 +21,16 @@ import (
 const libraryUsername = "homeworldz.library"
 
 func main() {
-	if err := run(context.Background()); err != nil {
+	configDirectory := flag.String("config", "config", "directory containing grid.ini and db.ini")
+	flag.Parse()
+	if err := run(context.Background(), *configDirectory); err != nil {
 		fmt.Fprintln(os.Stderr, "configure library failed:", err)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context) error {
-	settings, err := config.LoadGrid()
+func run(ctx context.Context, configDirectory string) error {
+	settings, err := config.LoadGrid(configDirectory)
 	if err != nil {
 		return err
 	}

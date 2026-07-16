@@ -146,18 +146,19 @@ func run(ctx context.Context, opts options) error {
 		return fmt.Errorf("create smoke-test log directory: %w", err)
 	}
 	stamp := time.Now().Format("20060102-150405")
-	environment := environmentWith(map[string]string{
-		"HOMEWORLDZ_CONFIG_DIR":             filepath.Join(root, "config"),
-		"HOMEWORLDZ_DATABASE_URL":           databaseURL,
-		"HOMEWORLDZ_GRID_PUBLIC_URL":        gridURL,
-		"HOMEWORLDZ_GRID_SERVICE_TOKEN":     serviceToken,
-		"HOMEWORLDZ_GRID_URL":               gridURL,
-		"HOMEWORLDZ_REGION_PUBLIC_ENDPOINT": regionURL,
-		"HOMEWORLDZ_REGION_DATA_PATH":       filepath.Join(root, "var", "region"),
-		"HOMEWORLDZ_REGION_ASSET_PATH":      filepath.Join(root, "assets", "region"),
-	})
+	runtimeConfigDirectory := filepath.Join(logDirectory, stamp+"-config")
+	primaryRegionConfig := filepath.Join(runtimeConfigDirectory, "region.ini")
+	if err := writeRuntimeConfiguration(runtimeConfigDirectory, databaseURL, serviceToken,
+		primaryRegionConfig, runtimeRegionSettings{
+			name: "My Region", gridX: 1000, gridY: 1000, publicEndpoint: regionURL,
+			httpPort: 42001, viewerPort: 42002, dataPath: filepath.Join(root, "var", "region"),
+			assetPath:   filepath.Join(root, "assets", "region"),
+			terrainPath: filepath.Join(root, "assets", "region", "terrain", "plateau-square.raw"),
+		}); err != nil {
+		return err
+	}
 
-	grid, err := startChild(gridExecutable, root, environment,
+	grid, err := startChild(gridExecutable, root, []string{"-config", runtimeConfigDirectory},
 		filepath.Join(logDirectory, stamp+"-grid.stdout.log"),
 		filepath.Join(logDirectory, stamp+"-grid.stderr.log"))
 	if err != nil {
@@ -168,7 +169,7 @@ func run(ctx context.Context, opts options) error {
 		return fmt.Errorf("grid did not become ready (inspect %s): %w", logDirectory, err)
 	}
 
-	region, err := startChild(regionExecutable, root, environment,
+	region, err := startChild(regionExecutable, root, []string{"--config", primaryRegionConfig},
 		filepath.Join(logDirectory, stamp+"-region.stdout.log"),
 		filepath.Join(logDirectory, stamp+"-region.stderr.log"))
 	if err != nil {
@@ -192,22 +193,16 @@ func run(ctx context.Context, opts options) error {
 		if err := os.MkdirAll(replicaAssetPath, 0o700); err != nil {
 			return fmt.Errorf("create replica test asset directory: %w", err)
 		}
-		replicaEnvironment := environmentWith(map[string]string{
-			"HOMEWORLDZ_CONFIG_DIR":             filepath.Join(root, "config"),
-			"HOMEWORLDZ_DATABASE_URL":           databaseURL,
-			"HOMEWORLDZ_GRID_PUBLIC_URL":        gridURL,
-			"HOMEWORLDZ_GRID_SERVICE_TOKEN":     serviceToken,
-			"HOMEWORLDZ_GRID_URL":               gridURL,
-			"HOMEWORLDZ_REGION_PUBLIC_ENDPOINT": replicaRegionURL,
-			"HOMEWORLDZ_REGION_DATA_PATH":       replicaDataPath,
-			"HOMEWORLDZ_REGION_ASSET_PATH":      replicaAssetPath,
-			"HOMEWORLDZ_REGION_NAME":            "Smoke Replica Region",
-			"HOMEWORLDZ_REGION_GRID_X":          "1001",
-			"HOMEWORLDZ_REGION_GRID_Y":          "1000",
-			"HOMEWORLDZ_REGION_PORT":            "42011",
-			"HOMEWORLDZ_VIEWER_PORT":            "42012",
-		})
-		replica, err := startChild(regionExecutable, root, replicaEnvironment,
+		replicaRegionConfig := filepath.Join(runtimeConfigDirectory, "replica-region.ini")
+		if err := writeRegionConfig(replicaRegionConfig, serviceToken, runtimeRegionSettings{
+			name: "Smoke Replica Region", gridX: 1001, gridY: 1000,
+			publicEndpoint: replicaRegionURL, httpPort: 42011, viewerPort: 42012,
+			dataPath: replicaDataPath, assetPath: replicaAssetPath,
+			terrainPath: filepath.Join(root, "assets", "region", "terrain", "plateau-square.raw"),
+		}); err != nil {
+			return err
+		}
+		replica, err := startChild(regionExecutable, root, []string{"--config", replicaRegionConfig},
 			filepath.Join(logDirectory, stamp+"-replica-region.stdout.log"),
 			filepath.Join(logDirectory, stamp+"-replica-region.stderr.log"))
 		if err != nil {
@@ -438,7 +433,7 @@ func loadSmokeConfig(path string) (smokeConfig, error) {
 	}, nil
 }
 
-func startChild(executable, directory string, environment []string, stdoutPath, stderrPath string) (*childProcess, error) {
+func startChild(executable, directory string, arguments []string, stdoutPath, stderrPath string) (*childProcess, error) {
 	stdout, err := os.Create(stdoutPath)
 	if err != nil {
 		return nil, err
@@ -448,9 +443,8 @@ func startChild(executable, directory string, environment []string, stdoutPath, 
 		stdout.Close()
 		return nil, err
 	}
-	command := exec.Command(executable)
+	command := exec.Command(executable, arguments...)
 	command.Dir = directory
-	command.Env = environment
 	command.Stdout = stdout
 	command.Stderr = stderr
 	configureBackground(command)
@@ -610,29 +604,52 @@ func validUsername(value string) bool {
 	return true
 }
 
-func environmentWith(overrides map[string]string) []string {
-	result := make([]string, 0, len(os.Environ())+len(overrides))
-	for _, entry := range os.Environ() {
-		name, _, found := strings.Cut(entry, "=")
-		if !found {
-			result = append(result, entry)
-			continue
-		}
-		overridden := false
-		for key := range overrides {
-			if strings.EqualFold(name, key) {
-				overridden = true
-				break
-			}
-		}
-		if !overridden {
-			result = append(result, entry)
-		}
+type runtimeRegionSettings struct {
+	name, publicEndpoint, dataPath, assetPath, terrainPath string
+	gridX, gridY, httpPort, viewerPort                     int
+}
+
+func writeRuntimeConfiguration(directory, databaseURL, serviceToken, regionPath string, region runtimeRegionSettings) error {
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		return fmt.Errorf("create runtime configuration directory: %w", err)
 	}
-	for key, value := range overrides {
-		result = append(result, key+"="+value)
+	grid := fmt.Sprintf("[server]\naddress = 127.0.0.1:42000\npublic_url = %s\n\n[client]\nurl = %s\n\n[auth]\nservice_token = %s\n", gridURL, gridURL, serviceToken)
+	database := fmt.Sprintf("[database]\nurl = %s\n", databaseURL)
+	if err := os.WriteFile(filepath.Join(directory, "grid.ini"), []byte(grid), 0o600); err != nil {
+		return fmt.Errorf("write runtime grid.ini: %w", err)
 	}
-	return result
+	if err := os.WriteFile(filepath.Join(directory, "db.ini"), []byte(database), 0o600); err != nil {
+		return fmt.Errorf("write runtime db.ini: %w", err)
+	}
+	return writeRegionConfig(regionPath, serviceToken, region)
+}
+
+func writeRegionConfig(path, serviceToken string, region runtimeRegionSettings) error {
+	contents := fmt.Sprintf(`[region]
+name = %s
+grid_x = %d
+grid_y = %d
+public_endpoint = %s
+http_port = %d
+viewer_port = %d
+bind_address = 127.0.0.1
+viewer_bind_address = 127.0.0.1
+data_path = %s
+asset_path = %s
+terrain_path = %s
+lease_seconds = 60
+
+[grid]
+url = %s
+public_url = %s
+service_token = %s
+`, region.name, region.gridX, region.gridY, region.publicEndpoint,
+		region.httpPort, region.viewerPort, region.dataPath, region.assetPath,
+		region.terrainPath, gridURL, gridURL, serviceToken)
+	if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
+		return fmt.Errorf("write runtime region configuration: %w", err)
+	}
+	return nil
 }
 
 func defaultFirestormPath() string {
