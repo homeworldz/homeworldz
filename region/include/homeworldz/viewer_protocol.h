@@ -46,6 +46,21 @@ struct AgentMessage {
     Uuid session_id{};
 };
 
+struct TeleportLocationRequest : AgentMessage {
+    std::uint64_t region_handle{};
+    std::array<float, 3> position{};
+    std::array<float, 3> look_at{};
+};
+
+struct TeleportStart {
+    std::uint32_t flags{};
+};
+
+struct TeleportFailed {
+    Uuid agent_id{};
+    std::string reason;
+};
+
 struct CreateInventoryFolder : AgentMessage {
     Uuid folder_id{};
     Uuid parent_id{};
@@ -485,6 +500,10 @@ bool normalize_primitive_texture_entry(
 
 std::vector<std::byte> encode_use_circuit_code(const UseCircuitCode& message);
 std::optional<UseCircuitCode> decode_use_circuit_code(std::span<const std::byte> payload);
+std::optional<TeleportLocationRequest> decode_teleport_location_request(
+    std::span<const std::byte> payload);
+std::vector<std::byte> encode_teleport_start(const TeleportStart& message);
+std::vector<std::byte> encode_teleport_failed(const TeleportFailed& message);
 std::vector<std::byte> encode_region_handshake(const RegionHandshake& message);
 std::optional<AgentMessage> decode_region_handshake_reply(std::span<const std::byte> payload);
 std::optional<CompleteAgentMovement> decode_complete_agent_movement(std::span<const std::byte> payload);

@@ -4,6 +4,7 @@
 #include <array>
 #include <chrono>
 #include <cstring>
+#include <limits>
 
 namespace {
 using namespace homeworldz::viewer;
@@ -506,6 +507,34 @@ bool message_codecs() {
            resumed_transfer.size() == 1 && resumed_transfer[0] == image_transfer[2];
 }
 
+bool teleport_codecs() {
+    const auto agent = *parse_uuid("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");
+    const auto session = *parse_uuid("11111111-2222-4333-8444-555555555555");
+    std::vector<std::byte> request(68);
+    request[0] = std::byte{0xff}; request[1] = std::byte{0xff};
+    request[2] = std::byte{0x00}; request[3] = std::byte{0x3f};
+    std::copy(agent.begin(), agent.end(), request.begin() + 4);
+    std::copy(session.begin(), session.end(), request.begin() + 20);
+    constexpr std::uint64_t handle = 0x0102030405060708ULL;
+    for (std::size_t index = 0; index < 8; ++index)
+        request[36 + index] = static_cast<std::byte>(handle >> (index * 8));
+    write_f32(request, 44, 128.0F); write_f32(request, 48, 64.0F); write_f32(request, 52, 30.0F);
+    write_f32(request, 56, 1.0F); write_f32(request, 60, 0.0F); write_f32(request, 64, 0.0F);
+    const auto decoded = decode_teleport_location_request(request);
+    if (!decoded || decoded->agent_id != agent || decoded->session_id != session ||
+        decoded->region_handle != handle || decoded->position != std::array<float, 3>{128.0F, 64.0F, 30.0F} ||
+        decoded->look_at != std::array<float, 3>{1.0F, 0.0F, 0.0F}) return false;
+    write_f32(request, 44, std::numeric_limits<float>::quiet_NaN());
+    if (decode_teleport_location_request(request)) return false;
+
+    const auto start = encode_teleport_start(TeleportStart{0x00000010});
+    if (start != bytes({0xff, 0xff, 0x00, 0x49, 0x10, 0x00, 0x00, 0x00})) return false;
+    const auto failed = encode_teleport_failed(TeleportFailed{agent, "Destination unavailable"});
+    return failed.size() == 4 + 16 + 1 + 24 + 1 && failed[3] == std::byte{0x4a} &&
+           std::equal(agent.begin(), agent.end(), failed.begin() + 4) &&
+           failed[20] == std::byte{24} && failed.back() == std::byte{};
+}
+
 bool map_codecs() {
     const auto agent = *parse_uuid("11111111-1111-4111-8111-111111111111");
     const auto session = *parse_uuid("22222222-2222-4222-8222-222222222222");
@@ -895,6 +924,7 @@ bool default_primitive_texture() {
 int main() {
     if (!packet_round_trip()) return 1;
     if (!message_codecs()) return 2;
+    if (!teleport_codecs()) return 18;
     if (!map_codecs()) return 17;
     if (!reliability()) return 3;
     if (!resend_throttle_and_timeout()) return 4;

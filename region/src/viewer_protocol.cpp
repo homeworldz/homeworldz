@@ -12,6 +12,12 @@ namespace {
 
 constexpr std::array<std::byte, 4> use_circuit_code_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x03}};
+constexpr std::array<std::byte, 4> teleport_location_request_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x3f}};
+constexpr std::array<std::byte, 4> teleport_start_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x49}};
+constexpr std::array<std::byte, 4> teleport_failed_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x4a}};
 constexpr std::array<std::byte, 4> packet_ack_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0xff}, std::byte{0xfb}};
 constexpr std::array<std::byte, 4> region_handshake_id{
@@ -314,6 +320,11 @@ std::uint16_t read_le_u16(std::span<const std::byte> data, std::size_t offset) {
         (std::to_integer<std::uint16_t>(data[offset + 1]) << 8));
 }
 
+std::uint64_t read_le_u64(std::span<const std::byte> data, std::size_t offset) {
+    return static_cast<std::uint64_t>(read_le_u32(data, offset)) |
+           (static_cast<std::uint64_t>(read_le_u32(data, offset + 4)) << 32);
+}
+
 float read_f32(std::span<const std::byte> data, std::size_t offset) {
     const auto bits = read_le_u32(data, offset);
     float result{};
@@ -541,6 +552,38 @@ std::optional<UseCircuitCode> decode_use_circuit_code(std::span<const std::byte>
     std::copy_n(payload.begin() + 8, 16, message.session_id.begin());
     std::copy_n(payload.begin() + 24, 16, message.agent_id.begin());
     return message;
+}
+
+std::optional<TeleportLocationRequest> decode_teleport_location_request(
+    std::span<const std::byte> payload) {
+    if (payload.size() != 68 ||
+        !std::equal(teleport_location_request_id.begin(), teleport_location_request_id.end(), payload.begin()))
+        return std::nullopt;
+    TeleportLocationRequest result;
+    std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
+    result.region_handle = read_le_u64(payload, 36);
+    result.position = read_vector3(payload, 44);
+    result.look_at = read_vector3(payload, 56);
+    const auto finite = [](const std::array<float, 3>& value) {
+        return std::all_of(value.begin(), value.end(), [](float component) { return std::isfinite(component); });
+    };
+    return finite(result.position) && finite(result.look_at)
+        ? std::optional<TeleportLocationRequest>{result} : std::nullopt;
+}
+
+std::vector<std::byte> encode_teleport_start(const TeleportStart& message) {
+    std::vector<std::byte> output(teleport_start_id.begin(), teleport_start_id.end());
+    append_le_u32(output, message.flags);
+    return output;
+}
+
+std::vector<std::byte> encode_teleport_failed(const TeleportFailed& message) {
+    std::vector<std::byte> output(teleport_failed_id.begin(), teleport_failed_id.end());
+    append_uuid(output, message.agent_id);
+    if (!append_variable1(output, message.reason)) return {};
+    output.push_back(std::byte{}); // no AlertInfo blocks
+    return output;
 }
 
 std::vector<std::byte> encode_region_handshake(const RegionHandshake& message) {
