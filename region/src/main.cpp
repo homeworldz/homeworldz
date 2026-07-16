@@ -2515,14 +2515,16 @@ int main(int argc, char* argv[]) {
                             }
                             const auto& live_avatar = avatars.at(endpoint);
                             auto& animations = avatar_animations[endpoint];
+                            const auto initial_movement =
+                                live_avatar.controller.movement_animation();
                             if (animations.empty()) {
-                                if (const auto stand = homeworldz::viewer::parse_uuid(
-                                        "2408fe9e-df1d-1d7d-f4ff-1384fa7b350f"))
-                                    animations.push_back({*stand, 1, identity->agent_id});
+                                if (const auto movement = homeworldz::viewer::parse_uuid(
+                                        homeworldz::viewer::movement_animation_id(initial_movement)))
+                                    animations.push_back({*movement, 1, identity->agent_id});
                                 next_animation_sequences[endpoint] = 2;
                             }
                             movement_animations.insert_or_assign(
-                                endpoint, homeworldz::viewer::MovementAnimation::stand);
+                                endpoint, initial_movement);
                             const auto initial_viewer_position = live_avatar.controller.viewer_position();
                             const std::array<float, 3> avatar_position{
                                 static_cast<float>(initial_viewer_position.x),

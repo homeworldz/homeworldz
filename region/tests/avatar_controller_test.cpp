@@ -86,7 +86,8 @@ int main() {
     for (int index = 0; index < 150; ++index) launch_avatar.step(0.01);
     const auto launch_rise = launch_avatar.state().position.z - launch_start;
     if (!launch_avatar.state().flying || launch_avatar.state().grounded ||
-        launch_rise < 0.49 || launch_rise > 0.53 || std::abs(launch_avatar.state().velocity.z) > 0.01)
+        launch_rise < 0.49 || launch_rise > 0.53 || std::abs(launch_avatar.state().velocity.z) > 0.01 ||
+        launch_avatar.movement_animation() != homeworldz::viewer::MovementAnimation::hover)
         return 8;
 
     homeworldz::viewer::AvatarController edge_avatar{{257.0, -1.0, 25.0}, 25.0, 1.56, 0.0,
