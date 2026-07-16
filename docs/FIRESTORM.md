@@ -762,4 +762,5 @@ The corrected controller passed repeat live acceptance on 2026-07-16 with
 the requested direction with controlled momentum and no launch behavior.
 The edit-reactivation safety check also passed live acceptance after the same
 Physical pyramid was placed roughly 80–90% below terrain: deselection raised
-it smoothly above the surface without a solver launch.
+it smoothly above the surface without a solver launch. A repeat from well
+underground resolved equally cleanly.
