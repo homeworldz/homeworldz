@@ -10,6 +10,7 @@
 #include <Jolt/Physics/Collision/RayCast.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
+#include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
 #include <Jolt/Physics/Collision/Shape/CylinderShape.h>
 #include <Jolt/Physics/Collision/Shape/HeightFieldShape.h>
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
@@ -97,6 +98,17 @@ JPH::ShapeRefC make_shape(const Shape& shape) {
             JPH::Quat::sRotation(JPH::Vec3::sAxisX(), JPH::DegreesToRadians(90.0F)),
             new JPH::CylinderShape(
                 static_cast<float>(shape.height * 0.5), static_cast<float>(shape.radius)));
+    case ShapeType::ConvexHull: {
+        JPH::Array<JPH::Vec3> points;
+        points.reserve(shape.hull_points.size());
+        for (const auto& point : shape.hull_points)
+            points.push_back(vec(point));
+        auto result = JPH::ConvexHullShapeSettings(points, 0.0F).Create();
+        if (result.HasError())
+            throw std::runtime_error(
+                std::string("Jolt could not create a convex hull: ") + result.GetError().c_str());
+        return result.Get();
+    }
     case ShapeType::Box:
     default:
         return new JPH::BoxShape(vec(shape.half_extents));

@@ -51,6 +51,17 @@ double cylinder_mass(scene::Vector3 scale, double density) {
     return std::clamp(volume * density, minimum_mass, maximum_mass);
 }
 
+double prism_mass(scene::Vector3 scale, double density) {
+    constexpr double minimum_mass = 0.001;
+    constexpr double maximum_mass = 100000.0;
+    // Area of the viewer's unit equilateral-triangle profile after its
+    // 0.5 profile scaling: 3 * sqrt(3) / 16.
+    constexpr double profile_area = 0.32475952641916449254;
+    const auto volume = profile_area * std::max(0.0, scale.x) *
+                        std::max(0.0, scale.y) * std::max(0.0, scale.z);
+    return std::clamp(volume * density, minimum_mass, maximum_mass);
+}
+
 bool StaticSceneMirror::synchronize(const scene::Entity& entity) {
     if (entity.object_id.empty() || entity.phantom || entity.physics_shape_type == 0x01)
         return remove(entity.id);
@@ -59,8 +70,10 @@ bool StaticSceneMirror::synchronize(const scene::Entity& entity) {
     definition.motion = entity.physical ? MotionType::Dynamic : MotionType::Static;
     const bool sphere = entity.path_curve == 0x20 && (entity.profile_curve & 0x0f) == 0x05;
     const bool cylinder = entity.path_curve == 0x10 && (entity.profile_curve & 0x0f) == 0x00;
+    const bool prism = entity.path_curve == 0x10 && (entity.profile_curve & 0x0f) == 0x03;
     definition.shape.type = sphere ? ShapeType::Sphere :
-        (cylinder ? ShapeType::Cylinder : ShapeType::Box);
+        (cylinder ? ShapeType::Cylinder :
+        (prism ? ShapeType::ConvexHull : ShapeType::Box));
     definition.shape.half_extents = {
         entity.scale.x * 0.5, entity.scale.y * 0.5, entity.scale.z * 0.5};
     if (sphere)
@@ -69,6 +82,16 @@ bool StaticSceneMirror::synchronize(const scene::Entity& entity) {
         definition.shape.radius = std::min(entity.scale.x, entity.scale.y) * 0.5;
         definition.shape.height = entity.scale.z;
     }
+    if (prism) {
+        constexpr double triangle_y = 0.43301270189221932338;
+        const auto x_front = entity.scale.x * 0.5;
+        const auto x_back = entity.scale.x * -0.25;
+        const auto y = entity.scale.y * triangle_y;
+        const auto z = entity.scale.z * 0.5;
+        definition.shape.hull_points = {
+            {x_front, 0.0, -z}, {x_back, y, -z}, {x_back, -y, -z},
+            {x_front, 0.0, z}, {x_back, y, z}, {x_back, -y, z}};
+    }
     definition.position = entity.position;
     definition.velocity = entity.velocity;
     const auto properties = material_properties(entity.material);
@@ -76,7 +99,8 @@ bool StaticSceneMirror::synchronize(const scene::Entity& entity) {
         ? std::clamp(entity.physics_density, 1.0, 22587.0)
         : properties.density;
     definition.mass = sphere ? ellipsoid_mass(entity.scale, density) :
-        (cylinder ? cylinder_mass(entity.scale, density) : box_mass(entity.scale, density));
+        (cylinder ? cylinder_mass(entity.scale, density) :
+        (prism ? prism_mass(entity.scale, density) : box_mass(entity.scale, density)));
     definition.friction = std::isfinite(entity.physics_friction)
         ? std::clamp(entity.physics_friction, 0.0, 255.0)
         : properties.friction;

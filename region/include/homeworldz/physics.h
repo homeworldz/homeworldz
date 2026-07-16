@@ -14,13 +14,14 @@ using BodyId = std::uint64_t;
 using CharacterId = std::uint64_t;
 
 enum class MotionType { Static, Kinematic, Dynamic };
-enum class ShapeType { Box, Sphere, Capsule, Cylinder };
+enum class ShapeType { Box, Sphere, Capsule, Cylinder, ConvexHull };
 
 struct Shape {
     ShapeType type{ShapeType::Box};
     scene::Vector3 half_extents{0.5, 0.5, 0.5};
     double radius{0.5};
     double height{1.0};
+    std::vector<scene::Vector3> hull_points;
 };
 
 struct BodyDefinition {

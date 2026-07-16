@@ -76,6 +76,10 @@ public:
             // needed by wheels and rollers. Require the portable convex-cylinder
             // cooking path instead of silently changing physical behavior.
             break;
+        case ShapeType::ConvexHull:
+            // Portable hull cooking is required before convex prims can run on
+            // the experimental PhysX adapter.
+            break;
         case ShapeType::Box:
         default:
             shape = physics_->createShape(physx::PxBoxGeometry(vec(definition.shape.half_extents)), *material);
