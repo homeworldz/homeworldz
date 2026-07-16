@@ -20,6 +20,8 @@ public:
         requests.push_back({std::string(method), std::string(path), std::string(body)});
         if (method == "POST" && path.starts_with("/api/v1/region-runtime/"))
             return {200, R"({"id":"22222222-2222-4222-8222-222222222222","name":"Sandbox","gridX":1001,"gridY":1000})"};
+        if (method == "GET" && path.ends_with("/neighbors"))
+            return {200, R"({"neighbors":[{"direction":"west","region":{"id":"11111111-1111-4111-8111-111111111111","name":"Welcome","gridX":1000,"gridY":1000,"publicEndpoint":"http://grid.example:42011","viewerPort":42012,"leaseExpiresAt":"2026-07-16T12:00:00Z"}}]})"};
         if (method == "POST" && path.ends_with("/copy-library-item"))
             return {201, R"({"id":"11111111-1111-4111-8111-111111111111","ownerUserId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","creatorUserId":"00000000-0000-0000-0000-000000000002","folderId":"22222222-2222-4222-8222-222222222222","assetId":"33333333-3333-4333-8333-333333333333","assetType":5,"inventoryType":18,"name":"Default Shirt","description":"","flags":4,"basePermissions":2147483647,"currentPermissions":2147483647,"everyonePermissions":2147483647,"nextPermissions":2147483647,"saleType":0,"salePrice":0})"};
         if (method == "POST" && path.ends_with("/copy-item"))
@@ -69,6 +71,14 @@ int main() {
     if (!provisioned || provisioned->name != "Sandbox" || provisioned->grid_x != 1001 ||
         provisioned->grid_y != 1000 || transport->requests.back().body.find(
             R"("viewerPort":42012)") == std::string::npos) return 1;
+    const auto neighbors = client.find_region_neighbors(provisioned->id);
+    if (!neighbors || neighbors->size() != 1 || neighbors->front().direction != "west" ||
+        neighbors->front().id != "11111111-1111-4111-8111-111111111111" ||
+        neighbors->front().name != "Welcome" || neighbors->front().grid_x != 1000 ||
+        neighbors->front().grid_y != 1000 || neighbors->front().viewer_port != 42012 ||
+        neighbors->front().public_endpoint != "http://grid.example:42011" ||
+        transport->requests.back().path !=
+            "/api/v1/regions/22222222-2222-4222-8222-222222222222/neighbors") return 1;
     homeworldz::grid::RegistrationLifecycle provisioned_lifecycle(
         client, provisioned_settings, provisioned->id);
     if (!provisioned_lifecycle.start(started) ||

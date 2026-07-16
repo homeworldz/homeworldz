@@ -42,6 +42,16 @@ struct RegisteredRegion {
     int grid_y{};
 };
 
+struct RegionNeighbor {
+    std::string direction;
+    std::string id;
+    std::string name;
+    int grid_x{};
+    int grid_y{};
+    std::string public_endpoint;
+    int viewer_port{};
+};
+
 struct ViewerSession {
     std::string session_id;
     std::string secure_session_id;
@@ -117,6 +127,8 @@ public:
     std::string register_region(const RegionSettings& settings);
 	std::optional<RegisteredRegion> register_provisioned_region(
 		std::string_view region_id, const RegionSettings& settings);
+    std::optional<std::vector<RegionNeighbor>> find_region_neighbors(
+        std::string_view region_id);
     bool renew_lease(std::string_view region_id, int lease_seconds);
     bool deregister(std::string_view region_id);
 	bool renew_provisioned_lease(std::string_view region_id, int lease_seconds);

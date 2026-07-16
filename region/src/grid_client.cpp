@@ -239,6 +239,54 @@ std::optional<RegisteredRegion> Client::register_provisioned_region(
     return region;
 }
 
+std::optional<std::vector<RegionNeighbor>> Client::find_region_neighbors(
+    std::string_view region_id) {
+    const auto response = transport_->send(
+        "GET", "/api/v1/regions/" + std::string(region_id) + "/neighbors", {});
+    if (response.status_code != 200) return std::nullopt;
+
+    std::vector<RegionNeighbor> neighbors;
+    constexpr std::string_view direction_marker = "\"direction\":\"";
+    constexpr std::string_view region_marker = "\"region\":{";
+    std::size_t position = 0;
+    while ((position = response.body.find(direction_marker, position)) != std::string::npos) {
+        const auto direction_start = position + direction_marker.size();
+        const auto direction_end = response.body.find('"', direction_start);
+        const auto region_start = response.body.find(region_marker, direction_end);
+        if (direction_end == std::string::npos || region_start == std::string::npos)
+            return std::nullopt;
+        const auto object_start = region_start + region_marker.size();
+        const auto object_end = response.body.find('}', object_start);
+        if (object_end == std::string::npos) return std::nullopt;
+        const auto object = std::string_view(response.body).substr(
+            object_start, object_end - object_start);
+        RegionNeighbor neighbor;
+        neighbor.direction = response.body.substr(
+            direction_start, direction_end - direction_start);
+        neighbor.id = json_field(object, "id");
+        neighbor.name = json_field(object, "name");
+        neighbor.public_endpoint = json_field(object, "publicEndpoint");
+        const auto grid_x = json_int(object, "gridX");
+        const auto grid_y = json_int(object, "gridY");
+        const auto viewer_port = json_int(object, "viewerPort");
+        const auto valid_direction = neighbor.direction == "north" ||
+            neighbor.direction == "east" || neighbor.direction == "south" ||
+            neighbor.direction == "west";
+        if (!valid_direction || neighbor.id.empty() || neighbor.name.empty() ||
+            neighbor.public_endpoint.empty() || !grid_x || !grid_y || !viewer_port ||
+            *viewer_port < 1 || *viewer_port > 65535)
+            return std::nullopt;
+        neighbor.grid_x = *grid_x;
+        neighbor.grid_y = *grid_y;
+        neighbor.viewer_port = *viewer_port;
+        neighbors.push_back(std::move(neighbor));
+        position = object_end + 1;
+    }
+    if (response.body.find("\"neighbors\":[") == std::string::npos)
+        return std::nullopt;
+    return neighbors;
+}
+
 bool Client::renew_lease(std::string_view region_id, int lease_seconds) {
     const auto body = "{\"leaseSeconds\":" + std::to_string(lease_seconds) + '}';
     return transport_->send("PUT", "/api/v1/regions/" + std::string(region_id) + "/lease", body).status_code == 200;
