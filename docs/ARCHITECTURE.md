@@ -118,7 +118,8 @@ Region itself and its cardinal neighbors, including coordinates, name, access,
 water height, and local agent count. The initial package advertises a stable
 HomeWorldz JPEG-2000 rendering of the default plateau rather than a null image
 UUID, preventing unrelated cross-grid cache reuse. Terrain-aware per-Region
-tile generation and Grid-wide map aggregation remain future work.
+tile generation remains future work; the first Grid-wide aggregation path uses
+the packaged plateau tile for every live Region.
 
 Firestorm also consumes the OpenSim `map-server-url` simulator feature for
 world-map imagery. Regions advertise the Grid's public `/map/` base URL, and

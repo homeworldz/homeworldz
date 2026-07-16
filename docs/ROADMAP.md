@@ -193,8 +193,9 @@ acceptance tests pass.
 
 - [ ] Generate and serve region and world map tiles for all supported region
   sizes.
-- [ ] Implement map-block discovery, landmark resolution, home location, and
-  teleport routing.
+- [x] Implement viewer map-block and prefix-name discovery for registered live
+  regions.
+- [ ] Implement landmark resolution, home location, and teleport routing.
 - [ ] Add region and parcel search sufficient to find and reach destinations.
 - [ ] Show friends and authorized users useful presence and location without
   leaking restricted information.

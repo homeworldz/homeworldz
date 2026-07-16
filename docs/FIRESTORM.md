@@ -804,6 +804,16 @@ delay the final rendered appearance.
 Cloud world-map discovery passed live acceptance on 2026-07-16. From
 Firestorm, both `Welcome` at `(1000, 1000)` and `Sandbox` at `(1001, 1000)`
 were found by their complete names and by the case-insensitive prefixes `welc`
-and `sand`. The viewer displayed unrelated cached map imagery from other grids
-at those coordinates because HomeWorldz still advertised null map-image UUIDs;
-stable grid-specific map tiles are the next map milestone.
+and `sand`. HomeWorldz now advertises a stable grid-specific map image UUID and
+the Grid serves Firestorm's levelled HTTP map-tile convention. A clean viewer
+session displayed only the two registered regions rather than unrelated cached
+tiles from other grids. Multi-resolution requests also returned a composite
+tile containing both adjacent regions.
+
+Repeated-login UDP circuit replacement passed live acceptance on 2026-07-16.
+After one successful cloud login, Firestorm was forcibly closed and relaunched
+without restarting the Welcome Region. The Region authenticated the new login,
+removed the earlier circuit and its endpoint-scoped runtime state, sent a new
+RegionHandshake to the viewer's new UDP endpoint, and completed login normally.
+This prevents an unacknowledged or interrupted logout from leaving the avatar
+blocked indefinitely at `Waiting for region handshake`.
