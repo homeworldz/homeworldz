@@ -221,11 +221,20 @@ func (a *API) viewerLogin(w http.ResponseWriter, r *http.Request) {
 			writeViewerLogin(w, loginFailure("unavailable", "The grid could not inspect the viewer inventory."))
 			return
 		}
+		defaultWearables := inventory.DefaultWearables(session.UserID)
 		if !inventory.DefaultOutfitInitialized(session.UserID, existingItems) {
-			for _, item := range inventory.DefaultWearables(session.UserID) {
+			for _, item := range defaultWearables {
 				if _, err := a.inventory.EnsureItem(r.Context(), item); err != nil {
 					_ = a.identity.RevokeSession(r.Context(), session.ID)
 					writeViewerLogin(w, loginFailure("unavailable", "The grid could not prepare the default outfit."))
+					return
+				}
+			}
+		} else if inventory.DefaultOutfitNeedsRepair(session.UserID, existingItems) {
+			for index := 1; index < len(defaultWearables); index += 2 {
+				if _, err := a.inventory.EnsureItem(r.Context(), defaultWearables[index]); err != nil {
+					_ = a.identity.RevokeSession(r.Context(), session.ID)
+					writeViewerLogin(w, loginFailure("unavailable", "The grid could not repair the default outfit."))
 					return
 				}
 			}

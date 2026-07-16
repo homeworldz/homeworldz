@@ -64,3 +64,21 @@ func TestDefaultOutfitInitializedUsesStableShapeMarker(t *testing.T) {
 		t.Fatal("default outfit initialization marker was not recognized correctly")
 	}
 }
+
+func TestDefaultOutfitRepairRequiresEmptyCOFAndAllSources(t *testing.T) {
+	const userID = "11111111-2222-4333-8444-555555555555"
+	defaults := DefaultWearables(userID)
+	sources := make([]Item, 0, len(defaults)/2)
+	for index := 0; index < len(defaults); index += 2 {
+		sources = append(sources, defaults[index])
+	}
+	if !DefaultOutfitNeedsRepair(userID, sources) {
+		t.Fatal("empty Current Outfit with all default sources was not repairable")
+	}
+	if DefaultOutfitNeedsRepair(userID, sources[:len(sources)-1]) {
+		t.Fatal("incomplete default sources unexpectedly allowed an outfit repair")
+	}
+	if DefaultOutfitNeedsRepair(userID, append(sources, defaults[1])) {
+		t.Fatal("non-empty Current Outfit unexpectedly allowed an outfit repair")
+	}
+}

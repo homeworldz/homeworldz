@@ -143,6 +143,38 @@ func DefaultOutfitInitialized(userID string, items []Item) bool {
 	return false
 }
 
+// DefaultOutfitNeedsRepair identifies the narrow interrupted-initialization
+// state where every original default wearable still exists but Current Outfit
+// has no entries at all. A non-empty COF is always left alone so an established
+// avatar's chosen outfit is never replaced by the defaults.
+func DefaultOutfitNeedsRepair(userID string, items []Item) bool {
+	if !DefaultOutfitInitialized(userID, items) {
+		return false
+	}
+	currentOutfitID := SystemFolderID(userID, 46)
+	for _, item := range items {
+		if item.OwnerUserID == userID && item.FolderID == currentOutfitID {
+			return false
+		}
+	}
+	defaults := DefaultWearables(userID)
+	remainingSources := make(map[string]bool, len(defaults)/2)
+	for index := 0; index < len(defaults); index += 2 {
+		remainingSources[defaults[index].ID] = false
+	}
+	for _, item := range items {
+		if _, expected := remainingSources[item.ID]; expected && item.OwnerUserID == userID {
+			remainingSources[item.ID] = true
+		}
+	}
+	for _, found := range remainingSources {
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
 func SystemFolders(userID string) []Folder {
 	rootID := SystemFolderID(userID, 8)
 	folders := []Folder{{rootID, userID, zeroUUID, "My Inventory", 8, 1}}

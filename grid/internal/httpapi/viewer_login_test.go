@@ -143,6 +143,34 @@ func TestViewerLoginResolvesNamedRegion(t *testing.T) {
 	if err != nil || len(items) != 12 {
 		t.Fatalf("default inventory items = %#v, error = %v", items, err)
 	}
+	currentOutfitID := inventory.SystemFolderID(fields["agent_id"].text(), 46)
+	var currentLinkIDs []string
+	for _, item := range items {
+		if item.FolderID == currentOutfitID {
+			currentLinkIDs = append(currentLinkIDs, item.ID)
+		}
+	}
+	for _, itemID := range currentLinkIDs {
+		if _, err := inventories.DeleteItem(context.Background(), fields["agent_id"].text(), itemID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	items, _ = inventories.ListItems(context.Background(), fields["agent_id"].text())
+	if len(items) != 6 {
+		t.Fatalf("inventory after simulated interrupted outfit initialization = %#v", items)
+	}
+	secondFields := viewerResponse(t, handler,
+		viewerRequest("Test", "User", "development-password", "uri:Welcome&128&128&25"))
+	items, _ = inventories.ListItems(context.Background(), secondFields["agent_id"].text())
+	cofItems := 0
+	for _, item := range items {
+		if item.FolderID == currentOutfitID {
+			cofItems++
+		}
+	}
+	if len(items) != 12 || cofItems != 6 {
+		t.Fatalf("repaired default inventory items = %#v", items)
+	}
 	for _, required := range []string{"0", "1", "5", "6", "7", "10", "13", "15", "16", "20", "21"} {
 		if !types[required] {
 			t.Fatalf("inventory skeleton lacks required folder type %s", required)
