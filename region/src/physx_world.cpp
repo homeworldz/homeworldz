@@ -72,10 +72,9 @@ public:
                     physx::PxQuat(physx::PxHalfPi, physx::PxVec3(0.0F, 1.0F, 0.0F))));
             break;
         case ShapeType::Cylinder:
-            // PhysX has no analytic cylinder. Use its conservative bounding box
-            // until portable convex collision cooking is available.
-            shape = physics_->createShape(
-                physx::PxBoxGeometry(vec(definition.shape.half_extents)), *material);
+            // A box preserves the bounds but destroys the round circumference
+            // needed by wheels and rollers. Require the portable convex-cylinder
+            // cooking path instead of silently changing physical behavior.
             break;
         case ShapeType::Box:
         default:

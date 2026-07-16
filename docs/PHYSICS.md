@@ -115,6 +115,14 @@ adapter builds a native cached shape. Static scene geometry may use a triangle
 mesh. Dynamic objects use convex hulls or compounds of convex hulls, while
 basic prims continue to use native analytic shapes.
 
+Cylinders preserve their round circumference as a physical property, not only
+as rendering geometry. This is essential when a short, wide cylinder is used as
+a wheel or roller. Jolt uses its native analytic cylinder. A backend without an
+analytic cylinder must generate a convex cylinder (or an equivalently round
+portable shape); it must not substitute a box merely to preserve the object's
+axis-aligned bounds. Rounded end-cap error is preferable to losing the rolling
+circumference when an approximation is unavoidable.
+
 Animated, skinned, and deforming meshes use an immutable collision capture for
 each instantiated object. Rigid-body transforms move the capture, but visual
 vertex deformation does not rebuild it every frame. Attachments are

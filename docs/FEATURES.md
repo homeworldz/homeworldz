@@ -79,10 +79,12 @@ The common physics contract uses the same right-handed, Z-up coordinates as
 regions and viewers; adapters must not expose an engine-native vertical axis.
 The current Jolt production path includes synchronized terrain heightfields,
 appearance-sized avatar capsules, static prim collision, and viewer-toggled
-dynamic box and sphere bodies with persisted Physical/Phantom flags and
-streamed linear and angular motion. Canonical spheres use native analytic Jolt
-shapes rather than collision meshes; their shape and collision flags also
-survive Take and re-rez through portable object assets.
+dynamic box, sphere, and cylinder bodies with persisted Physical/Phantom flags
+and streamed linear and angular motion. Canonical spheres and cylinders use
+native analytic Jolt shapes rather than collision meshes; their shape and
+collision flags also survive Take and re-rez through portable object assets.
+Cylinder collision must retain its round circumference so flattened cylinders
+remain suitable as wheels; physics adapters may not replace them with boxes.
 Viewer Extra Physics values are decoded from `ObjectFlagUpdate` and persisted
 with the scene: physics shape type, density, friction, restitution, and gravity
 multiplier. Density, friction, and restitution feed the physics-body mirror;
