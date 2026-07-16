@@ -347,7 +347,8 @@ collapsed to zero and sheared to one side (`pathScaleX=200`, raw
 block and builds a matching six-point convex wedge. Live acceptance on
 2026-07-16 confirmed correct rendering and collision on every face, including
 the slope. Taking `Prism1` into Inventory and re-rezzing it preserved both its
-wedge geometry and Physical state.
+wedge geometry and Physical state. A subsequent complete viewer and region
+restart retained the rezzed Prism as wedge-shaped and Physical.
 
 ### Required Scenarios
 

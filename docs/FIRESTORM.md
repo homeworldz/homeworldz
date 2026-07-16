@@ -748,4 +748,5 @@ path scale `[200,100]` and shear `[0xce,0]`, rather than as an equilateral
 triangle profile. HomeWorldz now round-trips the complete classic prim shape
 parameter block and uses a matching convex wedge; all sides, including the
 sloped face, produced the expected collision. Taking `Prism1` into Inventory
-and re-rezzing it preserved both the wedge shape and Physical state.
+and re-rezzing it preserved both the wedge shape and Physical state. A complete
+viewer and region restart then retained the rezzed Prism with both properties.
