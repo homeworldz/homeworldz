@@ -122,10 +122,11 @@ tile generation and Grid-wide map aggregation remain future work.
 
 Firestorm also consumes the OpenSim `map-server-url` simulator feature for
 world-map imagery. Regions advertise the Grid's public `/map/` base URL, and
-the Grid serves `map-1-{x}-{y}-objects.jpg` only for currently leased
-coordinates. The initial HTTP tile is the JPEG rendering of the same packaged
-plateau image; the helper URI remains the general viewer-services URI and is
-not the map-image base.
+the Grid serves Firestorm's `map-{level}-{x}-{y}-objects.jpg` convention only
+for tiles containing currently leased coordinates. Level 1 is one Region;
+higher levels composite progressively larger powers-of-two areas into 256-pixel
+JPEG tiles. The initial imagery renders the same packaged plateau; the helper
+URI remains the general viewer-services URI and is not the map-image base.
 
 Initial development accounts use normalized lowercase usernames and bcrypt
 password hashes. Successful credential checks create random UUID sessions with

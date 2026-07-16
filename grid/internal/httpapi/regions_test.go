@@ -115,7 +115,6 @@ func TestRegionDiscoveryIsReadOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	list := requestRegion[RegionList](t, handler, http.MethodGet, "/api/v1/regions", "", http.StatusOK)
 	if len(list.Regions) != 1 || list.Regions[0].ID != created.ID {
 		t.Fatalf("unexpected discovery response: %#v", list)
@@ -197,6 +196,15 @@ func TestMapTileIsPublicForAnOnlineRegion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	_, err = store.RegisterProvisioned(context.Background(),
+		"22222222-2222-4222-8222-222222222222", regions.Registration{
+			Name: "Sandbox", GridX: 1001, GridY: 1000,
+			PublicEndpoint: "http://region.example:42011", ViewerPort: 42012,
+			LeaseDuration: 60 * time.Second,
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
 	handler := New(checker{}, "test", Options{ServiceToken: "secret", Regions: store})
 	request := httptest.NewRequest(http.MethodGet, "/map/map-1-1000-1000-objects.jpg", nil)
 	response := httptest.NewRecorder()
@@ -206,8 +214,16 @@ func TestMapTileIsPublicForAnOnlineRegion(t *testing.T) {
 		t.Fatalf("map response = %d, %q, %d bytes", response.Code,
 			response.Header().Get("Content-Type"), response.Body.Len())
 	}
+	request = httptest.NewRequest(http.MethodGet, "/map/map-2-1000-1000-objects.jpg", nil)
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || response.Header().Get("Content-Type") != "image/jpeg" ||
+		response.Body.Len() == 0 {
+		t.Fatalf("composite map response = %d, %q, %d bytes", response.Code,
+			response.Header().Get("Content-Type"), response.Body.Len())
+	}
 
-	request = httptest.NewRequest(http.MethodGet, "/map/map-1-1002-1000-objects.jpg", nil)
+	request = httptest.NewRequest(http.MethodGet, "/map/map-2-1002-1000-objects.jpg", nil)
 	response = httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusNotFound {
