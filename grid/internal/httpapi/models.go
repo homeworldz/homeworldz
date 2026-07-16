@@ -39,6 +39,12 @@ type RenewRegionLeaseRequest struct {
 	LeaseSeconds int `json:"leaseSeconds"`
 }
 
+type StartProvisionedRegionRequest struct {
+	PublicEndpoint string `json:"publicEndpoint"`
+	ViewerPort     int    `json:"viewerPort"`
+	LeaseSeconds   int    `json:"leaseSeconds"`
+}
+
 type RegionList struct {
 	Regions []regions.Region `json:"regions"`
 }

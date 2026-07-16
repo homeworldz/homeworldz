@@ -556,17 +556,28 @@ std::string runtime_version() {
 
 int main(int argc, char* argv[]) {
     std::filesystem::path config_path = "config/region.ini";
+    std::string provisioned_region_id;
+    std::string region_access_key;
     for (int index = 1; index < argc; ++index) {
         const std::string_view argument = argv[index];
         if (argument == "--config" && index + 1 < argc) {
             config_path = argv[++index];
+        } else if (argument == "--region-id" && index + 1 < argc) {
+            provisioned_region_id = argv[++index];
+        } else if (argument == "--access-key" && index + 1 < argc) {
+            region_access_key = argv[++index];
         } else if (argument == "--help") {
-            std::cout << "Usage: homeworldz-region [--config path-to-region.ini]" << std::endl;
+            std::cout << "Usage: homeworldz-region [--config path-to-region.ini] "
+                         "--region-id uuid --access-key key" << std::endl;
             return 0;
         } else {
             std::cerr << "Unknown or incomplete argument: " << argument << std::endl;
             return 2;
         }
+    }
+    if (provisioned_region_id.empty() || region_access_key.empty()) {
+        std::cerr << "Both --region-id and --access-key are required." << std::endl;
+        return 2;
     }
 #ifdef _WIN32
     WSADATA data{};
@@ -592,9 +603,9 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    const auto region_name = configured_value("region.name", "My Region");
-    const auto region_grid_x = configured_int("region.grid_x", 1000, 0, 1000000);
-    const auto region_grid_y = configured_int("region.grid_y", 1000, 0, 1000000);
+    std::string region_name;
+    int region_grid_x{};
+    int region_grid_y{};
     const auto region_public_endpoint = configured_value(
         "region.public_endpoint", "http://localhost:" + std::to_string(configured_port()));
     const auto grid_public_endpoint = configured_value(
@@ -619,20 +630,40 @@ int main(int argc, char* argv[]) {
     std::unique_ptr<homeworldz::grid::Client> viewer_grid;
     std::unique_ptr<homeworldz::grid::ViewerSessionCache> viewer_sessions;
     const auto service_token = configured_value("grid.service_token");
-    if (!service_token.empty()) {
+    if (service_token.empty()) {
+        std::cerr << "{\"level\":\"error\",\"message\":\"grid service token is required\"}" << std::endl;
+#ifdef _WIN32
+        WSACleanup();
+#endif
+        return 1;
+    }
+    {
         try {
             homeworldz::grid::RegionSettings settings{
-                region_name, region_grid_x, region_grid_y,
+                {}, 0, 0,
                 region_public_endpoint,
                 configured_viewer_port(),
                 configured_int("region.lease_seconds", 60, 10, 300)};
-            auto transport = homeworldz::grid::socket_transport(
-                configured_value("grid.url", "http://localhost:42000"), service_token);
-            homeworldz::grid::Client client(transport);
-            viewer_grid = std::make_unique<homeworldz::grid::Client>(std::move(transport));
+            const auto grid_url = configured_value("grid.url", "http://localhost:42000");
+            auto registration_transport = homeworldz::grid::socket_transport(grid_url, region_access_key);
+            homeworldz::grid::Client registration_client(registration_transport);
+            const auto provisioned = registration_client.register_provisioned_region(
+                provisioned_region_id, settings);
+            if (!provisioned) {
+                std::cerr << "{\"level\":\"error\",\"message\":\"region registration failed\"}" << std::endl;
+#ifdef _WIN32
+                WSACleanup();
+#endif
+                return 1;
+            }
+            region_name = provisioned->name;
+            region_grid_x = provisioned->grid_x;
+            region_grid_y = provisioned->grid_y;
+            auto viewer_transport = homeworldz::grid::socket_transport(grid_url, service_token);
+            viewer_grid = std::make_unique<homeworldz::grid::Client>(std::move(viewer_transport));
             viewer_sessions = std::make_unique<homeworldz::grid::ViewerSessionCache>(*viewer_grid);
             registration = std::make_unique<homeworldz::grid::RegistrationLifecycle>(
-                std::move(client), std::move(settings));
+                std::move(registration_client), std::move(settings), provisioned->id);
             if (!registration->start(std::chrono::steady_clock::now())) {
                 std::cerr << "{\"level\":\"error\",\"message\":\"region registration failed\"}" << std::endl;
 #ifdef _WIN32

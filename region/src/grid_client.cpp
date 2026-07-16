@@ -222,6 +222,23 @@ std::string Client::register_region(const RegionSettings& settings) {
     return json_field(response.body, "id");
 }
 
+std::optional<RegisteredRegion> Client::register_provisioned_region(
+    std::string_view region_id, const RegionSettings& settings) {
+    const auto body = "{\"publicEndpoint\":" + api::json_string(settings.public_endpoint) +
+                      ",\"viewerPort\":" + std::to_string(settings.viewer_port) +
+                      ",\"leaseSeconds\":" + std::to_string(settings.lease_seconds) + '}';
+    const auto response = transport_->send(
+        "POST", "/api/v1/region-runtime/" + std::string(region_id), body);
+    if (response.status_code != 200) return std::nullopt;
+    RegisteredRegion region{json_field(response.body, "id"), json_field(response.body, "name")};
+    const auto grid_x = json_int(response.body, "gridX");
+    const auto grid_y = json_int(response.body, "gridY");
+    if (region.id != region_id || region.name.empty() || !grid_x || !grid_y) return std::nullopt;
+    region.grid_x = *grid_x;
+    region.grid_y = *grid_y;
+    return region;
+}
+
 bool Client::renew_lease(std::string_view region_id, int lease_seconds) {
     const auto body = "{\"leaseSeconds\":" + std::to_string(lease_seconds) + '}';
     return transport_->send("PUT", "/api/v1/regions/" + std::string(region_id) + "/lease", body).status_code == 200;
@@ -229,6 +246,17 @@ bool Client::renew_lease(std::string_view region_id, int lease_seconds) {
 
 bool Client::deregister(std::string_view region_id) {
     return transport_->send("DELETE", "/api/v1/regions/" + std::string(region_id), {}).status_code == 204;
+}
+
+bool Client::renew_provisioned_lease(std::string_view region_id, int lease_seconds) {
+    const auto body = "{\"leaseSeconds\":" + std::to_string(lease_seconds) + '}';
+    return transport_->send("PUT", "/api/v1/region-runtime/" + std::string(region_id) + "/lease", body)
+               .status_code == 200;
+}
+
+bool Client::deregister_provisioned(std::string_view region_id) {
+    return transport_->send("DELETE", "/api/v1/region-runtime/" + std::string(region_id), {})
+               .status_code == 204;
 }
 
 std::optional<ViewerSession> Client::validate_viewer_session(std::string_view session_id) {
@@ -429,11 +457,13 @@ bool Client::clear_presence(std::string_view user_id) {
     return status == 204 || status == 404;
 }
 
-RegistrationLifecycle::RegistrationLifecycle(Client client, RegionSettings settings)
-    : client_(std::move(client)), settings_(std::move(settings)) {}
+RegistrationLifecycle::RegistrationLifecycle(Client client, RegionSettings settings,
+                                               std::string registered_region_id)
+    : client_(std::move(client)), settings_(std::move(settings)),
+      region_id_(std::move(registered_region_id)), already_registered_(!region_id_.empty()) {}
 
 bool RegistrationLifecycle::start(std::chrono::steady_clock::time_point now) {
-    region_id_ = client_.register_region(settings_);
+    if (!already_registered_) region_id_ = client_.register_region(settings_);
     if (region_id_.empty()) return false;
     renew_at_ = now + std::chrono::seconds(settings_.lease_seconds / 2);
     return true;
@@ -441,13 +471,19 @@ bool RegistrationLifecycle::start(std::chrono::steady_clock::time_point now) {
 
 bool RegistrationLifecycle::tick(std::chrono::steady_clock::time_point now) {
     if (region_id_.empty() || now < renew_at_) return !region_id_.empty();
-    if (!client_.renew_lease(region_id_, settings_.lease_seconds)) return false;
+    const auto renewed = already_registered_ ?
+        client_.renew_provisioned_lease(region_id_, settings_.lease_seconds) :
+        client_.renew_lease(region_id_, settings_.lease_seconds);
+    if (!renewed) return false;
     renew_at_ = now + std::chrono::seconds(settings_.lease_seconds / 2);
     return true;
 }
 
 void RegistrationLifecycle::stop() {
-    if (!region_id_.empty()) client_.deregister(region_id_);
+    if (!region_id_.empty()) {
+        if (already_registered_) client_.deregister_provisioned(region_id_);
+        else client_.deregister(region_id_);
+    }
     region_id_.clear();
 }
 

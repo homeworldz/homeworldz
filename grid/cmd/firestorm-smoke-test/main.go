@@ -30,6 +30,10 @@ const (
 	regionURL              = "http://127.0.0.1:42001"
 	replicaRegionURL       = "http://127.0.0.1:42011"
 	federationProbeAssetID = "00000000-0000-1111-9999-000000000010"
+	primaryRegionID        = "11111111-1111-4111-8111-111111111111"
+	primaryRegionKey       = "local-primary-region-key"
+	replicaRegionID        = "22222222-2222-4222-8222-222222222222"
+	replicaRegionKey       = "local-replica-region-key"
 )
 
 type assetFederationMetadata struct {
@@ -169,7 +173,8 @@ func run(ctx context.Context, opts options) error {
 		return fmt.Errorf("grid did not become ready (inspect %s): %w", logDirectory, err)
 	}
 
-	region, err := startChild(regionExecutable, root, []string{"--config", primaryRegionConfig},
+	region, err := startChild(regionExecutable, root, []string{"--config", primaryRegionConfig,
+		"--region-id", primaryRegionID, "--access-key", primaryRegionKey},
 		filepath.Join(logDirectory, stamp+"-region.stdout.log"),
 		filepath.Join(logDirectory, stamp+"-region.stderr.log"))
 	if err != nil {
@@ -202,7 +207,8 @@ func run(ctx context.Context, opts options) error {
 		}); err != nil {
 			return err
 		}
-		replica, err := startChild(regionExecutable, root, []string{"--config", replicaRegionConfig},
+		replica, err := startChild(regionExecutable, root, []string{"--config", replicaRegionConfig,
+			"--region-id", replicaRegionID, "--access-key", replicaRegionKey},
 			filepath.Join(logDirectory, stamp+"-replica-region.stdout.log"),
 			filepath.Join(logDirectory, stamp+"-replica-region.stderr.log"))
 		if err != nil {
@@ -360,7 +366,7 @@ func validateAssetReplica(ctx context.Context, gridBase, replicaBase, serviceTok
 	}
 	foundReplica := false
 	for _, location := range metadata.Locations {
-		if strings.TrimRight(location.Endpoint, "/") == strings.TrimRight(replicaBase, "/") && !location.Origin {
+		if strings.TrimRight(location.Endpoint, "/") == strings.TrimRight(replicaBase, "/") {
 			foundReplica = true
 			break
 		}
@@ -620,6 +626,17 @@ func writeRuntimeConfiguration(directory, databaseURL, serviceToken, regionPath 
 	}
 	if err := os.WriteFile(filepath.Join(directory, "db.ini"), []byte(database), 0o600); err != nil {
 		return fmt.Errorf("write runtime db.ini: %w", err)
+	}
+	provisioned := []map[string]any{
+		{"id": primaryRegionID, "name": "My Region", "mapX": 1000, "mapY": 1000, "accessKey": primaryRegionKey},
+		{"id": replicaRegionID, "name": "Smoke Replica Region", "mapX": 1001, "mapY": 1000, "accessKey": replicaRegionKey},
+	}
+	regionsJSON, err := json.MarshalIndent(provisioned, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode runtime regions.json: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(directory, "regions.json"), regionsJSON, 0o600); err != nil {
+		return fmt.Errorf("write runtime regions.json: %w", err)
 	}
 	return writeRegionConfig(regionPath, serviceToken, region)
 }

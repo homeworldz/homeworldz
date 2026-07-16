@@ -16,13 +16,16 @@ Before installation, ask for:
 
 - The grid API URL reachable from the region host.
 - The grid public URL advertised to viewers.
-- The secret region service token.
-- The approved region name and X/Y grid coordinates.
+- The assigned region UUID and its unique startup access key.
+- The approved region name and X/Y map coordinates, for reference.
+- The transitional service token used by non-registration grid APIs.
 - The public hostname or address viewers will use for this region.
 - Approved HTTP/TCP and viewer/UDP ports.
 
-Treat the service token as a password. It permits authenticated region API
-calls and must not appear in screenshots, public logs, or source control.
+Treat both secrets as passwords. The access key authorizes only the assigned
+region's runtime lease. The transitional service token permits other internal
+region API calls. Neither belongs in screenshots, public logs, or source
+control.
 
 ## Expected region package
 
@@ -84,9 +87,10 @@ copy config\examples\region-personal.ini config\region.ini
 ```
 
 Edit `config/region.ini` with the values supplied by the grid operator. The
-region executable reads this file directly. In particular, set the region
-name and coordinates, its viewer-reachable public endpoint, the grid URLs, and
-the private service token.
+region executable reads this file directly. Set its viewer-reachable public
+endpoint, grid URLs, and transitional service token. The grid supplies the
+authoritative name and map coordinates after validating the command-line
+region UUID and access key.
 
 Runtime configuration is file-only. The public grid URL is used in
 viewer-facing responses, and the public region endpoint must be reachable by
@@ -94,8 +98,8 @@ viewers. Service managers should pass a different file explicitly with
 `--config`; they do not construct process environments from individual
 settings.
 
-Without the service token, the process can start for isolated health testing,
-but it does not register and cannot accept authenticated viewer circuits.
+The region UUID, access key, and transitional service token are currently all
+required for a connected region.
 
 ## Start and stop
 
@@ -105,13 +109,13 @@ visible:
 Windows:
 
 ```cmd
-homeworldz-region.exe --config config\region.ini
+homeworldz-region.exe --config config\region.ini --region-id REGION-UUID --access-key REGION-ACCESS-KEY
 ```
 
 Linux:
 
 ```sh
-./homeworldz-region --config config/region.ini
+./homeworldz-region --config config/region.ini --region-id REGION-UUID --access-key REGION-ACCESS-KEY
 ```
 
 Run it from the extracted package directory so relative asset and terrain paths
@@ -142,14 +146,11 @@ confirm registration at the assigned coordinates before inviting viewers.
 | `region.viewer_port` | Viewer UDP port | `42002` |
 | `region.bind_address` | Region HTTP IPv4 bind address | `127.0.0.1` |
 | `region.viewer_bind_address` | Viewer UDP IPv4 bind address | `127.0.0.1` |
-| `region.name` | Registered region name | `My Region` |
-| `region.grid_x` | Assigned grid X coordinate | `1000` |
-| `region.grid_y` | Assigned grid Y coordinate | `1000` |
 | `region.public_endpoint` | Viewer-reachable region HTTP URL | `http://localhost:42001` |
 | `region.lease_seconds` | Registration lease (10–300 seconds) | `60` |
 | `grid.url` | Grid API base URL | `http://localhost:42000` |
 | `grid.public_url` | Viewer-facing grid base URL | Grid URL |
-| `grid.service_token` | Transitional region authentication secret | Empty |
+| `grid.service_token` | Transitional internal-API authentication secret | Required |
 | `region.data_path` | Local scene and uploaded-asset state | `var/region` |
 | `region.asset_path` | Static assets imported at startup | `assets/region` |
 | `region.terrain_path` | 256×256 byte RAW terrain | `assets/region/terrain/plateau-square.raw` |
@@ -174,8 +175,8 @@ Voice is not initially provided by HomeWorldz; a viewer may still prompt for
 its own voice executable, but that is separate from the two region ports.
 
 The range `42010`–`42099` is reserved for additional local regions and
-development services. Each additional region needs unique HTTP and UDP ports,
-name, grid coordinates, public endpoint, and data path.
+development services. Each additional region needs a provisioned UUID and
+access key plus unique HTTP and UDP ports, public endpoint, and data path.
 
 ## Upgrades and restoration
 

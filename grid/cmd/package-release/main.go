@@ -97,6 +97,7 @@ func run(ctx context.Context, opts options) error {
 		archiveEntry{filepath.Join(root, "config", "examples", "grid.ini"), "config/examples/grid.ini"},
 		archiveEntry{filepath.Join(root, "config", "examples", "grid-personal.ini"), "config/examples/grid-personal.ini"},
 		archiveEntry{filepath.Join(root, "config", "examples", "grid-cloud.ini"), "config/examples/grid-cloud.ini"},
+		archiveEntry{filepath.Join(root, "config", "examples", "regions.json"), "config/examples/regions.json"},
 		archiveEntry{filepath.Join(root, "docs", "INSTALL-GRID.md"), "INSTALL-GRID.md"},
 		archiveEntry{filepath.Join(root, "docs", "INSTALL-REGION.md"), "INSTALL-REGION.md"},
 		archiveEntry{filepath.Join(root, "docs", "FEATURES.md"), "docs/FEATURES.md"},

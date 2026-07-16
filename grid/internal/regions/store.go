@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/homeworldz/homeworldz/grid/internal/identifier"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 var (
@@ -36,10 +37,49 @@ type Registration struct {
 
 type Store interface {
 	Register(context.Context, Registration) (Region, error)
+	RegisterProvisioned(context.Context, string, Registration) (Region, error)
 	Renew(context.Context, string, time.Duration) (Region, error)
 	Deregister(context.Context, string) error
 	Get(context.Context, string) (Region, error)
 	List(context.Context) ([]Region, error)
+}
+
+func (s *PostgresStore) RegisterProvisioned(ctx context.Context, id string, input Registration) (Region, error) {
+	if input.ViewerPort == 0 {
+		input.ViewerPort = 42002
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Region{}, fmt.Errorf("begin provisioned region registration: %w", err)
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, "DELETE FROM regions WHERE lease_expires_at <= now()"); err != nil {
+		return Region{}, fmt.Errorf("expire region leases: %w", err)
+	}
+	var region Region
+	err = tx.QueryRowContext(ctx, `
+        INSERT INTO regions (id, name, grid_x, grid_y, public_endpoint, viewer_port, lease_expires_at)
+        VALUES ($1, $2, $3, $4, $5, $6, now() + $7 * interval '1 second')
+        ON CONFLICT (id) DO UPDATE
+        SET name = EXCLUDED.name, grid_x = EXCLUDED.grid_x, grid_y = EXCLUDED.grid_y,
+            public_endpoint = EXCLUDED.public_endpoint, viewer_port = EXCLUDED.viewer_port,
+            lease_expires_at = EXCLUDED.lease_expires_at, updated_at = now()
+        RETURNING id, name, grid_x, grid_y, public_endpoint, viewer_port, lease_expires_at`,
+		id, input.Name, input.GridX, input.GridY, input.PublicEndpoint, input.ViewerPort,
+		int64(input.LeaseDuration/time.Second),
+	).Scan(&region.ID, &region.Name, &region.GridX, &region.GridY,
+		&region.PublicEndpoint, &region.ViewerPort, &region.LeaseExpiresAt)
+	if err != nil {
+		var databaseError *pgconn.PgError
+		if errors.As(err, &databaseError) && databaseError.Code == "23505" {
+			return Region{}, ErrConflict
+		}
+		return Region{}, fmt.Errorf("insert provisioned region: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return Region{}, fmt.Errorf("commit provisioned region registration: %w", err)
+	}
+	return region, nil
 }
 
 type PostgresStore struct {

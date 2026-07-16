@@ -103,12 +103,12 @@ cmake --build --preset default
 ctest --preset default --output-on-failure
 ```
 
-Development registration is configured in `config/region.ini`. Set the grid
-URL and transitional service token there, together with region identity,
-location, endpoints, bind addresses, and ports. Start another configuration
-with `homeworldz-region --config path/to/region.ini`; individual environment
-overrides are intentionally unsupported. Without a service token, the region
-runs without grid registration.
+The grid provisions region identity and map placement in `config/regions.json`.
+Start a region with its assigned credentials using `homeworldz-region --config
+path/to/region.ini --region-id UUID --access-key KEY`. The INI holds host-local
+endpoints, bind addresses, ports, data paths, the grid URL, and the transitional
+internal service token. Individual environment overrides are intentionally
+unsupported.
 
 ## Documentation
 

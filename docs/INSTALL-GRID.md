@@ -30,6 +30,7 @@ homeworldz-grid/
       grid.ini              # repository-development ports
       grid-personal.ini     # loopback port 8002
       grid-cloud.ini        # direct public port 80
+      regions.json          # provisioned region identities and access keys
   db/
     migrations/*.up.sql
   docs/
@@ -89,6 +90,31 @@ service_token = replace-with-a-long-random-secret
   transmit it privately to region owners, and never commit it to source
   control.
 
+Copy and edit the provisioned-region registry as a second private file:
+
+```cmd
+copy config\examples\regions.json config\regions.json
+```
+
+Each array row defines one region UUID, user-visible name, map coordinates,
+and unique startup access key:
+
+```json
+[
+  {
+    "id": "11111111-1111-4111-8111-111111111111",
+    "name": "Welcome",
+    "mapX": 1000,
+    "mapY": 1000,
+    "accessKey": "replace-with-a-unique-random-access-key"
+  }
+]
+```
+
+UUIDs and map coordinates must be unique. The grid refuses to start if this
+file is absent or invalid. Protect it like a password file and restart the grid
+after changing it.
+
 Loopback port 8002 is appropriate when grid, region, and viewer are all on one
 personal computer. It deliberately accepts no remote connections. The cloud
 profile instead binds `0.0.0.0:80` and must be edited to use the grid's DNS
@@ -146,7 +172,8 @@ Linux:
 ./homeworldz-grid
 ```
 
-The service reads `config/grid.ini` and `config/db.ini`. Stop it with Ctrl+C;
+The service reads `config/grid.ini`, `config/db.ini`, and `config/regions.json`.
+Stop it with Ctrl+C;
 it performs a graceful HTTP shutdown. A future installer is expected to add
 Windows-service and systemd integration, but neither is implemented yet.
 
@@ -167,8 +194,9 @@ when the configured PostgreSQL database cannot be used.
 Give each authorized region owner these values over a secure channel:
 
 - The internal grid API URL they can reach.
-- The shared region service token.
-- Their assigned region name and grid coordinates.
+- Their region UUID and its unique access key from `regions.json`.
+- Their assigned region name and map coordinates, for reference.
+- The transitional shared service token required by other internal region APIs.
 - The grid's policy for region HTTP and viewer UDP ports.
 
 The owner uses them as described in [INSTALL-REGION.md](INSTALL-REGION.md).
@@ -190,7 +218,7 @@ Before an upgrade:
 
 1. Stop the grid cleanly and notify region operators.
 2. Back up PostgreSQL with the database administrator's standard tools.
-3. Back up `config/grid.ini` and `config/db.ini` securely.
+3. Back up `config/grid.ini`, `config/db.ini`, and `config/regions.json` securely.
 4. Keep the previous program package available for rollback.
 
 Extract the new package separately, copy in the private configuration files,

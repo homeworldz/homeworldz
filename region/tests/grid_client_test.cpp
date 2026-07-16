@@ -18,6 +18,8 @@ public:
     homeworldz::grid::HttpResponse send(std::string_view method, std::string_view path,
                                         std::string_view body) override {
         requests.push_back({std::string(method), std::string(path), std::string(body)});
+        if (method == "POST" && path.starts_with("/api/v1/region-runtime/"))
+            return {200, R"({"id":"22222222-2222-4222-8222-222222222222","name":"Sandbox","gridX":1001,"gridY":1000})"};
         if (method == "POST" && path.ends_with("/copy-library-item"))
             return {201, R"({"id":"11111111-1111-4111-8111-111111111111","ownerUserId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","creatorUserId":"00000000-0000-0000-0000-000000000002","folderId":"22222222-2222-4222-8222-222222222222","assetId":"33333333-3333-4333-8333-333333333333","assetType":5,"inventoryType":18,"name":"Default Shirt","description":"","flags":4,"basePermissions":2147483647,"currentPermissions":2147483647,"everyonePermissions":2147483647,"nextPermissions":2147483647,"saleType":0,"salePrice":0})"};
         if (method == "POST" && path.ends_with("/copy-item"))
@@ -60,6 +62,22 @@ int main() {
     lifecycle.stop();
     if (transport->requests.size() != 3 || transport->requests[2].method != "DELETE" ||
         !lifecycle.region_id().empty()) return 1;
+    homeworldz::grid::RegionSettings provisioned_settings{
+        {}, 0, 0, "http://localhost:42011", 42012, 60};
+    const auto provisioned = client.register_provisioned_region(
+        "22222222-2222-4222-8222-222222222222", provisioned_settings);
+    if (!provisioned || provisioned->name != "Sandbox" || provisioned->grid_x != 1001 ||
+        provisioned->grid_y != 1000 || transport->requests.back().body.find(
+            R"("viewerPort":42012)") == std::string::npos) return 1;
+    homeworldz::grid::RegistrationLifecycle provisioned_lifecycle(
+        client, provisioned_settings, provisioned->id);
+    if (!provisioned_lifecycle.start(started) ||
+        !provisioned_lifecycle.tick(started + std::chrono::seconds(30)) ||
+        transport->requests.back().path !=
+            "/api/v1/region-runtime/22222222-2222-4222-8222-222222222222/lease") return 1;
+    provisioned_lifecycle.stop();
+    if (transport->requests.back().path !=
+        "/api/v1/region-runtime/22222222-2222-4222-8222-222222222222") return 1;
     const auto session = client.validate_viewer_session("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
     if (!session || session->agent_id != "cccccccc-cccc-4ccc-8ccc-cccccccccccc" ||
         session->secure_session_id != "dddddddd-dddd-4ddd-8ddd-dddddddddddd" ||

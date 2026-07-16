@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/homeworldz/homeworldz/grid/internal/identity"
 	"github.com/homeworldz/homeworldz/grid/internal/inventory"
 	"github.com/homeworldz/homeworldz/grid/internal/presence"
+	"github.com/homeworldz/homeworldz/grid/internal/provisioning"
 	"github.com/homeworldz/homeworldz/grid/internal/regions"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -31,6 +33,11 @@ func main() {
 	settings, err := config.LoadGrid(*configDirectory)
 	if err != nil {
 		logger.Error("load configuration", "error", err)
+		os.Exit(1)
+	}
+	provisionedRegions, err := provisioning.Load(filepath.Join(settings.Directory, "regions.json"))
+	if err != nil {
+		logger.Error("load provisioned regions", "error", err)
 		os.Exit(1)
 	}
 
@@ -55,6 +62,7 @@ func main() {
 			Presence:      presenceStore(db),
 			Inventory:     inventoryStore(db),
 			Assets:        assetStore(db),
+			Provisioned:   provisionedRegions,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}

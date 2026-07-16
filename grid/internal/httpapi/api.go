@@ -15,6 +15,7 @@ import (
 	"github.com/homeworldz/homeworldz/grid/internal/identity"
 	"github.com/homeworldz/homeworldz/grid/internal/inventory"
 	"github.com/homeworldz/homeworldz/grid/internal/presence"
+	"github.com/homeworldz/homeworldz/grid/internal/provisioning"
 	"github.com/homeworldz/homeworldz/grid/internal/regions"
 )
 
@@ -32,6 +33,7 @@ type API struct {
 	inventory    inventory.Store
 	assets       assetmeta.Store
 	serviceToken string
+	provisioned  *provisioning.Registry
 }
 
 type Options struct {
@@ -43,12 +45,14 @@ type Options struct {
 	Presence      presence.Store
 	Inventory     inventory.Store
 	Assets        assetmeta.Store
+	Provisioned   *provisioning.Registry
 }
 
 func New(ready ReadinessChecker, version string, options Options) http.Handler {
 	a := &API{ready: ready, version: version, publicURL: strings.TrimRight(options.GridPublicURL, "/"),
 		regions: options.Regions, identity: options.Identity, presence: options.Presence,
-		inventory: options.Inventory, assets: options.Assets, serviceToken: options.ServiceToken}
+		inventory: options.Inventory, assets: options.Assets, serviceToken: options.ServiceToken,
+		provisioned: options.Provisioned}
 	if a.publicURL == "" {
 		a.publicURL = "http://127.0.0.1:42000"
 	}
@@ -67,6 +71,7 @@ func New(ready ReadinessChecker, version string, options Options) http.Handler {
 	mux.HandleFunc("/caps/inventory/library/", a.libraryAISCapability)
 	mux.HandleFunc("/api/v1/regions", a.regionsRoot)
 	mux.HandleFunc("/api/v1/regions/", a.regionByID)
+	mux.HandleFunc("/api/v1/region-runtime/", a.provisionedRegionRuntime)
 	mux.HandleFunc("/api/v1/users", a.usersRoot)
 	mux.HandleFunc("/api/v1/users/", a.userByID)
 	mux.HandleFunc("/api/v1/sessions", a.sessionsRoot)
@@ -80,6 +85,73 @@ func New(ready ReadinessChecker, version string, options Options) http.Handler {
 	return withRequestID(withRequestLogging(
 		authenticateInternal(mux, options.ServiceToken), options.Logger,
 	))
+}
+
+func (a *API) provisionedRegionRuntime(w http.ResponseWriter, r *http.Request) {
+	if a.regions == nil || a.provisioned == nil {
+		writeJSON(w, http.StatusServiceUnavailable, Error{Code: "region_registration_unavailable", Message: "provisioned region registration is unavailable"})
+		return
+	}
+	parts := strings.Split(strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/region-runtime/"), "/"), "/")
+	if len(parts) == 0 || !validUUID(parts[0]) {
+		a.notFound(w, r)
+		return
+	}
+	scheme, accessKey, found := strings.Cut(r.Header.Get("Authorization"), " ")
+	provisioned, authenticated := a.provisioned.Authenticate(parts[0], accessKey)
+	if !found || !strings.EqualFold(scheme, "Bearer") || !authenticated {
+		w.Header().Set("WWW-Authenticate", "Bearer")
+		writeJSON(w, http.StatusUnauthorized, Error{Code: "unauthorized_region", Message: "the region UUID or access key is invalid"})
+		return
+	}
+	id := provisioned.ID
+	if len(parts) == 1 && r.Method == http.MethodPost {
+		var request StartProvisionedRegionRequest
+		if !decodeJSON(w, r, &request) {
+			return
+		}
+		lease, ok := validateLease(w, request.LeaseSeconds)
+		validation := RegisterRegionRequest{Name: provisioned.Name, GridX: provisioned.MapX, GridY: provisioned.MapY,
+			PublicEndpoint: request.PublicEndpoint, ViewerPort: request.ViewerPort}
+		if !ok || !validateRegistration(w, validation) {
+			return
+		}
+		region, err := a.regions.RegisterProvisioned(r.Context(), id, regions.Registration{
+			Name: provisioned.Name, GridX: provisioned.MapX, GridY: provisioned.MapY,
+			PublicEndpoint: request.PublicEndpoint, ViewerPort: request.ViewerPort, LeaseDuration: lease,
+		})
+		if errors.Is(err, regions.ErrConflict) {
+			writeJSON(w, http.StatusConflict, Error{Code: "region_coordinates_in_use", Message: "region coordinates are already leased"})
+		} else if err != nil {
+			writeJSON(w, http.StatusInternalServerError, Error{Code: "region_store_error", Message: "region registration failed"})
+		} else {
+			writeJSON(w, http.StatusOK, region)
+		}
+		return
+	}
+	if len(parts) == 2 && parts[1] == "lease" && r.Method == http.MethodPut {
+		var request RenewRegionLeaseRequest
+		if !decodeJSON(w, r, &request) {
+			return
+		}
+		lease, ok := validateLease(w, request.LeaseSeconds)
+		if !ok {
+			return
+		}
+		region, err := a.regions.Renew(r.Context(), id, lease)
+		a.writeRegionResult(w, region, err)
+		return
+	}
+	if len(parts) == 1 && r.Method == http.MethodDelete {
+		err := a.regions.Deregister(r.Context(), id)
+		if err != nil && !errors.Is(err, regions.ErrNotFound) {
+			writeJSON(w, http.StatusInternalServerError, Error{Code: "region_store_error", Message: "region deregistration failed"})
+		} else {
+			w.WriteHeader(http.StatusNoContent)
+		}
+		return
+	}
+	a.notFound(w, r)
 }
 
 func getOnly(next http.HandlerFunc) http.HandlerFunc {
@@ -134,33 +206,6 @@ func (a *API) regionsRoot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch r.Method {
-	case http.MethodPost:
-		var request RegisterRegionRequest
-		if !decodeJSON(w, r, &request) {
-			return
-		}
-		lease, ok := validateLease(w, request.LeaseSeconds)
-		if !ok || !validateRegistration(w, request) {
-			return
-		}
-		request.Name = strings.TrimSpace(request.Name)
-		if request.ViewerPort == 0 {
-			request.ViewerPort = 42002
-		}
-		region, err := a.regions.Register(r.Context(), regions.Registration{
-			Name: request.Name, GridX: request.GridX, GridY: request.GridY,
-			PublicEndpoint: request.PublicEndpoint, ViewerPort: request.ViewerPort, LeaseDuration: lease,
-		})
-		if errors.Is(err, regions.ErrConflict) {
-			writeJSON(w, http.StatusConflict, Error{Code: "region_coordinates_in_use", Message: "region coordinates are already leased"})
-			return
-		}
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, Error{Code: "region_store_error", Message: "region registration failed"})
-			return
-		}
-		w.Header().Set("Location", "/api/v1/regions/"+region.ID)
-		writeJSON(w, http.StatusCreated, region)
 	case http.MethodGet:
 		items, err := a.regions.List(r.Context())
 		if err != nil {
@@ -169,8 +214,8 @@ func (a *API) regionsRoot(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusOK, RegionList{Regions: items})
 	default:
-		w.Header().Set("Allow", "GET, POST")
-		writeJSON(w, http.StatusMethodNotAllowed, Error{Code: "method_not_allowed", Message: "only GET and POST are supported"})
+		w.Header().Set("Allow", "GET")
+		writeJSON(w, http.StatusMethodNotAllowed, Error{Code: "method_not_allowed", Message: "only GET is supported"})
 	}
 }
 
@@ -190,37 +235,9 @@ func (a *API) regionByID(w http.ResponseWriter, r *http.Request) {
 		a.writeRegionResult(w, region, err)
 		return
 	}
-	if len(parts) == 1 && r.Method == http.MethodDelete {
-		if err := a.regions.Deregister(r.Context(), id); errors.Is(err, regions.ErrNotFound) {
-			a.notFound(w, r)
-		} else if err != nil {
-			writeJSON(w, http.StatusInternalServerError, Error{Code: "region_store_error", Message: "region deregistration failed"})
-		} else {
-			w.WriteHeader(http.StatusNoContent)
-		}
-		return
-	}
-	if len(parts) == 2 && parts[1] == "lease" && r.Method == http.MethodPut {
-		var request RenewRegionLeaseRequest
-		if !decodeJSON(w, r, &request) {
-			return
-		}
-		lease, ok := validateLease(w, request.LeaseSeconds)
-		if !ok {
-			return
-		}
-		region, err := a.regions.Renew(r.Context(), id, lease)
-		a.writeRegionResult(w, region, err)
-		return
-	}
 	if len(parts) == 1 {
-		w.Header().Set("Allow", "GET, DELETE")
-		writeJSON(w, http.StatusMethodNotAllowed, Error{Code: "method_not_allowed", Message: "only GET and DELETE are supported"})
-		return
-	}
-	if len(parts) == 2 && parts[1] == "lease" {
-		w.Header().Set("Allow", "PUT")
-		writeJSON(w, http.StatusMethodNotAllowed, Error{Code: "method_not_allowed", Message: "only PUT is supported"})
+		w.Header().Set("Allow", "GET")
+		writeJSON(w, http.StatusMethodNotAllowed, Error{Code: "method_not_allowed", Message: "only GET is supported"})
 		return
 	}
 	a.notFound(w, r)

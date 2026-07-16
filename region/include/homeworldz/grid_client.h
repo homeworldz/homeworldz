@@ -35,6 +35,13 @@ struct RegionSettings {
     int lease_seconds{60};
 };
 
+struct RegisteredRegion {
+    std::string id;
+    std::string name;
+    int grid_x{};
+    int grid_y{};
+};
+
 struct ViewerSession {
     std::string session_id;
     std::string secure_session_id;
@@ -108,8 +115,12 @@ class Client {
 public:
     explicit Client(std::shared_ptr<Transport> transport) : transport_(std::move(transport)) {}
     std::string register_region(const RegionSettings& settings);
+	std::optional<RegisteredRegion> register_provisioned_region(
+		std::string_view region_id, const RegionSettings& settings);
     bool renew_lease(std::string_view region_id, int lease_seconds);
     bool deregister(std::string_view region_id);
+	bool renew_provisioned_lease(std::string_view region_id, int lease_seconds);
+	bool deregister_provisioned(std::string_view region_id);
     std::optional<ViewerSession> validate_viewer_session(std::string_view session_id);
     std::optional<User> find_user(std::string_view user_id);
     bool revoke_viewer_session(std::string_view session_id);
@@ -171,7 +182,8 @@ private:
 
 class RegistrationLifecycle {
 public:
-    RegistrationLifecycle(Client client, RegionSettings settings);
+    RegistrationLifecycle(Client client, RegionSettings settings,
+                          std::string registered_region_id = {});
     bool start(std::chrono::steady_clock::time_point now);
     bool tick(std::chrono::steady_clock::time_point now);
     void stop();
@@ -182,6 +194,7 @@ private:
     RegionSettings settings_;
     std::string region_id_;
     std::chrono::steady_clock::time_point renew_at_{};
+	bool already_registered_{};
 };
 
 } // namespace homeworldz::grid
