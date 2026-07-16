@@ -800,3 +800,10 @@ which created `#Firestorm` and its nested `#AO`, `#LSL Bridge`, and
 Initial wearable-cache and texture probes can still return 404 when a cache
 key has not been baked; those misses are part of the rebake path and did not
 delay the final rendered appearance.
+
+Cloud world-map discovery passed live acceptance on 2026-07-16. From
+Firestorm, both `Welcome` at `(1000, 1000)` and `Sandbox` at `(1001, 1000)`
+were found by their complete names and by the case-insensitive prefixes `welc`
+and `sand`. The viewer displayed unrelated cached map imagery from other grids
+at those coordinates because HomeWorldz still advertised null map-image UUIDs;
+stable grid-specific map tiles are the next map milestone.
