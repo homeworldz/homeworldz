@@ -728,3 +728,8 @@ object was named `Physical Ball` and taken into Inventory. After object assets
 were extended to retain path/profile geometry and Physical/Phantom flags, a
 second Take and re-rez preserved both the round shape and immediately active
 physical state.
+
+A complete region and viewer restart then retained `Physical Ball` as a
+physical, non-phantom sphere with uniform `1.46018 m` dimensions. This
+separately confirms scene-snapshot persistence after the inventory-asset
+round-trip.

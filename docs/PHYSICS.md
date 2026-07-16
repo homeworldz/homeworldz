@@ -298,7 +298,8 @@ the viewer scale; the initial native collision radius is half the smallest
 scale dimension, giving exact collision for uniformly scaled spheres and a
 conservative collision shape for non-uniform ellipsoids. Live Firestorm
 acceptance on 2026-07-15 confirmed sphere creation, dynamic collision, Take,
-and re-rez with shape and Physical state preserved.
+and re-rez with shape and Physical state preserved. A subsequent full restart
+retained the physical sphere and its uniform `1.46018 m` scale.
 
 ### Required Scenarios
 
