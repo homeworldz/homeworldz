@@ -60,6 +60,7 @@ static void close_socket(socket_handle socket) { close(socket); }
 namespace {
 std::atomic_bool running{true};
 constexpr std::string_view system_creator_id = "00000000-0000-0000-0000-000000000002";
+constexpr std::string_view default_map_tile_asset_id = "00000000-0000-1111-9999-000000000100";
 homeworldz::config::RegionSettings configured_values;
 
 struct LiveAvatar {
@@ -1467,19 +1468,23 @@ int main(int argc, char* argv[]) {
                         }
                         const auto available_map_regions = [&] {
                             std::vector<homeworldz::viewer::MapBlock> regions;
+                            const auto map_image_id = homeworldz::viewer::parse_uuid(
+                                default_map_tile_asset_id).value_or(homeworldz::viewer::Uuid{});
                             if (region_grid_x >= 0 && region_grid_x <= 65535 &&
                                 region_grid_y >= 0 && region_grid_y <= 65535) {
                                 regions.push_back(homeworldz::viewer::MapBlock{
                                     static_cast<std::uint16_t>(region_grid_x),
                                     static_cast<std::uint16_t>(region_grid_y), region_name,
-                                    13, 0, 20, static_cast<std::uint8_t>((std::min)(avatars.size(), std::size_t{255}))});
+                                    13, 0, 20, static_cast<std::uint8_t>((std::min)(avatars.size(), std::size_t{255})),
+                                    map_image_id});
                             }
                             for (const auto& neighbor : region_neighbors) {
                                 if (neighbor.grid_x < 0 || neighbor.grid_x > 65535 ||
                                     neighbor.grid_y < 0 || neighbor.grid_y > 65535) continue;
                                 regions.push_back(homeworldz::viewer::MapBlock{
                                     static_cast<std::uint16_t>(neighbor.grid_x),
-                                    static_cast<std::uint16_t>(neighbor.grid_y), neighbor.name});
+                                    static_cast<std::uint16_t>(neighbor.grid_y), neighbor.name,
+                                    13, 0, 20, 0, map_image_id});
                             }
                             return regions;
                         };

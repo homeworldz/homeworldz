@@ -115,8 +115,10 @@ at every region edge.
 The Region answers authenticated viewer `MapBlockRequest` and `MapNameRequest`
 UDP messages from that live topology snapshot. Replies currently cover the
 Region itself and its cardinal neighbors, including coordinates, name, access,
-water height, and local agent count. Map-image UUIDs remain empty until map-tile
-generation and Grid-wide map aggregation are implemented.
+water height, and local agent count. The initial package advertises a stable
+HomeWorldz JPEG-2000 rendering of the default plateau rather than a null image
+UUID, preventing unrelated cross-grid cache reuse. Terrain-aware per-Region
+tile generation and Grid-wide map aggregation remain future work.
 
 Initial development accounts use normalized lowercase usernames and bcrypt
 password hashes. Successful credential checks create random UUID sessions with
