@@ -307,9 +307,11 @@ launched or destabilized, while a 1 x 1 x 1 m physical cube remains effectively
 stationary and causes the avatar to bounce off or walk around it.
 
 Viewer editing and grabbing have separate physics behavior. Selecting an owned,
-modifiable physical object temporarily mirrors it as a non-dynamic body, so it
-cannot fall or react to collisions while its edit controls are open; deselection
-restores its saved physical state. `ObjectGrabUpdate` mouse drags apply a bounded,
+modifiable object temporarily mirrors it as a non-dynamic body, so it cannot
+fall or react to collisions while its edit controls are open. Enabling Physical
+during that edit records the new state but defers dynamic activation until
+deselection; selecting an already-Physical object follows the same rule.
+`ObjectGrabUpdate` mouse drags apply a bounded,
 mass-scaled impulse through the physics interface toward the viewer's grab
 target. This explicit grab controller is independent of ordinary avatar contact,
 which remains entirely within Jolt's character/body solver.
@@ -318,6 +320,9 @@ edited physical prim remained suspended until its edit form closed, mouse-hand
 dragging moved it through the grab controller, and resizing Dynamic4 to
 1 x 0.5 x 0.75 m made ordinary avatar collisions move it as expected from its
 reduced mass.
+The Physical-during-edit transition passed live acceptance on 2026-07-16: the
+prim remained suspended when Physical was enabled and began falling only after
+the edit selection closed.
 
 Canonical sphere prims use native analytic sphere shapes rather than triangle
 collision meshes. Their volume-based mass uses the ellipsoid volume implied by

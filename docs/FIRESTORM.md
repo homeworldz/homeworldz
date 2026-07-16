@@ -676,9 +676,10 @@ This test also identified and removed the historical synthetic welcome prim.
 That object had been injected directly into the login packet stream with a
 placeholder UUID, no valid owner, no authoritative scene record, and no
 physics body; it was therefore non-editable and non-colliding. Future contact
-tests use only persisted scene entities. A separate follow-up should determine
-whether Firestorm defers Physical changes while the edit window remains open or
-merely suppresses selected-object transform display until the editor closes.
+tests use only persisted scene entities. Edit suspension was subsequently made
+consistent for both transition directions: on 2026-07-16, enabling Physical on
+a selected non-Physical prim kept it suspended until the edit selection closed,
+then activated dynamics immediately on deselection.
 
 Primitive texture-entry persistence passed live Firestorm acceptance on
 2026-07-15. All four dynamic test prims retained their distinct color tints
