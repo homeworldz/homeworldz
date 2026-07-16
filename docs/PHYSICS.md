@@ -330,7 +330,9 @@ retained the physical sphere and its uniform `1.46018 m` scale.
 
 Canonical cylinder prims use a Z-axis native Jolt cylinder and cylinder-volume
 mass. Live Firestorm acceptance on 2026-07-15 confirmed that a Physical
-cylinder's falling, contact, and rolling behavior appeared correct.
+cylinder's falling, contact, and rolling behavior appeared correct. Copying
+`Physical Cylinder` in Inventory as `Physical Cylinder 2` and re-rezzing the
+copy preserved both its cylinder geometry and Physical state.
 
 ### Required Scenarios
 

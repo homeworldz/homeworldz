@@ -736,5 +736,7 @@ round-trip.
 
 Canonical cylinder creation passed its initial live acceptance on 2026-07-15.
 Firestorm rezzed the requested cylinder and the native Jolt cylinder produced
-convincing physical behavior. Inventory round-trip and restart persistence are
-separate acceptance checks.
+convincing physical behavior. The object was named `Physical Cylinder`, copied
+in Inventory as `Physical Cylinder 2`, and re-rezzed; the copy retained its
+cylinder geometry and Physical state. Restart persistence remains a separate
+acceptance check.
