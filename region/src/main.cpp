@@ -2516,7 +2516,7 @@ int main(int argc, char* argv[]) {
                                     now + std::chrono::milliseconds(100), initial_viewer_position});
                                 static_cast<void>(inserted);
                                 avatar_iterator->second.restored_flying_until =
-                                    persisted && persisted->avatar_flying ?
+                                    avatar_iterator->second.controller.state().flying ?
                                         now + std::chrono::seconds(2) : now;
                                 if (physics_world) {
                                     auto& live = avatars.at(endpoint);
