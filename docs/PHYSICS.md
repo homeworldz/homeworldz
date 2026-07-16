@@ -351,6 +351,11 @@ Persisted Physical objects found outside those bounds during startup are
 constrained before normal simulation resumes. If an escaped object is below
 terrain, the region also raises it with the rotated-bounds clearance rule and
 clears its stale velocity, then persists the recovered state.
+The 256 terrain samples span the complete `0..256 m` physical region using
+`256 / 255 m` between samples. Treating the sample spacing as exactly one metre
+would end Jolt's heightfield at coordinate 255, leaving the final metre without
+terrain support even though capsule and object origins may validly approach
+the 256 border.
 
 Canonical sphere prims use native analytic sphere shapes rather than triangle
 collision meshes. Their volume-based mass uses the ellipsoid volume implied by

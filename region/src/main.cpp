@@ -770,6 +770,11 @@ int main() {
             homeworldz::physics::HeightFieldDefinition definition;
             definition.samples.assign(terrain_heightmap->begin(), terrain_heightmap->end());
             definition.sample_count = static_cast<std::uint32_t>(homeworldz::terrain::width);
+            // Terrain samples describe the complete 256 m region. There are
+            // sample_count - 1 intervals between the first sample at 0 and the
+            // far region border at 256; unit spacing would incorrectly end the
+            // collision surface at 255 and let edge-bound bodies fall off.
+            definition.spacing = 256.0 / static_cast<double>(definition.sample_count - 1);
             const auto replacement = physics_world->create_heightfield(definition);
             if (replacement == 0) return false;
             if (physics_terrain != 0) physics_world->remove_body(physics_terrain);
