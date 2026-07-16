@@ -112,6 +112,16 @@ crossing is not enabled by discovery alone;
 until the crossing handoff exists, the simulation continues to contain entities
 at every region edge.
 
+Avatar teleports and crossings use the durable Grid-coordinated transaction in
+[ADR 0025](adr/0025-idempotent-avatar-transits.md). Internal Region clients
+prepare an immutable arrival record through `/api/v1/transits`; the destination
+accepts it after creating provisional state and activates it only after the
+viewer establishes its destination circuit. Activation moves the viewer
+session's authoritative destination in the same PostgreSQL transaction.
+Prepared or accepted transactions can be rolled back by either participating
+Region, expire automatically, and use a monotonically increasing per-avatar
+generation to reject stale handoff messages.
+
 The Region answers authenticated viewer `MapBlockRequest` and `MapNameRequest`
 UDP messages from that live topology snapshot. Replies currently cover the
 Region itself and its cardinal neighbors, including coordinates, name, access,

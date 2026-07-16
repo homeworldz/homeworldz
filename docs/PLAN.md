@@ -94,6 +94,7 @@ than runtime dependencies.
 - `/api/v1/regions` registers, renews, deregisters, and discovers regions.
 - `/api/v1/sessions` creates and validates viewer sessions.
 - `/api/v1/presence` updates and queries online presence.
+- `/api/v1/transits` coordinates idempotent, durable avatar handoff state.
 - `/api/v1/assets` records immutable asset provenance and region locations;
   authenticated region endpoints serve and explicitly replicate verified blobs.
 - Region-local capabilities provide viewer events and asset access.
