@@ -14,7 +14,7 @@ using BodyId = std::uint64_t;
 using CharacterId = std::uint64_t;
 
 enum class MotionType { Static, Kinematic, Dynamic };
-enum class ShapeType { Box, Sphere, Capsule };
+enum class ShapeType { Box, Sphere, Capsule, Cylinder };
 
 struct Shape {
     ShapeType type{ShapeType::Box};

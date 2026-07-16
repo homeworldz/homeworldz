@@ -65,7 +65,8 @@ int main() {
     if (!close(physics::box_mass({2.0, 3.0, 4.0}, 1000.0), 24000.0) ||
         !close(physics::box_mass({0.0, 1.0, 1.0}, 1000.0), 0.001) ||
         !close(physics::box_mass({100.0, 100.0, 100.0}, 1000.0), 100000.0) ||
-        !close(physics::ellipsoid_mass({2.0, 3.0, 4.0}, 1000.0), 12566.3706143592))
+        !close(physics::ellipsoid_mass({2.0, 3.0, 4.0}, 1000.0), 12566.3706143592) ||
+        !close(physics::cylinder_mass({2.0, 3.0, 4.0}, 1000.0), 18849.5559215388))
         return 2;
 
     RecordingWorld world;
@@ -102,6 +103,14 @@ int main() {
         !close(world.last_definition.shape.radius, 1.0) ||
         !close(world.last_definition.mass, 523.598775598299))
         return 6;
+    entity.path_curve = 0x10;
+    entity.profile_curve = 0x00;
+    entity.scale = {2.0, 2.0, 3.0};
+    if (!mirror.synchronize(entity) || world.last_definition.shape.type != physics::ShapeType::Cylinder ||
+        !close(world.last_definition.shape.radius, 1.0) ||
+        !close(world.last_definition.shape.height, 3.0) ||
+        !close(world.last_definition.mass, 1178.09724509617))
+        return 7;
     const auto rubber_body = mirror.body_id(entity.id);
     entity.physics_shape_type = 0x01;
     if (!mirror.synchronize(entity) || mirror.size() != 0 || world.definitions.contains(rubber_body))

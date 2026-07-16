@@ -18,6 +18,7 @@ struct MaterialProperties {
 MaterialProperties material_properties(std::uint8_t material);
 double box_mass(scene::Vector3 scale, double density);
 double ellipsoid_mass(scene::Vector3 scale, double density);
+double cylinder_mass(scene::Vector3 scale, double density);
 
 class StaticSceneMirror {
 public:

@@ -2616,6 +2616,9 @@ int main() {
                             const bool supported_sphere = object_add->pcode == 9 &&
                                 object_add->path_curve == 0x20 &&
                                 (object_add->profile_curve & 0x0f) == 0x05;
+                            const bool supported_cylinder = object_add->pcode == 9 &&
+                                object_add->path_curve == 0x10 &&
+                                (object_add->profile_curve & 0x0f) == 0x00;
                             std::optional<homeworldz::scene::Vector3> placement;
                             if (valid_scale && object_add->bypass_raycast) {
                                 const homeworldz::scene::Vector3 ray_end{
@@ -2652,8 +2655,8 @@ int main() {
                             bool created = false;
                             std::string object_id;
                             homeworldz::scene::EntityId entity_id{};
-                            if ((supported_box || supported_sphere) && valid_position && valid_rotation &&
-                                object_add->material <= 7) {
+                            if ((supported_box || supported_sphere || supported_cylinder) &&
+                                valid_position && valid_rotation && object_add->material <= 7) {
                                 object_id = homeworldz::viewer::random_uuid();
                                 const auto owner_id = homeworldz::viewer::format_uuid(identity->agent_id);
                                 entity_id = scene.create("Primitive", *placement);

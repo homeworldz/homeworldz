@@ -71,6 +71,12 @@ public:
                 shape->setLocalPose(physx::PxTransform(
                     physx::PxQuat(physx::PxHalfPi, physx::PxVec3(0.0F, 1.0F, 0.0F))));
             break;
+        case ShapeType::Cylinder:
+            // PhysX has no analytic cylinder. Use its conservative bounding box
+            // until portable convex collision cooking is available.
+            shape = physics_->createShape(
+                physx::PxBoxGeometry(vec(definition.shape.half_extents)), *material);
+            break;
         case ShapeType::Box:
         default:
             shape = physics_->createShape(physx::PxBoxGeometry(vec(definition.shape.half_extents)), *material);
