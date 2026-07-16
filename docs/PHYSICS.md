@@ -332,7 +332,9 @@ Canonical cylinder prims use a Z-axis native Jolt cylinder and cylinder-volume
 mass. Live Firestorm acceptance on 2026-07-15 confirmed that a Physical
 cylinder's falling, contact, and rolling behavior appeared correct. Copying
 `Physical Cylinder` in Inventory as `Physical Cylinder 2` and re-rezzing the
-copy preserved both its cylinder geometry and Physical state.
+copy preserved both its cylinder geometry and Physical state. A subsequent
+complete viewer and region restart retained the rezzed copy as a Physical
+cylinder.
 
 ### Required Scenarios
 
