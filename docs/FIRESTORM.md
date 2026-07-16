@@ -779,9 +779,24 @@ showed no detectable control or transport lag.
 
 This acceptance used the native Linux region build with Jolt on Ubuntu and a
 separate registered Sandbox region at `(1001, 1000)`. Both region processes
-continued renewing their Grid leases throughout the login. The acceptance
-also exposed two non-blocking cleanup items: Firestorm requested several
-well-known asset UUIDs absent from the fresh cloud asset store, and some
-initial-outfit AIS category writes received HTTP 400 responses while the
-eventual item updates and appearance bake succeeded. These should be resolved
-before treating a fresh cloud account's login as warning-free.
+continued renewing their Grid leases throughout the login.
+
+Follow-up cloud acceptance on the same day covered interrupted first-login
+recovery. Jim's six personal default wearables remained intact after an
+earlier viewer failure had removed every Current Outfit link. On the next
+login, the Grid detected the otherwise-impossible empty COF, verified that all
+six unchanged default source items still existed, and restored only their six
+links. Firestorm displayed the complete COF and rendered the clothed avatar
+immediately. This recovery is deliberately disabled whenever COF contains any
+entry or a default source is absent, so it cannot replace an established
+avatar's chosen outfit.
+
+Firestorm's standard private inventory setup also passed. AIS category
+creation now accepts the viewer's empty `<uuid/>` server-allocation sentinel,
+which created `#Firestorm` and its nested `#AO`, `#LSL Bridge`, and
+`#Wearable Favorites` folders. HomeWorldz provisions the viewer-required
+`Calling Cards → Friends → All` hierarchy, with all three folders using type
+2 as Firestorm expects. The final login produced no AIS HTTP 400 responses.
+Initial wearable-cache and texture probes can still return 404 when a cache
+key has not been baked; those misses are part of the rebake path and did not
+delay the final rendered appearance.
