@@ -465,6 +465,12 @@ func (a *API) createAISInventoryFolder(w http.ResponseWriter, r *http.Request, u
 		return
 	}
 	request, err := parseInventoryFolderMutationRequest(bytes.NewReader(body), "folder_id")
+	// Firestorm represents the not-yet-allocated category UUID as an empty
+	// <uuid/> element. Treat it like the canonical null UUID while still
+	// requiring the category_id field to be present in the AIS request.
+	if request.ID == "" {
+		request.ID = nullInventoryFolderID
+	}
 	if err != nil || !validUUID(request.ID) || !validUUID(request.ParentID) ||
 		request.ParentID != parentID || request.Type != -1 {
 		writeLLSDError(w, http.StatusBadRequest, "invalid AIS inventory folder request")

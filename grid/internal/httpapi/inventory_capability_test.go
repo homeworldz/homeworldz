@@ -302,6 +302,43 @@ func TestAISCreateAndRenameInventoryFolder(t *testing.T) {
 	}
 }
 
+func TestAISCreateInventoryFolderWithEmptyUUID(t *testing.T) {
+	identities := newMemoryIdentityStore()
+	user, err := identities.CreateUser(context.Background(), "inventory.ais.empty-uuid", "development-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := identities.CreateSession(context.Background(), "inventory.ais.empty-uuid", "development-password", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.AssignViewerDestination(context.Background(), session.ID, 123456,
+		"30000000-0000-4000-8000-000000000001"); err != nil {
+		t.Fatal(err)
+	}
+	inventories := &memoryInventoryStore{folders: make(map[string][]inventory.Folder)}
+	folders, _ := inventories.EnsureSystemFolders(context.Background(), user.ID)
+	rootID := folders[0].ID
+	body := `<?xml version="1.0"?><llsd><map><key>categories</key><array><map>` +
+		`<key>category_id</key><uuid/>` +
+		`<key>parent_id</key><uuid>` + rootID + `</uuid>` +
+		`<key>type_default</key><integer>-1</integer>` +
+		`<key>name</key><string>#Firestorm</string>` +
+		`</map></array></map></llsd>`
+	request := httptest.NewRequest(http.MethodPost,
+		"/caps/inventory/ais/"+session.ID+"/category/"+rootID+"?tid="+session.ID,
+		strings.NewReader(body))
+	response := httptest.NewRecorder()
+	New(checker{}, "test", Options{Identity: identities, Inventory: inventories}).ServeHTTP(response, request)
+	stored, _ := inventories.ListFolders(context.Background(), user.ID)
+	if response.Code != http.StatusOK || len(stored) != len(folders)+1 ||
+		stored[len(stored)-1].ID == nullInventoryFolderID || stored[len(stored)-1].Name != "#Firestorm" ||
+		!strings.Contains(response.Body.String(),
+			"<key>_created_categories</key><array><uuid>"+stored[len(stored)-1].ID+"</uuid>") {
+		t.Fatalf("status = %d, response = %s, folders = %#v", response.Code, response.Body.String(), stored)
+	}
+}
+
 func TestAISRenameMoveAndDeleteInventoryItem(t *testing.T) {
 	identities := newMemoryIdentityStore()
 	user, err := identities.CreateUser(context.Background(), "inventory.ais.items", "development-password")
