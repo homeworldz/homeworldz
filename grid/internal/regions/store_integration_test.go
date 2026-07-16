@@ -69,6 +69,17 @@ func TestPostgresRegionLifecycle(t *testing.T) {
 		Scan(&retainedRegionID); err != nil || retainedRegionID != provisioned.ID {
 		t.Fatalf("retained last region = %q, error = %v", retainedRegionID, err)
 	}
+	if _, err := db.ExecContext(ctx, "UPDATE regions SET provisioned = false WHERE id = $1", provisioned.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.RenewProvisioned(ctx, provisioned.ID, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	var markedProvisioned bool
+	if err := db.QueryRowContext(ctx, "SELECT provisioned FROM regions WHERE id = $1", provisioned.ID).
+		Scan(&markedProvisioned); err != nil || !markedProvisioned {
+		t.Fatalf("provisioned renewal marker = %t, error = %v", markedProvisioned, err)
+	}
 
 	created, err := store.Register(ctx, Registration{
 		Name: "Integration Region", GridX: coordinate, GridY: coordinate,

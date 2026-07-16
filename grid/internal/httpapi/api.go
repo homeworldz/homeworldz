@@ -157,7 +157,7 @@ func (a *API) provisionedRegionRuntime(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			return
 		}
-		region, err := a.regions.Renew(r.Context(), id, lease)
+		region, err := a.regions.RenewProvisioned(r.Context(), id, lease)
 		a.writeRegionResult(w, region, err)
 		return
 	}

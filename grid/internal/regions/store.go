@@ -39,6 +39,7 @@ type Store interface {
 	Register(context.Context, Registration) (Region, error)
 	RegisterProvisioned(context.Context, string, Registration) (Region, error)
 	Renew(context.Context, string, time.Duration) (Region, error)
+	RenewProvisioned(context.Context, string, time.Duration) (Region, error)
 	Deregister(context.Context, string) error
 	Get(context.Context, string) (Region, error)
 	List(context.Context) ([]Region, error)
@@ -132,13 +133,22 @@ func (s *PostgresStore) Register(ctx context.Context, input Registration) (Regio
 }
 
 func (s *PostgresStore) Renew(ctx context.Context, id string, duration time.Duration) (Region, error) {
+	return s.renew(ctx, id, duration, false)
+}
+
+func (s *PostgresStore) RenewProvisioned(ctx context.Context, id string, duration time.Duration) (Region, error) {
+	return s.renew(ctx, id, duration, true)
+}
+
+func (s *PostgresStore) renew(ctx context.Context, id string, duration time.Duration, provisioned bool) (Region, error) {
 	var region Region
 	err := s.db.QueryRowContext(ctx, `
         UPDATE regions
-        SET lease_expires_at = now() + $2 * interval '1 second', updated_at = now()
+        SET lease_expires_at = now() + $2 * interval '1 second',
+            provisioned = provisioned OR $3, updated_at = now()
         WHERE id = $1 AND lease_expires_at > now()
         RETURNING id, name, grid_x, grid_y, public_endpoint, viewer_port, lease_expires_at`,
-		id, int64(duration/time.Second),
+		id, int64(duration/time.Second), provisioned,
 	).Scan(&region.ID, &region.Name, &region.GridX, &region.GridY,
 		&region.PublicEndpoint, &region.ViewerPort, &region.LeaseExpiresAt)
 	if errors.Is(err, sql.ErrNoRows) {

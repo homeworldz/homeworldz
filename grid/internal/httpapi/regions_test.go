@@ -76,6 +76,12 @@ func (s *memoryRegionStore) Renew(_ context.Context, id string, duration time.Du
 	return region, nil
 }
 
+func (s *memoryRegionStore) RenewProvisioned(
+	ctx context.Context, id string, duration time.Duration,
+) (regions.Region, error) {
+	return s.Renew(ctx, id, duration)
+}
+
 func (s *memoryRegionStore) Deregister(_ context.Context, id string) error {
 	if _, ok := s.regions[id]; !ok {
 		return regions.ErrNotFound
