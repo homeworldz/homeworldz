@@ -52,6 +52,10 @@ homeworldz-region/
   docs/
     FEATURES.md
     ROADMAP.md
+  deploy/
+    linux/
+      homeworldz-region@.service
+      region.env.example
 ```
 
 Extract the package into a dedicated directory. The packaged region will not
@@ -100,6 +104,51 @@ settings.
 
 The region UUID, access key, and transitional service token are currently all
 required for a connected region.
+
+## Install as an Ubuntu service
+
+Use one instance of the packaged systemd template per region. Program files are
+shared, while configuration, credentials, and persistent state remain separate:
+
+```text
+/opt/homeworldz/region/                 # extracted package
+/etc/homeworldz/regions/sandbox.ini     # host-local region settings
+/etc/homeworldz/regions/sandbox.env     # UUID and access key
+/var/lib/homeworldz/regions/sandbox/    # SQLite, scene, terrain, and assets
+```
+
+Create the directories and install the unit:
+
+```sh
+sudo install -d -o root -g root -m 0755 /opt/homeworldz/region
+sudo install -d -o homeworldz -g homeworldz -m 0700 /etc/homeworldz/regions
+sudo install -d -o homeworldz -g homeworldz -m 0750 /var/lib/homeworldz/regions/sandbox
+sudo install -o root -g root -m 0644 \
+  /opt/homeworldz/region/deploy/linux/homeworldz-region@.service \
+  /etc/systemd/system/homeworldz-region@.service
+sudo systemctl daemon-reload
+```
+
+Copy `config/examples/region-cloud.ini` to
+`/etc/homeworldz/regions/sandbox.ini`. Set `region.data_path` to
+`/var/lib/homeworldz/regions/sandbox`, keep static asset paths relative to the
+unit's `/opt/homeworldz/region` working directory, and set the public endpoint,
+ports, bind addresses, grid URL, and transitional service token.
+
+Copy `deploy/linux/region.env.example` to
+`/etc/homeworldz/regions/sandbox.env`, replace both values with the UUID and
+access key assigned by the grid operator, then protect both files:
+
+```sh
+sudo chown homeworldz:homeworldz /etc/homeworldz/regions/sandbox.ini \
+  /etc/homeworldz/regions/sandbox.env
+sudo chmod 0600 /etc/homeworldz/regions/sandbox.ini \
+  /etc/homeworldz/regions/sandbox.env
+sudo systemctl enable --now homeworldz-region@sandbox
+```
+
+Additional instances use another short instance name, distinct configuration,
+credentials, data directory, TCP/UDP ports, and grid-provisioned identity.
 
 ## Start and stop
 

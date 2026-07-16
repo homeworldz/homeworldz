@@ -153,6 +153,8 @@ func run(ctx context.Context, opts options) error {
 		{filepath.Join(root, "docs", "INSTALL-GRID.md"), "INSTALL-GRID.md"},
 		{filepath.Join(root, "docs", "FEATURES.md"), "docs/FEATURES.md"},
 		{filepath.Join(root, "docs", "ROADMAP.md"), "docs/ROADMAP.md"},
+		{filepath.Join(root, "deploy", "linux", "homeworldz-region@.service"), "deploy/linux/homeworldz-region@.service"},
+		{filepath.Join(root, "deploy", "linux", "region.env.example"), "deploy/linux/region.env.example"},
 	}
 	if isWindows {
 		for _, dll := range siblingDLLs(regionExecutable) {

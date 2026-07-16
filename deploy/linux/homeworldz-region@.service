@@ -1,0 +1,22 @@
+[Unit]
+Description=HomeWorldz Region (%i)
+After=network-online.target homeworldz-grid.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=homeworldz
+Group=homeworldz
+WorkingDirectory=/opt/homeworldz/region
+EnvironmentFile=/etc/homeworldz/regions/%i.env
+ExecStart=/opt/homeworldz/region/homeworldz-region --config /etc/homeworldz/regions/%i.ini --region-id ${HOMEWORLDZ_REGION_ID} --access-key ${HOMEWORLDZ_REGION_ACCESS_KEY}
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/homeworldz/regions/%i
+
+[Install]
+WantedBy=multi-user.target

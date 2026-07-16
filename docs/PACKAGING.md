@@ -7,9 +7,10 @@ settings, or private configuration.
 
 The grid package contains the grid service, database bootstrap and Library
 configuration programs, PostgreSQL migrations, the example grid configuration,
-and `INSTALL-GRID.md`. The region package contains the native region service,
+the Caddy/systemd deployment files, and `INSTALL-GRID.md`. The region package contains the native region service,
 its adjacent dependency DLLs, app-local Microsoft Visual C++ runtime DLLs,
-static region assets, the example region configuration, and
+static region assets, the example region configuration, a multi-instance
+systemd template, and
 `INSTALL-REGION.md`.
 
 On a Windows or Linux x64 development host with the native region already
