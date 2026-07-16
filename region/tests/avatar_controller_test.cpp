@@ -31,6 +31,11 @@ int main() {
         std::abs(avatar.state().position.z - 25.78) > 1e-9 ||
         avatar.state().camera_center[1] != 2.F || avatar.state().rotation != update.body_rotation)
         return 3;
+    const auto facing = avatar.look_direction();
+    if (std::abs(facing[0] - 0.5F) > 1e-6F ||
+        std::abs(facing[1] - static_cast<float>(std::sqrt(3.0) / 2.0)) > 1e-6F ||
+        facing[2] != 0.0F)
+        return 20;
     if (avatar.movement_animation() != homeworldz::viewer::MovementAnimation::walk) return 11;
     avatar.expire_transient_controls();
     avatar.step(0.1);

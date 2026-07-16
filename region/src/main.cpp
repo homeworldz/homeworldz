@@ -1835,9 +1835,16 @@ int main(int argc, char* argv[]) {
                                     const auto avatar = avatars.find(endpoint);
                                     const bool flying = avatar != avatars.end() &&
                                         avatar->second.controller.state().flying;
+                                    // TeleportLocationRequest.LookAt is an absolute destination
+                                    // point, not a direction. Preserve the live avatar's facing
+                                    // across the handoff instead of interpreting that point as a
+                                    // quaternion direction at the destination.
+                                    const auto look_direction = avatar != avatars.end() ?
+                                        avatar->second.controller.look_direction() :
+                                        std::array<float, 3>{1.0F, 0.0F, 0.0F};
                                     const homeworldz::grid::AvatarTransitRequest transit_request{
                                         transit_id, agent_id, session_id, registration->region_id(),
-                                        target->id, teleport->position, teleport->look_at, flying, 30};
+                                        target->id, teleport->position, look_direction, flying, 30};
                                     const auto transit = viewer_grid->prepare_avatar_transit(transit_request);
                                     prepared = transit && transit->state == "prepared";
                                     if (!prepared) throw std::runtime_error("grid rejected transit preparation");

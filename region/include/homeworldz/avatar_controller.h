@@ -72,6 +72,7 @@ public:
     void synchronize_physics(scene::Vector3 position, scene::Vector3 velocity, bool grounded);
     void step(double seconds);
     const AvatarState& state() const { return state_; }
+    std::array<float, 3> look_direction() const;
     scene::Vector3 viewer_position() const;
     MovementAnimation movement_animation() const;
 

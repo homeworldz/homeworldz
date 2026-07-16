@@ -131,6 +131,13 @@ scene::Vector3 AvatarController::viewer_position() const {
     return position;
 }
 
+std::array<float, 3> AvatarController::look_direction() const {
+    const double x = state_.rotation[0], y = state_.rotation[1], z = state_.rotation[2];
+    const double w = std::sqrt(std::max(0.0, 1.0 - x * x - y * y - z * z));
+    return {static_cast<float>(1.0 - 2.0 * (y * y + z * z)),
+            static_cast<float>(2.0 * (x * y + w * z)), 0.0F};
+}
+
 MovementAnimation AvatarController::movement_animation() const {
     if (state_.grounded && landing_animation_remaining_ > 0.0) return MovementAnimation::land;
     const auto horizontal_speed = std::hypot(state_.velocity.x, state_.velocity.y);
