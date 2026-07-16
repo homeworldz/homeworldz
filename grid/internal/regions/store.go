@@ -53,17 +53,15 @@ func (s *PostgresStore) RegisterProvisioned(ctx context.Context, id string, inpu
 		return Region{}, fmt.Errorf("begin provisioned region registration: %w", err)
 	}
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, "DELETE FROM regions WHERE lease_expires_at <= now()"); err != nil {
-		return Region{}, fmt.Errorf("expire region leases: %w", err)
-	}
 	var region Region
 	err = tx.QueryRowContext(ctx, `
-        INSERT INTO regions (id, name, grid_x, grid_y, public_endpoint, viewer_port, lease_expires_at)
-        VALUES ($1, $2, $3, $4, $5, $6, now() + $7 * interval '1 second')
+        INSERT INTO regions (id, name, grid_x, grid_y, public_endpoint, viewer_port,
+                             lease_expires_at, provisioned)
+        VALUES ($1, $2, $3, $4, $5, $6, now() + $7 * interval '1 second', true)
         ON CONFLICT (id) DO UPDATE
         SET name = EXCLUDED.name, grid_x = EXCLUDED.grid_x, grid_y = EXCLUDED.grid_y,
             public_endpoint = EXCLUDED.public_endpoint, viewer_port = EXCLUDED.viewer_port,
-            lease_expires_at = EXCLUDED.lease_expires_at, updated_at = now()
+            lease_expires_at = EXCLUDED.lease_expires_at, provisioned = true, updated_at = now()
         RETURNING id, name, grid_x, grid_y, public_endpoint, viewer_port, lease_expires_at`,
 		id, input.Name, input.GridX, input.GridY, input.PublicEndpoint, input.ViewerPort,
 		int64(input.LeaseDuration/time.Second),
@@ -103,7 +101,8 @@ func (s *PostgresStore) Register(ctx context.Context, input Registration) (Regio
 		return Region{}, fmt.Errorf("begin region registration: %w", err)
 	}
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, "DELETE FROM regions WHERE lease_expires_at <= now()"); err != nil {
+	if _, err := tx.ExecContext(ctx,
+		"DELETE FROM regions WHERE lease_expires_at <= now() AND NOT provisioned"); err != nil {
 		return Region{}, fmt.Errorf("expire region leases: %w", err)
 	}
 	region := Region{ID: id}

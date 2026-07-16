@@ -4,10 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/homeworldz/homeworldz/grid/internal/identifier"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -26,6 +28,48 @@ func TestPostgresRegionLifecycle(t *testing.T) {
 
 	store := NewPostgresStore(db)
 	coordinate := int(time.Now().UnixNano() % 1_000_000_000)
+	provisionedID, err := identifier.NewUUID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	provisioned, err := store.RegisterProvisioned(ctx, provisionedID, Registration{
+		Name: "Provisioned Integration Region", GridX: coordinate + 1, GridY: coordinate + 1,
+		PublicEndpoint: "http://localhost:42101", LeaseDuration: time.Minute,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	userID, err := identifier.NewUUID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO users(id, username, password_hash, last_region_id)
+		VALUES($1, $2, 'not-a-login-password', $3)`, userID,
+		fmt.Sprintf("region-reference.%d", time.Now().UnixNano()), provisioned.ID); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = db.Exec("DELETE FROM users WHERE id = $1", userID)
+		_, _ = db.Exec("DELETE FROM regions WHERE id = $1", provisioned.ID)
+	})
+	if _, err := db.ExecContext(ctx,
+		"UPDATE regions SET lease_expires_at = now() - interval '1 second' WHERE id = $1",
+		provisioned.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.RegisterProvisioned(ctx, provisioned.ID, Registration{
+		Name: provisioned.Name, GridX: provisioned.GridX, GridY: provisioned.GridY,
+		PublicEndpoint: provisioned.PublicEndpoint, ViewerPort: provisioned.ViewerPort,
+		LeaseDuration: time.Minute,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var retainedRegionID string
+	if err := db.QueryRowContext(ctx, "SELECT last_region_id FROM users WHERE id = $1", userID).
+		Scan(&retainedRegionID); err != nil || retainedRegionID != provisioned.ID {
+		t.Fatalf("retained last region = %q, error = %v", retainedRegionID, err)
+	}
+
 	created, err := store.Register(ctx, Registration{
 		Name: "Integration Region", GridX: coordinate, GridY: coordinate,
 		PublicEndpoint: "http://localhost:42001", LeaseDuration: 60 * time.Second,
