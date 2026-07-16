@@ -133,8 +133,14 @@ int main() {
     passed &= !homeworldz::http::request_content_length(
                    "POST /caps/seed/id HTTP/1.1\r\nContent-Length: invalid\r\n\r\n");
     const auto seed = homeworldz::viewer::seed_capability_xml(
+        "http://region.example:42001/", "http://grid.example:42000/", "session-id",
+        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+    passed &= contains(seed, "<key>EventQueueGet</key><uri>http://region.example:42001/caps/event/"
+                             "session-id/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa</uri>");
+    const auto login_seed = homeworldz::viewer::seed_capability_xml(
         "http://region.example:42001/", "http://grid.example:42000/", "session-id");
-    passed &= contains(seed, "<key>EventQueueGet</key><uri>http://region.example:42001/caps/event/session-id</uri>");
+    passed &= contains(login_seed,
+        "<key>EventQueueGet</key><uri>http://region.example:42001/caps/event/session-id</uri>");
     passed &= contains(seed, "<key>GetTexture</key><uri>http://region.example:42001/caps/texture/session-id</uri>");
     passed &= contains(seed, "<key>ViewerAsset</key><uri>http://region.example:42001/caps/assets/session-id</uri>");
     passed &= contains(seed, "<key>SimulatorFeatures</key><uri>http://region.example:42001/caps/simulator-features/session-id</uri>");

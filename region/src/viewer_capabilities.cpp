@@ -107,10 +107,11 @@ std::string ip_binary(const SimulatorEventEndpoint& simulator) {
 } // namespace
 
 std::string seed_capability_xml(std::string_view public_endpoint, std::string_view grid_public_endpoint,
-                                std::string_view session_id) {
+                                std::string_view session_id, std::string_view visit_id) {
     auto base = std::string(public_endpoint);
     while (!base.empty() && base.back() == '/') base.pop_back();
-    const auto event_url = xml_escape(base + "/caps/event/" + std::string(session_id));
+    const auto visit_suffix = visit_id.empty() ? std::string{} : "/" + std::string(visit_id);
+    const auto event_url = xml_escape(base + "/caps/event/" + std::string(session_id) + visit_suffix);
     const auto texture_url = xml_escape(base + "/caps/texture/" + std::string(session_id));
     const auto asset_url = xml_escape(base + "/caps/assets/" + std::string(session_id));
     const auto simulator_features_url =

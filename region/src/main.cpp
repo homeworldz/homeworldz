@@ -289,9 +289,26 @@ void finish_http_response(socket_handle client) {
 
 std::string capability_session(std::string_view path, std::string_view prefix) {
     if (!path.starts_with(prefix)) return {};
-    const auto session = path.substr(prefix.size());
-    if (session.empty() || session.find('/') != std::string_view::npos) return {};
+    auto session = path.substr(prefix.size());
+    if (const auto separator = session.find('/'); separator != std::string_view::npos) {
+        const auto visit = session.substr(separator + 1);
+        if (visit.empty() || visit.find('/') != std::string_view::npos ||
+            !homeworldz::viewer::parse_uuid(visit)) return {};
+        session = session.substr(0, separator);
+    }
+    if (session.empty()) return {};
     return std::string(session);
+}
+
+std::string capability_visit(std::string_view path, std::string_view prefix) {
+    if (!path.starts_with(prefix)) return {};
+    const auto remainder = path.substr(prefix.size());
+    const auto separator = remainder.find('/');
+    if (separator == std::string_view::npos) return {};
+    const auto visit = remainder.substr(separator + 1);
+    if (visit.empty() || visit.find('/') != std::string_view::npos ||
+        !homeworldz::viewer::parse_uuid(visit)) return {};
+    return std::string(visit);
 }
 
 std::optional<std::pair<std::string, std::string>> texture_request(std::string_view path) {
@@ -1406,6 +1423,9 @@ int main(int argc, char* argv[]) {
                     const bool seed = !session_id.empty();
                     if (!seed) session_id = capability_session(response.path, "/caps/event/");
                     const bool event_queue = !seed && !session_id.empty();
+                    const auto capability_visit_id = seed ?
+                        capability_visit(response.path, "/caps/seed/") :
+                        capability_visit(response.path, "/caps/event/");
                     const auto texture = texture_request(response.path);
                     if (texture) session_id = texture->first;
                     const auto viewer_asset = viewer_asset_request(response.path);
@@ -1457,7 +1477,8 @@ int main(int argc, char* argv[]) {
                             response = homeworldz::http::response_for_content(
                                 request, 200, "application/llsd+xml",
                                 homeworldz::viewer::seed_capability_xml(
-                                    region_public_endpoint, grid_public_endpoint, session_id));
+                                    region_public_endpoint, grid_public_endpoint, session_id,
+                                    capability_visit_id));
                         } else if (authorized && event_queue) {
                             if (established_events.insert(session_id).second) {
                                 if (authorized_session) {
@@ -1465,7 +1486,9 @@ int main(int argc, char* argv[]) {
                                         homeworldz::viewer::establish_agent_communication_event_xml({
                                             authorized_session->agent_id,
                                             simulator_endpoint(region_public_endpoint, configured_viewer_port()),
-                                            region_public_endpoint + "/caps/seed/" + session_id}));
+                                            region_public_endpoint + "/caps/seed/" + session_id +
+                                                (capability_visit_id.empty() ? std::string{} :
+                                                    "/" + capability_visit_id)}));
                                 }
                             }
                             const auto events = take_viewer_events(session_id);
@@ -1861,7 +1884,8 @@ int main(int argc, char* argv[]) {
                                     enqueue_viewer_event(session_id,
                                         homeworldz::viewer::teleport_finish_event_xml({
                                             agent_id, target_handle, *simulator,
-                                            target->public_endpoint + "/caps/seed/" + session_id, 13}));
+                                            target->public_endpoint + "/caps/seed/" + session_id +
+                                                "/" + transit_id, 13}));
                                     std::cout << "{\"level\":\"info\",\"message\":\"avatar teleport signaled\",\"transitId\":"
                                               << homeworldz::api::json_string(transit_id)
                                               << ",\"destinationRegionId\":"

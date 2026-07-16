@@ -39,7 +39,7 @@ struct NewFileInventoryUpload {
 };
 
 std::string seed_capability_xml(std::string_view public_endpoint, std::string_view grid_public_endpoint,
-                                std::string_view session_id);
+                                std::string_view session_id, std::string_view visit_id = {});
 std::string establish_agent_communication_event_xml(const EstablishAgentCommunication& event);
 std::string enable_simulator_event_xml(std::uint64_t region_handle,
                                        const SimulatorEventEndpoint& simulator);
