@@ -137,6 +137,14 @@ acceptance tests pass.
 
 ### Region topology and variable size
 
+- [ ] Add authenticated grid-management endpoints to create, inspect, update,
+  enable, disable, relocate, remove, and rotate credentials for provisioned
+  regions.
+- [ ] Persist each region's UUID, unique name, owner UUID, X/Y location,
+  endpoints, enabled state, and per-region access-key hash independently of its
+  online lease.
+- [ ] Let a region authenticate by UUID or unique name plus its access key and
+  fetch effective grid-wide and region-specific startup configuration.
 - [ ] Represent neighboring regions, coordinates, extents, public endpoints,
   maturity, and online state in grid discovery.
 - [ ] Support exactly 1x1 (256 m), 2x2 (512 m), and 4x4 (1024 m) regions.
@@ -168,6 +176,8 @@ acceptance tests pass.
 - [x] In the single-region phase, assume every border has no neighbor and
   constrain avatar and physical-object origins to `0..256`, cancelling outward
   velocity at the crossed edge.
+- [ ] Resolve border neighbors from persistent grid region records plus their
+  current online leases before choosing crossing versus containment.
 
 - [ ] Cross individual objects and complete linksets without changing creator,
   owner, permissions, inventory, or physical state.

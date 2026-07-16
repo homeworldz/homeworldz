@@ -94,6 +94,13 @@ registration or renewal failure stops the region rather than leaving an active
 simulation undiscoverable. The dependency-free socket transport is limited to
 development `http://` URLs; deployed HTTPS will use a maintained TLS transport.
 
+This registration flow is transitional. ADR 0024 defines persistent grid-owned
+region provisioning: UUID, unique name, owner, coordinates, endpoints, enabled
+state, and a per-region credential hash. A future region bootstrap file holds
+only the grid URL, region UUID or name, and access key; authenticated startup
+fetches effective configuration before acquiring an online lease. Going offline
+does not delete the provisioned record.
+
 Initial development accounts use normalized lowercase usernames and bcrypt
 password hashes. Successful credential checks create random UUID sessions with
 database-controlled expiry; internal clients validate or revoke those sessions
