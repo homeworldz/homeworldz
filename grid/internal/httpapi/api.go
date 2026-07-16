@@ -162,7 +162,7 @@ func (a *API) provisionedRegionRuntime(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(parts) == 1 && r.Method == http.MethodDelete {
-		err := a.regions.Deregister(r.Context(), id)
+		err := a.regions.DeregisterProvisioned(r.Context(), id)
 		if err != nil && !errors.Is(err, regions.ErrNotFound) {
 			writeJSON(w, http.StatusInternalServerError, Error{Code: "region_store_error", Message: "region deregistration failed"})
 		} else {

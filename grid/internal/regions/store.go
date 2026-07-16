@@ -41,6 +41,7 @@ type Store interface {
 	Renew(context.Context, string, time.Duration) (Region, error)
 	RenewProvisioned(context.Context, string, time.Duration) (Region, error)
 	Deregister(context.Context, string) error
+	DeregisterProvisioned(context.Context, string) error
 	Get(context.Context, string) (Region, error)
 	List(context.Context) ([]Region, error)
 }
@@ -168,6 +169,23 @@ func (s *PostgresStore) Deregister(ctx context.Context, id string) error {
 	count, err := result.RowsAffected()
 	if err != nil {
 		return fmt.Errorf("count deregistered regions: %w", err)
+	}
+	if count == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *PostgresStore) DeregisterProvisioned(ctx context.Context, id string) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE regions
+		SET lease_expires_at = now(), provisioned = true, updated_at = now()
+		WHERE id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("deactivate provisioned region: %w", err)
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("count deactivated provisioned regions: %w", err)
 	}
 	if count == 0 {
 		return ErrNotFound

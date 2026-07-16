@@ -90,6 +90,16 @@ func (s *memoryRegionStore) Deregister(_ context.Context, id string) error {
 	return nil
 }
 
+func (s *memoryRegionStore) DeregisterProvisioned(_ context.Context, id string) error {
+	region, ok := s.regions[id]
+	if !ok {
+		return regions.ErrNotFound
+	}
+	region.LeaseExpiresAt = s.now
+	s.regions[id] = region
+	return nil
+}
+
 func (s *memoryRegionStore) Get(_ context.Context, id string) (regions.Region, error) {
 	region, ok := s.regions[id]
 	if !ok || !region.LeaseExpiresAt.After(s.now) {
@@ -317,6 +327,9 @@ func TestProvisionedRegionRegistrationUsesPerRegionCredentials(t *testing.T) {
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("deregistration status = %d: %s", response.Code, response.Body.String())
+	}
+	if retained, ok := store.regions[registered.ID]; !ok || retained.LeaseExpiresAt.After(store.now) {
+		t.Fatalf("provisioned shutdown removed identity or left lease online: %#v", retained)
 	}
 }
 

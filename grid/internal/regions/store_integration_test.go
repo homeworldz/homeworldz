@@ -80,6 +80,16 @@ func TestPostgresRegionLifecycle(t *testing.T) {
 		Scan(&markedProvisioned); err != nil || !markedProvisioned {
 		t.Fatalf("provisioned renewal marker = %t, error = %v", markedProvisioned, err)
 	}
+	if err := store.DeregisterProvisioned(ctx, provisioned.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Get(ctx, provisioned.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("deactivated provisioned region error = %v, want ErrNotFound", err)
+	}
+	if err := db.QueryRowContext(ctx,
+		"SELECT last_region_id FROM users WHERE id = $1", userID).Scan(&retainedRegionID); err != nil || retainedRegionID != provisioned.ID {
+		t.Fatalf("last region after deactivation = %q, error = %v", retainedRegionID, err)
+	}
 
 	created, err := store.Register(ctx, Registration{
 		Name: "Integration Region", GridX: coordinate, GridY: coordinate,
