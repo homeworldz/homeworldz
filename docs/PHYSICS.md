@@ -346,7 +346,8 @@ collapsed to zero and sheared to one side (`pathScaleX=200`, raw
 `pathShearX=0xce`). HomeWorldz preserves the complete classic prim parameter
 block and builds a matching six-point convex wedge. Live acceptance on
 2026-07-16 confirmed correct rendering and collision on every face, including
-the slope.
+the slope. Taking `Prism1` into Inventory and re-rezzing it preserved both its
+wedge geometry and Physical state.
 
 ### Required Scenarios
 
