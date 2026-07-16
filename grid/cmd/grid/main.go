@@ -56,6 +56,7 @@ func main() {
 		Handler: httpapi.New(db, version, httpapi.Options{
 			ServiceToken:  settings.ServiceToken,
 			GridPublicURL: settings.PublicURL,
+			GridName:      settings.Name,
 			Logger:        logger,
 			Regions:       regionStore(db),
 			Identity:      identityStore(db),

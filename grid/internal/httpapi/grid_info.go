@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"encoding/base64"
 	"encoding/xml"
+	"html"
 	"net/http"
 )
 
@@ -26,7 +27,7 @@ type viewerGridInfo struct {
 func (a *API) gridInfo(w http.ResponseWriter, _ *http.Request) {
 	contents, err := xml.Marshal(viewerGridInfo{
 		GridNick: "homeworldz",
-		GridName: "HomeWorldz",
+		GridName: a.gridName,
 		Platform: "OpenSim",
 		Login:    a.publicURL + "/login",
 		Welcome:  a.publicURL + "/welcome",
@@ -42,6 +43,7 @@ func (a *API) gridInfo(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (a *API) welcome(w http.ResponseWriter, _ *http.Request) {
+	gridName := html.EscapeString(a.gridName)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; img-src data:; style-src 'unsafe-inline'")
 	w.WriteHeader(http.StatusOK)
@@ -50,12 +52,12 @@ func (a *API) welcome(w http.ResponseWriter, _ *http.Request) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HomeWorldz</title>
+<title>` + gridName + `</title>
 <style>
 html,body{height:100%;margin:0}body{display:grid;place-items:center;background:#071923;color:#eaf7fb;font:16px system-ui,sans-serif;text-align:center}.panel{padding:2rem}.logo{display:block;width:min(80vw,28rem);height:auto;margin:0 auto 1.5rem}p{color:#b8d6df}
 </style>
 </head>
-<body><main class="panel"><img class="logo" src="` + homeworldzLogoDataURL + `" alt="HomeWorldz"><p>Welcome to the HomeWorldz development grid.</p></main></body>
+<body><main class="panel"><img class="logo" src="` + homeworldzLogoDataURL + `" alt="` + gridName + `"><p>Welcome to ` + gridName + `.</p></main></body>
 </html>`))
 }
 

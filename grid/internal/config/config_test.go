@@ -8,14 +8,14 @@ import (
 
 func TestLoadGridFromINI(t *testing.T) {
 	directory := t.TempDir()
-	writeFile(t, directory, "grid.ini", "[server]\naddress=:43000\n[auth]\nservice_token=file-token\n")
+	writeFile(t, directory, "grid.ini", "[server]\naddress=:43000\n[grid]\nname=HomeWorldz Local\n[auth]\nservice_token=file-token\n")
 	writeFile(t, directory, "db.ini", "[database]\nurl=postgres://user:semicolon;hash#password@file/database\n")
 
 	got, err := LoadGrid(directory)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Address != ":43000" || got.PublicURL != "http://127.0.0.1:42000" || got.DatabaseURL != "postgres://user:semicolon;hash#password@file/database" || got.ServiceToken != "file-token" {
+	if got.Address != ":43000" || got.PublicURL != "http://127.0.0.1:42000" || got.Name != "HomeWorldz Local" || got.DatabaseURL != "postgres://user:semicolon;hash#password@file/database" || got.ServiceToken != "file-token" {
 		t.Fatalf("unexpected configuration: %#v", got)
 	}
 }

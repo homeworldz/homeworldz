@@ -247,7 +247,7 @@ func (a *API) viewerLogin(w http.ResponseWriter, r *http.Request) {
 	libraryOwner := rpcStructValue(rpcField("agent_id", rpcString(inventory.LibraryOwnerID)))
 	_, librarySkeleton := inventorySkeleton(inventory.LibraryFolders())
 	response := rpcStructValue(
-		rpcField("login", rpcString("true")), rpcField("message", rpcString("Welcome to HomeWorldz")),
+		rpcField("login", rpcString("true")), rpcField("message", rpcString("Welcome to "+a.gridName)),
 		rpcField("agent_id", rpcString(session.UserID)), rpcField("session_id", rpcString(session.ID)),
 		rpcField("secure_session_id", rpcString(session.SecureID)), rpcField("first_name", rpcString(first)),
 		rpcField("last_name", rpcString(last)), rpcField("circuit_code", rpcInt(int(circuit))),

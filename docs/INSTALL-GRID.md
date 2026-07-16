@@ -85,6 +85,9 @@ Edit `config/grid.ini`:
 address = 127.0.0.1:8002
 public_url = http://127.0.0.1:8002
 
+[grid]
+name = HomeWorldz
+
 [auth]
 service_token = replace-with-a-long-random-secret
 ```
@@ -92,6 +95,9 @@ service_token = replace-with-a-long-random-secret
 - `address` is the interface and TCP port on which the grid listens.
 - `public_url` is the URL given to viewers and regions. It must be reachable by
   them; use the host's DNS name and HTTPS URL in a public deployment.
+- `name` is the grid's user-visible name in viewer grid selection and login.
+  Operators can use a distinct name such as `HomeWorldz Local` for a private
+  development grid.
 - `service_token` authenticates every region. Generate a strong, unique value,
   transmit it privately to region owners, and never commit it to source
   control.

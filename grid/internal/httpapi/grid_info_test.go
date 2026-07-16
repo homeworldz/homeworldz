@@ -11,7 +11,7 @@ import (
 )
 
 func TestViewerGridInfo(t *testing.T) {
-	handler := New(nil, "test", Options{GridPublicURL: "http://grid.example:8002/"})
+	handler := New(nil, "test", Options{GridPublicURL: "http://grid.example:8002/", GridName: "HomeWorldz Local"})
 	request := httptest.NewRequest(http.MethodGet, "/get_grid_info", nil)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
@@ -22,7 +22,7 @@ func TestViewerGridInfo(t *testing.T) {
 	if err := xml.Unmarshal(response.Body.Bytes(), &info); err != nil {
 		t.Fatalf("decode grid info: %v", err)
 	}
-	if info.GridNick != "homeworldz" || info.GridName != "HomeWorldz" || info.Platform != "OpenSim" ||
+	if info.GridNick != "homeworldz" || info.GridName != "HomeWorldz Local" || info.Platform != "OpenSim" ||
 		info.Login != "http://grid.example:8002/login" || info.Welcome != "http://grid.example:8002/welcome" ||
 		info.Helper != "http://grid.example:8002/" {
 		t.Fatalf("unexpected grid info: %#v", info)
@@ -32,9 +32,10 @@ func TestViewerGridInfo(t *testing.T) {
 func TestViewerWelcomePage(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/welcome", nil)
 	response := httptest.NewRecorder()
-	New(nil, "test", Options{}).ServeHTTP(response, request)
+	New(nil, "test", Options{GridName: "HomeWorldz Local"}).ServeHTTP(response, request)
 	if response.Code != http.StatusOK || response.Header().Get("Content-Type") != "text/html; charset=utf-8" ||
-		!strings.Contains(response.Body.String(), `src="data:image/svg+xml;base64,`) {
+		!strings.Contains(response.Body.String(), `src="data:image/svg+xml;base64,`) ||
+		!strings.Contains(response.Body.String(), "Welcome to HomeWorldz Local.") {
 		t.Fatalf("unexpected welcome response: %d %q", response.Code, response.Body.String())
 	}
 }

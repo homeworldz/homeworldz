@@ -27,6 +27,7 @@ type API struct {
 	ready        ReadinessChecker
 	version      string
 	publicURL    string
+	gridName     string
 	regions      regions.Store
 	identity     identity.Store
 	presence     presence.Store
@@ -39,6 +40,7 @@ type API struct {
 type Options struct {
 	ServiceToken  string
 	GridPublicURL string
+	GridName      string
 	Logger        *slog.Logger
 	Regions       regions.Store
 	Identity      identity.Store
@@ -50,11 +52,15 @@ type Options struct {
 
 func New(ready ReadinessChecker, version string, options Options) http.Handler {
 	a := &API{ready: ready, version: version, publicURL: strings.TrimRight(options.GridPublicURL, "/"),
-		regions: options.Regions, identity: options.Identity, presence: options.Presence,
+		gridName: strings.TrimSpace(options.GridName),
+		regions:  options.Regions, identity: options.Identity, presence: options.Presence,
 		inventory: options.Inventory, assets: options.Assets, serviceToken: options.ServiceToken,
 		provisioned: options.Provisioned}
 	if a.publicURL == "" {
 		a.publicURL = "http://127.0.0.1:42000"
+	}
+	if a.gridName == "" {
+		a.gridName = "HomeWorldz"
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/get_grid_info", getOnly(a.gridInfo))

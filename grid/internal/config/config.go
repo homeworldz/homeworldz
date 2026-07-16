@@ -12,6 +12,7 @@ import (
 type Grid struct {
 	Address      string
 	PublicURL    string
+	Name         string
 	DatabaseURL  string
 	ServiceToken string
 	Directory    string
@@ -35,9 +36,13 @@ func LoadGrid(directory string) (Grid, error) {
 	result := Grid{
 		Address:      parsed.Section("server").Key("address").MustString("127.0.0.1:42000"),
 		PublicURL:    parsed.Section("server").Key("public_url").MustString("http://127.0.0.1:42000"),
+		Name:         strings.TrimSpace(parsed.Section("grid").Key("name").MustString("HomeWorldz")),
 		DatabaseURL:  parsed.Section("database").Key("url").String(),
 		ServiceToken: parsed.Section("auth").Key("service_token").String(),
 		Directory:    resolved,
+	}
+	if result.Name == "" || len(result.Name) > 128 {
+		return Grid{}, fmt.Errorf("invalid grid name %q", result.Name)
 	}
 	result.PublicURL = strings.TrimRight(result.PublicURL, "/")
 	publicURL, err := url.Parse(result.PublicURL)
