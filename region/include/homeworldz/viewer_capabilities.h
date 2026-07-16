@@ -1,9 +1,11 @@
 #pragma once
 
 #include <cstdint>
+#include <array>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace homeworldz::viewer {
 
@@ -11,6 +13,20 @@ struct EstablishAgentCommunication {
     std::string agent_id;
     std::string simulator_endpoint;
     std::string seed_capability;
+};
+
+struct SimulatorEventEndpoint {
+    std::array<std::uint8_t, 4> address{};
+    std::uint16_t port{};
+};
+
+struct TeleportFinish {
+    std::string agent_id;
+    std::uint64_t region_handle{};
+    SimulatorEventEndpoint simulator;
+    std::string seed_capability;
+    std::uint8_t simulator_access{};
+    std::uint32_t teleport_flags{0x00000010U};
 };
 
 struct NewFileInventoryUpload {
@@ -24,8 +40,11 @@ struct NewFileInventoryUpload {
 
 std::string seed_capability_xml(std::string_view public_endpoint, std::string_view grid_public_endpoint,
                                 std::string_view session_id);
-std::string event_queue_xml(std::uint64_t id,
-                            const std::optional<EstablishAgentCommunication>& event = std::nullopt);
+std::string establish_agent_communication_event_xml(const EstablishAgentCommunication& event);
+std::string enable_simulator_event_xml(std::uint64_t region_handle,
+                                       const SimulatorEventEndpoint& simulator);
+std::string teleport_finish_event_xml(const TeleportFinish& event);
+std::string event_queue_xml(std::uint64_t id, const std::vector<std::string>& events = {});
 std::string simulator_features_xml(std::string_view currency = "C$",
                                    std::string_view map_server_url = {});
 std::string environment_settings_xml(std::string_view region_id);

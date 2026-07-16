@@ -146,13 +146,29 @@ int main() {
     passed &= contains(seed, "<key>CreateInventoryCategory</key><uri>http://grid.example:42000/caps/inventory/create-folder/session-id</uri>");
     passed &= contains(seed, "<key>InventoryAPIv3</key><uri>http://grid.example:42000/caps/inventory/ais/session-id</uri>");
     passed &= contains(seed, "<key>LibraryAPIv3</key><uri>http://grid.example:42000/caps/inventory/library/session-id</uri>");
-    const auto event = homeworldz::viewer::event_queue_xml(7,
+    const auto establish = homeworldz::viewer::establish_agent_communication_event_xml(
         homeworldz::viewer::EstablishAgentCommunication{
             "11111111-2222-4333-8444-555555555555", "region.example:42002",
             "http://region.example:42001/caps/seed/session&amp;id"});
+    const auto event = homeworldz::viewer::event_queue_xml(7, {establish});
     passed &= contains(event, "<string>EstablishAgentCommunication</string>");
     passed &= contains(event, "<key>id</key><integer>7</integer>");
     passed &= contains(event, "session&amp;amp;id");
+    const homeworldz::viewer::SimulatorEventEndpoint event_endpoint{{192, 0, 2, 10}, 42002};
+    const auto enable = homeworldz::viewer::enable_simulator_event_xml(
+        0x0102030405060708ULL, event_endpoint);
+    passed &= contains(enable, "<string>EnableSimulator</string>");
+    passed &= contains(enable, "<key>Handle</key><binary>AQIDBAUGBwg=</binary>");
+    passed &= contains(enable, "<key>IP</key><binary>wAACCg==</binary>");
+    passed &= contains(enable, "<key>Port</key><integer>42002</integer>");
+    const auto teleport_finish = homeworldz::viewer::teleport_finish_event_xml({
+        "11111111-2222-4333-8444-555555555555", 0x0102030405060708ULL, event_endpoint,
+        "https://region.example/caps/seed/session&amp;id", 13});
+    passed &= contains(teleport_finish, "<string>TeleportFinish</string>");
+    passed &= contains(teleport_finish, "<key>RegionHandle</key><binary>AQIDBAUGBwg=</binary>");
+    passed &= contains(teleport_finish, "<key>SeedCapability</key><string>https://region.example/caps/seed/session&amp;amp;id</string>");
+    passed &= contains(teleport_finish, "<key>SimAccess</key><integer>13</integer>");
+    passed &= contains(teleport_finish, "<key>TeleportFlags</key><integer>16</integer>");
     const auto simulator_features = homeworldz::viewer::simulator_features_xml(
         "C$", "https://grid.example/map/");
     passed &= contains(simulator_features,

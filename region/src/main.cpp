@@ -119,7 +119,7 @@ struct PendingWearableXfer {
 
 struct PendingEventResponse {
     socket_handle client{invalid_socket};
-    homeworldz::http::Response response;
+    std::string request;
     std::string session_id;
     std::chrono::steady_clock::time_point deadline{};
 };
@@ -1092,7 +1092,9 @@ int main(int argc, char* argv[]) {
     std::unordered_map<std::string, PendingInventoryUpload> pending_inventory_uploads;
     std::unordered_map<std::string, PendingWearableUpload> pending_wearable_uploads;
     std::unordered_map<std::string, PendingWearableXfer> pending_wearable_xfers;
+    std::unordered_map<std::string, std::deque<std::string>> queued_viewer_events;
     std::vector<PendingEventResponse> pending_event_responses;
+    std::uint64_t event_id{};
     std::uint64_t next_wearable_xfer{1};
     const auto clear_viewer_endpoint = [&](const std::string& endpoint, const std::string& session_id) {
         if (const auto live = avatars.find(endpoint); live != avatars.end() &&
@@ -1117,6 +1119,7 @@ int main(int argc, char* argv[]) {
         movement_animations.erase(endpoint);
         handshake_replies.erase(endpoint);
         established_events.erase(session_id);
+        queued_viewer_events.erase(session_id);
         texture_packets.erase(endpoint);
         std::erase_if(active_texture_transfers, [&](const std::string& key) {
             return key.starts_with(endpoint + '|');
@@ -1134,20 +1137,57 @@ int main(int argc, char* argv[]) {
         });
     };
 
+    const auto take_viewer_events = [&](const std::string& session_id) {
+        std::vector<std::string> events;
+        const auto queued = queued_viewer_events.find(session_id);
+        if (queued == queued_viewer_events.end()) return events;
+        events.assign(std::make_move_iterator(queued->second.begin()),
+                      std::make_move_iterator(queued->second.end()));
+        queued_viewer_events.erase(queued);
+        return events;
+    };
+    const auto flush_pending_viewer_events = [&](const std::string& session_id) {
+        const auto queued = queued_viewer_events.find(session_id);
+        if (queued == queued_viewer_events.end() || queued->second.empty()) return;
+        const auto pending = std::find_if(pending_event_responses.begin(), pending_event_responses.end(),
+            [&](const PendingEventResponse& candidate) { return candidate.session_id == session_id; });
+        if (pending == pending_event_responses.end()) return;
+        const auto events = take_viewer_events(session_id);
+        const auto response = homeworldz::http::response_for_content(
+            pending->request, 200, "application/llsd+xml",
+            homeworldz::viewer::event_queue_xml(++event_id, events));
+        static_cast<void>(send_all(pending->client, response.content));
+        finish_http_response(pending->client);
+        close_socket(pending->client);
+        std::cout << "{\"level\":\"info\",\"message\":\"http request\",\"requestId\":"
+                  << homeworldz::api::json_string(response.request_id)
+                  << ",\"method\":" << homeworldz::api::json_string(response.method)
+                  << ",\"path\":" << homeworldz::api::json_string(response.path)
+                  << ",\"status\":" << response.status_code << "}" << std::endl;
+        pending_event_responses.erase(pending);
+    };
+    const auto enqueue_viewer_event = [&](const std::string& session_id, std::string event) {
+        queued_viewer_events[session_id].push_back(std::move(event));
+        flush_pending_viewer_events(session_id);
+    };
+
     std::cout << "{\"level\":\"info\",\"message\":\"region service listening\",\"httpPort\":"
               << configured_port() << ",\"viewerPort\":" << configured_viewer_port() << "}" << std::endl;
     while (running) {
         const auto http_now = std::chrono::steady_clock::now();
         std::erase_if(pending_event_responses, [&](const PendingEventResponse& pending) {
             if (pending.deadline > http_now) return false;
-            static_cast<void>(send_all(pending.client, pending.response.content));
+            const auto response = homeworldz::http::response_for_content(
+                pending.request, 200, "application/llsd+xml",
+                homeworldz::viewer::event_queue_xml(++event_id));
+            static_cast<void>(send_all(pending.client, response.content));
             finish_http_response(pending.client);
             close_socket(pending.client);
             std::cout << "{\"level\":\"info\",\"message\":\"http request\",\"requestId\":"
-                      << homeworldz::api::json_string(pending.response.request_id)
-                      << ",\"method\":" << homeworldz::api::json_string(pending.response.method)
-                      << ",\"path\":" << homeworldz::api::json_string(pending.response.path)
-                      << ",\"status\":" << pending.response.status_code << "}" << std::endl;
+                      << homeworldz::api::json_string(response.request_id)
+                      << ",\"method\":" << homeworldz::api::json_string(response.method)
+                      << ",\"path\":" << homeworldz::api::json_string(response.path)
+                      << ",\"status\":" << response.status_code << "}" << std::endl;
             return true;
         });
         fd_set readable;
@@ -1325,22 +1365,23 @@ int main(int argc, char* argv[]) {
                                 homeworldz::viewer::seed_capability_xml(
                                     region_public_endpoint, grid_public_endpoint, session_id));
                         } else if (authorized && event_queue) {
-                            static std::atomic<std::uint64_t> event_id{0};
-                            std::optional<homeworldz::viewer::EstablishAgentCommunication> event;
                             if (established_events.insert(session_id).second) {
                                 if (authorized_session) {
-                                    event = homeworldz::viewer::EstablishAgentCommunication{
-                                        authorized_session->agent_id,
-                                        simulator_endpoint(region_public_endpoint, configured_viewer_port()),
-                                        region_public_endpoint + "/caps/seed/" + session_id};
+                                    enqueue_viewer_event(session_id,
+                                        homeworldz::viewer::establish_agent_communication_event_xml({
+                                            authorized_session->agent_id,
+                                            simulator_endpoint(region_public_endpoint, configured_viewer_port()),
+                                            region_public_endpoint + "/caps/seed/" + session_id}));
                                 }
                             }
-                            response = homeworldz::http::response_for_content(
-                                request, 200, "application/llsd+xml",
-                                homeworldz::viewer::event_queue_xml(++event_id, event));
-                            if (!event) {
+                            const auto events = take_viewer_events(session_id);
+                            if (!events.empty()) {
+                                response = homeworldz::http::response_for_content(
+                                    request, 200, "application/llsd+xml",
+                                    homeworldz::viewer::event_queue_xml(++event_id, events));
+                            } else {
                                 pending_event_responses.push_back(PendingEventResponse{
-                                    client, response, session_id,
+                                    client, std::string(request), session_id,
                                     std::chrono::steady_clock::now() + std::chrono::seconds(20)});
                                 response_deferred = true;
                             }

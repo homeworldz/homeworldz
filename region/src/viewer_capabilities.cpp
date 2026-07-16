@@ -5,6 +5,7 @@
 #include <array>
 #include <charconv>
 #include <random>
+#include <span>
 
 namespace homeworldz::viewer {
 namespace {
@@ -73,6 +74,36 @@ std::optional<std::uint32_t> llsd_u32(std::string_view xml, std::string_view key
     if (result.ec != std::errc{} || result.ptr != value->data() + value->size()) return std::nullopt;
     return parsed;
 }
+
+std::string base64(std::span<const std::uint8_t> bytes) {
+    static constexpr std::string_view alphabet =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string result;
+    result.reserve(((bytes.size() + 2) / 3) * 4);
+    for (std::size_t offset = 0; offset < bytes.size(); offset += 3) {
+        const auto remaining = bytes.size() - offset;
+        const std::uint32_t value =
+            static_cast<std::uint32_t>(bytes[offset]) << 16 |
+            (remaining > 1 ? static_cast<std::uint32_t>(bytes[offset + 1]) << 8 : 0U) |
+            (remaining > 2 ? static_cast<std::uint32_t>(bytes[offset + 2]) : 0U);
+        result.push_back(alphabet[(value >> 18) & 0x3fU]);
+        result.push_back(alphabet[(value >> 12) & 0x3fU]);
+        result.push_back(remaining > 1 ? alphabet[(value >> 6) & 0x3fU] : '=');
+        result.push_back(remaining > 2 ? alphabet[value & 0x3fU] : '=');
+    }
+    return result;
+}
+
+std::string region_handle_binary(std::uint64_t handle) {
+    std::array<std::uint8_t, 8> bytes{};
+    for (std::size_t index = 0; index < bytes.size(); ++index)
+        bytes[index] = static_cast<std::uint8_t>(handle >> ((7 - index) * 8));
+    return base64(bytes);
+}
+
+std::string ip_binary(const SimulatorEventEndpoint& simulator) {
+    return base64(simulator.address);
+}
 } // namespace
 
 std::string seed_capability_xml(std::string_view public_endpoint, std::string_view grid_public_endpoint,
@@ -112,16 +143,41 @@ std::string seed_capability_xml(std::string_view public_endpoint, std::string_vi
            "</uri></map></llsd>";
 }
 
-std::string event_queue_xml(std::uint64_t id, const std::optional<EstablishAgentCommunication>& event) {
-    std::string events = "<array/>";
-    if (event) {
-        events = "<array><map><key>message</key><string>EstablishAgentCommunication</string>"
-                 "<key>body</key><map><key>agent-id</key><uuid>" + xml_escape(event->agent_id) +
-                 "</uuid><key>sim-ip-and-port</key><string>" + xml_escape(event->simulator_endpoint) +
-                 "</string><key>seed-capability</key><uri>" + xml_escape(event->seed_capability) +
-                 "</uri></map></map></array>";
-    }
-    return "<?xml version=\"1.0\"?><llsd><map><key>events</key>" + events +
+std::string establish_agent_communication_event_xml(const EstablishAgentCommunication& event) {
+    return "<map><key>message</key><string>EstablishAgentCommunication</string>"
+           "<key>body</key><map><key>agent-id</key><uuid>" + xml_escape(event.agent_id) +
+           "</uuid><key>sim-ip-and-port</key><string>" + xml_escape(event.simulator_endpoint) +
+           "</string><key>seed-capability</key><uri>" + xml_escape(event.seed_capability) +
+           "</uri></map></map>";
+}
+
+std::string enable_simulator_event_xml(std::uint64_t region_handle,
+                                       const SimulatorEventEndpoint& simulator) {
+    return "<map><key>message</key><string>EnableSimulator</string><key>body</key><map>"
+           "<key>SimulatorInfo</key><array><map><key>Handle</key><binary>" +
+           region_handle_binary(region_handle) + "</binary><key>IP</key><binary>" +
+           ip_binary(simulator) + "</binary><key>Port</key><integer>" +
+           std::to_string(simulator.port) + "</integer></map></array></map></map>";
+}
+
+std::string teleport_finish_event_xml(const TeleportFinish& event) {
+    return "<map><key>message</key><string>TeleportFinish</string><key>body</key><map>"
+           "<key>Info</key><array><map><key>AgentID</key><uuid>" + xml_escape(event.agent_id) +
+           "</uuid><key>LocationID</key><integer>4</integer><key>RegionHandle</key><binary>" +
+           region_handle_binary(event.region_handle) +
+           "</binary><key>SeedCapability</key><string>" + xml_escape(event.seed_capability) +
+           "</string><key>SimAccess</key><integer>" + std::to_string(event.simulator_access) +
+           "</integer><key>SimIP</key><binary>" + ip_binary(event.simulator) +
+           "</binary><key>SimPort</key><integer>" + std::to_string(event.simulator.port) +
+           "</integer><key>TeleportFlags</key><integer>" + std::to_string(event.teleport_flags) +
+           "</integer></map></array></map></map>";
+}
+
+std::string event_queue_xml(std::uint64_t id, const std::vector<std::string>& events) {
+    std::string encoded_events = events.empty() ? "<array/>" : "<array>";
+    for (const auto& event : events) encoded_events += event;
+    if (!events.empty()) encoded_events += "</array>";
+    return "<?xml version=\"1.0\"?><llsd><map><key>events</key>" + encoded_events +
            "<key>id</key><integer>" + std::to_string(id) + "</integer></map></llsd>";
 }
 
