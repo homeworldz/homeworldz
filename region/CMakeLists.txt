@@ -7,6 +7,7 @@ add_library(homeworldz-region-core
   src/physics_scene.cpp
   src/physics_scenarios.cpp
   src/region_config.cpp
+  src/region_transit.cpp
   src/region_storage.cpp
   src/scene.cpp
   src/sha256.cpp
@@ -52,6 +53,10 @@ add_test(NAME region-scene COMMAND homeworldz-scene-tests)
 add_executable(homeworldz-grid-client-tests tests/grid_client_test.cpp)
 target_link_libraries(homeworldz-grid-client-tests PRIVATE homeworldz-region-core)
 add_test(NAME region-grid-client COMMAND homeworldz-grid-client-tests)
+
+add_executable(homeworldz-region-transit-tests tests/region_transit_test.cpp)
+target_link_libraries(homeworldz-region-transit-tests PRIVATE homeworldz-region-core)
+add_test(NAME region-transit COMMAND homeworldz-region-transit-tests)
 
 add_executable(homeworldz-object-asset-tests tests/object_asset_test.cpp)
 target_link_libraries(homeworldz-object-asset-tests PRIVATE homeworldz-region-core)
