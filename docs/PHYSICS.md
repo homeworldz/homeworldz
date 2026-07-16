@@ -328,6 +328,10 @@ acceptance on 2026-07-15 confirmed sphere creation, dynamic collision, Take,
 and re-rez with shape and Physical state preserved. A subsequent full restart
 retained the physical sphere and its uniform `1.46018 m` scale.
 
+Canonical cylinder prims use a Z-axis native Jolt cylinder and cylinder-volume
+mass. Live Firestorm acceptance on 2026-07-15 confirmed that a Physical
+cylinder's falling, contact, and rolling behavior appeared correct.
+
 ### Required Scenarios
 
 - Avatar walking on flat terrain, slopes, ramps, stairs, and mesh surfaces.
