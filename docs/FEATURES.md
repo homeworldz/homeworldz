@@ -22,6 +22,12 @@ Live Firestorm acceptance on 2026-07-16 distinguished two initially identical
 Regions by carving a large X into Welcome. The X appeared immediately on the
 world map while Sandbox remained unchanged.
 
+This is intentionally different from the InWorldz/Halcyon deployment model,
+where terrain was processed into map textures on a scheduled cycle, commonly
+once per day. HomeWorldz terrain edits feed the live map pipeline immediately,
+subject only to its brief tile cache, so operators do not wait for a daily map
+refresh or run a separate terrain-map generation job.
+
 ### Asset creation provenance
 
 Every HomeWorldz asset metadata record has a required `creator_id` UUID. For a
