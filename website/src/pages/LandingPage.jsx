@@ -3,6 +3,11 @@ import { A } from "@solidjs/router";
 export function LandingPage() {
   return (
     <>
+      <aside class="coming-soon-banner" aria-label="Availability notice">
+        <strong>Coming soon</strong>
+        <span>HomeWorldz is under active development and is not available yet.</span>
+      </aside>
+
       <section class="hero" aria-labelledby="hero-title">
         <div>
           <p class="eyebrow">A new foundation for building open virtual worlds</p>

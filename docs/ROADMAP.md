@@ -26,7 +26,7 @@ when scope or implementation evidence changes.
 
 | Phase | Progress | Estimate |
 | --- | --- | ---: |
-| 1. Playable Single region | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="92" aria-label="Phase 1 progress: 92%">92%</progress> | 92% |
+| 1. Functional Single-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="92" aria-label="Phase 1 progress: 92%">92%</progress> | 92% |
 | 2. Interactive Physical World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="25" aria-label="Phase 2 progress: 25%">25%</progress> | 25% |
 | 3. Connected Multi-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="30" aria-label="Phase 3 progress: 30%">30%</progress> | 30% |
 | 4. LSL Scripting | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="2" aria-label="Phase 4 progress: 2%">2%</progress> | 2% |
@@ -39,7 +39,7 @@ arithmetic mean of the phase percentages. The binary checkboxes below remain
 the acceptance record; partially implemented work contributes to these bars
 but stays unchecked until its complete wording is satisfied.
 
-## Phase 1: Playable Single region
+## Phase 1: Functional Single-region World
 
 ### Platform foundation
 

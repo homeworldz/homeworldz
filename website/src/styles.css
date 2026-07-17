@@ -73,6 +73,37 @@ main > section,
   padding-block: clamp(3.5rem, 8vw, 7rem);
 }
 
+.coming-soon-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem 1.25rem;
+  margin-top: clamp(1rem, 3vw, 2rem);
+  padding: 0.85rem 1.25rem;
+  border: 0.4rem solid transparent;
+  border-radius: var(--vitre-radius);
+  color: hsl(222 35% 10%);
+  background:
+    linear-gradient(var(--vitre-warning), var(--vitre-warning)) padding-box,
+    repeating-linear-gradient(
+      135deg,
+      hsl(222 35% 10%) 0 0.8rem,
+      var(--vitre-warning) 0.8rem 1.6rem
+    ) border-box;
+  box-shadow: var(--vitre-shadow-sm);
+  text-align: center;
+}
+
+.coming-soon-banner strong {
+  flex: none;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.coming-soon-banner span {
+  font-weight: 600;
+}
+
 .hero {
   min-height: min(48rem, calc(100vh - 5rem));
   display: grid;
@@ -601,6 +632,11 @@ section > h2,
 }
 
 @media (max-width: 48rem) {
+  .coming-soon-banner {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
   .hero,
   .technology {
     grid-template-columns: 1fr;
