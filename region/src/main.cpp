@@ -1945,6 +1945,31 @@ int main(int argc, char* argv[]) {
                                       << homeworldz::api::json_string(session_id) << "}" << std::endl;
                             continue;
                         }
+                        const auto task_inventory_request =
+                            homeworldz::viewer::decode_request_task_inventory(packet->payload);
+                        if (task_inventory_request &&
+                            task_inventory_request->agent_id == identity->agent_id &&
+                            task_inventory_request->session_id == identity->session_id) {
+                            const auto* entity = scene.find(task_inventory_request->local_id);
+                            const auto agent_id = homeworldz::viewer::format_uuid(identity->agent_id);
+                            bool sent = false;
+                            if (entity && entity->owner_id == agent_id) {
+                                const auto task_id = homeworldz::viewer::parse_uuid(entity->object_id);
+                                if (task_id) {
+                                    const auto payload = homeworldz::viewer::encode_reply_task_inventory(
+                                        {*task_id, 0, {}});
+                                    if (!payload.empty()) {
+                                        if (const auto outgoing = circuits.send(
+                                                endpoint, payload, true, now, true))
+                                            sent = send_udp(viewer_server, endpoint, *outgoing);
+                                    }
+                                }
+                            }
+                            std::cout << "{\"level\":" << (sent ? "\"info\"" : "\"warn\"")
+                                      << ",\"message\":\"empty task inventory reply "
+                                      << (sent ? "sent" : "rejected") << "\",\"localId\":"
+                                      << task_inventory_request->local_id << "}" << std::endl;
+                        }
                         const auto create_folder =
                             homeworldz::viewer::decode_create_inventory_folder(packet->payload);
                         if (create_folder && create_folder->agent_id == identity->agent_id &&

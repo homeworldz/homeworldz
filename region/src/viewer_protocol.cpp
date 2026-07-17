@@ -56,6 +56,10 @@ constexpr std::array<std::byte, 4> move_inventory_folder_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x13}};
 constexpr std::array<std::byte, 4> move_inventory_item_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x0c}};
+constexpr std::array<std::byte, 4> request_task_inventory_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x21}};
+constexpr std::array<std::byte, 4> reply_task_inventory_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x22}};
 constexpr std::array<std::byte, 2> object_add_id{std::byte{0xff}, std::byte{0x01}};
 constexpr std::array<std::byte, 4> derez_object_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x23}};
@@ -828,6 +832,30 @@ std::optional<MoveInventoryItem> decode_move_inventory_item(std::span<const std:
     }
     if (offset != payload.size()) return std::nullopt;
     return result;
+}
+
+std::optional<RequestTaskInventory> decode_request_task_inventory(
+    std::span<const std::byte> payload) {
+    constexpr std::size_t message_size = 40;
+    if (payload.size() != message_size ||
+        !std::equal(request_task_inventory_id.begin(), request_task_inventory_id.end(), payload.begin()))
+        return std::nullopt;
+    RequestTaskInventory result;
+    std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
+    result.local_id = read_le_u32(payload, 36);
+    return result;
+}
+
+std::vector<std::byte> encode_reply_task_inventory(const ReplyTaskInventory& message) {
+    if (message.filename.size() > 255) return {};
+    std::vector<std::byte> output(reply_task_inventory_id.begin(), reply_task_inventory_id.end());
+    append_uuid(output, message.task_id);
+    append_le_u16(output, static_cast<std::uint16_t>(message.serial));
+    output.push_back(static_cast<std::byte>(message.filename.size()));
+    output.insert(output.end(), reinterpret_cast<const std::byte*>(message.filename.data()),
+                  reinterpret_cast<const std::byte*>(message.filename.data() + message.filename.size()));
+    return output;
 }
 
 std::optional<ObjectAdd> decode_object_add(std::span<const std::byte> payload) {

@@ -56,6 +56,32 @@ bool reliability() {
     return true;
 }
 
+bool task_inventory_codecs() {
+    const auto agent = *parse_uuid("12345678-1234-4234-8234-123456789abc");
+    const auto session = *parse_uuid("87654321-4321-4321-8321-cba987654321");
+    const auto task = *parse_uuid("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");
+    auto request = bytes({0xff, 0xff, 0x01, 0x21});
+    request.insert(request.end(), agent.begin(), agent.end());
+    request.insert(request.end(), session.begin(), session.end());
+    request.insert(request.end(), {std::byte{0x78}, std::byte{0x56},
+                                   std::byte{0x34}, std::byte{0x12}});
+    const auto decoded = decode_request_task_inventory(request);
+    if (!decoded || decoded->agent_id != agent || decoded->session_id != session ||
+        decoded->local_id != 0x12345678) return false;
+    request.pop_back();
+    if (decode_request_task_inventory(request)) return false;
+
+    const auto reply = encode_reply_task_inventory({task, 0x1234, "inventory_1.tmp"});
+    if (reply.size() != 4 + 16 + 2 + 1 + 15 || reply[0] != std::byte{0xff} ||
+        reply[1] != std::byte{0xff} || reply[2] != std::byte{0x01} ||
+        reply[3] != std::byte{0x22} ||
+        !std::equal(task.begin(), task.end(), reply.begin() + 4) ||
+        reply[20] != std::byte{0x34} || reply[21] != std::byte{0x12} ||
+        reply[22] != std::byte{15}) return false;
+    const auto empty = encode_reply_task_inventory({task, 0, {}});
+    return empty.size() == 23 && empty.back() == std::byte{};
+}
+
 bool message_codecs() {
     UseCircuitCode expected;
     expected.circuit_code = 0x10203040;
@@ -994,6 +1020,7 @@ int main() {
     if (!object_flag_codec()) return 14;
     if (!object_interaction_codecs()) return 15;
     if (!default_primitive_texture()) return 16;
+    if (!task_inventory_codecs()) return 20;
     if (decode_packet(std::array<std::byte, 2>{})) return 12;
     return 0;
 }
