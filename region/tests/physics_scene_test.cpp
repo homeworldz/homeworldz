@@ -167,5 +167,24 @@ int main() {
     entity.parent_id = 7;
     if (!mirror.synchronize(entity) || mirror.size() != 0 || mirror.body_id(entity.id) != 0)
         return 13;
+    if (!mirror.synchronize(entity, physics::MotionType::Static) || mirror.size() != 1 ||
+        world.last_definition.motion != physics::MotionType::Static)
+        return 14;
+    scene::Scene linked_scene;
+    const auto root_id = linked_scene.create("root");
+    const auto child_id = linked_scene.create("child", {2.0, 0.0, 0.0});
+    linked_scene.find(root_id)->object_id = "root";
+    linked_scene.find(child_id)->object_id = "child";
+    linked_scene.find(child_id)->parent_id = root_id;
+    RecordingWorld linked_world;
+    physics::StaticSceneMirror linked_mirror(linked_world);
+    linked_mirror.synchronize(linked_scene);
+    if (linked_mirror.size() != 2 || linked_mirror.body_id(child_id) == 0)
+        return 15;
+    linked_scene.find(root_id)->physical = true;
+    linked_mirror.synchronize(linked_scene);
+    if (linked_mirror.size() != 1 || linked_mirror.body_id(root_id) == 0 ||
+        linked_mirror.body_id(child_id) != 0)
+        return 16;
     return 0;
 }

@@ -31,7 +31,9 @@ class StaticSceneMirror {
 public:
     explicit StaticSceneMirror(World& world) : world_(world) {}
 
-    bool synchronize(const scene::Entity& entity);
+    bool synchronize(
+        const scene::Entity& entity,
+        std::optional<MotionType> linked_motion = std::nullopt);
     void synchronize(const scene::Scene& scene);
     bool remove(scene::EntityId entity_id);
     BodyId body_id(scene::EntityId entity_id) const;

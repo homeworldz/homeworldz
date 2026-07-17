@@ -140,15 +140,17 @@ bool contain_body_without_neighbors(BodyState& state, double region_extent) {
     return constrained;
 }
 
-bool StaticSceneMirror::synchronize(const scene::Entity& entity) {
-    if (entity.object_id.empty() || entity.parent_id != 0 || entity.phantom ||
+bool StaticSceneMirror::synchronize(
+    const scene::Entity& entity, std::optional<MotionType> linked_motion) {
+    if (entity.object_id.empty() || (entity.parent_id != 0 && !linked_motion) || entity.phantom ||
         entity.physics_shape_type == 0x01) {
         static_cast<void>(remove(entity.id));
         return true;
     }
     BodyDefinition definition;
     definition.entity_id = entity.id;
-    definition.motion = entity.physical ? MotionType::Dynamic : MotionType::Static;
+    definition.motion = linked_motion.value_or(
+        entity.physical ? MotionType::Dynamic : MotionType::Static);
     const bool sphere = entity.path_curve == 0x20 && (entity.profile_curve & 0x0f) == 0x05;
     const bool cylinder = entity.path_curve == 0x10 && (entity.profile_curve & 0x0f) == 0x00;
     const bool prism = entity.path_curve == 0x10 && (entity.profile_curve & 0x0f) == 0x01 &&
@@ -212,11 +214,17 @@ bool StaticSceneMirror::synchronize(const scene::Entity& entity) {
 void StaticSceneMirror::synchronize(const scene::Scene& scene) {
     std::unordered_set<scene::EntityId> present;
     for (const auto& [entity_id, entity] : scene.entities()) {
-        if (entity.object_id.empty() || entity.parent_id != 0 || entity.phantom ||
+        std::optional<MotionType> linked_motion;
+        if (entity.parent_id != 0) {
+            const auto* root = scene.find(entity.parent_id);
+            if (!root || root->physical) continue;
+            linked_motion = MotionType::Static;
+        }
+        if (entity.object_id.empty() || entity.phantom ||
             entity.physics_shape_type == 0x01)
             continue;
         present.insert(entity_id);
-        synchronize(entity);
+        synchronize(entity, linked_motion);
     }
     for (auto iterator = bodies_.begin(); iterator != bodies_.end();) {
         if (present.contains(iterator->first)) {

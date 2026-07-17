@@ -953,11 +953,26 @@ int main(int argc, char* argv[]) {
     const auto synchronize_physics_object = [&](const homeworldz::scene::Entity& entity) {
         if (!physics_scene) return;
         try {
-            auto synchronized_entity = entity;
-            if (physics_edit_suspended.contains(entity.id)) synchronized_entity.physical = false;
-            if (!physics_scene->synchronize(synchronized_entity))
-                std::cerr << "{\"level\":\"warning\",\"message\":\"static object physics synchronization rejected\","
-                             "\"entityId\":" << entity.id << "}" << std::endl;
+            const auto synchronize_entity = [&](const homeworldz::scene::Entity& candidate) {
+                auto synchronized_entity = candidate;
+                if (physics_edit_suspended.contains(candidate.id)) synchronized_entity.physical = false;
+                std::optional<homeworldz::physics::MotionType> linked_motion;
+                if (candidate.parent_id != 0) {
+                    const auto* root = scene.find(candidate.parent_id);
+                    if (root && !root->physical)
+                        linked_motion = homeworldz::physics::MotionType::Static;
+                }
+                if (!physics_scene->synchronize(synchronized_entity, linked_motion))
+                    std::cerr << "{\"level\":\"warning\",\"message\":\"static object physics synchronization rejected\","
+                                 "\"entityId\":" << candidate.id << "}" << std::endl;
+            };
+            synchronize_entity(entity);
+            if (entity.parent_id == 0) {
+                for (const auto& [candidate_id, candidate] : scene.entities()) {
+                    static_cast<void>(candidate_id);
+                    if (candidate.parent_id == entity.id) synchronize_entity(candidate);
+                }
+            }
         } catch (const std::exception& error) {
             std::cerr << "{\"level\":\"error\",\"message\":\"static object physics synchronization failed\","
                          "\"entityId\":" << entity.id << ",\"error\":"
