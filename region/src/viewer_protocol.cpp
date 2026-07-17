@@ -46,6 +46,8 @@ constexpr std::array<std::byte, 4> agent_set_appearance_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x54}};
 constexpr std::array<std::byte, 4> create_inventory_folder_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x11}};
+constexpr std::array<std::byte, 4> create_inventory_item_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x31}};
 constexpr std::array<std::byte, 4> copy_inventory_item_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x0d}};
 constexpr std::array<std::byte, 4> update_create_inventory_item_id{
@@ -712,6 +714,38 @@ std::optional<CreateInventoryFolder> decode_create_inventory_folder(std::span<co
     result.name.assign(reinterpret_cast<const char*>(payload.data() + fixed_size), name_size);
     while (!result.name.empty() && result.name.back() == '\0') result.name.pop_back();
     if (result.name.empty() || result.name.find('\0') != std::string::npos) return std::nullopt;
+    return result;
+}
+
+std::optional<CreateInventoryItem> decode_create_inventory_item(std::span<const std::byte> payload) {
+    constexpr std::size_t name_offset = 80;
+    if (payload.size() < name_offset + 1 ||
+        !std::equal(create_inventory_item_id.begin(), create_inventory_item_id.end(), payload.begin()))
+        return std::nullopt;
+    const auto name_size = std::to_integer<std::size_t>(payload[79]);
+    if (payload.size() < name_offset + name_size + 1) return std::nullopt;
+    const auto description_length_offset = name_offset + name_size;
+    const auto description_size = std::to_integer<std::size_t>(payload[description_length_offset]);
+    if (payload.size() != description_length_offset + 1 + description_size) return std::nullopt;
+
+    CreateInventoryItem result;
+    std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
+    result.callback_id = read_le_u32(payload, 36);
+    std::copy_n(payload.begin() + 40, 16, result.folder_id.begin());
+    std::copy_n(payload.begin() + 56, 16, result.transaction_id.begin());
+    result.next_owner_permissions = read_le_u32(payload, 72);
+    result.asset_type = static_cast<std::int8_t>(std::to_integer<std::uint8_t>(payload[76]));
+    result.inventory_type = static_cast<std::int8_t>(std::to_integer<std::uint8_t>(payload[77]));
+    result.wearable_type = std::to_integer<std::uint8_t>(payload[78]);
+    result.name.assign(reinterpret_cast<const char*>(payload.data() + name_offset), name_size);
+    result.description.assign(
+        reinterpret_cast<const char*>(payload.data() + description_length_offset + 1), description_size);
+    while (!result.name.empty() && result.name.back() == '\0') result.name.pop_back();
+    while (!result.description.empty() && result.description.back() == '\0') result.description.pop_back();
+    if (result.name.empty() || result.name.find('\0') != std::string::npos ||
+        result.description.find('\0') != std::string::npos)
+        return std::nullopt;
     return result;
 }
 

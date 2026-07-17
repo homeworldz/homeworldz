@@ -68,6 +68,18 @@ struct CreateInventoryFolder : AgentMessage {
     std::string name;
 };
 
+struct CreateInventoryItem : AgentMessage {
+    std::uint32_t callback_id{};
+    Uuid folder_id{};
+    Uuid transaction_id{};
+    std::uint32_t next_owner_permissions{};
+    std::int8_t asset_type{-1};
+    std::int8_t inventory_type{-1};
+    std::uint8_t wearable_type{};
+    std::string name;
+    std::string description;
+};
+
 struct CopyInventoryItem : AgentMessage {
     std::uint32_t callback_id{};
     Uuid old_agent_id{};
@@ -526,6 +538,7 @@ std::vector<std::byte> encode_economy_data(std::int32_t price_upload = 0,
                                            std::int32_t object_count = 0);
 std::optional<AgentMessage> decode_logout_request(std::span<const std::byte> payload);
 std::optional<CreateInventoryFolder> decode_create_inventory_folder(std::span<const std::byte> payload);
+std::optional<CreateInventoryItem> decode_create_inventory_item(std::span<const std::byte> payload);
 std::optional<CopyInventoryItem> decode_copy_inventory_item(std::span<const std::byte> payload);
 std::optional<MoveInventoryFolder> decode_move_inventory_folder(std::span<const std::byte> payload);
 std::optional<MoveInventoryItem> decode_move_inventory_item(std::span<const std::byte> payload);

@@ -117,6 +117,28 @@ bool message_codecs() {
     for (const char value : std::string("Projects\0", 9))
         create_folder_payload.push_back(static_cast<std::byte>(value));
     const auto create_folder = decode_create_inventory_folder(create_folder_payload);
+    auto create_item_payload = bytes({0xff, 0xff, 0x01, 0x31});
+    create_item_payload.insert(create_item_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
+    create_item_payload.insert(create_item_payload.end(), expected.session_id.begin(), expected.session_id.end());
+    create_item_payload.insert(create_item_payload.end(),
+                               {std::byte{0x78}, std::byte{0x56}, std::byte{0x34}, std::byte{0x12}});
+    create_item_payload.insert(create_item_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
+    create_item_payload.insert(create_item_payload.end(), expected.session_id.begin(), expected.session_id.end());
+    create_item_payload.insert(create_item_payload.end(),
+                               {std::byte{0xff}, std::byte{0xff}, std::byte{0xff}, std::byte{0x7f},
+                                std::byte{5}, std::byte{18}, std::byte{5}, std::byte{10}});
+    for (const char value : std::string("New Pants\0", 10))
+        create_item_payload.push_back(static_cast<std::byte>(value));
+    create_item_payload.insert(create_item_payload.end(), {std::byte{1}, std::byte{}});
+    const auto create_item = decode_create_inventory_item(create_item_payload);
+    if (!create_item || create_item->callback_id != 0x12345678 ||
+        create_item->folder_id != expected.agent_id ||
+        create_item->transaction_id != expected.session_id ||
+        create_item->next_owner_permissions != 0x7fffffff ||
+        create_item->asset_type != 5 || create_item->inventory_type != 18 ||
+        create_item->wearable_type != 5 || create_item->name != "New Pants" ||
+        !create_item->description.empty())
+        return false;
     auto copy_item_payload = bytes({0xff, 0xff, 0x01, 0x0d});
     copy_item_payload.insert(copy_item_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
     copy_item_payload.insert(copy_item_payload.end(), expected.session_id.begin(), expected.session_id.end());

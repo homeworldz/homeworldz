@@ -2078,6 +2078,86 @@ int main(int argc, char* argv[]) {
                                       << (sent ? "completed" : "rejected") << "\",\"sourceItemId\":"
                                       << homeworldz::api::json_string(source_id) << "}" << std::endl;
                         }
+                        const auto create_item =
+                            homeworldz::viewer::decode_create_inventory_item(packet->payload);
+                        if (create_item && create_item->agent_id == identity->agent_id &&
+                            create_item->session_id == identity->session_id) {
+                            const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
+                            const auto transaction_id =
+                                homeworldz::viewer::format_uuid(create_item->transaction_id);
+                            const auto pending =
+                                pending_wearable_uploads.find(endpoint + '|' + transaction_id);
+                            const bool wearable = create_item->inventory_type == 18 &&
+                                (create_item->asset_type == 5 || create_item->asset_type == 13);
+                            bool created = false;
+                            homeworldz::grid::InventoryItem item;
+                            if (wearable && pending != pending_wearable_uploads.end() &&
+                                pending->second.asset_type == create_item->asset_type && viewer_grid) {
+                                item.item_id = homeworldz::viewer::random_uuid();
+                                item.creator_id = user_id;
+                                item.owner_id = user_id;
+                                item.folder_id = homeworldz::viewer::format_uuid(create_item->folder_id);
+                                item.asset_id = pending->second.asset_id;
+                                item.asset_type = create_item->asset_type;
+                                item.inventory_type = create_item->inventory_type;
+                                item.name = create_item->name;
+                                item.description = create_item->description;
+                                item.flags = create_item->wearable_type;
+                                item.base_permissions = 0x7fffffffU;
+                                item.current_permissions = 0x7fffffffU;
+                                item.everyone_permissions = 0x00000000U;
+                                item.next_permissions = create_item->next_owner_permissions;
+                                try {
+                                    created = viewer_grid->create_inventory_item(user_id, item);
+                                } catch (const std::exception& error) {
+                                    std::cout << "{\"level\":\"error\",\"message\":\"wearable inventory creation failed\",\"error\":"
+                                              << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+                                }
+                            }
+                            bool sent = false;
+                            if (created) {
+                                const auto item_id = homeworldz::viewer::parse_uuid(item.item_id);
+                                const auto creator_id = homeworldz::viewer::parse_uuid(item.creator_id);
+                                const auto owner_id = homeworldz::viewer::parse_uuid(item.owner_id);
+                                const auto folder_id = homeworldz::viewer::parse_uuid(item.folder_id);
+                                const auto asset_id = homeworldz::viewer::parse_uuid(item.asset_id);
+                                if (item_id && creator_id && owner_id && folder_id && asset_id) {
+                                    homeworldz::viewer::InventoryItem response_item;
+                                    response_item.item_id = *item_id;
+                                    response_item.creator_id = *creator_id;
+                                    response_item.owner_id = *owner_id;
+                                    response_item.folder_id = *folder_id;
+                                    response_item.asset_id = *asset_id;
+                                    response_item.asset_type = static_cast<std::int8_t>(item.asset_type);
+                                    response_item.inventory_type = static_cast<std::int8_t>(item.inventory_type);
+                                    response_item.name = item.name;
+                                    response_item.description = item.description;
+                                    response_item.flags = item.flags;
+                                    response_item.base_permissions = item.base_permissions;
+                                    response_item.current_permissions = item.current_permissions;
+                                    response_item.everyone_permissions = item.everyone_permissions;
+                                    response_item.next_permissions = item.next_permissions;
+                                    response_item.creation_date = static_cast<std::int32_t>(
+                                        std::chrono::duration_cast<std::chrono::seconds>(
+                                            std::chrono::system_clock::now().time_since_epoch()).count());
+                                    const homeworldz::viewer::AgentMessage reply{
+                                        identity->agent_id, identity->session_id};
+                                    if (const auto outgoing = circuits.send(endpoint,
+                                            homeworldz::viewer::encode_update_create_inventory_item(
+                                                reply, create_item->callback_id, response_item),
+                                            true, now, true))
+                                        sent = send_udp(viewer_server, endpoint, *outgoing);
+                                }
+                                pending_wearable_uploads.erase(pending);
+                            }
+                            std::cout << "{\"level\":" << (created && sent ? "\"info\"" : "\"warn\"")
+                                      << ",\"message\":\"wearable inventory item "
+                                      << (created && sent ? "created" : "rejected") << "\",\"name\":"
+                                      << homeworldz::api::json_string(create_item->name)
+                                      << ",\"wearableType\":"
+                                      << static_cast<unsigned int>(create_item->wearable_type) << "}"
+                                      << std::endl;
+                        }
                         const auto handshake_reply = homeworldz::viewer::decode_region_handshake_reply(packet->payload);
                         if (handshake_reply && handshake_reply->agent_id == identity->agent_id &&
                             handshake_reply->session_id == identity->session_id) {

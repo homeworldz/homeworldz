@@ -430,7 +430,8 @@ func (a *API) inventoryItemsByUser(w http.ResponseWriter, r *http.Request, userI
 		return
 	}
 	validType := (request.AssetType == 0 && request.InventoryType == 0) ||
-		(request.AssetType == 6 && request.InventoryType == 6)
+		(request.AssetType == 6 && request.InventoryType == 6) ||
+		((request.AssetType == 5 || request.AssetType == 13) && request.InventoryType == 18)
 	if !validUUID(request.ID) || !validUUID(request.CreatorUserID) ||
 		!validUUID(request.FolderID) ||
 		!validUUID(request.AssetID) || !validType {
@@ -441,6 +442,7 @@ func (a *API) inventoryItemsByUser(w http.ResponseWriter, r *http.Request, userI
 		ID: request.ID, OwnerUserID: userID, CreatorUserID: request.CreatorUserID,
 		FolderID: request.FolderID, AssetID: request.AssetID, AssetType: request.AssetType,
 		InventoryType: request.InventoryType, Name: request.Name, Description: request.Description,
+		Flags:           request.Flags,
 		BasePermissions: request.BasePermissions, CurrentPermissions: request.CurrentPermissions,
 		EveryonePermissions: request.EveryonePermissions, NextPermissions: request.NextPermissions,
 	})

@@ -218,6 +218,16 @@ int main() {
             R"("creatorUserId":"77777777-7777-4777-8777-777777777777")") == std::string::npos ||
         transport->requests.back().body.find(R"("basePermissions":647168)") == std::string::npos ||
         transport->requests.back().body.find(R"("name":"Primitive")") == std::string::npos) return 1;
+    const homeworldz::grid::InventoryItem pants{
+        "99999999-9999-4999-8999-999999999999", session->agent_id, session->agent_id,
+        "22222222-2222-4222-8222-222222222222", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        5, 18, "New Pants", "", 5, 0x7fffffff, 0x7fffffff, 0x00000000, 0x0008e000};
+    if (!client.create_inventory_item(session->agent_id, pants) ||
+        transport->requests.back().body.find(R"("assetType":5,"inventoryType":18)") == std::string::npos ||
+        transport->requests.back().body.find(R"("flags":5)") == std::string::npos ||
+        transport->requests.back().body.find(R"("name":"New Pants")") == std::string::npos ||
+        transport->requests.back().body.find(R"("nextPermissions":581632)") == std::string::npos)
+        return 1;
     if (!client.register_asset(
             "66666666-6666-4666-8666-666666666666",
             "77777777-7777-4777-8777-777777777777",

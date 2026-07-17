@@ -185,6 +185,7 @@ public:
                                                             int folder_type);
     bool create_texture_inventory_item(std::string_view user_id, const TextureInventoryItem& item);
     bool create_object_inventory_item(std::string_view user_id, const ObjectInventoryItem& item);
+    bool create_inventory_item(std::string_view user_id, const InventoryItem& item);
     bool register_asset(std::string_view asset_id, std::string_view creator_id,
                         std::string_view sha256, std::uint64_t size,
                         std::string_view endpoint, bool origin);
