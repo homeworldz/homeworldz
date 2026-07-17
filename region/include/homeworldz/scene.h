@@ -97,6 +97,7 @@ std::optional<RayIntersection> intersect_box(
 
 void establish_link(Entity& child, const Entity& root);
 void update_linked_world_transform(Entity& child, const Entity& root);
+void scale_linked_child(Entity& child, Vector3 factors);
 
 class Scene {
 public:

@@ -48,6 +48,12 @@ int main() {
     if (!near(child.position.x, 23.0) || !near(child.position.y, 30.0) ||
         !near(child.position.z, 42.0))
         return 1;
+    child.scale = {1.0, 2.0, 3.0};
+    homeworldz::scene::scale_linked_child(child, {2.0, 0.5, 3.0});
+    if (!near(child.local_position.x, 0.0) || !near(child.local_position.y, -1.5) ||
+        !near(child.local_position.z, 6.0) || !near(child.scale.x, 2.0) ||
+        !near(child.scale.y, 1.0) || !near(child.scale.z, 9.0))
+        return 1;
     homeworldz::scene::Scene scene;
     const auto id = scene.create("moving object", {1.0, 2.0, 3.0}, {4.0, -2.0, 1.0});
     if (scene.size() != 1 || scene.revision() != 1) return 1;

@@ -162,6 +162,15 @@ void update_linked_world_transform(Entity& child, const Entity& root) {
     child.rotation = quaternion_vector(multiply(root_rotation, quaternion(child.local_rotation)));
 }
 
+void scale_linked_child(Entity& child, Vector3 factors) {
+    child.local_position.x *= factors.x;
+    child.local_position.y *= factors.y;
+    child.local_position.z *= factors.z;
+    child.scale.x *= factors.x;
+    child.scale.y *= factors.y;
+    child.scale.z *= factors.z;
+}
+
 EntityId Scene::create(std::string name, Vector3 position, Vector3 velocity) {
     const auto id = next_id_++;
     entities_.emplace(id, Entity{id, std::move(name), position, velocity});

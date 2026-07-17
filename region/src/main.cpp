@@ -3002,6 +3002,9 @@ int main(int argc, char* argv[]) {
                             std::unordered_set<homeworldz::scene::EntityId> requested_entities;
                             std::unordered_set<homeworldz::scene::EntityId> changed_roots;
                             std::unordered_set<homeworldz::scene::EntityId> changed_children;
+                            std::unordered_set<homeworldz::scene::EntityId> changed_root_frames;
+                            std::unordered_map<homeworldz::scene::EntityId,
+                                homeworldz::scene::Vector3> linked_scale_factors;
                             const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
                             for (const auto& update : transform_update->objects) {
                                 auto* entity = scene.find(update.local_id);
@@ -3038,6 +3041,7 @@ int main(int argc, char* argv[]) {
                                 if (!valid_position || !valid_rotation || !valid_scale) continue;
                                 if (!update.position && !update.rotation && !update.scale) continue;
                                 originals.try_emplace(entity->id, *entity);
+                                const bool linked_update = (update.type & 0x08) != 0;
                                 auto& position = entity->parent_id == 0
                                     ? entity->position : entity->local_position;
                                 auto& rotation = entity->parent_id == 0
@@ -3048,12 +3052,56 @@ int main(int argc, char* argv[]) {
                                 if (update.rotation)
                                     rotation = {(*update.rotation)[0], (*update.rotation)[1],
                                                 (*update.rotation)[2]};
-                                if (update.scale)
-                                    entity->scale = {(*update.scale)[0], (*update.scale)[1], (*update.scale)[2]};
+                                if (update.scale && entity->parent_id == 0 && linked_update) {
+                                    homeworldz::scene::Vector3 factors{
+                                        (*update.scale)[0] / entity->scale.x,
+                                        (*update.scale)[1] / entity->scale.y,
+                                        (*update.scale)[2] / entity->scale.z};
+                                    for (const auto& [candidate_id, candidate] : scene.entities()) {
+                                        static_cast<void>(candidate_id);
+                                        if (candidate.parent_id != entity->id) continue;
+                                        factors.x = std::clamp(
+                                            factors.x, 0.01 / candidate.scale.x, 64.0 / candidate.scale.x);
+                                        factors.y = std::clamp(
+                                            factors.y, 0.01 / candidate.scale.y, 64.0 / candidate.scale.y);
+                                        factors.z = std::clamp(
+                                            factors.z, 0.01 / candidate.scale.z, 64.0 / candidate.scale.z);
+                                    }
+                                    entity->scale = {
+                                        entity->scale.x * factors.x,
+                                        entity->scale.y * factors.y,
+                                        entity->scale.z * factors.z};
+                                    linked_scale_factors.emplace(entity->id, factors);
+                                } else if (update.scale) {
+                                    entity->scale = {
+                                        (*update.scale)[0], (*update.scale)[1], (*update.scale)[2]};
+                                }
                                 if (entity->parent_id == 0) {
-                                    if (update.position || update.rotation) changed_roots.insert(entity->id);
+                                    if (linked_update) {
+                                        if (update.position || update.rotation || update.scale)
+                                            changed_roots.insert(entity->id);
+                                    } else if (update.position || update.rotation) {
+                                        changed_root_frames.insert(entity->id);
+                                    }
                                 } else {
                                     changed_children.insert(entity->id);
+                                }
+                            }
+                            for (const auto& [entity_id, current] : scene.entities()) {
+                                if (current.parent_id == 0) continue;
+                                const auto* root = scene.find(current.parent_id);
+                                auto* child = scene.find(entity_id);
+                                if (!root || !child) continue;
+                                if (changed_root_frames.contains(current.parent_id)) {
+                                    originals.try_emplace(child->id, *child);
+                                    homeworldz::scene::establish_link(*child, *root);
+                                    requested_entities.insert(child->id);
+                                }
+                                const auto scaled = linked_scale_factors.find(current.parent_id);
+                                if (scaled != linked_scale_factors.end()) {
+                                    originals.try_emplace(child->id, *child);
+                                    homeworldz::scene::scale_linked_child(*child, scaled->second);
+                                    requested_entities.insert(child->id);
                                 }
                             }
                             for (const auto& [entity_id, current] : scene.entities()) {
