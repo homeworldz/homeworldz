@@ -80,6 +80,23 @@ WHIP/Aperture boundaries, C#/.NET implementation constraints, or protobuf as
 an architectural default. Viewer-protocol compatibility remains a goal even
 when the server internals differ.
 
+### Independently restartable Grid services
+
+The central Grid service can be rebuilt or restarted without restarting its
+connected Regions. Active viewer circuits, avatar simulation, physics, and
+scene state are owned by the Region processes and continue running while the
+Grid service is briefly unavailable. Viewer sessions and other central state
+are persisted in PostgreSQL, so Regions and viewers resume Grid-backed
+operations such as AIS inventory access when the service returns without
+requiring a new Region process or a new viewer login.
+
+This differs from deployments where grid-level services share a process or
+runtime lifecycle with simulators, or where restarting the central service
+requires coordinated simulator restarts. Requests that arrive during the
+brief outage may still fail and require retry; independent restartability does
+not make the Grid service optional or remove the need for availability
+monitoring.
+
 ### Pluggable physics engines
 
 HomeWorldz keeps simulation behind an engine-independent physics plugin
@@ -149,8 +166,9 @@ legacy and AIS stores. See
 [`ADR 0018`](adr/0018-ais-first-viewer-inventory.md).
 
 The implemented AIS v3 path includes personal folder and item mutation,
-texture-backed item creation, copying a complete Library outfit into personal
-Inventory, replacing Current Outfit links, and recursively emptying Trash.
+texture-backed item creation, saving named outfit folders, copying a complete
+Library outfit into personal Inventory, replacing Current Outfit links, and
+recursively emptying Trash.
 Firestorm's individual item and folder moves use narrow legacy UDP adapters;
 those adapters update the same authoritative inventory store.
 
