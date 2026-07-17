@@ -3,7 +3,6 @@ export function FaqPage() {
     <article class="faq-page">
       <header class="faq-intro">
         <p class="eyebrow">Frequently asked questions</p>
-        <h1>Running worlds on HomeWorldz.</h1>
         <p class="lede">
           The short answers to how regions are operated, where world data lives, and what the
           experience looks like to visitors.
