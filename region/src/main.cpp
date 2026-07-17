@@ -3283,14 +3283,32 @@ int main(int argc, char* argv[]) {
                                 (object_duplicate->duplicate_flags & ~create_selected) == 0;
                             const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
                             std::vector<homeworldz::scene::EntityId> created_entities;
-                            std::unordered_set<std::uint32_t> requested_ids;
+                            std::unordered_set<homeworldz::scene::EntityId> requested_roots;
                             if (finite_offset && supported_flags) {
                                 for (const auto local_id : object_duplicate->local_ids) {
-                                    if (!requested_ids.insert(local_id).second) continue;
-                                    const auto* source = scene.find(local_id);
+                                    const auto* selected = scene.find(local_id);
+                                    if (!selected) continue;
+                                    const auto root_id = selected->parent_id != 0
+                                        ? selected->parent_id : selected->id;
+                                    if (!requested_roots.insert(root_id).second) continue;
+                                    const auto* source = scene.find(root_id);
                                     if (!source || source->owner_id != user_id ||
                                         (source->owner_permissions & homeworldz::scene::permission_copy) == 0)
                                         continue;
+                                    std::vector<const homeworldz::scene::Entity*> source_children;
+                                    bool permitted = true;
+                                    for (const auto& [candidate_id, candidate] : scene.entities()) {
+                                        static_cast<void>(candidate_id);
+                                        if (candidate.parent_id != root_id) continue;
+                                        if (candidate.owner_id != user_id ||
+                                            (candidate.owner_permissions &
+                                                homeworldz::scene::permission_copy) == 0) {
+                                            permitted = false;
+                                            break;
+                                        }
+                                        source_children.push_back(&candidate);
+                                    }
+                                    if (!permitted) continue;
                                     const auto source_copy = *source;
                                     const homeworldz::scene::Vector3 position{
                                         source_copy.position.x + object_duplicate->offset[0],
@@ -3300,18 +3318,34 @@ int main(int argc, char* argv[]) {
                                         position.y < 0.0 || position.y > 256.0 ||
                                         position.z < -64.0 || position.z > 4096.0)
                                         continue;
-                                    const auto entity_id = scene.create(source_copy.name, position);
-                                    auto* duplicate = scene.find(entity_id);
+                                    const auto duplicate_root_id = scene.create(source_copy.name, position);
+                                    auto* duplicate = scene.find(duplicate_root_id);
                                     if (!duplicate) continue;
                                     *duplicate = source_copy;
-                                    duplicate->id = entity_id;
+                                    duplicate->id = duplicate_root_id;
+                                    duplicate->parent_id = 0;
+                                    duplicate->local_position = {};
+                                    duplicate->local_rotation = {};
                                     duplicate->position = position;
                                     duplicate->velocity = {};
                                     duplicate->object_id = homeworldz::viewer::random_uuid();
                                     duplicate->creation_date = static_cast<std::uint64_t>(
                                         std::chrono::duration_cast<std::chrono::seconds>(
                                             std::chrono::system_clock::now().time_since_epoch()).count());
-                                    created_entities.push_back(entity_id);
+                                    created_entities.push_back(duplicate_root_id);
+                                    for (const auto* source_child : source_children) {
+                                        const auto child_id = scene.create(source_child->name);
+                                        auto* child = scene.find(child_id);
+                                        if (!child) continue;
+                                        *child = *source_child;
+                                        child->id = child_id;
+                                        child->parent_id = duplicate_root_id;
+                                        child->velocity = {};
+                                        child->object_id = homeworldz::viewer::random_uuid();
+                                        child->creation_date = duplicate->creation_date;
+                                        homeworldz::scene::update_linked_world_transform(*child, *duplicate);
+                                        created_entities.push_back(child_id);
+                                    }
                                 }
                             }
                             bool persisted = false;
