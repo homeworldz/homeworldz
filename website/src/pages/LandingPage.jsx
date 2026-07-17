@@ -11,23 +11,30 @@ export function LandingPage() {
 
       <section class="hero" aria-labelledby="hero-title">
         <div>
-          <p class="eyebrow">A new foundation for building open virtual worlds</p>
-          <h1 id="hero-title">Virtual worlds should feel boundless. Their infrastructure shouldn’t.</h1>
+          <p class="eyebrow">A fresh way to build open virtual worlds</p>
+          <figure class="world-mark">
+            <img src={homeworldzLogo} alt="HomeWorldz" />
+          </figure>
+          <h1 id="hero-title">
+            <span>Make a world.</span>
+            <span>Invite people over.</span>
+            <span>Make it yours.</span>
+          </h1>
           <p class="lede">
-            Instead, it should define clear boundaries. HomeWorldz is a clean-architecture
-            virtual world server built for practical viewer compatibility,{" "}
-            <em class="key-emphasis">independently-operated</em> regions, and infrastructure you can
-            understand. It provides the infrastructure framework, for you to <em>easily</em> run your own regions where desired.
+            HomeWorldz lets you run your own region, connect it to a shared grid, and welcome
+            visitors using the viewer they already know.
           </p>
+          <ul class="hero-points">
+            <li><strong>Run it where you want.</strong> Use a machine at home or a server of your choice.</li>
+            <li><strong>Make it your own.</strong> Shape the land, content, and experiences people find there.</li>
+            <li><strong>Welcome people in.</strong> Visitors arrive through a familiar Firestorm-compatible viewer.</li>
+            <li><strong>Join a wider world.</strong> The shared grid helps people discover and travel between independently hosted regions.</li>
+          </ul>
           <p class="actions">
             <A href="/roadmap" role="button">Explore the roadmap</A>
             <A href="/architecture" role="button" data-variant="outline">Read the architecture</A>
           </p>
         </div>
-        <figure class="world-mark">
-          <img src={homeworldzLogo} alt="HomeWorldz" />
-          <figcaption>Your worlds. Clear boundaries.</figcaption>
-        </figure>
       </section>
 
       <section aria-labelledby="direction-title">
