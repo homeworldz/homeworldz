@@ -12,6 +12,8 @@
 namespace homeworldz::asset {
 
 struct ObjectAsset {
+    std::string name;
+    std::string creator_id;
     scene::Vector3 scale;
     scene::Vector3 rotation;
     std::uint8_t material{};
@@ -42,8 +44,23 @@ struct ObjectAsset {
     std::uint16_t profile_hollow{};
     bool physical{};
     bool phantom{};
+    std::uint32_t base_permissions{scene::permission_creator};
+    std::uint32_t owner_permissions{scene::permission_creator};
+    std::uint32_t group_permissions{};
+    std::uint32_t everyone_permissions{};
+    std::uint32_t next_owner_permissions{scene::permission_all};
+    scene::Vector3 local_position;
+    scene::Vector3 local_rotation;
+};
+
+struct LinksetAsset {
+    ObjectAsset root;
+    std::vector<ObjectAsset> children;
 };
 
 std::optional<ObjectAsset> parse_object_asset(std::span<const std::byte> content);
+std::optional<LinksetAsset> parse_linkset_asset(std::span<const std::byte> content);
+std::string serialize_linkset_asset(
+    const scene::Entity& root, std::span<const scene::Entity* const> children = {});
 
 } // namespace homeworldz::asset

@@ -4,6 +4,7 @@
 #include <array>
 #include <charconv>
 #include <cmath>
+#include <limits>
 #include <string>
 #include <string_view>
 
@@ -83,6 +84,88 @@ std::optional<std::vector<std::byte>> bytes_from_hex(std::string_view value) {
     return result;
 }
 
+std::string json_string(std::string_view value) {
+    constexpr char hex[] = "0123456789abcdef";
+    std::string result{"\""};
+    for (const auto character : value) {
+        const auto byte = static_cast<unsigned char>(character);
+        switch (character) {
+        case '"': result += "\\\""; break;
+        case '\\': result += "\\\\"; break;
+        case '\b': result += "\\b"; break;
+        case '\f': result += "\\f"; break;
+        case '\n': result += "\\n"; break;
+        case '\r': result += "\\r"; break;
+        case '\t': result += "\\t"; break;
+        default:
+            if (byte < 0x20) {
+                result += "\\u00";
+                result.push_back(hex[byte >> 4]);
+                result.push_back(hex[byte & 0x0f]);
+            } else {
+                result.push_back(character);
+            }
+        }
+    }
+    result.push_back('"');
+    return result;
+}
+
+std::string object_json(const scene::Entity& entity, bool child) {
+    constexpr char hex[] = "0123456789abcdef";
+    std::string texture_entry(entity.texture_entry.size() * 2, '0');
+    for (std::size_t index = 0; index < entity.texture_entry.size(); ++index) {
+        const auto value = std::to_integer<unsigned>(entity.texture_entry[index]);
+        texture_entry[index * 2] = hex[value >> 4];
+        texture_entry[index * 2 + 1] = hex[value & 0x0f];
+    }
+    const auto& rotation = child ? entity.local_rotation : entity.rotation;
+    auto result = "{\"format\":\"homeworldz-object-v1\",\"creatorId\":" +
+        json_string(entity.creator_id) + ",\"name\":" + json_string(entity.name) +
+        ",\"scale\":[" + std::to_string(entity.scale.x) + ',' +
+        std::to_string(entity.scale.y) + ',' + std::to_string(entity.scale.z) +
+        "],\"rotation\":[" + std::to_string(rotation.x) + ',' +
+        std::to_string(rotation.y) + ',' + std::to_string(rotation.z) +
+        "],\"description\":" + json_string(entity.description) +
+        ",\"material\":" + std::to_string(entity.material) +
+        ",\"physicsShapeType\":" + std::to_string(entity.physics_shape_type) +
+        ",\"physicsDensity\":" + std::to_string(entity.physics_density) +
+        ",\"physicsFriction\":" + std::to_string(entity.physics_friction) +
+        ",\"physicsRestitution\":" + std::to_string(entity.physics_restitution) +
+        ",\"physicsGravityMultiplier\":" + std::to_string(entity.physics_gravity_multiplier) +
+        ",\"textureEntry\":" + json_string(texture_entry) +
+        ",\"pathCurve\":" + std::to_string(entity.path_curve) +
+        ",\"profileCurve\":" + std::to_string(entity.profile_curve) +
+        ",\"pathBegin\":" + std::to_string(entity.path_begin) +
+        ",\"pathEnd\":" + std::to_string(entity.path_end) +
+        ",\"pathScaleX\":" + std::to_string(entity.path_scale_x) +
+        ",\"pathScaleY\":" + std::to_string(entity.path_scale_y) +
+        ",\"pathShearX\":" + std::to_string(entity.path_shear_x) +
+        ",\"pathShearY\":" + std::to_string(entity.path_shear_y) +
+        ",\"pathTwist\":" + std::to_string(entity.path_twist) +
+        ",\"pathTwistBegin\":" + std::to_string(entity.path_twist_begin) +
+        ",\"pathRadiusOffset\":" + std::to_string(entity.path_radius_offset) +
+        ",\"pathTaperX\":" + std::to_string(entity.path_taper_x) +
+        ",\"pathTaperY\":" + std::to_string(entity.path_taper_y) +
+        ",\"pathRevolutions\":" + std::to_string(entity.path_revolutions) +
+        ",\"pathSkew\":" + std::to_string(entity.path_skew) +
+        ",\"profileBegin\":" + std::to_string(entity.profile_begin) +
+        ",\"profileEnd\":" + std::to_string(entity.profile_end) +
+        ",\"profileHollow\":" + std::to_string(entity.profile_hollow) +
+        ",\"physical\":" + (entity.physical ? "true" : "false") +
+        ",\"phantom\":" + (entity.phantom ? "true" : "false") +
+        ",\"basePermissions\":" + std::to_string(entity.base_permissions) +
+        ",\"ownerPermissions\":" + std::to_string(entity.owner_permissions) +
+        ",\"groupPermissions\":" + std::to_string(entity.group_permissions) +
+        ",\"everyonePermissions\":" + std::to_string(entity.everyone_permissions) +
+        ",\"nextOwnerPermissions\":" + std::to_string(entity.next_owner_permissions);
+    if (child)
+        result += ",\"localPosition\":[" + std::to_string(entity.local_position.x) + ',' +
+            std::to_string(entity.local_position.y) + ',' +
+            std::to_string(entity.local_position.z) + ']';
+    return result + '}';
+}
+
 } // namespace
 
 std::optional<ObjectAsset> parse_object_asset(std::span<const std::byte> content) {
@@ -92,6 +175,9 @@ std::optional<ObjectAsset> parse_object_asset(std::span<const std::byte> content
     const auto scale = vector_after(text, R"("scale":[)");
     const auto rotation = vector_after(text, R"("rotation":[)");
     const auto description = string_after(text, R"("description":")");
+    const auto name = string_after(text, R"("name":")");
+    const auto creator_id = string_after(text, R"("creatorId":")");
+    const auto local_position = vector_after(text, R"("localPosition":[)");
     std::size_t position = 0;
     const auto material = number_after(text, R"("material":)", position);
     position = 0;
@@ -129,6 +215,11 @@ std::optional<ObjectAsset> parse_object_asset(std::span<const std::byte> content
     const auto profile_begin = shape_number(R"("profileBegin":)", 0.0);
     const auto profile_end = shape_number(R"("profileEnd":)", 0.0);
     const auto profile_hollow = shape_number(R"("profileHollow":)", 0.0);
+    const auto base_permissions = shape_number(R"("basePermissions":)", scene::permission_creator);
+    const auto owner_permissions = shape_number(R"("ownerPermissions":)", scene::permission_creator);
+    const auto group_permissions = shape_number(R"("groupPermissions":)", 0.0);
+    const auto everyone_permissions = shape_number(R"("everyonePermissions":)", 0.0);
+    const auto next_owner_permissions = shape_number(R"("nextOwnerPermissions":)", scene::permission_all);
     auto physical = boolean_after(text, R"("physical":)");
     auto phantom = boolean_after(text, R"("phantom":)");
     const auto texture_entry_hex = string_after(text, R"("textureEntry":")");
@@ -160,10 +251,15 @@ std::optional<ObjectAsset> parse_object_asset(std::span<const std::byte> content
         path_twist, path_twist_begin, path_radius_offset, path_taper_x, path_taper_y,
         path_revolutions, path_skew};
     const std::array word_values{path_begin, path_end, profile_begin, profile_end, profile_hollow};
+    const std::array permission_values{base_permissions, owner_permissions, group_permissions,
+        everyone_permissions, next_owner_permissions};
     if (std::any_of(byte_values.begin(), byte_values.end(), [](double value) {
             return value < 0.0 || value > 255.0 || std::floor(value) != value;
         }) || std::any_of(word_values.begin(), word_values.end(), [](double value) {
             return value < 0.0 || value > 65535.0 || std::floor(value) != value;
+        }) || std::any_of(permission_values.begin(), permission_values.end(), [](double value) {
+            return value < 0.0 || value > std::numeric_limits<std::uint32_t>::max() ||
+                std::floor(value) != value;
         }))
         return std::nullopt;
     auto texture_entry = texture_entry_hex
@@ -171,6 +267,8 @@ std::optional<ObjectAsset> parse_object_asset(std::span<const std::byte> content
         : std::optional<std::vector<std::byte>>(std::vector<std::byte>{});
     if (!texture_entry) return std::nullopt;
     ObjectAsset result;
+    result.name = name.value_or("");
+    result.creator_id = creator_id.value_or("");
     result.scale = *scale;
     result.rotation = *rotation;
     result.material = static_cast<std::uint8_t>(*material);
@@ -201,7 +299,75 @@ std::optional<ObjectAsset> parse_object_asset(std::span<const std::byte> content
     result.profile_hollow = static_cast<std::uint16_t>(profile_hollow);
     result.physical = *physical;
     result.phantom = *phantom;
+    result.base_permissions = static_cast<std::uint32_t>(base_permissions);
+    result.owner_permissions = static_cast<std::uint32_t>(owner_permissions);
+    result.group_permissions = static_cast<std::uint32_t>(group_permissions);
+    result.everyone_permissions = static_cast<std::uint32_t>(everyone_permissions);
+    result.next_owner_permissions = static_cast<std::uint32_t>(next_owner_permissions);
+    result.local_position = local_position.value_or(scene::Vector3{});
+    result.local_rotation = result.rotation;
     return result;
+}
+
+std::optional<LinksetAsset> parse_linkset_asset(std::span<const std::byte> content) {
+    const std::string_view text(reinterpret_cast<const char*>(content.data()), content.size());
+    if (text.find(R"("format":"homeworldz-linkset-v1")") == std::string_view::npos) {
+        const auto root = parse_object_asset(content);
+        if (!root) return std::nullopt;
+        return LinksetAsset{*root, {}};
+    }
+    const auto parts = text.find(R"("parts":[)");
+    if (parts == std::string_view::npos) return std::nullopt;
+    std::vector<ObjectAsset> parsed;
+    std::size_t position = parts + 9;
+    while (position < text.size()) {
+        while (position < text.size() && (text[position] == ' ' || text[position] == ',')) ++position;
+        if (position < text.size() && text[position] == ']') break;
+        if (position >= text.size() || text[position] != '{' || parsed.size() >= 256) return std::nullopt;
+        const auto start = position;
+        std::size_t depth = 0;
+        bool quoted = false;
+        bool escaped = false;
+        for (; position < text.size(); ++position) {
+            const auto character = text[position];
+            if (quoted) {
+                if (escaped) escaped = false;
+                else if (character == '\\') escaped = true;
+                else if (character == '"') quoted = false;
+                continue;
+            }
+            if (character == '"') quoted = true;
+            else if (character == '{') ++depth;
+            else if (character == '}' && --depth == 0) {
+                ++position;
+                break;
+            }
+        }
+        if (depth != 0) return std::nullopt;
+        const auto part = text.substr(start, position - start);
+        const auto asset = parse_object_asset(std::span(
+            reinterpret_cast<const std::byte*>(part.data()), part.size()));
+        if (!asset) return std::nullopt;
+        parsed.push_back(*asset);
+    }
+    if (parsed.empty()) return std::nullopt;
+    LinksetAsset result{std::move(parsed.front()), {}};
+    result.children.assign(
+        std::make_move_iterator(parsed.begin() + 1), std::make_move_iterator(parsed.end()));
+    return result;
+}
+
+std::string serialize_linkset_asset(
+    const scene::Entity& root, std::span<const scene::Entity* const> children) {
+    if (children.empty()) return object_json(root, false);
+    std::string result{"{\"format\":\"homeworldz-linkset-v1\",\"parts\":["};
+    result += object_json(root, false);
+    for (const auto* child : children) {
+        if (!child || child->parent_id != root.id) continue;
+        result += ',';
+        result += object_json(*child, true);
+    }
+    return result + "]}";
 }
 
 } // namespace homeworldz::asset

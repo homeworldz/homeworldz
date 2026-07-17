@@ -1,5 +1,6 @@
 #include "homeworldz/object_asset.h"
 
+#include <array>
 #include <string>
 
 int main() {
@@ -26,6 +27,38 @@ int main() {
     const std::string invalid = R"({"format":"homeworldz-object-v1","scale":[0,1,1],"rotation":[0,0,0],"description":"","material":3})";
     if (homeworldz::asset::parse_object_asset(
             std::span(reinterpret_cast<const std::byte*>(invalid.data()), invalid.size())))
+        return 1;
+    homeworldz::scene::Entity root;
+    root.id = 10;
+    root.name = "Root Prim";
+    root.creator_id = "10000000-0000-4000-8000-000000000001";
+    root.scale = {1.0, 2.0, 3.0};
+    root.rotation = {0.0, 0.0, 0.25};
+    root.owner_permissions = 0x0008e000;
+    homeworldz::scene::Entity child;
+    child.id = 11;
+    child.parent_id = root.id;
+    child.name = "Child Prim";
+    child.creator_id = "20000000-0000-4000-8000-000000000002";
+    child.scale = {0.5, 0.75, 1.0};
+    child.local_position = {2.0, -3.0, 4.0};
+    child.local_rotation = {0.125, 0.0, -0.25};
+    child.next_owner_permissions = 0x00082000;
+    const std::array<const homeworldz::scene::Entity*, 1> children{&child};
+    const auto linkset_text = homeworldz::asset::serialize_linkset_asset(root, children);
+    const auto linkset = homeworldz::asset::parse_linkset_asset(std::span(
+        reinterpret_cast<const std::byte*>(linkset_text.data()), linkset_text.size()));
+    if (!linkset || linkset->root.name != "Root Prim" || linkset->root.scale.y != 2.0 ||
+        linkset->root.rotation.z != 0.25 || linkset->root.owner_permissions != 0x0008e000 ||
+        linkset->children.size() != 1 || linkset->children[0].name != "Child Prim" ||
+        linkset->children[0].creator_id != child.creator_id ||
+        linkset->children[0].local_position.x != 2.0 ||
+        linkset->children[0].local_position.y != -3.0 ||
+        linkset->children[0].local_rotation.z != -0.25 ||
+        linkset->children[0].next_owner_permissions != 0x00082000)
+        return 1;
+    const auto single = homeworldz::asset::parse_linkset_asset(bytes);
+    if (!single || !single->children.empty() || single->root.description != "Round \"prim\"")
         return 1;
     return 0;
 }

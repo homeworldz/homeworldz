@@ -525,54 +525,37 @@ std::optional<homeworldz::viewer::StaticObject> static_object_from_entity(
     return object;
 }
 
-std::string object_asset_json(const homeworldz::scene::Entity& entity) {
-    constexpr char hex[] = "0123456789abcdef";
-    std::string texture_entry(entity.texture_entry.size() * 2, '0');
-    for (std::size_t index = 0; index < entity.texture_entry.size(); ++index) {
-        const auto value = std::to_integer<unsigned>(entity.texture_entry[index]);
-        texture_entry[index * 2] = hex[value >> 4];
-        texture_entry[index * 2 + 1] = hex[value & 0x0f];
-    }
-    return "{\"format\":\"homeworldz-object-v1\",\"creatorId\":" +
-        homeworldz::api::json_string(entity.creator_id) + ",\"name\":" +
-        homeworldz::api::json_string(entity.name) + ",\"scale\":[" +
-        std::to_string(entity.scale.x) + ',' + std::to_string(entity.scale.y) + ',' +
-        std::to_string(entity.scale.z) + "],\"rotation\":[" +
-        std::to_string(entity.rotation.x) + ',' + std::to_string(entity.rotation.y) + ',' +
-        std::to_string(entity.rotation.z) + "],\"description\":" +
-        homeworldz::api::json_string(entity.description) +
-        ",\"material\":" + std::to_string(entity.material) +
-        ",\"physicsShapeType\":" + std::to_string(entity.physics_shape_type) +
-        ",\"physicsDensity\":" + std::to_string(entity.physics_density) +
-        ",\"physicsFriction\":" + std::to_string(entity.physics_friction) +
-        ",\"physicsRestitution\":" + std::to_string(entity.physics_restitution) +
-        ",\"physicsGravityMultiplier\":" + std::to_string(entity.physics_gravity_multiplier) +
-        ",\"textureEntry\":" + homeworldz::api::json_string(texture_entry) +
-        ",\"pathCurve\":" + std::to_string(entity.path_curve) +
-        ",\"profileCurve\":" + std::to_string(entity.profile_curve) +
-        ",\"pathBegin\":" + std::to_string(entity.path_begin) +
-        ",\"pathEnd\":" + std::to_string(entity.path_end) +
-        ",\"pathScaleX\":" + std::to_string(entity.path_scale_x) +
-        ",\"pathScaleY\":" + std::to_string(entity.path_scale_y) +
-        ",\"pathShearX\":" + std::to_string(entity.path_shear_x) +
-        ",\"pathShearY\":" + std::to_string(entity.path_shear_y) +
-        ",\"pathTwist\":" + std::to_string(entity.path_twist) +
-        ",\"pathTwistBegin\":" + std::to_string(entity.path_twist_begin) +
-        ",\"pathRadiusOffset\":" + std::to_string(entity.path_radius_offset) +
-        ",\"pathTaperX\":" + std::to_string(entity.path_taper_x) +
-        ",\"pathTaperY\":" + std::to_string(entity.path_taper_y) +
-        ",\"pathRevolutions\":" + std::to_string(entity.path_revolutions) +
-        ",\"pathSkew\":" + std::to_string(entity.path_skew) +
-        ",\"profileBegin\":" + std::to_string(entity.profile_begin) +
-        ",\"profileEnd\":" + std::to_string(entity.profile_end) +
-        ",\"profileHollow\":" + std::to_string(entity.profile_hollow) +
-        ",\"physical\":" + (entity.physical ? "true" : "false") +
-        ",\"phantom\":" + (entity.phantom ? "true" : "false") +
-        ",\"basePermissions\":" + std::to_string(entity.base_permissions) +
-        ",\"ownerPermissions\":" + std::to_string(entity.owner_permissions) +
-        ",\"groupPermissions\":" + std::to_string(entity.group_permissions) +
-        ",\"everyonePermissions\":" + std::to_string(entity.everyone_permissions) +
-        ",\"nextOwnerPermissions\":" + std::to_string(entity.next_owner_permissions) + '}';
+void apply_object_asset(
+    homeworldz::scene::Entity& entity, const homeworldz::asset::ObjectAsset& asset) {
+    entity.scale = asset.scale;
+    entity.rotation = asset.rotation;
+    entity.material = asset.material;
+    entity.physics_shape_type = asset.physics_shape_type;
+    entity.physics_density = asset.physics_density;
+    entity.physics_friction = asset.physics_friction;
+    entity.physics_restitution = asset.physics_restitution;
+    entity.physics_gravity_multiplier = asset.physics_gravity_multiplier;
+    entity.texture_entry = asset.texture_entry;
+    entity.path_curve = asset.path_curve;
+    entity.profile_curve = asset.profile_curve;
+    entity.path_begin = asset.path_begin;
+    entity.path_end = asset.path_end;
+    entity.path_scale_x = asset.path_scale_x;
+    entity.path_scale_y = asset.path_scale_y;
+    entity.path_shear_x = asset.path_shear_x;
+    entity.path_shear_y = asset.path_shear_y;
+    entity.path_twist = asset.path_twist;
+    entity.path_twist_begin = asset.path_twist_begin;
+    entity.path_radius_offset = asset.path_radius_offset;
+    entity.path_taper_x = asset.path_taper_x;
+    entity.path_taper_y = asset.path_taper_y;
+    entity.path_revolutions = asset.path_revolutions;
+    entity.path_skew = asset.path_skew;
+    entity.profile_begin = asset.profile_begin;
+    entity.profile_end = asset.profile_end;
+    entity.profile_hollow = asset.profile_hollow;
+    entity.physical = asset.physical;
+    entity.phantom = asset.phantom;
 }
 
 std::optional<homeworldz::viewer::ObjectProperties> object_properties_from_entity(
@@ -3740,19 +3723,49 @@ int main(int argc, char* argv[]) {
                             }
                             std::vector<std::uint32_t> removed_ids;
                             std::size_t inventory_items_created = 0;
+                            std::unordered_set<homeworldz::scene::EntityId> processed_roots;
                             if ((derez->destination == derez_take_inventory ||
                                  derez->destination == derez_trash) &&
                                 homeworldz::viewer::valid_derez_batch(
                                     derez->packet_count, derez->packet_number)) {
                                 for (const auto local_id : derez->local_ids) {
-                                    const auto* entity = scene.find(local_id);
-                                    if (!entity || entity->object_id.empty() || entity->owner_id != user_id)
+                                    const auto* selected = scene.find(local_id);
+                                    if (!selected) continue;
+                                    const auto root_id = selected->parent_id != 0
+                                        ? selected->parent_id : local_id;
+                                    const auto* entity = scene.find(root_id);
+                                    if (!processed_roots.insert(root_id).second || !entity ||
+                                        entity->object_id.empty() || entity->owner_id != user_id)
                                         continue;
+                                    std::vector<const homeworldz::scene::Entity*> children;
+                                    std::vector<homeworldz::scene::EntityId> part_ids{root_id};
+                                    bool valid_linkset = true;
+                                    for (const auto& [candidate_id, candidate] : scene.entities()) {
+                                        if (candidate.parent_id != root_id) continue;
+                                        if (candidate.owner_id != user_id) {
+                                            valid_linkset = false;
+                                            break;
+                                        }
+                                        children.push_back(&candidate);
+                                        part_ids.push_back(candidate_id);
+                                    }
+                                    if (!valid_linkset) continue;
                                     const auto asset_id = homeworldz::viewer::random_uuid();
                                     const auto item_id = homeworldz::viewer::random_uuid();
-                                    const auto content_text = object_asset_json(*entity);
+                                    const auto content_text =
+                                        homeworldz::asset::serialize_linkset_asset(*entity, children);
                                     const auto content = std::span(
                                         reinterpret_cast<const std::byte*>(content_text.data()), content_text.size());
+                                    auto base_permissions = entity->base_permissions;
+                                    auto owner_permissions = entity->owner_permissions;
+                                    auto everyone_permissions = entity->everyone_permissions;
+                                    auto next_owner_permissions = entity->next_owner_permissions;
+                                    for (const auto* child : children) {
+                                        base_permissions &= child->base_permissions;
+                                        owner_permissions &= child->owner_permissions;
+                                        everyone_permissions &= child->everyone_permissions;
+                                        next_owner_permissions &= child->next_owner_permissions;
+                                    }
                                     bool item_created = false;
                                     try {
                                         const auto metadata = storage->store_asset(
@@ -3763,9 +3776,9 @@ int main(int argc, char* argv[]) {
                                         item_created = asset_registered && viewer_grid->create_object_inventory_item(
                                             user_id, homeworldz::grid::ObjectInventoryItem{
                                                 item_id, entity->creator_id, destination_id, asset_id,
-                                                entity->name, entity->description, entity->base_permissions,
-                                                entity->owner_permissions, entity->everyone_permissions,
-                                                entity->next_owner_permissions});
+                                                entity->name, entity->description, base_permissions,
+                                                owner_permissions, everyone_permissions,
+                                                next_owner_permissions});
                                     } catch (const std::exception& error) {
                                         std::cout << "{\"level\":\"error\",\"message\":\"primitive derez inventory failed\",\"error\":"
                                                   << homeworldz::api::json_string(error.what()) << "}" << std::endl;
@@ -3780,10 +3793,10 @@ int main(int argc, char* argv[]) {
                                     item.asset_type = 6;
                                     item.inventory_type = 6;
                                     item.name = entity->name;
-                                    item.base_permissions = entity->base_permissions;
-                                    item.current_permissions = entity->owner_permissions;
-                                    item.everyone_permissions = entity->everyone_permissions;
-                                    item.next_permissions = entity->next_owner_permissions;
+                                    item.base_permissions = base_permissions;
+                                    item.current_permissions = owner_permissions;
+                                    item.everyone_permissions = everyone_permissions;
+                                    item.next_permissions = next_owner_permissions;
                                     item.creation_date = static_cast<std::int32_t>(
                                         std::chrono::duration_cast<std::chrono::seconds>(
                                             std::chrono::system_clock::now().time_since_epoch()).count());
@@ -3794,10 +3807,10 @@ int main(int argc, char* argv[]) {
                                     if (const auto outgoing = circuits.send(
                                             endpoint, std::move(inventory_update), true, now, true))
                                         static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
-                                    if (scene.remove(local_id)) {
-                                        removed_ids.push_back(local_id);
-                                        ++inventory_items_created;
-                                    }
+                                    for (auto part = part_ids.rbegin(); part != part_ids.rend(); ++part)
+                                        if (scene.remove(*part))
+                                            removed_ids.push_back(static_cast<std::uint32_t>(*part));
+                                    ++inventory_items_created;
                                 }
                             }
                             bool persisted = removed_ids.empty();
@@ -3821,7 +3834,8 @@ int main(int argc, char* argv[]) {
                                 }
                             }
                             std::cout << "{\"level\":"
-                                      << (persisted && removed_ids.size() == derez->local_ids.size() ? "\"info\"" : "\"warn\"")
+                                      << (persisted && inventory_items_created == processed_roots.size()
+                                              ? "\"info\"" : "\"warn\"")
                                       << ",\"message\":\"primitive derez batch processed\",\"removed\":"
                                       << removed_ids.size() << ",\"inventoryItemsCreated\":"
                                       << inventory_items_created << ",\"requested\":" << derez->local_ids.size()
@@ -3835,15 +3849,16 @@ int main(int argc, char* argv[]) {
                             const auto item_id = homeworldz::viewer::format_uuid(rez->item_id);
                             bool created = false;
                             std::string object_id;
-                            homeworldz::scene::EntityId entity_id{};
+                            std::vector<homeworldz::scene::EntityId> entity_ids;
                             try {
                                 const auto item = viewer_grid
                                     ? viewer_grid->find_inventory_item(user_id, item_id) : std::nullopt;
                                 if (item && item->asset_type == 6 && item->inventory_type == 6 &&
                                     (!rez->remove_item ||
-                                     (item->current_permissions & homeworldz::scene::permission_copy) != 0)) {
+                                    (item->current_permissions & homeworldz::scene::permission_copy) != 0)) {
                                     const auto content = read_federated_asset(item->asset_id);
-                                    const auto asset = homeworldz::asset::parse_object_asset(content);
+                                    const auto linkset = homeworldz::asset::parse_linkset_asset(content);
+                                    const auto* asset = linkset ? &linkset->root : nullptr;
                                     std::optional<homeworldz::scene::Vector3> placement;
                                     if (asset && rez->bypass_raycast) {
                                         const homeworldz::scene::Vector3 ray_end{
@@ -3886,41 +3901,13 @@ int main(int argc, char* argv[]) {
                                         placement->z >= -64.0 && placement->z <= 4096.0;
                                     if (asset && valid_position) {
                                         object_id = homeworldz::viewer::random_uuid();
-                                        entity_id = scene.create(item->name, *placement);
-                                        if (auto* entity = scene.find(entity_id)) {
+                                        const auto root_id = scene.create(item->name, *placement);
+                                        entity_ids.push_back(root_id);
+                                        if (auto* entity = scene.find(root_id)) {
                                             entity->object_id = object_id;
                                             entity->owner_id = user_id;
                                             entity->creator_id = item->creator_id;
-                                            entity->scale = asset->scale;
-                                            entity->rotation = asset->rotation;
-                                            entity->material = asset->material;
-                                            entity->physics_shape_type = asset->physics_shape_type;
-                                            entity->physics_density = asset->physics_density;
-                                            entity->physics_friction = asset->physics_friction;
-                                            entity->physics_restitution = asset->physics_restitution;
-                                            entity->physics_gravity_multiplier =
-                                                asset->physics_gravity_multiplier;
-                                            entity->texture_entry = asset->texture_entry;
-                                            entity->path_curve = asset->path_curve;
-                                            entity->profile_curve = asset->profile_curve;
-                                            entity->path_begin = asset->path_begin;
-                                            entity->path_end = asset->path_end;
-                                            entity->path_scale_x = asset->path_scale_x;
-                                            entity->path_scale_y = asset->path_scale_y;
-                                            entity->path_shear_x = asset->path_shear_x;
-                                            entity->path_shear_y = asset->path_shear_y;
-                                            entity->path_twist = asset->path_twist;
-                                            entity->path_twist_begin = asset->path_twist_begin;
-                                            entity->path_radius_offset = asset->path_radius_offset;
-                                            entity->path_taper_x = asset->path_taper_x;
-                                            entity->path_taper_y = asset->path_taper_y;
-                                            entity->path_revolutions = asset->path_revolutions;
-                                            entity->path_skew = asset->path_skew;
-                                            entity->profile_begin = asset->profile_begin;
-                                            entity->profile_end = asset->profile_end;
-                                            entity->profile_hollow = asset->profile_hollow;
-                                            entity->physical = asset->physical;
-                                            entity->phantom = asset->phantom;
+                                            apply_object_asset(*entity, *asset);
                                             entity->description = item->description.empty()
                                                 ? asset->description : item->description;
                                             entity->base_permissions = item->base_permissions;
@@ -3930,19 +3917,48 @@ int main(int argc, char* argv[]) {
                                             entity->creation_date = static_cast<std::uint64_t>(
                                                 std::chrono::duration_cast<std::chrono::seconds>(
                                                     std::chrono::system_clock::now().time_since_epoch()).count());
+                                            for (const auto& child_asset : linkset->children) {
+                                                const auto child_id = scene.create(
+                                                    child_asset.name.empty() ? "Primitive" : child_asset.name);
+                                                entity_ids.push_back(child_id);
+                                                auto* child = scene.find(child_id);
+                                                if (!child) throw std::runtime_error("create linkset child");
+                                                child->object_id = homeworldz::viewer::random_uuid();
+                                                child->owner_id = user_id;
+                                                child->creator_id = child_asset.creator_id.empty()
+                                                    ? item->creator_id : child_asset.creator_id;
+                                                apply_object_asset(*child, child_asset);
+                                                child->description = child_asset.description;
+                                                child->base_permissions =
+                                                    child_asset.base_permissions & item->base_permissions;
+                                                child->owner_permissions =
+                                                    child_asset.owner_permissions & item->current_permissions;
+                                                child->group_permissions = child_asset.group_permissions;
+                                                child->everyone_permissions =
+                                                    child_asset.everyone_permissions & item->everyone_permissions;
+                                                child->next_owner_permissions =
+                                                    child_asset.next_owner_permissions & item->next_permissions;
+                                                child->creation_date = entity->creation_date;
+                                                child->parent_id = root_id;
+                                                child->local_position = child_asset.local_position;
+                                                child->local_rotation = child_asset.local_rotation;
+                                                homeworldz::scene::update_linked_world_transform(*child, *entity);
+                                            }
                                             storage->save_snapshot(scene);
                                             created = true;
                                         }
                                     }
                                 }
                             } catch (const std::exception& error) {
-                                if (entity_id != 0) scene.remove(entity_id);
+                                for (auto entity = entity_ids.rbegin(); entity != entity_ids.rend(); ++entity)
+                                    scene.remove(*entity);
                                 std::cout << "{\"level\":\"error\",\"message\":\"primitive rez failed\",\"error\":"
                                           << homeworldz::api::json_string(error.what()) << "}" << std::endl;
                             }
                             if (created) {
-                                const auto* entity = scene.find(entity_id);
-                                if (entity) {
+                                for (const auto entity_id : entity_ids) {
+                                    const auto* entity = scene.find(entity_id);
+                                    if (!entity) continue;
                                     synchronize_physics_object(*entity);
                                     const auto region_handle =
                                         (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
