@@ -833,3 +833,10 @@ large X was carved into Welcome with Firestorm's terrain editor. The changed
 heightfield appeared immediately on the world map while Sandbox retained the
 original plateau. This verifies the complete Region terrain snapshot, Grid
 shading/cache/composition, and viewer map-refresh path.
+
+The initial task-inventory protocol passed live acceptance on 2026-07-17.
+Opening the Contents tab of the newly created owned prim `Contents1` displayed
+`Contents (No Elements)` immediately, without a spinner, delay, or viewer
+error. The Welcome Region recorded the matching authenticated
+`RequestTaskInventory` and sent the empty `ReplyTaskInventory` for the prim's
+persistent object UUID.
