@@ -2604,9 +2604,29 @@ int main(int argc, char* argv[]) {
                                 static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
                             const homeworldz::viewer::AvatarAnimation animation_response{
                                 identity->agent_id, animations};
-                            if (const auto outgoing = circuits.send(endpoint,
-                                    homeworldz::viewer::encode_avatar_animation(animation_response), false, now))
-                                static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
+                            const auto new_animation =
+                                homeworldz::viewer::encode_avatar_animation(animation_response);
+                            for (const auto& [recipient_endpoint, recipient] : avatars) {
+                                static_cast<void>(recipient);
+                                if (const auto outgoing = circuits.send(
+                                        recipient_endpoint, new_animation, false, now))
+                                    static_cast<void>(send_udp(
+                                        viewer_server, recipient_endpoint, *outgoing));
+                            }
+                            for (const auto& [animation_endpoint, retained] : avatar_animations) {
+                                if (animation_endpoint == endpoint || retained.empty()) continue;
+                                const auto existing = avatars.find(animation_endpoint);
+                                if (existing == avatars.end()) continue;
+                                const auto sender_id =
+                                    homeworldz::viewer::parse_uuid(existing->second.user_id);
+                                if (!sender_id) continue;
+                                const auto retained_animation =
+                                    homeworldz::viewer::encode_avatar_animation(
+                                        {*sender_id, retained});
+                                if (const auto outgoing = circuits.send(
+                                        endpoint, retained_animation, false, now))
+                                    static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
+                            }
                             for (const auto& [appearance_endpoint, retained] : avatar_appearances) {
                                 if (appearance_endpoint == endpoint) continue;
                                 const auto retained_appearance =
