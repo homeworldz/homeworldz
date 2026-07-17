@@ -10,6 +10,31 @@ Checkboxes describe the present state, not a promise of a release date. A
 milestone is complete only when its automated tests and applicable Firestorm
 acceptance tests pass.
 
+## Progress snapshot
+
+Updated 2026-07-17. These bars are effort-weighted engineering estimates, not
+simple checkbox ratios. Later scripting, crossings, social systems, security,
+recovery, and scale items are substantially larger than many completed viewer
+protocol tasks. Percentages are deliberately approximate and should be revised
+when scope or implementation evidence changes.
+
+**Overall: `████░░░░░░░░░░░░░░░░` 18%**
+
+| Phase | Progress | Estimate |
+| --- | --- | ---: |
+| 1. Playable Single Region | `██████████████████░░` | 92% |
+| 2. Interactive Physical World | `█████░░░░░░░░░░░░░░░` | 25% |
+| 3. Connected Multi-Region World | `██████░░░░░░░░░░░░░░` | 30% |
+| 4. LSL Scripting | `░░░░░░░░░░░░░░░░░░░░` | 2% |
+| 5. Social and Creator Platform | `█░░░░░░░░░░░░░░░░░░░` | 7% |
+| 6. Reliable Operations and Distribution | `██░░░░░░░░░░░░░░░░░░` | 10% |
+| 7. Scale, Compatibility, and Ecosystem | `░░░░░░░░░░░░░░░░░░░░` | 2% |
+
+The overall estimate is weighted by expected effort and therefore is not the
+arithmetic mean of the phase percentages. The binary checkboxes below remain
+the acceptance record; partially implemented work contributes to these bars
+but stays unchecked until its complete wording is satisfied.
+
 ## Phase 1: Playable Single Region
 
 ### Platform foundation
@@ -31,6 +56,8 @@ acceptance tests pass.
   baking, and persistent appearance across relogs.
 - [x] Provide a read-only system Library with default avatar and terrain
   content.
+- [x] Synchronize nearby avatar presence, movement, appearance rebakes, and
+  animation changes between concurrently connected viewers.
 
 ### Authoritative avatar movement
 
@@ -65,8 +92,9 @@ acceptance tests pass.
 
 ### Core inventory, assets, and objects
 
-- [x] Implement AIS v3 inventory fetch and mutation, Library outfit copying,
-  Current Outfit links, folder operations, and Trash lifecycle operations.
+- [x] Implement AIS v3 inventory fetch and mutation, viewer-authored wearables,
+  named outfit saving, Library outfit copying, Current Outfit links, folder
+  operations, and Trash lifecycle operations.
 - [x] Implement free texture upload, required creator provenance,
   content-addressed assets, origin registration, and region replication.
 - [x] Implement primitive rez, edit, permissions, ownership, take, delete,
@@ -83,13 +111,13 @@ acceptance tests pass.
 
 - [x] Make Jolt the default production physics world while retaining the
   engine-independent plugin boundary.
-- [ ] Create, update, sleep, wake, remove, and restore physical bodies from
+- [x] Create, update, sleep, wake, remove, and restore physical bodies from
   authoritative scene changes.
 - [ ] Synchronize physical transforms and velocities to viewers at suitable
   rates with interest-aware throttling.
 - [ ] Implement collision filtering, material behavior, phantom and temporary
   objects, volume detection, and collision events.
-- [ ] Verify deterministic-enough restart and handoff behavior through shared
+- [x] Verify deterministic-enough restart and handoff behavior through shared
   physics acceptance scenarios.
 
 ### Attachments and sitting
@@ -107,7 +135,7 @@ acceptance tests pass.
 
 ### Vehicles and physical objects
 
-- [ ] Implement stable dynamic-object movement, editing, taking, and restoration
+- [x] Implement stable dynamic-object movement, editing, taking, and restoration
   without losing physics state.
 - [ ] Add the Second Life vehicle parameter model required by LSL vehicles.
 - [ ] Make a single `llSetVehicleType(VEHICLE_TYPE_*)` call activate a usable
@@ -134,6 +162,10 @@ acceptance tests pass.
 ## Phase 3: Connected Multi-Region World
 
 ### Region topology and variable size
+
+- [x] Load an operator-owned JSON registry of provisioned Regions and
+  authenticate Region startup by UUID plus per-Region access key, returning the
+  authoritative name and map coordinates.
 
 - [ ] Add authenticated grid-management endpoints to create, inspect, update,
   enable, disable, relocate, remove, and rotate credentials for provisioned
@@ -290,7 +322,8 @@ acceptance tests pass.
   meshes and non-colliding attachments by default.
 - [ ] Implement uploads, validation, dependencies, creator attribution, asset
   replication, and inventory creation for each supported asset type.
-- [ ] Add outfit creation and editing beyond the initial default-avatar flow.
+- [x] Add viewer-authored wearable creation, editing, and named outfit saving
+  beyond the initial default-avatar flow.
 - [ ] Provide bulk inventory, search, copy, transfer, export-policy, recovery,
   and large-inventory performance behavior.
 
@@ -320,6 +353,10 @@ acceptance tests pass.
   source checkout or development toolchain.
 
 ### Backups, upgrades, and reconciliation
+
+- [x] Restart or replace the central Grid service without restarting connected
+  Regions; retain PostgreSQL-backed viewer sessions so Region simulation and
+  active viewer circuits continue while Grid-backed operations resume.
 
 - [ ] Back up and restore PostgreSQL grid state, region SQLite state, assets,
   terrain, configuration, and compatible runtime state.
