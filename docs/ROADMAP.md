@@ -18,24 +18,28 @@ recovery, and scale items are substantially larger than many completed viewer
 protocol tasks. Percentages are deliberately approximate and should be revised
 when scope or implementation evidence changes.
 
-**Overall: `████░░░░░░░░░░░░░░░░` 18%**
+<label class="roadmap-overall-progress">
+  <span>Overall progress</span>
+  <progress data-color="primary" max="100" value="18">18%</progress>
+  <strong>18%</strong>
+</label>
 
 | Phase | Progress | Estimate |
 | --- | --- | ---: |
-| 1. Playable Single Region | `██████████████████░░` | 92% |
-| 2. Interactive Physical World | `█████░░░░░░░░░░░░░░░` | 25% |
-| 3. Connected Multi-Region World | `██████░░░░░░░░░░░░░░` | 30% |
-| 4. LSL Scripting | `░░░░░░░░░░░░░░░░░░░░` | 2% |
-| 5. Social and Creator Platform | `█░░░░░░░░░░░░░░░░░░░` | 7% |
-| 6. Reliable Operations and Distribution | `██░░░░░░░░░░░░░░░░░░` | 10% |
-| 7. Scale, Compatibility, and Ecosystem | `░░░░░░░░░░░░░░░░░░░░` | 2% |
+| 1. Playable Single region | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="92" aria-label="Phase 1 progress: 92%">92%</progress> | 92% |
+| 2. Interactive Physical World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="25" aria-label="Phase 2 progress: 25%">25%</progress> | 25% |
+| 3. Connected Multi-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="30" aria-label="Phase 3 progress: 30%">30%</progress> | 30% |
+| 4. LSL Scripting | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="2" aria-label="Phase 4 progress: 2%">2%</progress> | 2% |
+| 5. Social and Creator Platform | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="7" aria-label="Phase 5 progress: 7%">7%</progress> | 7% |
+| 6. Reliable Operations and Distribution | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="10" aria-label="Phase 6 progress: 10%">10%</progress> | 10% |
+| 7. Scale, Compatibility, and Ecosystem | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="2" aria-label="Phase 7 progress: 2%">2%</progress> | 2% |
 
 The overall estimate is weighted by expected effort and therefore is not the
 arithmetic mean of the phase percentages. The binary checkboxes below remain
 the acceptance record; partially implemented work contributes to these bars
 but stays unchecked until its complete wording is satisfied.
 
-## Phase 1: Playable Single Region
+## Phase 1: Playable Single region
 
 ### Platform foundation
 
@@ -159,12 +163,12 @@ but stays unchecked until its complete wording is satisfied.
 - [ ] Apply permissions recursively and consistently to linksets, object
   contents, attachments, and inventory transfers.
 
-## Phase 3: Connected Multi-Region World
+## Phase 3: Connected Multi-region World
 
 ### Region topology and variable size
 
-- [x] Load an operator-owned JSON registry of provisioned Regions and
-  authenticate Region startup by UUID plus per-Region access key, returning the
+- [x] Load an operator-owned JSON registry of provisioned regions and
+  authenticate region startup by UUID plus per-region access key, returning the
   authoritative name and map coordinates.
 
 - [ ] Add authenticated grid-management endpoints to create, inspect, update,
@@ -186,11 +190,11 @@ but stays unchecked until its complete wording is satisfied.
 ### Teleports and avatar crossings
 
 - [x] Keep avatar appearance, inventory, and Current Outfit stable through an
-  explicit teleport between registered Regions.
-- [ ] Keep avatar appearance stable while sitting and crossing Region borders.
+  explicit teleport between registered regions.
+- [ ] Keep avatar appearance stable while sitting and crossing region borders.
 - [x] Build an authenticated, idempotent two-region handoff transaction with a
   transit UUID, generation, prepare, accept, activate, and rollback stages.
-- [x] Teleport between registered Regions with destination validation, viewer
+- [x] Teleport between registered regions with destination validation, viewer
   circuit establishment, arrival placement, source retirement, and durable
   last-location login.
 - [ ] Complete remote-host failure recovery and reconciliation for interrupted
@@ -227,10 +231,10 @@ but stays unchecked until its complete wording is satisfied.
 
 ### World navigation
 
-- [x] Generate live terrain-derived Region tiles and compose world-map zoom
-  levels for 1x1 Regions.
-- [ ] Extend Region and world-map tile composition to the planned 2x2 and 4x4
-  Region sizes.
+- [x] Generate live terrain-derived region tiles and compose world-map zoom
+  levels for 1x1 regions.
+- [ ] Extend region and world-map tile composition to the planned 2x2 and 4x4
+  region sizes.
 - [x] Implement viewer map-block and prefix-name discovery for registered live
   regions.
 - [ ] Implement landmark resolution, home location, and teleport routing.
@@ -354,9 +358,9 @@ but stays unchecked until its complete wording is satisfied.
 
 ### Backups, upgrades, and reconciliation
 
-- [x] Restart or replace the central Grid service without restarting connected
-  Regions; retain PostgreSQL-backed viewer sessions so Region simulation and
-  active viewer circuits continue while Grid-backed operations resume.
+- [x] Restart or replace the central grid service without restarting connected
+  regions; retain PostgreSQL-backed viewer sessions so region simulation and
+  active viewer circuits continue while grid-backed operations resume.
 
 - [ ] Back up and restore PostgreSQL grid state, region SQLite state, assets,
   terrain, configuration, and compatible runtime state.

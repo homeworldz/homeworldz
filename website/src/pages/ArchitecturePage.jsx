@@ -6,7 +6,7 @@ export function ArchitecturePage() {
         <h1>Shared services at the center. Independent worlds at the edges.</h1>
         <p class="lede">
           HomeWorldz separates the services that make a grid feel connected from the servers that
-          run each world. The Grid coordinates identity, inventory, discovery, and movement between
+          run each world. The grid coordinates identity, inventory, discovery, and movement between
           regions. Region nodes own the live simulation and the content their regions need.
         </p>
       </header>
@@ -83,7 +83,7 @@ export function ArchitecturePage() {
                 <text class="diagram-svg-title diagram-svg-title-small" x="440" y="235">Welcome host</text>
                 <g class="diagram-process">
                   <rect x="440" y="250" width="170" height="78" rx="12" />
-                  <text class="diagram-process-title" x="456" y="280">Welcome Region</text>
+                <text class="diagram-process-title" x="456" y="280">Welcome region</text>
                   <text class="diagram-svg-copy" x="456" y="306">C++ · Jolt · local state</text>
                 </g>
                 <g class="diagram-storage">
@@ -102,12 +102,12 @@ export function ArchitecturePage() {
                 <text class="diagram-svg-title diagram-svg-title-small" x="670" y="235">Community host</text>
                 <g class="diagram-process">
                   <rect x="670" y="250" width="170" height="48" rx="12" />
-                  <text class="diagram-process-title" x="686" y="270">Events Region</text>
+                  <text class="diagram-process-title" x="686" y="270">Events region</text>
                   <text class="diagram-svg-copy" x="686" y="289">C++ · Jolt · local state</text>
                 </g>
                 <g class="diagram-process">
                   <rect x="670" y="306" width="170" height="48" rx="12" />
-                  <text class="diagram-process-title" x="686" y="326">Sandbox Region</text>
+                  <text class="diagram-process-title" x="686" y="326">Sandbox region</text>
                   <text class="diagram-svg-copy" x="686" y="345">C++ · Jolt · local state</text>
                 </g>
                 <g class="diagram-storage">
@@ -126,7 +126,7 @@ export function ArchitecturePage() {
                 <text class="diagram-svg-title diagram-svg-title-small" x="900" y="235">Personal host</text>
                 <g class="diagram-process">
                   <rect x="900" y="250" width="170" height="78" rx="12" />
-                  <text class="diagram-process-title" x="916" y="280">Home Region</text>
+                  <text class="diagram-process-title" x="916" y="280">Home region</text>
                   <text class="diagram-svg-copy" x="916" y="306">C++ · Jolt · local state</text>
                 </g>
                 <g class="diagram-storage">
@@ -144,8 +144,8 @@ export function ArchitecturePage() {
           </div>
 
           <figcaption id="diagram-caption">
-            Viewers use the Grid to log in and find a destination, then connect to the Region that
-            runs that part of the world. A region node can run one or more separate Region processes.
+            Viewers use the grid to log in and find a destination, then connect to the region that
+            runs that part of the world. A region node can run one or more separate region processes.
           </figcaption>
         </figure>
       </section>
@@ -154,25 +154,25 @@ export function ArchitecturePage() {
         <div class="section-heading">
           <p class="eyebrow">A viewer enters the world</p>
           <h2 id="connection-title">
-            The <strong>Grid</strong> introduces the <strong>viewer</strong> → the <strong>Region</strong> runs the <em>experience</em>.
+            The <strong>grid</strong> introduces the <strong>viewer</strong> → the <strong>region</strong> runs the <em>experience</em>.
           </h2>
         </div>
         <ol>
           <li>
             <strong>Sign in</strong>
-            <span>Firestorm contacts the Grid, which authenticates the account and resolves a destination.</span>
+            <span>Firestorm contacts the grid, which authenticates the account and resolves a destination.</span>
           </li>
           <li>
             <strong>Connect</strong>
-            <span>The viewer establishes a direct circuit with the destination Region.</span>
+            <span>The viewer establishes a direct circuit with the destination region.</span>
           </li>
           <li>
             <strong>Enter</strong>
-            <span>The Region streams terrain, objects, avatars, movement, physics, and capabilities.</span>
+            <span>The region streams terrain, objects, avatars, movement, physics, and capabilities.</span>
           </li>
           <li>
             <strong>Move between worlds</strong>
-            <span>The Grid and Regions coordinate teleports without making the Grid run the simulation.</span>
+            <span>The grid and regions coordinate teleports without making the grid run the simulation.</span>
           </li>
         </ol>
       </section>
@@ -184,18 +184,18 @@ export function ArchitecturePage() {
         </div>
         <div class="boundary-grid">
           <article>
-            <h3>The Grid connects the world</h3>
+            <h3>The grid connects the world</h3>
             <p>
               Central services maintain identities, inventory metadata, online presence, region
-              discovery, the world map, and coordination between independently running Regions.
+              discovery, the world map, and coordination between independently running regions.
             </p>
             <p class="boundary-store"><strong>Durable state:</strong> PostgreSQL</p>
           </article>
           <article>
             <h3>Regions run the world</h3>
             <p>
-              Each Region owns its scene, terrain, objects, avatar simulation, physics, viewer
-              updates, and local asset bytes. A Grid restart does not stop a running Region simulation.
+              Each region owns its scene, terrain, objects, avatar simulation, physics, viewer
+              updates, and local asset bytes. A grid restart does not stop a running region simulation.
             </p>
             <p class="boundary-store"><strong>Durable state:</strong> local SQLite and files</p>
           </article>
@@ -219,22 +219,22 @@ export function ArchitecturePage() {
           <article>
             <h3>Region-local assets</h3>
             <p>
-              Immutable asset bytes live near the Regions that use them. Regions can discover and
-              verify copies without turning the Grid into one central asset warehouse.
+              Immutable asset bytes live near the regions that use them. Regions can discover and
+              verify copies without turning the grid into one central asset warehouse.
             </p>
           </article>
           <article>
             <h3>Live world maps</h3>
             <p>
-              The Grid renders map tiles from running Regions’ current terrain, so viewer terrain
+              The grid renders map tiles from running regions’ current terrain, so viewer terrain
               edits can reach the world map without a separate daily map-generation job.
             </p>
           </article>
           <article>
             <h3>Restartable central services</h3>
             <p>
-              Grid services and Region simulations have separate lifecycles. Active Regions keep
-              simulating through a brief central Grid restart and resume shared operations afterward.
+              Grid services and region simulations have separate lifecycles. Active regions keep
+              simulating through a brief central grid restart and resume shared operations afterward.
               A central grid restart does not require the entire grid to be restarted.
             </p>
           </article>

@@ -10,10 +10,28 @@ export function FaqPage() {
         </p>
       </header>
 
-      <section class="faq-list" aria-label="HomeWorldz questions and answers">
+      <nav class="faq-toc" aria-labelledby="faq-toc-title">
+        <h2 id="faq-toc-title">On this page</h2>
+        <ul>
+          <li><a href="#what-is-homeworldz">What the heck is this?</a></li>
+          <li><a href="#supported-viewers">Which viewers are supported?</a></li>
+          <li><a href="#visitor-experience">What do visitors see?</a></li>
+          <li><a href="#grid-operation">Do I need to operate an entire grid?</a></li>
+          <li><a href="#multiple-regions">Can one host run more than one region?</a></li>
+          <li><a href="#asset-storage">Where are assets stored? Can I back up my region?</a></li>
+          <li><a href="#grid-restarts">What happens if the central grid restarts?</a></li>
+          <li><a href="#pricing-short-answer">What is the short answer on pricing?</a></li>
+          <li><a href="#pricing-long-answer">What is the longer answer on pricing?</a></li>
+          <li><a href="#availability">When can I try this? How is progress advancing?</a></li>
+          <li><a href="#run-a-region">Is there an installer I can try? How do I run my own region?</a></li>
+          <li><a href="#low-grid-prices">How are you able to offer grid services at such low prices?</a></li>
+          <li><a href="#intellectual-property">How is intellectual property protected?</a></li>
+        </ul>
+      </nav>
 
-        <details name="faq">
-          <summary>What the heck is this?</summary>
+      <div class="faq-list" aria-label="HomeWorldz questions and answers">
+        <section class="faq-item" id="what-is-homeworldz">
+          <h2>What the heck is this?</h2>
           <p>
             It is an easy way to run an SL-like virtual world on your own machine.
             You can run it at home, or pay for an inexpensive VPS machine on a cloud server like OVH or Digital Ocean.
@@ -22,18 +40,75 @@ export function FaqPage() {
             When hooked up to the central public grid, and marked not as a restricted-access private region, visitors
             with any Firestorm-compatible viewer can visit your region.
           </p>
-        </details>
+        </section>
 
-        <details name="faq">
-          <summary>Which viewers are supported?</summary>
+        <section class="faq-item" id="supported-viewers">
+          <h2>Which viewers are supported?</h2>
           <p>
             Firestorm compatibility is the first target. HomeWorldz presents the familiar viewer
             protocols at the edge while using a new server design internally.
           </p>
-        </details>
+        </section>
 
-        <details name="faq">
-          <summary>What is the short answer on pricing?</summary>
+        <section class="faq-item" id="visitor-experience">
+          <h2>What do visitors see?</h2>
+          <p>
+            Visitors use a compatible viewer to sign in, find destinations, and enter a region.
+            They see the terrain, objects, avatars, and experiences created by that region’s owner,
+            with familiar inventory, map, movement, and building workflows.
+          </p>
+          <p>
+            It looks and feels the same, except that some of the old quirks are resolved
+            by a fresh implementation. Avatar clouds,rebakes, etc are all brand-new and shiny
+            and have that "new car smell".
+          </p>
+        </section>
+
+        <section class="faq-item" id="grid-operation">
+          <h2>Do I need to operate an entire grid?</h2>
+          <p>
+            No. A region operator can connect a node to an existing grid and remain responsible
+            only for their own regions, content, and local infrastructure. Grid services are a
+            separate operational role.
+          </p>
+        </section>
+
+        <section class="faq-item" id="multiple-regions">
+          <h2>Can one host run more than one region?</h2>
+          <p>
+            Yes. One region node can run multiple independent region processes. Operators can keep
+            a small deployment together on one host or spread larger worlds across several hosts.
+          </p>
+        </section>
+
+        <section class="faq-item" id="asset-storage">
+          <h2>Where are assets stored? Can I back up my region?</h2>
+          <p>
+            Regions can discover and verify copies without relying on one central asset warehouse.
+            Assets live on the machines with the regions that use them, on storage controlled by
+            each region operator. (In English, this means they are stored with your region at your home, or where you choose.)
+          </p>
+          <p>
+            The grid stores shared records and inventory metadata in PostgreSQL, while region-local
+            scenes, assets, and simulation state remain at the edge.
+          </p>
+          <p>
+            <strong>This also means that saving a full backup of your region and everything in it, <em>including assets,</em> is as easy as copying
+              the HomeWorldz region folder somewhere safe, yourself.</strong>
+          </p>
+        </section>
+
+        <section class="faq-item" id="grid-restarts">
+          <h2>What happens if the central grid restarts?</h2>
+          <p>
+            Running regions keep simulating because grid services and region processes have separate
+            lifecycles. Shared operations such as login, discovery, and teleport coordination resume
+            after the grid is available again.
+          </p>
+        </section>
+
+        <section class="faq-item" id="pricing-short-answer">
+          <h2>What is the short answer on pricing?</h2>
           <p>
             Since you will be running <em>your own regions</em> on <em>your own machines</em>, that part
             is <strong>free</strong>, or whatever you want to pay for a machine of your choosing.
@@ -47,10 +122,10 @@ export function FaqPage() {
             Remember, you are hosting the region, this is just the registration to connect them all together,
             to provide centralized services like user, inventory and teleport management, etc. We want to encourage wide use.
           </p>
-          </details>
+        </section>
 
-        <details name="faq">
-          <summary>What is the longer answer on pricing?</summary>
+        <section class="faq-item" id="pricing-long-answer">
+          <h2>What is the longer answer on pricing?</h2>
           <p>
             Since you will be running <em>your own regions</em> on <em>your own machines</em>, that part
             is <strong>free</strong>, or whatever you want to pay for a machine of your choosing.
@@ -80,10 +155,10 @@ export function FaqPage() {
             matches your budget and scale it as your community grows. The only other cost is the nominal
             cost of registration with the grid.
           </p>
-        </details>
+        </section>
 
-        <details name="faq">
-          <summary>When can I try this? How is progress advancing?</summary>
+        <section class="faq-item" id="availability">
+          <h2>When can I try this? How is progress advancing?</h2>
           <p>
             It is not available to download or try yet, but something to try should be available
             in a matter of weeks, not months. You will probably be able to register a Homeworldz
@@ -108,11 +183,11 @@ export function FaqPage() {
             Because of this, it is too early to estimate completion but it is safe to say the current
             pace of progress is extreme. You can follow along on the <a href="/roadmap">Roadmap page</a>.
           </p>
-        </details>
+        </section>
 
 
-        <details name="faq">
-          <summary>Is there an installer I can try? How do I run my own region?</summary>
+        <section class="faq-item" id="run-a-region">
+          <h2>Is there an installer I can try? How do I run my own region?</h2>
           <p>
             We made it as simple as possible. Once the region installation bundle becomes available,
             for Windows, Mac and Linux, you will be able to download it and (almost) just run it.
@@ -130,10 +205,10 @@ export function FaqPage() {
             Then it is just an executable program you start like any other. Then you start your viewer and log in.
             Packaging and step-by-step setup will be published as the implementation reaches its first availability release.
           </p>
-        </details>
+        </section>
 
-        <details name="faq">
-          <summary>How are you able to offer grid services at such low prices?</summary>
+        <section class="faq-item" id="low-grid-prices">
+          <h2>How will you offer grid services at such low prices?</h2>
           <p>
             One of the critical costs of running InWorldz and other Halcyon grids -- or for that matter
             OpenSim as well -- was the ever-growing size of asset storage. For every user that <em>ever</em>
@@ -154,23 +229,10 @@ export function FaqPage() {
              More importantly, it means when a user shuts down a region, the grid is no longer responsible for
              presenting those assets, which means no longer responsible for storing them. (In Homeworldz, it never was.)
           </p>
-        </details>
+        </section>
 
-        <details name="faq">
-          <summary>Where are assets stored?</summary>
-          <p>
-            Immutable asset bytes live near the regions that use them, on storage controlled by
-            each region operator. Regions can discover and verify copies without relying on one
-            central asset warehouse.
-          </p>
-          <p>
-            The Grid stores shared records and inventory metadata in PostgreSQL, while region-local
-            scenes, assets, and simulation state remain at the edge.
-          </p>
-        </details>
-
-        <details name="faq">
-          <summary>How is intellectual property protected?</summary>
+        <section class="faq-item" id="intellectual-property">
+          <h2>How is intellectual property protected?</h2>
           <p>
             Because assets are stored under the direction of the region owner, there are legitimate
             concerns about Intellectual Property rights and protections. But by completely redesigning
@@ -193,48 +255,9 @@ export function FaqPage() {
             HomeWorldz believes that a grid must either provide reliable IP protections or move them out
             of the way don't pretend there is a strong permissions system.
           </p>
-        </details>
+        </section>
 
-        <details name="faq">
-          <summary>What do visitors see?</summary>
-          <p>
-            Visitors use a compatible viewer to sign in, find destinations, and enter a region.
-            They see the terrain, objects, avatars, and experiences created by that region’s owner,
-            with familiar inventory, map, movement, and building workflows.
-          </p>
-          <p>
-            It looks and feels the same, except that some of the old quirks are resolved
-            by a fresh implementation. Avatar clouds,rebakes, etc are all brand-new and shiny
-            and have that "new car smell".
-          </p>
-        </details>
-
-        <details name="faq">
-          <summary>Do I need to operate an entire Grid?</summary>
-          <p>
-            No. A region operator can connect a node to an existing Grid and remain responsible
-            only for their own regions, content, and local infrastructure. Grid services are a
-            separate operational role.
-          </p>
-        </details>
-
-        <details name="faq">
-          <summary>Can one host run more than one region?</summary>
-          <p>
-            Yes. One region node can run multiple independent region processes. Operators can keep
-            a small deployment together on one host or spread larger worlds across several hosts.
-          </p>
-        </details>
-
-        <details name="faq">
-          <summary>What happens if the central Grid restarts?</summary>
-          <p>
-            Running regions keep simulating because Grid services and region processes have separate
-            lifecycles. Shared operations such as login, discovery, and teleport coordination resume
-            after the Grid is available again.
-          </p>
-        </details>
-      </section>
+      </div>
     </article>
   );
 }

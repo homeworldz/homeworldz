@@ -179,6 +179,32 @@ section > h2,
   overflow-x: auto;
 }
 
+.roadmap-overall-progress {
+  display: grid;
+  grid-template-columns: auto minmax(8rem, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
+  margin-block: 1.5rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--vitre-border);
+  border-radius: var(--vitre-radius);
+  background: var(--vitre-surface-soft);
+}
+
+.roadmap-overall-progress > span,
+.roadmap-overall-progress > strong {
+  white-space: nowrap;
+}
+
+.roadmap-overall-progress progress {
+  inline-size: 100%;
+}
+
+.roadmap-phase-progress {
+  display: block;
+  inline-size: clamp(7rem, 22vw, 14rem);
+}
+
 .architecture-page {
   padding-bottom: clamp(3.5rem, 8vw, 7rem);
 }
@@ -509,35 +535,68 @@ section > h2,
   letter-spacing: -0.052em;
 }
 
-.faq-list {
+.faq-toc {
+  display: block;
+  margin-bottom: clamp(3rem, 7vw, 5rem);
+  padding: clamp(1.25rem, 3vw, 2rem);
+  border: 1px solid var(--vitre-border);
+  border-radius: var(--vitre-radius-lg);
+  background: color-mix(in srgb, var(--vitre-surface) 72%, transparent);
+}
+
+.faq-toc h2 {
+  margin-top: 0;
+  font-size: clamp(1.35rem, 3vw, 1.8rem);
+}
+
+.faq-toc ul {
   display: grid;
-  gap: 0.85rem;
+  grid-template-columns: 1fr;
+  gap: 0.65rem;
+  margin-bottom: 0;
+  padding-left: 0;
+  list-style: none;
 }
 
-.faq-list details {
-  padding: clamp(1.1rem, 2.5vw, 1.5rem);
-  transition: border-color 160ms ease, background-color 160ms ease;
+.faq-toc a {
+  text-underline-offset: 0.2em;
 }
 
-.faq-list details[open] {
-  border-color: color-mix(in srgb, var(--vitre-primary) 48%, var(--vitre-border));
-  background: color-mix(in srgb, var(--vitre-surface-soft) 86%, var(--vitre-primary) 3%);
+.faq-list {
+  border-bottom: 1px solid var(--vitre-border);
 }
 
-.faq-list summary {
-  font-size: clamp(1.05rem, 2vw, 1.2rem);
+.faq-item {
+  scroll-margin-top: 6rem;
+  padding-block: clamp(2rem, 5vw, 3.5rem);
+  border-top: 1px solid var(--vitre-border);
 }
 
-.faq-list summary::marker {
-  color: var(--vitre-primary);
+.faq-item:target {
+  border-top-color: var(--vitre-primary);
 }
 
-.faq-list details p {
+.faq-item h2 {
+  width: 100%;
+  max-width: none;
+  margin-top: 0;
+  font-size: clamp(1.35rem, 2.1vw, 1.65rem);
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+}
+
+@media (min-width: 48.01rem) {
+  .faq-item h2 {
+    white-space: nowrap;
+  }
+}
+
+.faq-item p {
   max-width: none;
   color: var(--vitre-muted);
 }
 
-.faq-list details p:last-child {
+.faq-item p:last-child {
   margin-bottom: 0;
 }
 
@@ -561,6 +620,19 @@ section > h2,
 
   .feature-grid {
     grid-template-columns: 1fr;
+  }
+
+  .roadmap-overall-progress {
+    grid-template-columns: 1fr auto;
+  }
+
+  .roadmap-overall-progress progress {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .roadmap-phase-progress {
+    inline-size: 4.5rem;
   }
 
   .boundary-grid,
@@ -596,7 +668,4 @@ section > h2,
     scroll-behavior: auto;
   }
 
-  .faq-list details {
-    transition: none;
-  }
 }
