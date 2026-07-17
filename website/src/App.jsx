@@ -1,7 +1,6 @@
-import type { ParentProps } from "solid-js";
 import { A } from "@solidjs/router";
 
-export function App(props: ParentProps) {
+export function App(props) {
   return (
     <>
       <header class="site-header">

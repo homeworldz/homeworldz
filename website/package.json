@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -16,7 +16,6 @@
     "vitre-js": "^0.4.0"
   },
   "devDependencies": {
-    "typescript": "^5.8.3",
     "vite": "^7.0.4",
     "vite-plugin-solid": "^2.11.8"
   },
