@@ -3744,12 +3744,19 @@ int main(int argc, char* argv[]) {
                         const auto derez = homeworldz::viewer::decode_derez_object(packet->payload);
                         if (derez && derez->agent_id == identity->agent_id &&
                             derez->session_id == identity->session_id) {
+                            constexpr std::uint8_t derez_take_copy = 0x01;
                             constexpr std::uint8_t derez_take_inventory = 0x04;
                             constexpr std::uint8_t derez_trash = 0x06;
+                            constexpr std::uint8_t derez_return_owner = 0x09;
                             constexpr int objects_folder_type = 6;
                             const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
                             auto destination_id = homeworldz::viewer::format_uuid(derez->destination_id);
-                            if (derez->destination == derez_take_inventory &&
+                            const bool objects_destination =
+                                derez->destination == derez_take_copy ||
+                                derez->destination == derez_take_inventory ||
+                                derez->destination == derez_return_owner;
+                            const bool removes_from_scene = derez->destination != derez_take_copy;
+                            if (objects_destination &&
                                 destination_id == "00000000-0000-0000-0000-000000000000" && viewer_grid) {
                                 if (const auto objects_folder = viewer_grid->find_system_inventory_folder(
                                         user_id, objects_folder_type))
@@ -3758,8 +3765,7 @@ int main(int argc, char* argv[]) {
                             std::vector<std::uint32_t> removed_ids;
                             std::size_t inventory_items_created = 0;
                             std::unordered_set<homeworldz::scene::EntityId> processed_roots;
-                            if ((derez->destination == derez_take_inventory ||
-                                 derez->destination == derez_trash) &&
+                            if ((objects_destination || derez->destination == derez_trash) &&
                                 homeworldz::viewer::valid_derez_batch(
                                     derez->packet_count, derez->packet_number)) {
                                 for (const auto local_id : derez->local_ids) {
@@ -3769,14 +3775,20 @@ int main(int argc, char* argv[]) {
                                         ? selected->parent_id : local_id;
                                     const auto* entity = scene.find(root_id);
                                     if (!processed_roots.insert(root_id).second || !entity ||
-                                        entity->object_id.empty() || entity->owner_id != user_id)
+                                        entity->object_id.empty() || entity->owner_id != user_id ||
+                                        (derez->destination == derez_take_copy &&
+                                         (entity->owner_permissions &
+                                             homeworldz::scene::permission_copy) == 0))
                                         continue;
                                     std::vector<const homeworldz::scene::Entity*> children;
                                     std::vector<homeworldz::scene::EntityId> part_ids{root_id};
                                     bool valid_linkset = true;
                                     for (const auto& [candidate_id, candidate] : scene.entities()) {
                                         if (candidate.parent_id != root_id) continue;
-                                        if (candidate.owner_id != user_id) {
+                                        if (candidate.owner_id != user_id ||
+                                            (derez->destination == derez_take_copy &&
+                                             (candidate.owner_permissions &
+                                                 homeworldz::scene::permission_copy) == 0)) {
                                             valid_linkset = false;
                                             break;
                                         }
@@ -3841,9 +3853,10 @@ int main(int argc, char* argv[]) {
                                     if (const auto outgoing = circuits.send(
                                             endpoint, std::move(inventory_update), true, now, true))
                                         static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
-                                    for (auto part = part_ids.rbegin(); part != part_ids.rend(); ++part)
-                                        if (scene.remove(*part))
-                                            removed_ids.push_back(static_cast<std::uint32_t>(*part));
+                                    if (removes_from_scene)
+                                        for (auto part = part_ids.rbegin(); part != part_ids.rend(); ++part)
+                                            if (scene.remove(*part))
+                                                removed_ids.push_back(static_cast<std::uint32_t>(*part));
                                     ++inventory_items_created;
                                 }
                             }
