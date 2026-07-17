@@ -73,6 +73,13 @@ than runtime dependencies.
   including exact region dimensions, north/south row conversion, and HSL
   lightness mapped to the 0-to-128-metre height range; reject JPEG terrain.
 - [x] Object rez, edit, take, delete, permissions, and persistence.
+- [x] Add persistent nonphysical linksets with root and child transforms,
+  whole-object and Edit Linked scaling, duplication, take, take-copy, return,
+  derez, inventory round trips, and static child collision.
+- [ ] Add object contents inventory and its permissions, mutation, copy, derez,
+  return, and inventory round-trip lifecycle.
+- [ ] Represent physical linksets as compound physics bodies rather than
+  independent self-colliding child bodies.
 - [x] Define the engine-independent script runtime boundary.
 - [x] Select a single-threaded custom C++ bytecode interpreter for Second Life
   LSL plus Halcyon/InWorldz extensions, excluding OpenSim extensions.

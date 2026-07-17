@@ -26,7 +26,7 @@ when scope or implementation evidence changes.
 
 | Phase | Progress | Estimate |
 | --- | --- | ---: |
-| 1. Functional Single-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="92" aria-label="Phase 1 progress: 92%">92%</progress> | 92% |
+| 1. Functional Single-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="94" aria-label="Phase 1 progress: 94%">94%</progress> | 94% |
 | 2. Interactive Physical World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="25" aria-label="Phase 2 progress: 25%">25%</progress> | 25% |
 | 3. Connected Multi-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="30" aria-label="Phase 3 progress: 30%">30%</progress> | 30% |
 | 4. LSL Scripting | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="2" aria-label="Phase 4 progress: 2%">2%</progress> | 2% |
@@ -103,8 +103,11 @@ but stays unchecked until its complete wording is satisfied.
   content-addressed assets, origin registration, and region replication.
 - [x] Implement primitive rez, edit, permissions, ownership, take, delete,
   restore, and restart persistence.
-- [ ] Complete linksets, child-prim transforms, object inventory, duplication,
-  return, and derez edge cases.
+- [x] Implement persistent nonphysical linksets with root and child transforms,
+  whole-object and Edit Linked scaling, duplication, take, take-copy, return,
+  derez, inventory round trips, and static child collision.
+- [ ] Implement task inventory (object contents) and complete its permissions,
+  mutation, copy, derez, return, and inventory round-trip lifecycle.
 - [ ] Add the remaining fundamental content types needed by appearance,
   building, attachments, and scripts, including animations, sounds, gestures,
   notecards, landmarks, and LSL source.
@@ -121,6 +124,8 @@ but stays unchecked until its complete wording is satisfied.
   rates with interest-aware throttling.
 - [ ] Implement collision filtering, material behavior, phantom and temporary
   objects, volume detection, and collision events.
+- [ ] Represent physical linksets as compound Jolt bodies with correct child
+  shapes, mass properties, collision behavior, transforms, and persistence.
 - [x] Verify deterministic-enough restart and handoff behavior through shared
   physics acceptance scenarios.
 
