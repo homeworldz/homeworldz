@@ -11,6 +11,7 @@ export function App(props) {
           </A>
           <div class="nav-links">
             <A href="/architecture">Architecture</A>
+            <A href="/faq">FAQ</A>
             <A href="/roadmap">Roadmap</A>
             <span data-kind="theme-toggle" aria-label="Choose color theme"></span>
           </div>

@@ -6,6 +6,7 @@ import { Vitre } from "vitre-js";
 import "./styles.css";
 import { App } from "./App";
 import { ArchitecturePage } from "./pages/ArchitecturePage";
+import { FaqPage } from "./pages/FaqPage";
 import { LandingPage } from "./pages/LandingPage";
 import { MarkdownPage } from "./pages/MarkdownPage";
 import roadmap from "../../docs/ROADMAP.md?raw";
@@ -22,6 +23,7 @@ render(
       <Route path="/" component={LandingPage} />
       <Route path="/roadmap" component={() => <MarkdownPage markdown={roadmap} />} />
       <Route path="/architecture" component={ArchitecturePage} />
+      <Route path="/faq" component={FaqPage} />
     </Router>
   ),
   root,

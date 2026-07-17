@@ -58,12 +58,11 @@ export function LandingPage() {
           <h2 id="technology-title">Optimal technology at every boundary.</h2>
         </div>
         <ul>
+          <li><strong>C++20</strong> for optimal gaming simulation for regions</li>
+          <li><strong>Jolt Physics</strong> default for powerful in-world physics</li>
+          <li><strong>NVIDIA PhysX 5</strong> optional alternative physics</li>
           <li><strong>Go language</strong> for central grid services</li>
           <li><strong>PostgreSQL</strong> for the durable grid state</li>
-          <li><strong>C++20</strong> for optimal gaming simulation for regions</li>
-          <li><strong>Jolt Physics</strong> default for powerful physics and vehicles</li>
-          <li><strong>NVIDIA PhysX 5</strong> optional alternative physics and vehicles</li>
-
         </ul>
       </section>
     </>

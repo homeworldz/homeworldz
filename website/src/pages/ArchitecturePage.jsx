@@ -18,68 +18,129 @@ export function ArchitecturePage() {
         </div>
 
         <figure class="architecture-diagram" aria-labelledby="diagram-caption">
-          <div class="diagram-grid-service">
-            <span class="diagram-kicker">Central grid host</span>
-            <h3>Grid services</h3>
-            <p>Identity · inventory · presence · region registry · map · coordination</p>
-            <strong>Go</strong>
-          </div>
+          <div class="architecture-diagram-scroll" tabindex="0" aria-label="Scrollable architecture diagram">
+            <svg class="architecture-diagram-svg" viewBox="0 0 1120 700" role="img" aria-labelledby="architecture-svg-title architecture-svg-description">
+              <title id="architecture-svg-title">HomeWorldz grid and region architecture</title>
+              <desc id="architecture-svg-description">
+                A central Go grid service stores durable data in PostgreSQL and coordinates three
+                independent region hosts. Firestorm viewers use the grid for sign-in and discovery,
+                then connect directly to a region for the live world experience.
+              </desc>
 
-          <div class="diagram-storage-link" aria-hidden="true">
-            <span>durable grid state</span>
-          </div>
+              <defs>
+                <marker id="arrow-grid" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M 0 0 L 10 5 L 0 10 z" />
+                </marker>
+                <marker id="arrow-live" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M 0 0 L 10 5 L 0 10 z" />
+                </marker>
+              </defs>
 
-          <div class="diagram-database">
-            <span class="diagram-kicker">Grid data</span>
-            <h3>PostgreSQL</h3>
-            <p>Accounts, inventory metadata, sessions, presence, and region records</p>
-          </div>
+              <g class="diagram-links">
+                <path class="diagram-link diagram-link-storage" d="M 180 410 V 335" />
+                <text class="diagram-link-label" x="195" y="378">durable grid state</text>
 
-          <div class="diagram-coordination" aria-hidden="true">
-            <span>authenticated coordination, discovery, and handoff</span>
-          </div>
+                <path class="diagram-link diagram-link-grid" d="M 320 245 H 370 V 105 H 985" />
+                <path class="diagram-link diagram-link-grid" d="M 525 105 V 150" />
+                <path class="diagram-link diagram-link-grid" d="M 755 105 V 150" />
+                <path class="diagram-link diagram-link-grid" d="M 985 105 V 150" />
+                <text class="diagram-link-label diagram-link-label-grid" x="677" y="82">authenticated coordination · discovery · handoff</text>
 
-          <div class="region-fleet" aria-label="Remote region nodes">
-            <section class="region-node">
-              <span class="diagram-kicker">Remote region node</span>
-              <h3>Welcome host</h3>
-              <div class="region-process">
-                <strong>Welcome Region</strong>
-                <span>C++ · Jolt · local state</span>
-              </div>
-            </section>
+                <path class="diagram-link diagram-link-login" d="M 420 615 H 365 V 285 H 320" />
+                <path class="diagram-link diagram-link-login" d="M 650 615 H 365" />
+                <path class="diagram-link diagram-link-login" d="M 880 615 H 365" />
+                <text class="diagram-link-label diagram-link-label-login" x="380" y="550">sign in &amp; find destination</text>
 
-            <section class="region-node region-node-multiple">
-              <span class="diagram-kicker">Remote region node</span>
-              <h3>Community host</h3>
-              <div class="region-process">
-                <strong>Events Region</strong>
-                <span>C++ · Jolt · local state</span>
-              </div>
-              <div class="region-process">
-                <strong>Sandbox Region</strong>
-                <span>C++ · Jolt · local state</span>
-              </div>
-            </section>
+                <path class="diagram-link diagram-link-live" d="M 525 410 V 580" />
+                <path class="diagram-link diagram-link-live" d="M 755 410 V 580" />
+                <path class="diagram-link diagram-link-live" d="M 985 410 V 580" />
+                <text class="diagram-link-label diagram-link-label-live" x="770" y="505">direct live world connections</text>
+              </g>
 
-            <section class="region-node">
-              <span class="diagram-kicker">Remote region node</span>
-              <h3>Personal host</h3>
-              <div class="region-process">
-                <strong>Home Region</strong>
-                <span>C++ · Jolt · local state</span>
-              </div>
-            </section>
-          </div>
+              <g class="diagram-card diagram-card-grid">
+                <rect x="40" y="170" width="280" height="165" rx="16" />
+                <text class="diagram-svg-kicker" x="64" y="202">CENTRAL GRID HOST</text>
+                <text class="diagram-svg-title" x="64" y="240">Grid services</text>
+                <text class="diagram-svg-copy" x="64" y="271">Identity · inventory · presence</text>
+                <text class="diagram-svg-copy" x="64" y="295">Registry · map · coordination</text>
+                <text class="diagram-svg-tech" x="64" y="319">GO</text>
+              </g>
 
-          <div class="diagram-viewer-link" aria-hidden="true">
-            <span>live world connections</span>
-          </div>
+              <g class="diagram-card diagram-card-database">
+                <rect x="70" y="410" width="220" height="120" rx="16" />
+                <text class="diagram-svg-kicker" x="94" y="442">GRID DATA</text>
+                <text class="diagram-svg-title diagram-svg-title-small" x="94" y="480">PostgreSQL</text>
+                <text class="diagram-svg-copy" x="94" y="508">Accounts · inventory · presence</text>
+              </g>
 
-          <div class="viewer-fleet" aria-label="Firestorm viewers">
-            <span>Firestorm viewer</span>
-            <span>Firestorm viewer</span>
-            <span>Firestorm viewer</span>
+              <g class="diagram-card diagram-card-region diagram-card-owner-one">
+                <rect x="420" y="150" width="210" height="260" rx="16" />
+                <text class="diagram-svg-kicker" x="440" y="181">REMOTE REGION NODE</text>
+                <g class="diagram-owner">
+                  <line x1="440" y1="201" x2="458" y2="201" />
+                  <text x="466" y="205">OWNER 1</text>
+                </g>
+                <text class="diagram-svg-title diagram-svg-title-small" x="440" y="235">Welcome host</text>
+                <g class="diagram-process">
+                  <rect x="440" y="250" width="170" height="78" rx="12" />
+                  <text class="diagram-process-title" x="456" y="280">Welcome Region</text>
+                  <text class="diagram-svg-copy" x="456" y="306">C++ · Jolt · local state</text>
+                </g>
+                <g class="diagram-storage">
+                  <line x1="440" y1="365" x2="610" y2="365" />
+                  <text x="440" y="391">Assets</text>
+                </g>
+              </g>
+
+              <g class="diagram-card diagram-card-region diagram-card-owner-two">
+                <rect x="650" y="150" width="210" height="260" rx="16" />
+                <text class="diagram-svg-kicker" x="670" y="181">REMOTE REGION NODE</text>
+                <g class="diagram-owner">
+                  <line x1="670" y1="201" x2="688" y2="201" />
+                  <text x="696" y="205">OWNER 2</text>
+                </g>
+                <text class="diagram-svg-title diagram-svg-title-small" x="670" y="235">Community host</text>
+                <g class="diagram-process">
+                  <rect x="670" y="250" width="170" height="48" rx="12" />
+                  <text class="diagram-process-title" x="686" y="270">Events Region</text>
+                  <text class="diagram-svg-copy" x="686" y="289">C++ · Jolt · local state</text>
+                </g>
+                <g class="diagram-process">
+                  <rect x="670" y="306" width="170" height="48" rx="12" />
+                  <text class="diagram-process-title" x="686" y="326">Sandbox Region</text>
+                  <text class="diagram-svg-copy" x="686" y="345">C++ · Jolt · local state</text>
+                </g>
+                <g class="diagram-storage">
+                  <line x1="670" y1="365" x2="840" y2="365" />
+                  <text x="670" y="391">Assets</text>
+                </g>
+              </g>
+
+              <g class="diagram-card diagram-card-region diagram-card-owner-three">
+                <rect x="880" y="150" width="210" height="260" rx="16" />
+                <text class="diagram-svg-kicker" x="900" y="181">REMOTE REGION NODE</text>
+                <g class="diagram-owner">
+                  <line x1="900" y1="201" x2="918" y2="201" />
+                  <text x="926" y="205">OWNER 3</text>
+                </g>
+                <text class="diagram-svg-title diagram-svg-title-small" x="900" y="235">Personal host</text>
+                <g class="diagram-process">
+                  <rect x="900" y="250" width="170" height="78" rx="12" />
+                  <text class="diagram-process-title" x="916" y="280">Home Region</text>
+                  <text class="diagram-svg-copy" x="916" y="306">C++ · Jolt · local state</text>
+                </g>
+                <g class="diagram-storage">
+                  <line x1="900" y1="365" x2="1070" y2="365" />
+                  <text x="900" y="391">Assets</text>
+                </g>
+              </g>
+
+              <g class="diagram-viewer">
+                <g><rect x="420" y="580" width="210" height="70" rx="14" /><circle cx="480" cy="615" r="7" /><text x="498" y="621">Viewer(s)</text></g>
+                <g><rect x="650" y="580" width="210" height="70" rx="14" /><circle cx="710" cy="615" r="7" /><text x="728" y="621">Viewer(s)</text></g>
+                <g><rect x="880" y="580" width="210" height="70" rx="14" /><circle cx="940" cy="615" r="7" /><text x="958" y="621">Viewer(s)</text></g>
+              </g>
+            </svg>
           </div>
 
           <figcaption id="diagram-caption">
@@ -92,7 +153,9 @@ export function ArchitecturePage() {
       <section class="connection-flow" aria-labelledby="connection-title">
         <div class="section-heading">
           <p class="eyebrow">A viewer enters the world</p>
-          <h2 id="connection-title">The central Grid introduces the viewer. The Region runs the experience.</h2>
+          <h2 id="connection-title">
+            The <strong>Grid</strong> introduces the <strong>viewer</strong> → the <strong>Region</strong> runs the <em>experience</em>.
+          </h2>
         </div>
         <ol>
           <li>
