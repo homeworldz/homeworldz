@@ -461,42 +461,6 @@ void apply_extra_physics(
         std::clamp(static_cast<double>(update.gravity_multiplier), -1.0, 28.0);
 }
 
-std::array<double, 4> entity_quaternion(const homeworldz::scene::Vector3& rotation) {
-    const auto squared = rotation.x * rotation.x + rotation.y * rotation.y + rotation.z * rotation.z;
-    return {rotation.x, rotation.y, rotation.z, std::sqrt((std::max)(0.0, 1.0 - squared))};
-}
-
-std::array<double, 4> multiply_quaternions(
-    const std::array<double, 4>& left, const std::array<double, 4>& right) {
-    return {
-        left[3] * right[0] + left[0] * right[3] + left[1] * right[2] - left[2] * right[1],
-        left[3] * right[1] - left[0] * right[2] + left[1] * right[3] + left[2] * right[0],
-        left[3] * right[2] + left[0] * right[1] - left[1] * right[0] + left[2] * right[3],
-        left[3] * right[3] - left[0] * right[0] - left[1] * right[1] - left[2] * right[2]};
-}
-
-homeworldz::scene::Vector3 quaternion_vector(std::array<double, 4> rotation) {
-    if (rotation[3] < 0.0) {
-        for (auto& component : rotation) component = -component;
-    }
-    return {rotation[0], rotation[1], rotation[2]};
-}
-
-void establish_child_transform(
-    homeworldz::scene::Entity& child, const homeworldz::scene::Entity& root) {
-    const auto root_rotation = entity_quaternion(root.rotation);
-    const std::array<double, 4> inverse_root{
-        -root_rotation[0], -root_rotation[1], -root_rotation[2], root_rotation[3]};
-    const homeworldz::scene::Vector3 offset{
-        child.position.x - root.position.x,
-        child.position.y - root.position.y,
-        child.position.z - root.position.z};
-    child.parent_id = root.id;
-    child.local_position = homeworldz::physics::rotate_vector(offset, inverse_root);
-    child.local_rotation = quaternion_vector(
-        multiply_quaternions(inverse_root, entity_quaternion(child.rotation)));
-}
-
 std::optional<homeworldz::viewer::StaticObject> static_object_from_entity(
     const homeworldz::scene::Entity& entity, std::string_view recipient_id) {
     constexpr std::uint32_t object_modify = 0x00000004;
@@ -2804,7 +2768,7 @@ int main(int argc, char* argv[]) {
                                 for (std::size_t index = 1; index < object_link->local_ids.size(); ++index) {
                                     auto* child = scene.find(object_link->local_ids[index]);
                                     originals.emplace(child->id, *child);
-                                    establish_child_transform(*child, *root);
+                                    homeworldz::scene::establish_link(*child, *root);
                                     child->velocity = {};
                                     changed.push_back(child->id);
                                 }
@@ -3036,13 +3000,10 @@ int main(int argc, char* argv[]) {
                             homeworldz::viewer::decode_multiple_object_update(packet->payload);
                         if (transform_update && transform_update->agent_id == identity->agent_id &&
                             transform_update->session_id == identity->session_id) {
-                            struct OriginalTransform {
-                                homeworldz::scene::Vector3 position;
-                                homeworldz::scene::Vector3 rotation;
-                                homeworldz::scene::Vector3 scale;
-                            };
-                            std::unordered_map<homeworldz::scene::EntityId, OriginalTransform> originals;
+                            std::unordered_map<homeworldz::scene::EntityId, homeworldz::scene::Entity> originals;
                             std::unordered_set<homeworldz::scene::EntityId> requested_entities;
+                            std::unordered_set<homeworldz::scene::EntityId> changed_roots;
+                            std::unordered_set<homeworldz::scene::EntityId> changed_children;
                             const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
                             for (const auto& update : transform_update->objects) {
                                 auto* entity = scene.find(update.local_id);
@@ -3056,10 +3017,15 @@ int main(int argc, char* argv[]) {
                                         [](float component) { return std::isfinite(component); });
                                 };
                                 const bool valid_position = !update.position ||
-                                    (finite_vector(*update.position) && (*update.position)[0] >= 0.0F &&
-                                     (*update.position)[0] <= 256.0F && (*update.position)[1] >= 0.0F &&
-                                     (*update.position)[1] <= 256.0F && (*update.position)[2] >= -64.0F &&
-                                     (*update.position)[2] <= 4096.0F);
+                                    (finite_vector(*update.position) &&
+                                     (entity->parent_id != 0
+                                         ? std::all_of(update.position->begin(), update.position->end(),
+                                               [](float component) {
+                                                   return component >= -4096.0F && component <= 4096.0F;
+                                               })
+                                         : ((*update.position)[0] >= 0.0F && (*update.position)[0] <= 256.0F &&
+                                            (*update.position)[1] >= 0.0F && (*update.position)[1] <= 256.0F &&
+                                            (*update.position)[2] >= -64.0F && (*update.position)[2] <= 4096.0F)));
                                 const bool valid_rotation = !update.rotation ||
                                     (finite_vector(*update.rotation) &&
                                      std::all_of(update.rotation->begin(), update.rotation->end(),
@@ -3073,16 +3039,36 @@ int main(int argc, char* argv[]) {
                                          [](float component) { return component >= 0.01F && component <= 64.0F; }));
                                 if (!valid_position || !valid_rotation || !valid_scale) continue;
                                 if (!update.position && !update.rotation && !update.scale) continue;
-                                originals.try_emplace(entity->id, OriginalTransform{
-                                    entity->position, entity->rotation, entity->scale});
+                                originals.try_emplace(entity->id, *entity);
+                                auto& position = entity->parent_id == 0
+                                    ? entity->position : entity->local_position;
+                                auto& rotation = entity->parent_id == 0
+                                    ? entity->rotation : entity->local_rotation;
                                 if (update.position)
-                                    entity->position = {(*update.position)[0], (*update.position)[1],
-                                                        (*update.position)[2]};
+                                    position = {(*update.position)[0], (*update.position)[1],
+                                                (*update.position)[2]};
                                 if (update.rotation)
-                                    entity->rotation = {(*update.rotation)[0], (*update.rotation)[1],
-                                                        (*update.rotation)[2]};
+                                    rotation = {(*update.rotation)[0], (*update.rotation)[1],
+                                                (*update.rotation)[2]};
                                 if (update.scale)
                                     entity->scale = {(*update.scale)[0], (*update.scale)[1], (*update.scale)[2]};
+                                if (entity->parent_id == 0) {
+                                    if (update.position || update.rotation) changed_roots.insert(entity->id);
+                                } else {
+                                    changed_children.insert(entity->id);
+                                }
+                            }
+                            for (const auto& [entity_id, current] : scene.entities()) {
+                                if (current.parent_id == 0 ||
+                                    (!changed_roots.contains(current.parent_id) &&
+                                     !changed_children.contains(entity_id)))
+                                    continue;
+                                const auto* root = scene.find(current.parent_id);
+                                auto* child = scene.find(entity_id);
+                                if (!root || !child) continue;
+                                originals.try_emplace(child->id, *child);
+                                homeworldz::scene::update_linked_world_transform(*child, *root);
+                                requested_entities.insert(child->id);
                             }
                             bool persisted = false;
                             if (!originals.empty()) {
@@ -3090,13 +3076,8 @@ int main(int argc, char* argv[]) {
                                     storage->save_snapshot(scene);
                                     persisted = true;
                                 } catch (const std::exception& error) {
-                                    for (const auto& [entity_id, original] : originals) {
-                                        if (auto* entity = scene.find(entity_id)) {
-                                            entity->position = original.position;
-                                            entity->rotation = original.rotation;
-                                            entity->scale = original.scale;
-                                        }
-                                    }
+                                    for (const auto& [entity_id, original] : originals)
+                                        if (auto* entity = scene.find(entity_id)) *entity = original;
                                     std::cout << "{\"level\":\"error\",\"message\":\"primitive update persistence failed\",\"error\":"
                                               << homeworldz::api::json_string(error.what()) << "}" << std::endl;
                                 }

@@ -25,6 +25,28 @@ int main() {
         homeworldz::scene::intersect_box(
             {5.0, 5.0, 5.0}, {4.0, 4.0, 4.0}, {0.0, 0.0, 0.0}, {1.0, 1.0, 1.0}))
         return 1;
+    homeworldz::scene::Entity root;
+    root.id = 10;
+    root.position = {10.0, 20.0, 30.0};
+    homeworldz::scene::Entity child;
+    child.id = 11;
+    child.position = {12.0, 20.0, 31.0};
+    homeworldz::scene::establish_link(child, root);
+    if (child.parent_id != root.id || !near(child.local_position.x, 2.0) ||
+        !near(child.local_position.y, 0.0) || !near(child.local_position.z, 1.0))
+        return 1;
+    constexpr double half_root_two = 0.70710678118654752440;
+    root.position = {20.0, 30.0, 40.0};
+    root.rotation.z = half_root_two;
+    homeworldz::scene::update_linked_world_transform(child, root);
+    if (!near(child.position.x, 20.0) || !near(child.position.y, 32.0) ||
+        !near(child.position.z, 41.0) || !near(child.rotation.z, half_root_two))
+        return 1;
+    child.local_position = {0.0, -3.0, 2.0};
+    homeworldz::scene::update_linked_world_transform(child, root);
+    if (!near(child.position.x, 23.0) || !near(child.position.y, 30.0) ||
+        !near(child.position.z, 42.0))
+        return 1;
     homeworldz::scene::Scene scene;
     const auto id = scene.create("moving object", {1.0, 2.0, 3.0}, {4.0, -2.0, 1.0});
     if (scene.size() != 1 || scene.revision() != 1) return 1;

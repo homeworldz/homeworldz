@@ -9,6 +9,45 @@
 
 namespace homeworldz::scene {
 
+namespace {
+using Quaternion = std::array<double, 4>;
+
+Quaternion quaternion(const Vector3& rotation) {
+    const auto squared = rotation.x * rotation.x + rotation.y * rotation.y + rotation.z * rotation.z;
+    return {rotation.x, rotation.y, rotation.z, std::sqrt((std::max)(0.0, 1.0 - squared))};
+}
+
+Quaternion multiply(const Quaternion& left, const Quaternion& right) {
+    return {
+        left[3] * right[0] + left[0] * right[3] + left[1] * right[2] - left[2] * right[1],
+        left[3] * right[1] - left[0] * right[2] + left[1] * right[3] + left[2] * right[0],
+        left[3] * right[2] + left[0] * right[1] - left[1] * right[0] + left[2] * right[3],
+        left[3] * right[3] - left[0] * right[0] - left[1] * right[1] - left[2] * right[2]};
+}
+
+Vector3 quaternion_vector(Quaternion rotation) {
+    if (rotation[3] < 0.0)
+        for (auto& component : rotation) component = -component;
+    return {rotation[0], rotation[1], rotation[2]};
+}
+
+Vector3 rotate(Vector3 value, const Quaternion& rotation) {
+    const Vector3 axis{rotation[0], rotation[1], rotation[2]};
+    const Vector3 cross{
+        axis.y * value.z - axis.z * value.y,
+        axis.z * value.x - axis.x * value.z,
+        axis.x * value.y - axis.y * value.x};
+    const Vector3 second_cross{
+        axis.y * cross.z - axis.z * cross.y,
+        axis.z * cross.x - axis.x * cross.z,
+        axis.x * cross.y - axis.y * cross.x};
+    return {
+        value.x + 2.0 * (rotation[3] * cross.x + second_cross.x),
+        value.y + 2.0 * (rotation[3] * cross.y + second_cross.y),
+        value.z + 2.0 * (rotation[3] * cross.z + second_cross.z)};
+}
+} // namespace
+
 bool apply_permission_update(
     Entity& entity, std::string_view agent_id, std::uint8_t field, bool set,
     std::uint32_t mask) {
@@ -98,6 +137,29 @@ std::optional<RayIntersection> intersect_box(
     if (near_axis == 1) result.normal.y = near_sign;
     if (near_axis == 2) result.normal.z = near_sign;
     return result;
+}
+
+void establish_link(Entity& child, const Entity& root) {
+    const auto root_rotation = quaternion(root.rotation);
+    const Quaternion inverse_root{
+        -root_rotation[0], -root_rotation[1], -root_rotation[2], root_rotation[3]};
+    const Vector3 offset{
+        child.position.x - root.position.x,
+        child.position.y - root.position.y,
+        child.position.z - root.position.z};
+    child.parent_id = root.id;
+    child.local_position = rotate(offset, inverse_root);
+    child.local_rotation = quaternion_vector(multiply(inverse_root, quaternion(child.rotation)));
+}
+
+void update_linked_world_transform(Entity& child, const Entity& root) {
+    const auto root_rotation = quaternion(root.rotation);
+    const auto offset = rotate(child.local_position, root_rotation);
+    child.position = {
+        root.position.x + offset.x,
+        root.position.y + offset.y,
+        root.position.z + offset.z};
+    child.rotation = quaternion_vector(multiply(root_rotation, quaternion(child.local_rotation)));
 }
 
 EntityId Scene::create(std::string name, Vector3 position, Vector3 velocity) {

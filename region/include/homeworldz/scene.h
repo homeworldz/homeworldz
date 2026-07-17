@@ -95,6 +95,9 @@ bool apply_permission_update(
 std::optional<RayIntersection> intersect_box(
     Vector3 ray_start, Vector3 ray_end, Vector3 center, Vector3 scale);
 
+void establish_link(Entity& child, const Entity& root);
+void update_linked_world_transform(Entity& child, const Entity& root);
+
 class Scene {
 public:
     EntityId create(std::string name, Vector3 position = {}, Vector3 velocity = {});
