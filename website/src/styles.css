@@ -1,0 +1,540 @@
+:root {
+  --vitre-hue: 201;
+  --vitre-primary: hsl(192 88% 46%);
+  --vitre-measure: 76rem;
+  --vitre-radius: 0.85rem;
+  --page-gutter: clamp(1rem, 4vw, 3rem);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  min-width: 20rem;
+}
+
+.site-header {
+  position: sticky;
+  z-index: 10;
+  top: 0;
+  padding-block: 0.65rem;
+  background: color-mix(in srgb, var(--vitre-background, Canvas) 82%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  backdrop-filter: blur(18px);
+}
+
+.site-header nav,
+main {
+  width: min(100% - (2 * var(--page-gutter)), 76rem);
+  margin-inline: auto;
+}
+
+.site-header nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.brand,
+.nav-links {
+  display: flex;
+  align-items: center;
+}
+
+.brand {
+  gap: 0.65rem;
+  color: inherit;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.brand img {
+  width: 2.35rem;
+  height: 2.35rem;
+}
+
+.nav-links {
+  gap: clamp(0.75rem, 2.5vw, 1.5rem);
+}
+
+.nav-links a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.nav-links a[aria-current="page"] {
+  color: var(--vitre-primary);
+}
+
+main > section,
+.document-page {
+  padding-block: clamp(3.5rem, 8vw, 7rem);
+}
+
+.hero {
+  min-height: min(48rem, calc(100vh - 5rem));
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(16rem, 0.65fr);
+  align-items: center;
+  gap: clamp(2rem, 6vw, 6rem);
+}
+
+.hero h1 {
+  max-width: 17ch;
+  margin-block: 0.35rem 1.25rem;
+  font-size: clamp(2.6rem, 7vw, 5.9rem);
+  line-height: 0.98;
+  letter-spacing: -0.055em;
+}
+
+.eyebrow {
+  margin-bottom: 0;
+  color: var(--vitre-primary);
+  font-size: 0.78rem;
+  font-weight: 750;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.lede {
+  max-width: 61ch;
+  font-size: clamp(1.05rem, 2vw, 1.3rem);
+}
+
+.key-emphasis {
+  color: var(--vitre-primary);
+  font-weight: 750;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  margin-top: 2rem;
+}
+
+.world-mark {
+  margin: 0;
+  text-align: center;
+}
+
+.world-mark img {
+  width: min(100%, 24rem);
+  filter: drop-shadow(0 1.75rem 3rem color-mix(in srgb, var(--vitre-primary) 20%, transparent));
+}
+
+.world-mark figcaption {
+  margin-top: 1.25rem;
+  opacity: 0.68;
+  font-size: 0.9rem;
+}
+
+section > h2,
+.technology h2 {
+  max-width: 22ch;
+  font-size: clamp(2rem, 4.5vw, 3.75rem);
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+}
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-top: 2.5rem;
+}
+
+.feature-grid article {
+  padding: clamp(1.25rem, 3vw, 2rem);
+}
+
+.technology {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: clamp(2rem, 7vw, 7rem);
+  align-items: start;
+}
+
+.technology ul {
+  margin-top: 0.5rem;
+}
+
+.document-page {
+  width: min(100%, 54rem);
+  margin-inline: auto;
+}
+
+.document-page h1 {
+  font-size: clamp(2.4rem, 6vw, 4.75rem);
+  letter-spacing: -0.045em;
+}
+
+.document-page h2 {
+  margin-top: 2.75rem;
+}
+
+.document-page pre {
+  overflow-x: auto;
+}
+
+.architecture-page {
+  padding-bottom: clamp(3.5rem, 8vw, 7rem);
+}
+
+.architecture-page > header,
+.architecture-page > section {
+  padding-block: clamp(3.5rem, 8vw, 7rem);
+}
+
+.architecture-intro {
+  max-width: 67rem;
+}
+
+.architecture-intro h1 {
+  max-width: 19ch;
+  margin-block: 0.4rem 1.5rem;
+  font-size: clamp(2.7rem, 6.5vw, 5.6rem);
+  line-height: 0.98;
+  letter-spacing: -0.052em;
+}
+
+.section-heading {
+  max-width: 52rem;
+  margin-bottom: clamp(2rem, 5vw, 4rem);
+}
+
+.section-heading h2 {
+  margin-top: 0.4rem;
+  font-size: clamp(2rem, 4.5vw, 3.75rem);
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+}
+
+.architecture-diagram {
+  display: grid;
+  grid-template-columns: minmax(15rem, 0.8fr) minmax(0, 1.8fr);
+  grid-template-areas:
+    "grid coordination"
+    "storage regions"
+    ". viewer-link"
+    ". viewers"
+    "caption caption";
+  gap: 0 2.25rem;
+  margin: 0;
+  padding: clamp(1rem, 3vw, 2rem);
+  border: 1px solid var(--vitre-border);
+  border-radius: var(--vitre-radius-lg);
+  background: color-mix(in srgb, var(--vitre-surface) 72%, transparent);
+}
+
+.diagram-grid-service,
+.diagram-database,
+.region-node,
+.region-process,
+.viewer-fleet span {
+  border: 1px solid var(--vitre-border);
+  border-radius: var(--vitre-radius);
+  background: var(--vitre-surface-soft);
+}
+
+.diagram-grid-service {
+  grid-area: grid;
+  align-self: end;
+  padding: 1.4rem;
+  border-color: color-mix(in srgb, var(--vitre-primary) 55%, var(--vitre-border));
+}
+
+.diagram-grid-service h3,
+.diagram-database h3,
+.region-node h3 {
+  margin-block: 0.25rem 0.45rem;
+}
+
+.diagram-grid-service p,
+.diagram-database p,
+.region-node p {
+  margin-block: 0.4rem;
+  font-size: 0.9rem;
+}
+
+.diagram-grid-service > strong {
+  color: var(--vitre-primary);
+}
+
+.diagram-kicker {
+  color: var(--vitre-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.diagram-storage-link {
+  grid-area: storage;
+  display: grid;
+  grid-template-rows: 2.8rem auto;
+  justify-items: center;
+}
+
+.diagram-storage-link::before,
+.diagram-viewer-link::before {
+  width: 1px;
+  height: 100%;
+  content: "";
+  background: var(--vitre-border-strong);
+}
+
+.diagram-storage-link span,
+.diagram-viewer-link span,
+.diagram-coordination span {
+  color: var(--vitre-muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
+  text-align: center;
+}
+
+.diagram-database {
+  width: 100%;
+  padding: 1.1rem 1.25rem;
+}
+
+.diagram-coordination {
+  grid-area: coordination;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: end;
+  gap: 0.75rem;
+  min-height: 3.5rem;
+}
+
+.diagram-coordination::before,
+.diagram-coordination::after {
+  height: 1px;
+  content: "";
+  background: var(--vitre-border-strong);
+}
+
+.region-fleet {
+  grid-area: regions;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.region-node {
+  padding: 1rem;
+}
+
+.region-process {
+  display: grid;
+  gap: 0.15rem;
+  margin-top: 0.75rem;
+  padding: 0.85rem;
+  border-color: color-mix(in srgb, var(--vitre-success) 55%, var(--vitre-border));
+}
+
+.region-process span {
+  color: var(--vitre-muted);
+  font-size: 0.75rem;
+}
+
+.diagram-viewer-link {
+  grid-area: viewer-link;
+  display: grid;
+  grid-template-rows: 2.5rem auto;
+  justify-items: center;
+}
+
+.viewer-fleet {
+  grid-area: viewers;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.8rem;
+}
+
+.viewer-fleet span {
+  padding: 0.7rem 0.9rem;
+  text-align: center;
+}
+
+.viewer-fleet span::before {
+  content: "◉";
+  margin-right: 0.45rem;
+  color: var(--vitre-primary);
+}
+
+.architecture-diagram figcaption {
+  grid-area: caption;
+  max-width: 75ch;
+  margin: 2rem auto 0;
+  color: var(--vitre-muted);
+  font-size: 0.86rem;
+  text-align: center;
+}
+
+.connection-flow ol {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--vitre-border);
+  border-radius: var(--vitre-radius-lg);
+  background: var(--vitre-border);
+  list-style: none;
+  counter-reset: viewer-flow;
+}
+
+.connection-flow li {
+  position: relative;
+  min-height: 12rem;
+  padding: 4rem 1.25rem 1.25rem;
+  background: var(--vitre-surface-soft);
+  counter-increment: viewer-flow;
+}
+
+.connection-flow li::before {
+  position: absolute;
+  top: 1.2rem;
+  left: 1.25rem;
+  content: "0" counter(viewer-flow);
+  color: var(--vitre-primary);
+  font-weight: 750;
+}
+
+.connection-flow li:not(:last-child)::after {
+  position: absolute;
+  z-index: 1;
+  top: 1.1rem;
+  right: -0.55rem;
+  content: "→";
+  color: var(--vitre-muted);
+}
+
+.connection-flow strong,
+.connection-flow span {
+  display: block;
+}
+
+.connection-flow span {
+  margin-top: 0.5rem;
+  color: var(--vitre-muted);
+}
+
+.boundary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.boundary-grid article {
+  padding: clamp(1.25rem, 3vw, 2rem);
+}
+
+.boundary-store {
+  color: var(--vitre-muted);
+  font-size: 0.88rem;
+}
+
+.difference-list {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0 3rem;
+}
+
+.difference-list article {
+  padding-block: 1.5rem;
+  border-top: 1px solid var(--vitre-border);
+}
+
+.difference-list h3 {
+  margin-top: 0;
+}
+
+@media (max-width: 48rem) {
+  .hero,
+  .technology {
+    grid-template-columns: 1fr;
+  }
+
+  .hero {
+    min-height: auto;
+  }
+
+  .world-mark {
+    order: -1;
+  }
+
+  .world-mark img {
+    width: min(65vw, 16rem);
+  }
+
+  .feature-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .architecture-diagram {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "grid"
+      "storage"
+      "coordination"
+      "regions"
+      "viewer-link"
+      "viewers"
+      "caption";
+  }
+
+  .diagram-coordination {
+    grid-template-columns: 1fr;
+    grid-template-rows: 2.8rem auto;
+    justify-items: center;
+    align-items: center;
+  }
+
+  .diagram-coordination::before {
+    width: 1px;
+    height: 100%;
+  }
+
+  .diagram-coordination::after {
+    display: none;
+  }
+
+  .region-fleet,
+  .viewer-fleet,
+  .boundary-grid,
+  .difference-list {
+    grid-template-columns: 1fr;
+  }
+
+  .connection-flow ol {
+    grid-template-columns: 1fr;
+  }
+
+  .connection-flow li {
+    min-height: 0;
+  }
+
+  .connection-flow li:not(:last-child)::after {
+    top: auto;
+    right: 1.2rem;
+    bottom: -0.7rem;
+    content: "↓";
+  }
+}
+
+@media (max-width: 34rem) {
+  .brand span,
+  .nav-links > a:nth-of-type(1) {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}

@@ -1,0 +1,730 @@
+openapi: 3.0.3
+info:
+  title: HomeWorldz Website API
+  version: 0.1.0
+  description: |
+    Browser-facing registration, avatar account management, and Grid
+    administration API. This API is separate from the viewer login protocol
+    and the service-token-protected API at grid.homeworldz.com.
+
+    Except for registration and token creation, operations require a short-lived
+    JWT in the Authorization header. JWTs identify an avatar account but are not
+    viewer sessions and never authorize an in-world connection.
+servers:
+  - url: https://api.homeworldz.com/v1
+    description: Production
+tags:
+  - name: Authentication
+    description: Public avatar registration and stateless website authentication.
+  - name: Account
+    description: Self-service operations for the authenticated avatar identity.
+  - name: Users
+    description: Privileged management of other avatar identities.
+  - name: Bans
+    description: Privileged account suspension and restoration.
+  - name: Regions
+    description: Privileged region metadata, map, and deployment management.
+paths:
+  /registrations:
+    post:
+      tags: [Authentication]
+      operationId: registerAvatar
+      summary: Register a new avatar account
+      description: |
+        Creates the avatar identity, both supported password representations,
+        and required initial inventory atomically. It does not create a viewer
+        or website session. Registration policy may reject public registration.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegisterAvatarRequest" }
+      responses:
+        "201":
+          description: Avatar account created
+          headers:
+            Location: { $ref: "#/components/headers/Location" }
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Identity" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /tokens:
+    post:
+      tags: [Authentication]
+      operationId: createWebsiteToken
+      summary: Authenticate an avatar for website administration
+      description: |
+        Verifies the bcrypt password and returns a short-lived JWT. No website
+        session record is created. The token has no in-world meaning.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateTokenRequest" }
+      responses:
+        "200":
+          description: Authentication succeeded
+          headers:
+            Cache-Control:
+              schema: { type: string, example: no-store }
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/InvalidCredentials" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /account:
+    get:
+      tags: [Account]
+      operationId: getCurrentAccount
+      summary: Return the authenticated avatar identity
+      security: [{ WebsiteToken: [] }]
+      responses:
+        "200":
+          description: Current identity
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Identity" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /account/profile:
+    patch:
+      tags: [Account]
+      operationId: updateCurrentProfile
+      summary: Update the authenticated avatar profile
+      security: [{ WebsiteToken: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateProfileRequest" }
+      responses:
+        "200":
+          description: Updated identity
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Identity" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /account/password:
+    put:
+      tags: [Account]
+      operationId: changeCurrentPassword
+      summary: Change the authenticated avatar password
+      description: |
+        Verifies the current password and atomically replaces the bcrypt and
+        viewer-compatible password representations. Incrementing the account's
+        authorization version invalidates all previously issued website JWTs,
+        including the token used for this request. Existing in-world viewer
+        sessions are not disconnected.
+      security: [{ WebsiteToken: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChangePasswordRequest" }
+      responses:
+        "204":
+          description: Password changed; authenticate again
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /admin/users:
+    get:
+      tags: [Users]
+      operationId: listUsers
+      summary: List or search avatar accounts
+      description: Requires `users`, `admin`, or `super`.
+      x-required-privilege: users
+      security: [{ WebsiteToken: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: User page
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /admin/users/{userId}:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    get:
+      tags: [Users]
+      operationId: getUser
+      summary: Get an avatar account
+      description: Requires `users`, `admin`, or `super`.
+      x-required-privilege: users
+      security: [{ WebsiteToken: [] }]
+      responses:
+        "200":
+          description: Avatar account
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ManagedUser" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Users]
+      operationId: updateUser
+      summary: Update an avatar account profile as an administrator
+      description: Requires `users`, `admin`, or `super`.
+      x-required-privilege: users
+      security: [{ WebsiteToken: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateProfileRequest" }
+      responses:
+        "200":
+          description: Updated account
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ManagedUser" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /admin/users/{userId}/privileges:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    put:
+      tags: [Users]
+      operationId: replaceUserPrivileges
+      summary: Replace an avatar account's administrative privileges
+      description: |
+        Requires `admin` or `super`. Only `super` may grant or revoke `super`.
+        The final enabled `super` account cannot be demoted. Updating privileges
+        increments the target account's authorization version.
+      x-required-privilege: admin
+      security: [{ WebsiteToken: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReplacePrivilegesRequest" }
+      responses:
+        "200":
+          description: Updated account
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ManagedUser" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /admin/users/{userId}/ban:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    put:
+      tags: [Bans]
+      operationId: banUser
+      summary: Ban an avatar account
+      description: Requires `bans`, `admin`, or `super`.
+      x-required-privilege: bans
+      security: [{ WebsiteToken: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanUserRequest" }
+      responses:
+        "200":
+          description: Banned account
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ManagedUser" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Bans]
+      operationId: unbanUser
+      summary: Remove an avatar account ban
+      description: Requires `bans`, `admin`, or `super`.
+      x-required-privilege: bans
+      security: [{ WebsiteToken: [] }]
+      responses:
+        "200":
+          description: Restored account
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ManagedUser" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /admin/regions:
+    get:
+      tags: [Regions]
+      operationId: listManagedRegions
+      summary: List provisioned regions, including offline regions
+      description: Requires `regions`, `admin`, or `super`.
+      x-required-privilege: regions
+      security: [{ WebsiteToken: [] }]
+      responses:
+        "200":
+          description: Provisioned regions
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegionList" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Regions]
+      operationId: createRegion
+      summary: Provision and deploy a new region
+      description: |
+        Requires `deploy` or `super`. Returns the region access key exactly
+        once. The caller is responsible for transferring it securely to the
+        region operator.
+      x-required-privilege: deploy
+      security: [{ WebsiteToken: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateRegionRequest" }
+      responses:
+        "201":
+          description: Region provisioned and enabled
+          headers:
+            Location: { $ref: "#/components/headers/Location" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegionDeployment" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /admin/regions/{regionId}:
+    parameters:
+      - $ref: "#/components/parameters/RegionId"
+    get:
+      tags: [Regions]
+      operationId: getManagedRegion
+      summary: Get a provisioned region
+      description: Requires `regions`, `admin`, or `super`.
+      x-required-privilege: regions
+      security: [{ WebsiteToken: [] }]
+      responses:
+        "200":
+          description: Provisioned region
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ManagedRegion" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Regions]
+      operationId: updateRegion
+      summary: Update ordinary region metadata
+      description: |
+        Requires `regions`, `admin`, or `super`. This endpoint cannot move,
+        deploy, or undeploy a region.
+      x-required-privilege: regions
+      security: [{ WebsiteToken: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateRegionRequest" }
+      responses:
+        "200":
+          description: Updated region
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ManagedRegion" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /admin/regions/{regionId}/map-position:
+    parameters:
+      - $ref: "#/components/parameters/RegionId"
+    put:
+      tags: [Regions]
+      operationId: moveRegion
+      summary: Assign or move a region on the world map
+      description: Requires `map` or `super`.
+      x-required-privilege: map
+      security: [{ WebsiteToken: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MapPositionRequest" }
+      responses:
+        "200":
+          description: Moved region
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ManagedRegion" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /admin/regions/{regionId}/deployment:
+    parameters:
+      - $ref: "#/components/parameters/RegionId"
+    post:
+      tags: [Regions]
+      operationId: deployRegion
+      summary: Enable a previously undeployed region
+      description: |
+        Requires `deploy` or `super`. Issues a new access key exactly once and
+        invalidates any earlier region access key.
+      x-required-privilege: deploy
+      security: [{ WebsiteToken: [] }]
+      responses:
+        "200":
+          description: Region enabled with a new access key
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegionDeployment" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [Regions]
+      operationId: undeployRegion
+      summary: Disable and remove a region from service
+      description: |
+        Requires `undeploy` or `super`. Revokes the region access key, disables
+        startup and discovery, ends any active lease, and releases its map
+        position. It does not erase region-local scenes or assets.
+      x-required-privilege: undeploy
+      security: [{ WebsiteToken: [] }]
+      responses:
+        "200":
+          description: Undeployed region record retained for later deployment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ManagedRegion" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+components:
+  securitySchemes:
+    WebsiteToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Short-lived HomeWorldz website identity JWT.
+  headers:
+    RequestId:
+      required: true
+      schema: { type: string }
+    Location:
+      required: true
+      schema: { type: string, format: uri-reference }
+  parameters:
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    RegionId:
+      name: regionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    Search:
+      name: search
+      in: query
+      schema: { type: string, maxLength: 128 }
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string, maxLength: 512 }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+  responses:
+    BadRequest:
+      description: Invalid request
+      headers:
+        X-Request-ID: { $ref: "#/components/headers/RequestId" }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    InvalidCredentials:
+      description: User ID or password is incorrect
+      headers:
+        X-Request-ID: { $ref: "#/components/headers/RequestId" }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unauthorized:
+      description: A valid, unexpired website token is required
+      headers:
+        WWW-Authenticate:
+          schema: { type: string, example: Bearer }
+        X-Request-ID: { $ref: "#/components/headers/RequestId" }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: The authenticated identity lacks the required privilege
+      headers:
+        X-Request-ID: { $ref: "#/components/headers/RequestId" }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Resource not found
+      headers:
+        X-Request-ID: { $ref: "#/components/headers/RequestId" }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Conflict:
+      description: Request conflicts with current state
+      headers:
+        X-Request-ID: { $ref: "#/components/headers/RequestId" }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    RateLimited:
+      description: Too many requests
+      headers:
+        Retry-After:
+          schema: { type: integer, minimum: 1 }
+        X-Request-ID: { $ref: "#/components/headers/RequestId" }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unavailable:
+      description: Operation is currently unavailable
+      headers:
+        X-Request-ID: { $ref: "#/components/headers/RequestId" }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+  schemas:
+    Error:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code: { type: string, pattern: "^[a-z0-9_]+$" }
+        message: { type: string }
+        field: { type: string }
+
+    UserId:
+      type: string
+      minLength: 3
+      maxLength: 32
+      pattern: "^[a-z0-9._-]+$"
+      example: jim.tarber
+    DisplayName:
+      type: string
+      minLength: 1
+      maxLength: 64
+      example: Jim Tarber
+    Privileges:
+      type: string
+      description: |
+        Normalized comma-separated privilege names. Initial names are users,
+        bans, regions, map, deploy, undeploy, admin, and super. `admin` expands
+        to a deliberately curated common set; `super` authorizes every current
+        and future privilege. Unknown names confer no authority.
+      pattern: "^$|^[a-z][a-z0-9_-]*(,[a-z][a-z0-9_-]*)*$"
+      example: users,bans,regions,map
+
+    Identity:
+      type: object
+      additionalProperties: false
+      required: [id, userid, displayName, rezDate, privs]
+      properties:
+        id: { type: string, format: uuid }
+        userid: { $ref: "#/components/schemas/UserId" }
+        displayName: { $ref: "#/components/schemas/DisplayName" }
+        rezDate: { type: string, format: date-time }
+        privs: { $ref: "#/components/schemas/Privileges" }
+
+    RegisterAvatarRequest:
+      type: object
+      additionalProperties: false
+      required: [userid, displayName, password]
+      properties:
+        userid: { $ref: "#/components/schemas/UserId" }
+        displayName: { $ref: "#/components/schemas/DisplayName" }
+        password: { type: string, format: password, minLength: 8, maxLength: 128 }
+    CreateTokenRequest:
+      type: object
+      additionalProperties: false
+      required: [userid, password]
+      properties:
+        userid: { $ref: "#/components/schemas/UserId" }
+        password: { type: string, format: password, minLength: 1, maxLength: 128 }
+    TokenResponse:
+      type: object
+      additionalProperties: false
+      required: [accessToken, tokenType, expiresAt, identity]
+      properties:
+        accessToken:
+          type: string
+          description: |
+            Signed JWT containing iss, aud, sub, userid, displayName, rezDate,
+            privs, ver, iat, and exp claims. It must not contain password data.
+        tokenType: { type: string, enum: [Bearer] }
+        expiresAt: { type: string, format: date-time }
+        identity: { $ref: "#/components/schemas/Identity" }
+    UpdateProfileRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        displayName: { $ref: "#/components/schemas/DisplayName" }
+    ChangePasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword: { type: string, format: password, minLength: 1, maxLength: 128 }
+        newPassword: { type: string, format: password, minLength: 8, maxLength: 128 }
+
+    AccountState:
+      type: string
+      enum: [active, banned]
+    Ban:
+      type: object
+      additionalProperties: false
+      required: [reason, bannedAt, bannedBy]
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 1024 }
+        expiresAt: { type: string, format: date-time, nullable: true }
+        bannedAt: { type: string, format: date-time }
+        bannedBy: { type: string, format: uuid }
+    ManagedUser:
+      allOf:
+        - $ref: "#/components/schemas/Identity"
+        - type: object
+          required: [state]
+          properties:
+            state: { $ref: "#/components/schemas/AccountState" }
+            ban: { $ref: "#/components/schemas/Ban" }
+    UserPage:
+      type: object
+      additionalProperties: false
+      required: [users]
+      properties:
+        users:
+          type: array
+          items: { $ref: "#/components/schemas/ManagedUser" }
+        nextCursor: { type: string }
+    ReplacePrivilegesRequest:
+      type: object
+      additionalProperties: false
+      required: [privs]
+      properties:
+        privs: { $ref: "#/components/schemas/Privileges" }
+    BanUserRequest:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 1024 }
+        expiresAt: { type: string, format: date-time, nullable: true }
+
+    RegionState:
+      type: string
+      enum: [online, offline, undeployed]
+    ManagedRegion:
+      type: object
+      additionalProperties: false
+      required: [id, name, ownerUserId, gridX, gridY, publicEndpoint, viewerPort, enabled, state]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 128 }
+        ownerUserId: { type: string, format: uuid }
+        gridX: { type: integer, minimum: 0, nullable: true }
+        gridY: { type: integer, minimum: 0, nullable: true }
+        publicEndpoint: { type: string, format: uri }
+        viewerPort: { type: integer, minimum: 1, maximum: 65535 }
+        enabled: { type: boolean }
+        state: { $ref: "#/components/schemas/RegionState" }
+        leaseExpiresAt: { type: string, format: date-time, nullable: true }
+    RegionList:
+      type: object
+      additionalProperties: false
+      required: [regions]
+      properties:
+        regions:
+          type: array
+          items: { $ref: "#/components/schemas/ManagedRegion" }
+    CreateRegionRequest:
+      type: object
+      additionalProperties: false
+      required: [name, ownerUserId, gridX, gridY, publicEndpoint, viewerPort]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 128 }
+        ownerUserId: { type: string, format: uuid }
+        gridX: { type: integer, minimum: 0 }
+        gridY: { type: integer, minimum: 0 }
+        publicEndpoint: { type: string, format: uri }
+        viewerPort: { type: integer, minimum: 1, maximum: 65535, default: 42002 }
+    UpdateRegionRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1, maxLength: 128 }
+        ownerUserId: { type: string, format: uuid }
+        publicEndpoint: { type: string, format: uri }
+        viewerPort: { type: integer, minimum: 1, maximum: 65535 }
+    MapPositionRequest:
+      type: object
+      additionalProperties: false
+      required: [gridX, gridY]
+      properties:
+        gridX: { type: integer, minimum: 0 }
+        gridY: { type: integer, minimum: 0 }
+    RegionDeployment:
+      type: object
+      additionalProperties: false
+      required: [region, accessKey]
+      properties:
+        region: { $ref: "#/components/schemas/ManagedRegion" }
+        accessKey:
+          type: string
+          minLength: 32
+          description: One-time plaintext region bootstrap credential.
