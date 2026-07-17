@@ -5,23 +5,95 @@ export function FaqPage() {
         <p class="eyebrow">Frequently asked questions</p>
         <h1>Running worlds on HomeWorldz.</h1>
         <p class="lede">
-          The short answers to how Regions are operated, where world data lives, and what the
+          The short answers to how regions are operated, where world data lives, and what the
           experience looks like to visitors.
         </p>
       </header>
 
       <section class="faq-list" aria-label="HomeWorldz questions and answers">
+
         <details name="faq">
-          <summary>When can I try this?</summary>
+          <summary>What the heck is this?</summary>
+          <p>
+            It is an easy way to run an SL-like virtual world on your own machine.
+            You can run it at home, or pay for an inexpensive VPS machine on a cloud server like OVH or Digital Ocean.
+          </p>
+          <p>
+            When hooked up to the central public grid, and marked not as a restricted-access private region, visitors
+            with any Firestorm-compatible viewer can visit your region.
+          </p>
+        </details>
+
+        <details name="faq">
+          <summary>Which viewers are supported?</summary>
+          <p>
+            Firestorm compatibility is the first target. HomeWorldz presents the familiar viewer
+            protocols at the edge while using a new server design internally.
+          </p>
+        </details>
+
+        <details name="faq">
+          <summary>What is the short answer on pricing?</summary>
+          <p>
+            Since you will be running <em>your own regions</em> on <em>your own machines</em>, that part
+            is <strong>free</strong>, or whatever you want to pay for a machine of your choosing.
+          </p>
+          <p>
+            <em>Registering</em> on the central public grid uses grid resources which will start adding up pretty quickly,
+            so <em>registration</em> of new regions won't be <em>completely</em> free.
+            Current expectations are no more than $5/month, or something like that. Pricing to be determined. More below in the longer answer.
+          </p>
+          <p>
+            Remember, you are hosting the region, this is just the registration to connect them all together,
+            to provide centralized services like user, inventory and teleport management, etc. We want to encourage wide use.
+          </p>
+          </details>
+
+        <details name="faq">
+          <summary>What is the longer answer on pricing?</summary>
+          <p>
+            Since you will be running <em>your own regions</em> on <em>your own machines</em>, that part
+            is <strong>free</strong>, or whatever you want to pay for a machine of your choosing.
+          </p>
+          <p>
+            That said, <em>registering</em> on the central public grid uses grid resources which will start adding up pretty quickly,
+            so <em>registration</em> of new regions won't be <em>completely</em> free.
+          </p>
+          <p>
+            Final pricing for HomeWorldz region registration has not yet been determined, but the current expectations,
+            subject to change as it firms up, places registration cost at maximum of $5 per region.
+            It may end up perhaps in cheaper bundles of $5 per <em>bundle of several region registrations</em>.
+            Remember, you are hosting the region, this is just the registration to connect them all together,
+            to provide centralized services like user, inventory and teleport management, etc. We want to encourage wide use.
+          </p>
+          <p>
+            Running your own region will also involve your own infrastructure costs for compute, storage,
+            and bandwidth, which depend on the size and activity of your world and the hosting provider you choose.
+          </p>
+          <p>
+            That said, your infrastructure may be running <em>in your own home</em>, for the cost of electricity.
+            It is up to you to decide how serious you want to be, and a free self-hosted region running
+            from home is expected to be the norm. After all, this is the origin of the name "HomeWorldz".
+          </p>
+          <p>
+            Because regions run on infrastructure you control, you can choose a deployment that
+            matches your budget and scale it as your community grows. The only other cost is the nominal
+            cost of registration with the grid.
+          </p>
+        </details>
+
+        <details name="faq">
+          <summary>When can I try this? How is progress advancing?</summary>
           <p>
             It is not available to download or try yet, but something to try should be available
             in a matter of weeks, not months. You will probably be able to register a Homeworldz
-            account within a week or two, and try it on our hosted development test regions.
+            account within a week or two, and try it on our hosted development test regions before
+            wider hookups are offered.
           </p>
           <p>
-            Progress has been epic. Still in <em>the first week</em>, it is already possible to
-            login to one or more regions with the Firestorm viewer, where it is already possible
-            to see improvements over Halcyon and OpenSim servers.
+            Progress has been epic. Still in <em>the first week</em>, and written entirely from scratch,
+            it is already possible to login to one or more regions with the Firestorm viewer,
+            where it is already possible to see some improvements over Halcyon and OpenSim servers.
           </p>
           <p>
             Logins are complete with avatar initialization, a Library with defaults, appearance and
@@ -33,13 +105,14 @@ export function FaqPage() {
             if you consider that the project is less than a week old.
           </p>
           <p>
-            Because of this, it is too early to estimate completion but I think it is safe to say the
+            Because of this, it is too early to estimate completion but it is safe to say the current
             pace of progress is extreme. You can follow along on the <a href="/roadmap">Roadmap page</a>.
           </p>
         </details>
 
+
         <details name="faq">
-          <summary>Is there an installer I can try? How do I run my own Region?</summary>
+          <summary>Is there an installer I can try? How do I run my own region?</summary>
           <p>
             We made it as simple as possible. Once the region installation bundle becomes available,
             for Windows, Mac and Linux, you will be able to download it and (almost) just run it.
@@ -56,37 +129,6 @@ export function FaqPage() {
           <p>
             Then it is just an executable program you start like any other. Then you start your viewer and log in.
             Packaging and step-by-step setup will be published as the implementation reaches its first availability release.
-          </p>
-        </details>
-
-        <details name="faq">
-          <summary>How much does this cost?</summary>
-          <p>
-            Since you will be running <em>your own regions</em> on <em>your own machines</em>, that part
-            is <strong>free</strong>. That said, <em>registering</em> on the grid uses central grid
-            resources which will start adding up pretty quickly, so <em>registration</em> of new regions won't be free.
-          </p>
-          <p>
-            Final pricing for HomeWorldz region registration has not yet been determined, but the current expectations,
-            subject to change as it firms up, places registration cost at maximum of $5 per region.
-            It may end up perhaps $5 per <em>bundle of many region registrations</em>.
-            Remember, you are hosting the region, this is just the registration to connect them all together,
-            to provide centralized services like user, inventory and teleport management, etc. We want to encourage wide use.
-          </p>
-          <p>
-            Running your own region will involve your own
-            infrastructure costs for compute, storage, and bandwidth, which depend on the size and
-            activity of your world and the hosting provider you choose.
-          </p>
-          <p>
-            That said, your infrastructure may be running in your home, for the cost of electricity.
-            It is up to you to decide how serious you want to be, and a free self-hosted region running
-            from home is expected to be the norm.
-          </p>
-          <p>
-            Because Regions run on infrastructure you control, you can choose a deployment that
-            matches your budget and scale it as your community grows. Any fees or terms for joining
-            a Grid will be set by that Grid’s operator.
           </p>
         </details>
 
@@ -112,71 +154,84 @@ export function FaqPage() {
              More importantly, it means when a user shuts down a region, the grid is no longer responsible for
              presenting those assets, which means no longer responsible for storing them. (In Homeworldz, it never was.)
           </p>
-          <p>
-            That said, your infrastructure may be running in your home, for the cost of electricity.
-            It is up to you to decide how serious you want to be, and a free self-hosted region running
-            from home is expected to be the norm.
-          </p>
-          <p>
-            Because Regions run on infrastructure you control, you can choose a deployment that
-            matches your budget and scale it as your community grows. Any fees or terms for joining
-            a Grid will be set by that Grid’s operator.
-          </p>
         </details>
 
         <details name="faq">
           <summary>Where are assets stored?</summary>
           <p>
-            Immutable asset bytes live near the Regions that use them, on storage controlled by
-            each Region operator. Regions can discover and verify copies without relying on one
+            Immutable asset bytes live near the regions that use them, on storage controlled by
+            each region operator. Regions can discover and verify copies without relying on one
             central asset warehouse.
           </p>
           <p>
-            The Grid stores shared records and inventory metadata in PostgreSQL, while Region-local
+            The Grid stores shared records and inventory metadata in PostgreSQL, while region-local
             scenes, assets, and simulation state remain at the edge.
+          </p>
+        </details>
+
+        <details name="faq">
+          <summary>How is intellectual property protected?</summary>
+          <p>
+            Because assets are stored under the direction of the region owner, there are legitimate
+            concerns about Intellectual Property rights and protections. But by completely redesigning
+            the architecture and implementation, HomeWorldz does not come with the same limitations of
+            SL-compatible grids based on OpenSim. This means, for example, assets themselves can hold
+            much more data than in the past, including the original creator/uploader, as many nested
+            levels of permissions as desired, specialized permissions designed for distributed assets,
+            and a full provenance chain of where this asset has been. Most use cases won't need anything
+            like this, and in fact the original design of Homeworldz years ago resolved this by
+            restricting permissions to always be permissive (full-perm), and abandoning the whole
+            permissions system.
+          </p>
+          <p>
+            Some of this still needs to be worked out, but even just storing the creator in the asset
+            goes a long way to regaining control for creators. Saving creator intentions in an asset
+            adds permissions on steroids, and layering a provenance chain creates opportunities for
+            creator control that have not been heard of before.
+          </p>
+          <p>
+            HomeWorldz believes that a grid must either provide reliable IP protections or move them out
+            of the way don't pretend there is a strong permissions system.
           </p>
         </details>
 
         <details name="faq">
           <summary>What do visitors see?</summary>
           <p>
-            Visitors use a compatible viewer to sign in, find destinations, and enter a Region.
-            They see the terrain, objects, avatars, and experiences created by that Region’s owner,
+            Visitors use a compatible viewer to sign in, find destinations, and enter a region.
+            They see the terrain, objects, avatars, and experiences created by that region’s owner,
             with familiar inventory, map, movement, and building workflows.
+          </p>
+          <p>
+            It looks and feels the same, except that some of the old quirks are resolved
+            by a fresh implementation. Avatar clouds,rebakes, etc are all brand-new and shiny
+            and have that "new car smell".
           </p>
         </details>
 
         <details name="faq">
           <summary>Do I need to operate an entire Grid?</summary>
           <p>
-            No. A Region operator can connect a node to an existing Grid and remain responsible
-            only for their own Regions, content, and local infrastructure. Grid services are a
+            No. A region operator can connect a node to an existing Grid and remain responsible
+            only for their own regions, content, and local infrastructure. Grid services are a
             separate operational role.
           </p>
         </details>
 
         <details name="faq">
-          <summary>Can one host run more than one Region?</summary>
+          <summary>Can one host run more than one region?</summary>
           <p>
-            Yes. One Region node can run multiple independent Region processes. Operators can keep
+            Yes. One region node can run multiple independent region processes. Operators can keep
             a small deployment together on one host or spread larger worlds across several hosts.
           </p>
         </details>
 
-        <details>
+        <details name="faq">
           <summary>What happens if the central Grid restarts?</summary>
           <p>
-            Running Regions keep simulating because Grid services and Region processes have separate
+            Running regions keep simulating because Grid services and region processes have separate
             lifecycles. Shared operations such as login, discovery, and teleport coordination resume
             after the Grid is available again.
-          </p>
-        </details>
-
-        <details>
-          <summary>Which viewers are supported?</summary>
-          <p>
-            Firestorm compatibility is the first target. HomeWorldz presents the familiar viewer
-            protocols at the edge while using a new server design internally.
           </p>
         </details>
       </section>

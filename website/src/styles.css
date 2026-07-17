@@ -533,7 +533,7 @@ section > h2,
 }
 
 .faq-list details p {
-  max-width: 68ch;
+  max-width: none;
   color: var(--vitre-muted);
 }
 
