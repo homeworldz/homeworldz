@@ -471,8 +471,10 @@ func (a *API) createAISInventoryFolder(w http.ResponseWriter, r *http.Request, u
 	if request.ID == "" {
 		request.ID = nullInventoryFolderID
 	}
+	validFolderType := request.Type == -1 ||
+		(request.Type == 47 && parentID == inventory.SystemFolderID(userID, 48))
 	if err != nil || !validUUID(request.ID) || !validUUID(request.ParentID) ||
-		request.ParentID != parentID || request.Type != -1 {
+		request.ParentID != parentID || !validFolderType {
 		writeLLSDError(w, http.StatusBadRequest, "invalid AIS inventory folder request")
 		return
 	}

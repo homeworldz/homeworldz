@@ -236,7 +236,7 @@ func (s *PostgresStore) CreateFolder(ctx context.Context, folder Folder) (Folder
 	folder.Name = strings.TrimSpace(folder.Name)
 	if folder.ID == "" || folder.OwnerUserID == "" || folder.ParentID == "" ||
 		folder.ParentID == zeroUUID || len(folder.Name) == 0 || len(folder.Name) > 255 ||
-		folder.TypeDefault != -1 {
+		(folder.TypeDefault != -1 && folder.TypeDefault != 47) {
 		return Folder{}, ErrInvalidFolder
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -245,16 +245,21 @@ func (s *PostgresStore) CreateFolder(ctx context.Context, folder Folder) (Folder
 	}
 	defer tx.Rollback()
 	var parentVersion int64
-	if err := tx.QueryRowContext(ctx, `SELECT version FROM inventory_folders
-		WHERE id = $1 AND owner_user_id = $2 FOR UPDATE`, folder.ParentID, folder.OwnerUserID).Scan(&parentVersion); errors.Is(err, sql.ErrNoRows) {
+	var parentType int
+	if err := tx.QueryRowContext(ctx, `SELECT version, type_default FROM inventory_folders
+		WHERE id = $1 AND owner_user_id = $2 FOR UPDATE`, folder.ParentID, folder.OwnerUserID).
+		Scan(&parentVersion, &parentType); errors.Is(err, sql.ErrNoRows) {
 		return Folder{}, ErrFolderNotFound
 	} else if err != nil {
 		return Folder{}, fmt.Errorf("find inventory parent folder: %w", err)
 	}
+	if folder.TypeDefault == 47 && parentType != 48 {
+		return Folder{}, ErrInvalidFolder
+	}
 	result, err := tx.ExecContext(ctx, `INSERT INTO inventory_folders
 		(id, owner_user_id, parent_id, name, type_default, version)
-		VALUES ($1, $2, $3, $4, -1, 1) ON CONFLICT (id) DO NOTHING`,
-		folder.ID, folder.OwnerUserID, folder.ParentID, folder.Name)
+		VALUES ($1, $2, $3, $4, $5, 1) ON CONFLICT (id) DO NOTHING`,
+		folder.ID, folder.OwnerUserID, folder.ParentID, folder.Name, folder.TypeDefault)
 	if err != nil {
 		return Folder{}, fmt.Errorf("create inventory folder: %w", err)
 	}
@@ -280,7 +285,8 @@ func (s *PostgresStore) CreateFolder(ctx context.Context, folder Folder) (Folder
 func (s *PostgresStore) UpdateFolder(ctx context.Context, folder Folder) (Folder, error) {
 	folder.Name = strings.TrimSpace(folder.Name)
 	if folder.ID == "" || folder.OwnerUserID == "" || folder.ParentID == "" ||
-		len(folder.Name) == 0 || len(folder.Name) > 255 || folder.TypeDefault != -1 {
+		len(folder.Name) == 0 || len(folder.Name) > 255 ||
+		(folder.TypeDefault != -1 && folder.TypeDefault != 47) {
 		return Folder{}, ErrInvalidFolder
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -297,18 +303,23 @@ func (s *PostgresStore) UpdateFolder(ctx context.Context, folder Folder) (Folder
 	} else if err != nil {
 		return Folder{}, fmt.Errorf("find inventory folder for update: %w", err)
 	}
-	if existing.TypeDefault != -1 {
+	if existing.TypeDefault != folder.TypeDefault ||
+		(existing.TypeDefault != -1 && existing.TypeDefault != 47) {
 		return Folder{}, ErrInvalidFolder
 	}
 	parentChanged := existing.ParentID != folder.ParentID
 	if parentChanged {
 		var destinationVersion int64
-		if err := tx.QueryRowContext(ctx, `SELECT version FROM inventory_folders
+		var destinationType int
+		if err := tx.QueryRowContext(ctx, `SELECT version, type_default FROM inventory_folders
 			WHERE id = $1 AND owner_user_id = $2 FOR UPDATE`, folder.ParentID, folder.OwnerUserID).
-			Scan(&destinationVersion); errors.Is(err, sql.ErrNoRows) {
+			Scan(&destinationVersion, &destinationType); errors.Is(err, sql.ErrNoRows) {
 			return Folder{}, ErrFolderNotFound
 		} else if err != nil {
 			return Folder{}, fmt.Errorf("find inventory folder destination: %w", err)
+		}
+		if folder.TypeDefault == 47 && destinationType != 48 && destinationType != 14 {
+			return Folder{}, ErrInvalidFolder
 		}
 		var createsCycle bool
 		if err := tx.QueryRowContext(ctx, `WITH RECURSIVE descendants AS (

@@ -339,6 +339,80 @@ func TestAISCreateInventoryFolderWithEmptyUUID(t *testing.T) {
 	}
 }
 
+func TestAISCreateOutfitFolderAndSaveLinks(t *testing.T) {
+	identities := newMemoryIdentityStore()
+	user, err := identities.CreateUser(context.Background(), "inventory.ais.outfit", "development-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := identities.CreateSession(context.Background(), "inventory.ais.outfit", "development-password", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.AssignViewerDestination(context.Background(), session.ID, 123456,
+		"30000000-0000-4000-8000-000000000001"); err != nil {
+		t.Fatal(err)
+	}
+	inventories := &memoryInventoryStore{folders: make(map[string][]inventory.Folder)}
+	_, _ = inventories.EnsureSystemFolders(context.Background(), user.ID)
+	sources := []inventory.Item{
+		{ID: "40000000-0000-4000-8000-000000000071", OwnerUserID: user.ID, CreatorUserID: user.ID,
+			FolderID: inventory.SystemFolderID(user.ID, 13), AssetID: "50000000-0000-4000-8000-000000000071",
+			AssetType: 13, InventoryType: 18, Name: "Shape", Flags: 0,
+			BasePermissions: 0x7fffffff, CurrentPermissions: 0x7fffffff, NextPermissions: 0x7fffffff},
+		{ID: "40000000-0000-4000-8000-000000000072", OwnerUserID: user.ID, CreatorUserID: user.ID,
+			FolderID: inventory.SystemFolderID(user.ID, 5), AssetID: "50000000-0000-4000-8000-000000000072",
+			AssetType: 5, InventoryType: 18, Name: "New Jacket", Flags: 8,
+			BasePermissions: 0x7fffffff, CurrentPermissions: 0x7fffffff, NextPermissions: 0x7fffffff},
+	}
+	for _, source := range sources {
+		if _, err := inventories.CreateItem(context.Background(), source); err != nil {
+			t.Fatal(err)
+		}
+	}
+	handler := New(checker{}, "test", Options{Identity: identities, Inventory: inventories})
+	base := "/caps/inventory/ais/" + session.ID
+	outfitsID := inventory.SystemFolderID(user.ID, 48)
+	createBody := `<?xml version="1.0"?><llsd><map><key>categories</key><array><map>` +
+		`<key>category_id</key><uuid/>` +
+		`<key>parent_id</key><uuid>` + outfitsID + `</uuid>` +
+		`<key>type_default</key><integer>47</integer>` +
+		`<key>name</key><string>Freebie Outfit</string>` +
+		`</map></array></map></llsd>`
+	createRequest := httptest.NewRequest(http.MethodPost, base+"/category/"+outfitsID,
+		strings.NewReader(createBody))
+	createResponse := httptest.NewRecorder()
+	handler.ServeHTTP(createResponse, createRequest)
+	folders, _ := inventories.ListFolders(context.Background(), user.ID)
+	created := folders[len(folders)-1]
+	if createResponse.Code != http.StatusOK || created.ParentID != outfitsID ||
+		created.TypeDefault != 47 || created.Name != "Freebie Outfit" ||
+		!strings.Contains(createResponse.Body.String(), "<uuid>"+created.ID+"</uuid>") {
+		t.Fatalf("create status = %d, response = %s, folder = %#v",
+			createResponse.Code, createResponse.Body.String(), created)
+	}
+	linksBody := `<?xml version="1.0"?><llsd><array>` +
+		`<map><key>linked_id</key><uuid>` + sources[0].ID + `</uuid>` +
+		`<key>type</key><integer>24</integer><key>inv_type</key><integer>18</integer>` +
+		`<key>name</key><string>Shape</string><key>desc</key><string></string></map>` +
+		`<map><key>linked_id</key><uuid>` + sources[1].ID + `</uuid>` +
+		`<key>type</key><integer>24</integer><key>inv_type</key><integer>18</integer>` +
+		`<key>name</key><string>New Jacket</string><key>desc</key><string></string></map>` +
+		`</array></llsd>`
+	linksRequest := httptest.NewRequest(http.MethodPut, base+"/category/"+created.ID+"/links",
+		strings.NewReader(linksBody))
+	linksResponse := httptest.NewRecorder()
+	handler.ServeHTTP(linksResponse, linksRequest)
+	items, _ := inventories.ListItems(context.Background(), user.ID)
+	if linksResponse.Code != http.StatusOK || len(items) != 4 ||
+		items[2].FolderID != created.ID || items[2].AssetType != 24 ||
+		items[2].AssetID != sources[0].ID || items[3].AssetID != sources[1].ID ||
+		!strings.Contains(linksResponse.Body.String(), "<key>_created_items</key>") {
+		t.Fatalf("links status = %d, response = %s, items = %#v",
+			linksResponse.Code, linksResponse.Body.String(), items)
+	}
+}
+
 func TestAISRenameMoveAndDeleteInventoryItem(t *testing.T) {
 	identities := newMemoryIdentityStore()
 	user, err := identities.CreateUser(context.Background(), "inventory.ais.items", "development-password")

@@ -25,6 +25,9 @@ func (s *memoryInventoryStore) ListFolders(_ context.Context, userID string) ([]
 }
 
 func (s *memoryInventoryStore) CreateFolder(_ context.Context, folder inventory.Folder) (inventory.Folder, error) {
+	if folder.TypeDefault != -1 && folder.TypeDefault != 47 {
+		return inventory.Folder{}, inventory.ErrInvalidFolder
+	}
 	for _, existing := range s.folders[folder.OwnerUserID] {
 		if existing.ID == folder.ID {
 			return inventory.Folder{}, inventory.ErrFolderConflict
@@ -33,6 +36,9 @@ func (s *memoryInventoryStore) CreateFolder(_ context.Context, folder inventory.
 	parentFound := false
 	for index := range s.folders[folder.OwnerUserID] {
 		if s.folders[folder.OwnerUserID][index].ID == folder.ParentID {
+			if folder.TypeDefault == 47 && s.folders[folder.OwnerUserID][index].TypeDefault != 48 {
+				return inventory.Folder{}, inventory.ErrInvalidFolder
+			}
 			s.folders[folder.OwnerUserID][index].Version++
 			parentFound = true
 		}
@@ -50,13 +56,17 @@ func (s *memoryInventoryStore) UpdateFolder(_ context.Context, folder inventory.
 		if existing.ID != folder.ID {
 			continue
 		}
-		if existing.TypeDefault != -1 || folder.TypeDefault != -1 || folder.ParentID == folder.ID {
+		if existing.TypeDefault != folder.TypeDefault ||
+			(existing.TypeDefault != -1 && existing.TypeDefault != 47) || folder.ParentID == folder.ID {
 			return inventory.Folder{}, inventory.ErrInvalidFolder
 		}
 		destinationFound := existing.ParentID == folder.ParentID
 		if !destinationFound {
 			for _, candidate := range s.folders[folder.OwnerUserID] {
 				if candidate.ID == folder.ParentID {
+					if folder.TypeDefault == 47 && candidate.TypeDefault != 48 && candidate.TypeDefault != 14 {
+						return inventory.Folder{}, inventory.ErrInvalidFolder
+					}
 					destinationFound = true
 					break
 				}
