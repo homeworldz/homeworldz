@@ -142,8 +142,10 @@ bool contain_body_without_neighbors(BodyState& state, double region_extent) {
 
 bool StaticSceneMirror::synchronize(const scene::Entity& entity) {
     if (entity.object_id.empty() || entity.parent_id != 0 || entity.phantom ||
-        entity.physics_shape_type == 0x01)
-        return remove(entity.id);
+        entity.physics_shape_type == 0x01) {
+        static_cast<void>(remove(entity.id));
+        return true;
+    }
     BodyDefinition definition;
     definition.entity_id = entity.id;
     definition.motion = entity.physical ? MotionType::Dynamic : MotionType::Static;
