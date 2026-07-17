@@ -1,4 +1,5 @@
 import { A } from "@solidjs/router";
+import homeworldzLogo from "../assets/brand/homeworldz.svg";
 
 export function LandingPage() {
   return (
@@ -24,7 +25,7 @@ export function LandingPage() {
           </p>
         </div>
         <figure class="world-mark">
-          <img src="/homeworldz.svg" alt="HomeWorldz" />
+          <img src={homeworldzLogo} alt="HomeWorldz" />
           <figcaption>Your worlds. Clear boundaries.</figcaption>
         </figure>
       </section>

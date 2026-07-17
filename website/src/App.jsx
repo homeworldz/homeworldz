@@ -1,4 +1,5 @@
 import { A } from "@solidjs/router";
+import homeworldzMark from "./assets/brand/homeworldz-mark.svg";
 
 export function App(props) {
   return (
@@ -6,7 +7,7 @@ export function App(props) {
       <header class="site-header">
         <nav aria-label="Primary navigation">
           <A href="/" end class="brand" aria-label="HomeWorldz home">
-            <img src="/homeworldz-mark.svg" alt="" />
+            <img src={homeworldzMark} alt="" />
             <span>HomeWorldz</span>
           </A>
           <div class="nav-links">
