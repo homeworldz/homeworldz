@@ -2147,6 +2147,23 @@ int main(int argc, char* argv[]) {
                             if (stored != 0)
                                 std::cout << "{\"level\":\"info\",\"message\":\"wearable cache updated\","
                                              "\"count\":" << stored << "}" << std::endl;
+                            const auto remote_appearance = homeworldz::viewer::encode_avatar_appearance({
+                                identity->agent_id, appearance->serial, appearance->texture_entry,
+                                appearance->visual_params});
+                            std::size_t recipients = 0;
+                            if (!remote_appearance.empty()) {
+                                for (const auto& [recipient_endpoint, recipient] : avatars) {
+                                    static_cast<void>(recipient);
+                                    if (recipient_endpoint == endpoint) continue;
+                                    if (const auto outgoing = circuits.send(
+                                            recipient_endpoint, remote_appearance, true, now, true)) {
+                                        if (send_udp(viewer_server, recipient_endpoint, *outgoing))
+                                            ++recipients;
+                                    }
+                                }
+                            }
+                            std::cout << "{\"level\":\"info\",\"message\":\"avatar appearance distributed\",\"bytes\":"
+                                      << remote_appearance.size() << ",\"recipients\":" << recipients << "}" << std::endl;
                         }
                         const auto agent_animation =
                             homeworldz::viewer::decode_agent_animation(packet->payload);
@@ -2313,20 +2330,7 @@ int main(int argc, char* argv[]) {
                                                          "\"error\":"
                                                       << homeworldz::api::json_string(error.what()) << "}"
                                           << std::endl;
-                            const auto remote_appearance = homeworldz::viewer::encode_avatar_appearance({
-                                identity->agent_id, appearance->serial, appearance->texture_entry,
-                                appearance->visual_params});
-                            if (!remote_appearance.empty()) {
-                                for (const auto& [recipient_endpoint, recipient] : avatars) {
-                                    static_cast<void>(recipient);
-                                    if (recipient_endpoint == endpoint) continue;
-                                    if (const auto outgoing = circuits.send(
-                                            recipient_endpoint, remote_appearance, true, now, true))
-                                        static_cast<void>(send_udp(
-                                            viewer_server, recipient_endpoint, *outgoing));
-                                }
-                            }
-                        }
+                                        }
                                     }
                                     if (const auto outgoing = circuits.send(endpoint,
                                             homeworldz::viewer::encode_asset_upload_complete(
@@ -2564,11 +2568,37 @@ int main(int argc, char* argv[]) {
                                 static_cast<float>(initial_viewer_position.x),
                                 static_cast<float>(initial_viewer_position.y),
                                 static_cast<float>(initial_viewer_position.z)};
-                            if (const auto avatar = circuits.send(endpoint,
+                            const auto new_avatar_update =
+                                homeworldz::viewer::encode_avatar_object_update(
+                                    response.region_handle,
+                                    static_cast<std::uint32_t>(live_avatar.entity_id),
+                                    identity->agent_id, avatar_position);
+                            for (const auto& [recipient_endpoint, recipient] : avatars) {
+                                if (const auto avatar = circuits.send(
+                                        recipient_endpoint, new_avatar_update, true, now, true))
+                                    static_cast<void>(send_udp(
+                                        viewer_server, recipient_endpoint, *avatar));
+                                if (recipient_endpoint == endpoint) continue;
+                                const auto recipient_position = recipient.controller.viewer_position();
+                                const auto recipient_id =
+                                    homeworldz::viewer::parse_uuid(recipient.user_id);
+                                if (!recipient_id) continue;
+                                const auto existing_avatar_update =
                                     homeworldz::viewer::encode_avatar_object_update(
-                                        response.region_handle, static_cast<std::uint32_t>(live_avatar.entity_id),
-                                        identity->agent_id, avatar_position), true, now, true))
-                                static_cast<void>(send_udp(viewer_server, endpoint, *avatar));
+                                        response.region_handle,
+                                        static_cast<std::uint32_t>(recipient.entity_id),
+                                        *recipient_id,
+                                        {static_cast<float>(recipient_position.x),
+                                         static_cast<float>(recipient_position.y),
+                                         static_cast<float>(recipient_position.z)},
+                                        {static_cast<float>(recipient.controller.state().velocity.x),
+                                         static_cast<float>(recipient.controller.state().velocity.y),
+                                         static_cast<float>(recipient.controller.state().velocity.z)},
+                                        recipient.controller.state().rotation);
+                                if (const auto avatar = circuits.send(
+                                        endpoint, existing_avatar_update, true, now, true))
+                                    static_cast<void>(send_udp(viewer_server, endpoint, *avatar));
+                            }
                             if (const auto outgoing = circuits.send(endpoint,
                                     homeworldz::viewer::encode_agent_movement_complete(response), true, now))
                                 static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
