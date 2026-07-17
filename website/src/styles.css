@@ -35,6 +35,7 @@ main {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  margin-block: 0;
 }
 
 .brand,
@@ -165,7 +166,7 @@ main {
 
 main > section,
 .document-page {
-  padding-block: clamp(3.5rem, 8vw, 7rem);
+  padding-block: 2rem;
 }
 
 .coming-soon-banner {
@@ -204,7 +205,6 @@ main > section,
   display: grid;
   grid-template-columns: 1fr;
   align-items: center;
-  padding-block-start: 2rem;
 }
 
 .hero h1 {
@@ -350,12 +350,12 @@ section > h2,
 }
 
 .architecture-page {
-  padding-bottom: clamp(3.5rem, 8vw, 7rem);
+  padding-bottom: 2rem;
 }
 
 .architecture-page > header,
 .architecture-page > section {
-  padding-block: clamp(3.5rem, 8vw, 7rem);
+  padding-block: 2rem;
 }
 
 .architecture-intro {
@@ -663,7 +663,7 @@ section > h2,
 .faq-page {
   width: min(100%, 62rem);
   margin-inline: auto;
-  padding-block: clamp(3.5rem, 8vw, 7rem);
+  padding-block: 2rem;
 }
 
 .faq-intro {
@@ -712,7 +712,7 @@ section > h2,
 
 .faq-item {
   scroll-margin-top: 6rem;
-  padding-block: clamp(2rem, 5vw, 3.5rem);
+  padding-block: 2rem;
   border-top: 1px solid var(--vitre-border);
 }
 
