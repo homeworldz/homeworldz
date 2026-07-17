@@ -65,6 +65,10 @@ constexpr std::array<std::byte, 4> object_select_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x6e}};
 constexpr std::array<std::byte, 4> object_deselect_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x6f}};
+constexpr std::array<std::byte, 4> object_link_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x73}};
+constexpr std::array<std::byte, 4> object_delink_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x74}};
 constexpr std::array<std::byte, 4> object_grab_update_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x76}};
 constexpr std::array<std::byte, 2> multiple_object_update_id{
@@ -967,6 +971,35 @@ std::optional<ObjectSelect> decode_object_deselect(std::span<const std::byte> pa
     for (std::size_t index = 0; index < count; ++index)
         result.local_ids.push_back(read_le_u32(payload, header_size + index * sizeof(std::uint32_t)));
     return result;
+}
+
+namespace {
+std::optional<ObjectSelect> decode_object_relationship_request(
+    std::span<const std::byte> payload, const std::array<std::byte, 4>& message_id) {
+    constexpr std::size_t header_size = 37;
+    if (payload.size() < header_size ||
+        !std::equal(message_id.begin(), message_id.end(), payload.begin()))
+        return std::nullopt;
+    const auto count = std::to_integer<std::size_t>(payload[36]);
+    if (count == 0 || count > 256 ||
+        payload.size() != header_size + count * sizeof(std::uint32_t))
+        return std::nullopt;
+    ObjectSelect result;
+    std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
+    result.local_ids.reserve(count);
+    for (std::size_t index = 0; index < count; ++index)
+        result.local_ids.push_back(read_le_u32(payload, header_size + index * sizeof(std::uint32_t)));
+    return result;
+}
+} // namespace
+
+std::optional<ObjectSelect> decode_object_link(std::span<const std::byte> payload) {
+    return decode_object_relationship_request(payload, object_link_id);
+}
+
+std::optional<ObjectSelect> decode_object_delink(std::span<const std::byte> payload) {
+    return decode_object_relationship_request(payload, object_delink_id);
 }
 
 std::optional<ObjectGrabUpdate> decode_object_grab_update(std::span<const std::byte> payload) {
@@ -1910,7 +1943,7 @@ std::vector<std::byte> encode_static_object_update(std::uint64_t region_handle, 
     for (const auto value : object.rotation) append_f32(transform, value);
     for (int index = 0; index < 3; ++index) append_f32(transform, 0.0F); // angular velocity
     if (!append_binary(output, transform, 1)) return {};
-    append_le_u32(output, 0); // parent
+    append_le_u32(output, object.parent_local_id);
     append_le_u32(output, object.update_flags);
     output.push_back(static_cast<std::byte>(object.path_curve));
     output.push_back(static_cast<std::byte>(object.profile_curve));

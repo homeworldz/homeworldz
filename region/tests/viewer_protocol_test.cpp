@@ -822,6 +822,7 @@ bool flat_terrain_codec() {
 
 bool static_object_codec() {
     StaticObject object;
+    object.parent_local_id = 0x12345678;
     object.id = *parse_uuid("12345678-1234-4234-8234-123456789abc");
     object.update_flags = 0x1002013c;
     object.rotation = {0.25F, 0.0F, 0.0F};
@@ -838,6 +839,8 @@ bool static_object_codec() {
         encoded[8] != std::byte{1} || encoded[11] != std::byte{1} || encoded[37] != std::byte{9} ||
         encoded[89] != std::byte{0x00} || encoded[90] != std::byte{0x00} ||
         encoded[91] != std::byte{0x80} || encoded[92] != std::byte{0x3e} ||
+        encoded[113] != std::byte{0x78} || encoded[114] != std::byte{0x56} ||
+        encoded[115] != std::byte{0x34} || encoded[116] != std::byte{0x12} ||
         encoded[117] != std::byte{0x3c} || encoded[118] != std::byte{0x01} ||
         encoded[119] != std::byte{0x02} || encoded[120] != std::byte{0x10} ||
         encoded[121] != std::byte{0x20} || encoded[122] != std::byte{0x05} ||
@@ -853,6 +856,28 @@ bool static_object_codec() {
     return avatar.size() == encoded.size() && moving_avatar.size() == avatar.size() &&
            moving_avatar != avatar && avatar[37] == std::byte{47} && avatar[38] == std::byte{4} &&
            std::equal(agent.begin(), agent.end(), avatar.begin() + 17);
+}
+
+bool object_relationship_codecs() {
+    const auto agent = *parse_uuid("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");
+    const auto session = *parse_uuid("11111111-2222-4333-8444-555555555555");
+    const auto make_request = [&](std::uint8_t message) {
+        auto payload = bytes({0xff, 0xff, 0x00, message});
+        payload.insert(payload.end(), agent.begin(), agent.end());
+        payload.insert(payload.end(), session.begin(), session.end());
+        payload.push_back(std::byte{3});
+        const auto local_ids = bytes({42, 0, 0, 0, 7, 0, 0, 0, 99, 0, 0, 0});
+        payload.insert(payload.end(), local_ids.begin(), local_ids.end());
+        return payload;
+    };
+    const auto linked = decode_object_link(make_request(0x73));
+    const auto delinked = decode_object_delink(make_request(0x74));
+    auto malformed = make_request(0x73);
+    malformed.pop_back();
+    return linked && linked->agent_id == agent && linked->session_id == session &&
+           linked->local_ids == std::vector<std::uint32_t>{42, 7, 99} &&
+           delinked && delinked->local_ids == linked->local_ids &&
+           !decode_object_link(malformed) && !decode_object_link(make_request(0x74));
 }
 
 bool object_flag_codec() {
@@ -965,6 +990,7 @@ int main() {
     if (!chat_codecs()) return 9;
     if (!flat_terrain_codec()) return 10;
     if (!static_object_codec()) return 11;
+    if (!object_relationship_codecs()) return 19;
     if (!object_flag_codec()) return 14;
     if (!object_interaction_codecs()) return 15;
     if (!default_primitive_texture()) return 16;

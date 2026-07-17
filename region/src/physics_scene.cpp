@@ -141,7 +141,8 @@ bool contain_body_without_neighbors(BodyState& state, double region_extent) {
 }
 
 bool StaticSceneMirror::synchronize(const scene::Entity& entity) {
-    if (entity.object_id.empty() || entity.phantom || entity.physics_shape_type == 0x01)
+    if (entity.object_id.empty() || entity.parent_id != 0 || entity.phantom ||
+        entity.physics_shape_type == 0x01)
         return remove(entity.id);
     BodyDefinition definition;
     definition.entity_id = entity.id;
@@ -209,7 +210,8 @@ bool StaticSceneMirror::synchronize(const scene::Entity& entity) {
 void StaticSceneMirror::synchronize(const scene::Scene& scene) {
     std::unordered_set<scene::EntityId> present;
     for (const auto& [entity_id, entity] : scene.entities()) {
-        if (entity.object_id.empty() || entity.phantom || entity.physics_shape_type == 0x01)
+        if (entity.object_id.empty() || entity.parent_id != 0 || entity.phantom ||
+            entity.physics_shape_type == 0x01)
             continue;
         present.insert(entity_id);
         synchronize(entity);

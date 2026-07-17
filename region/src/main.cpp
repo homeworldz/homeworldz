@@ -461,6 +461,42 @@ void apply_extra_physics(
         std::clamp(static_cast<double>(update.gravity_multiplier), -1.0, 28.0);
 }
 
+std::array<double, 4> entity_quaternion(const homeworldz::scene::Vector3& rotation) {
+    const auto squared = rotation.x * rotation.x + rotation.y * rotation.y + rotation.z * rotation.z;
+    return {rotation.x, rotation.y, rotation.z, std::sqrt((std::max)(0.0, 1.0 - squared))};
+}
+
+std::array<double, 4> multiply_quaternions(
+    const std::array<double, 4>& left, const std::array<double, 4>& right) {
+    return {
+        left[3] * right[0] + left[0] * right[3] + left[1] * right[2] - left[2] * right[1],
+        left[3] * right[1] - left[0] * right[2] + left[1] * right[3] + left[2] * right[0],
+        left[3] * right[2] + left[0] * right[1] - left[1] * right[0] + left[2] * right[3],
+        left[3] * right[3] - left[0] * right[0] - left[1] * right[1] - left[2] * right[2]};
+}
+
+homeworldz::scene::Vector3 quaternion_vector(std::array<double, 4> rotation) {
+    if (rotation[3] < 0.0) {
+        for (auto& component : rotation) component = -component;
+    }
+    return {rotation[0], rotation[1], rotation[2]};
+}
+
+void establish_child_transform(
+    homeworldz::scene::Entity& child, const homeworldz::scene::Entity& root) {
+    const auto root_rotation = entity_quaternion(root.rotation);
+    const std::array<double, 4> inverse_root{
+        -root_rotation[0], -root_rotation[1], -root_rotation[2], root_rotation[3]};
+    const homeworldz::scene::Vector3 offset{
+        child.position.x - root.position.x,
+        child.position.y - root.position.y,
+        child.position.z - root.position.z};
+    child.parent_id = root.id;
+    child.local_position = homeworldz::physics::rotate_vector(offset, inverse_root);
+    child.local_rotation = quaternion_vector(
+        multiply_quaternions(inverse_root, entity_quaternion(child.rotation)));
+}
+
 std::optional<homeworldz::viewer::StaticObject> static_object_from_entity(
     const homeworldz::scene::Entity& entity, std::string_view recipient_id) {
     constexpr std::uint32_t object_modify = 0x00000004;
@@ -479,6 +515,7 @@ std::optional<homeworldz::viewer::StaticObject> static_object_from_entity(
     if (!object_id || !owner_id) return std::nullopt;
     homeworldz::viewer::StaticObject object;
     object.local_id = static_cast<std::uint32_t>(entity.id);
+    object.parent_local_id = static_cast<std::uint32_t>(entity.parent_id);
     object.id = *object_id;
     object.owner_id = *owner_id;
     const bool is_owner = entity.owner_id == recipient_id;
@@ -492,12 +529,14 @@ std::optional<homeworldz::viewer::StaticObject> static_object_from_entity(
     if ((permissions & homeworldz::scene::permission_transfer) != 0) object.update_flags |= object_transfer;
     if (is_owner) object.update_flags |= object_you_owner | object_owner_modify;
     object.material = entity.material;
-    object.position = {static_cast<float>(entity.position.x), static_cast<float>(entity.position.y),
-                       static_cast<float>(entity.position.z)};
+    const auto& protocol_position = entity.parent_id == 0 ? entity.position : entity.local_position;
+    const auto& protocol_rotation = entity.parent_id == 0 ? entity.rotation : entity.local_rotation;
+    object.position = {static_cast<float>(protocol_position.x), static_cast<float>(protocol_position.y),
+                       static_cast<float>(protocol_position.z)};
     object.velocity = {static_cast<float>(entity.velocity.x), static_cast<float>(entity.velocity.y),
                        static_cast<float>(entity.velocity.z)};
-    object.rotation = {static_cast<float>(entity.rotation.x), static_cast<float>(entity.rotation.y),
-                       static_cast<float>(entity.rotation.z)};
+    object.rotation = {static_cast<float>(protocol_rotation.x), static_cast<float>(protocol_rotation.y),
+                       static_cast<float>(protocol_rotation.z)};
     object.scale = {static_cast<float>(entity.scale.x), static_cast<float>(entity.scale.y),
                     static_cast<float>(entity.scale.z)};
     object.texture_entry = entity.texture_entry;
@@ -2735,6 +2774,128 @@ int main(int argc, char* argv[]) {
                                             response.region_handle, *restored_object), true, now, true))
                                     static_cast<void>(send_udp(viewer_server, endpoint, *object));
                             }
+                        }
+                        const auto object_link = homeworldz::viewer::decode_object_link(packet->payload);
+                        if (object_link && object_link->agent_id == identity->agent_id &&
+                            object_link->session_id == identity->session_id) {
+                            const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
+                            std::unordered_map<homeworldz::scene::EntityId, homeworldz::scene::Entity> originals;
+                            std::vector<homeworldz::scene::EntityId> changed;
+                            bool valid = object_link->local_ids.size() >= 2;
+                            std::unordered_set<std::uint32_t> unique;
+                            auto* root = valid ? scene.find(object_link->local_ids.front()) : nullptr;
+                            valid = valid && root && root->parent_id == 0 && root->owner_id == user_id &&
+                                (root->owner_permissions & homeworldz::scene::permission_modify) != 0;
+                            if (valid) {
+                                for (const auto local_id : object_link->local_ids) {
+                                    auto* entity = scene.find(local_id);
+                                    const bool has_children = std::any_of(
+                                        scene.entities().begin(), scene.entities().end(),
+                                        [local_id](const auto& entry) { return entry.second.parent_id == local_id; });
+                                    if (!unique.insert(local_id).second || !entity || entity->parent_id != 0 ||
+                                        has_children || entity->owner_id != user_id ||
+                                        (entity->owner_permissions & homeworldz::scene::permission_modify) == 0) {
+                                        valid = false;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (valid) {
+                                for (std::size_t index = 1; index < object_link->local_ids.size(); ++index) {
+                                    auto* child = scene.find(object_link->local_ids[index]);
+                                    originals.emplace(child->id, *child);
+                                    establish_child_transform(*child, *root);
+                                    child->velocity = {};
+                                    changed.push_back(child->id);
+                                }
+                                try {
+                                    storage->save_snapshot(scene);
+                                } catch (const std::exception& error) {
+                                    valid = false;
+                                    for (const auto& [entity_id, original] : originals)
+                                        if (auto* entity = scene.find(entity_id)) *entity = original;
+                                    std::cout << "{\"level\":\"error\",\"message\":\"linkset persistence failed\",\"error\":"
+                                              << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+                                }
+                            }
+                            if (valid) {
+                                const auto region_handle =
+                                    (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
+                                    static_cast<std::uint32_t>(region_grid_y * 256);
+                                synchronize_physics_object(*root);
+                                for (const auto entity_id : changed)
+                                    if (const auto* child = scene.find(entity_id)) synchronize_physics_object(*child);
+                                std::vector<homeworldz::scene::EntityId> updates{root->id};
+                                updates.insert(updates.end(), changed.begin(), changed.end());
+                                for (const auto& [recipient_endpoint, recipient] : avatars) {
+                                    for (const auto entity_id : updates) {
+                                        const auto* entity = scene.find(entity_id);
+                                        const auto object = entity
+                                            ? static_object_from_entity(*entity, recipient.user_id) : std::nullopt;
+                                        if (!object) continue;
+                                        if (const auto sent = circuits.send(recipient_endpoint,
+                                                homeworldz::viewer::encode_static_object_update(
+                                                    region_handle, *object), true, now, true))
+                                            static_cast<void>(send_udp(viewer_server, recipient_endpoint, *sent));
+                                    }
+                                }
+                            }
+                            std::cout << "{\"level\":" << (valid ? "\"info\"" : "\"warn\"")
+                                      << ",\"message\":\"linkset creation "
+                                      << (valid ? "completed" : "rejected") << "\",\"prims\":"
+                                      << object_link->local_ids.size() << "}" << std::endl;
+                        }
+                        const auto object_delink = homeworldz::viewer::decode_object_delink(packet->payload);
+                        if (object_delink && object_delink->agent_id == identity->agent_id &&
+                            object_delink->session_id == identity->session_id) {
+                            const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
+                            std::unordered_map<homeworldz::scene::EntityId, homeworldz::scene::Entity> originals;
+                            std::vector<homeworldz::scene::EntityId> changed;
+                            for (const auto local_id : object_delink->local_ids) {
+                                auto* entity = scene.find(local_id);
+                                if (!entity || entity->parent_id == 0 || entity->owner_id != user_id ||
+                                    (entity->owner_permissions & homeworldz::scene::permission_modify) == 0)
+                                    continue;
+                                originals.emplace(entity->id, *entity);
+                                entity->parent_id = 0;
+                                entity->local_position = {};
+                                entity->local_rotation = {};
+                                changed.push_back(entity->id);
+                            }
+                            bool persisted = false;
+                            if (!changed.empty()) {
+                                try {
+                                    storage->save_snapshot(scene);
+                                    persisted = true;
+                                } catch (const std::exception& error) {
+                                    for (const auto& [entity_id, original] : originals)
+                                        if (auto* entity = scene.find(entity_id)) *entity = original;
+                                    std::cout << "{\"level\":\"error\",\"message\":\"delink persistence failed\",\"error\":"
+                                              << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+                                }
+                            }
+                            if (persisted) {
+                                const auto region_handle =
+                                    (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
+                                    static_cast<std::uint32_t>(region_grid_y * 256);
+                                for (const auto entity_id : changed) {
+                                    const auto* entity = scene.find(entity_id);
+                                    if (!entity) continue;
+                                    synchronize_physics_object(*entity);
+                                    for (const auto& [recipient_endpoint, recipient] : avatars) {
+                                        const auto object = static_object_from_entity(*entity, recipient.user_id);
+                                        if (!object) continue;
+                                        if (const auto sent = circuits.send(recipient_endpoint,
+                                                homeworldz::viewer::encode_static_object_update(
+                                                    region_handle, *object), true, now, true))
+                                            static_cast<void>(send_udp(viewer_server, recipient_endpoint, *sent));
+                                    }
+                                }
+                            }
+                            std::cout << "{\"level\":" << (persisted ? "\"info\"" : "\"warn\"")
+                                      << ",\"message\":\"linkset separation "
+                                      << (persisted ? "completed" : "rejected") << "\",\"prims\":"
+                                      << changed.size() << "}" << std::endl;
                         }
                         const auto object_select = homeworldz::viewer::decode_object_select(packet->payload);
                         if (object_select && object_select->agent_id == identity->agent_id &&

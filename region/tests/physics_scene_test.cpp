@@ -161,5 +161,11 @@ int main() {
     entity.physics_shape_type = 0x01;
     if (!mirror.synchronize(entity) || mirror.size() != 0 || world.definitions.contains(rubber_body))
         return 5;
+    entity.physics_shape_type = 0x00;
+    if (!mirror.synchronize(entity) || mirror.size() != 1)
+        return 12;
+    entity.parent_id = 7;
+    if (!mirror.synchronize(entity) || mirror.size() != 0 || mirror.body_id(entity.id) != 0)
+        return 13;
     return 0;
 }

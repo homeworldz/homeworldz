@@ -420,6 +420,19 @@ private:
         result.profile_begin = read_word_field("profileBegin");
         result.profile_end = read_word_field("profileEnd");
         result.profile_hollow = read_word_field("profileHollow");
+        if (consume("}")) return result;
+        expect(",");
+        expect_string("parentId");
+        expect(":");
+        result.parent_id = unsigned_integer();
+        expect(",");
+        expect_string("localPosition");
+        expect(":");
+        result.local_position = vector();
+        expect(",");
+        expect_string("localRotation");
+        expect(":");
+        result.local_rotation = vector();
         expect("}");
         return result;
     }
@@ -490,7 +503,14 @@ std::string snapshot_json(const scene::Scene& scene) {
                 ",\"pathSkew\":" + std::to_string(entity->path_skew) +
                 ",\"profileBegin\":" + std::to_string(entity->profile_begin) +
                 ",\"profileEnd\":" + std::to_string(entity->profile_end) +
-                ",\"profileHollow\":" + std::to_string(entity->profile_hollow) + '}';
+                ",\"profileHollow\":" + std::to_string(entity->profile_hollow) +
+                ",\"parentId\":" + std::to_string(entity->parent_id) +
+                ",\"localPosition\":[" + std::to_string(entity->local_position.x) + ',' +
+                std::to_string(entity->local_position.y) + ',' +
+                std::to_string(entity->local_position.z) +
+                "],\"localRotation\":[" + std::to_string(entity->local_rotation.x) + ',' +
+                std::to_string(entity->local_rotation.y) + ',' +
+                std::to_string(entity->local_rotation.z) + "]}";
     }
     return json + "]}";
 }

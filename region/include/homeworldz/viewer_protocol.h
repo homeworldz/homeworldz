@@ -479,6 +479,7 @@ struct TerrainPatch {
 
 struct StaticObject {
     std::uint32_t local_id{1};
+    std::uint32_t parent_local_id{};
     Uuid id{};
     Uuid owner_id{};
     std::uint32_t update_flags{};
@@ -549,6 +550,8 @@ std::optional<RezObject> decode_rez_object(std::span<const std::byte> payload);
 std::vector<std::byte> encode_kill_object(std::span<const std::uint32_t> local_ids);
 std::optional<ObjectSelect> decode_object_select(std::span<const std::byte> payload);
 std::optional<ObjectSelect> decode_object_deselect(std::span<const std::byte> payload);
+std::optional<ObjectSelect> decode_object_link(std::span<const std::byte> payload);
+std::optional<ObjectSelect> decode_object_delink(std::span<const std::byte> payload);
 std::optional<ObjectGrabUpdate> decode_object_grab_update(std::span<const std::byte> payload);
 std::optional<MultipleObjectUpdate> decode_multiple_object_update(std::span<const std::byte> payload);
 std::optional<ObjectName> decode_object_name(std::span<const std::byte> payload);

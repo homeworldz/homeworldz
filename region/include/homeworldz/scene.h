@@ -78,6 +78,9 @@ struct Entity {
     std::uint16_t profile_begin{};
     std::uint16_t profile_end{};
     std::uint16_t profile_hollow{};
+    EntityId parent_id{};
+    Vector3 local_position;
+    Vector3 local_rotation;
 };
 
 struct RayIntersection {

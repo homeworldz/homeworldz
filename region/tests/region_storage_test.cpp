@@ -47,6 +47,9 @@ int main() {
         primitive->path_shear_x = 0xce;
         primitive->path_skew = 7;
         primitive->profile_hollow = 0x5678;
+        primitive->parent_id = first;
+        primitive->local_position = {1.25, -2.5, 3.75};
+        primitive->local_rotation = {0.125, -0.25, 0.5};
         std::filesystem::create_directories(path);
         sqlite3* legacy_database = nullptr;
         if (sqlite3_open((path / "region.db").string().c_str(), &legacy_database) != SQLITE_OK) return 1;
@@ -108,6 +111,10 @@ int main() {
                 restored_second->path_begin != 0x1234 || restored_second->path_scale_x != 200 ||
                 restored_second->path_scale_y != 100 || restored_second->path_shear_x != 0xce ||
                 restored_second->path_skew != 7 || restored_second->profile_hollow != 0x5678 ||
+                restored_second->parent_id != first || restored_second->local_position.x != 1.25 ||
+                restored_second->local_position.y != -2.5 || restored_second->local_position.z != 3.75 ||
+                restored_second->local_rotation.x != 0.125 || restored_second->local_rotation.y != -0.25 ||
+                restored_second->local_rotation.z != 0.5 ||
                 restored.create("next") != 3) return 1;
 
             const std::array content{std::byte{0x00}, std::byte{0x7f}, std::byte{0xff}, std::byte{0x42}};
