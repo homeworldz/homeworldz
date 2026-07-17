@@ -375,6 +375,9 @@ bool message_codecs() {
     appearance_payload.push_back(std::byte{149});
     appearance_payload.insert(appearance_payload.end(), 149, std::byte{42});
     const auto appearance = decode_agent_set_appearance(appearance_payload);
+    const auto avatar_appearance = appearance ? encode_avatar_appearance({
+        appearance->agent_id, 17, appearance->texture_entry, appearance->visual_params,
+        {0.0F, 0.0F, 0.125F}}) : std::vector<std::byte>{};
     auto image_payload = bytes({8});
     image_payload.insert(image_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
     image_payload.insert(image_payload.end(), expected.session_id.begin(), expected.session_id.end());
@@ -497,6 +500,10 @@ bool message_codecs() {
            appearance->cache_entries[0].texture_index == 8 && appearance->texture_ids[8] == expected.agent_id &&
            appearance->texture_ids[9] == expected.session_id && appearance->size[2] == 2.0F &&
            appearance->visual_params.size() == 149 && appearance->visual_params[148] == 42 &&
+           avatar_appearance.size() == 232 &&
+           avatar_appearance[0] == std::byte{0xff} && avatar_appearance[3] == std::byte{0x9e} &&
+           avatar_appearance[21] == std::byte{35} && avatar_appearance[22] == std::byte{0} &&
+           avatar_appearance[58] == std::byte{149} && avatar_appearance[208] == std::byte{1} &&
            image_request && image_request->requests.size() == 1 &&
            image_request->requests[0].image_id == expected.agent_id &&
            image_request->requests[0].download_priority == 1.0F && image_request->requests[0].type == 1 &&

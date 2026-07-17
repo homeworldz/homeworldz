@@ -1456,6 +1456,7 @@ std::optional<AgentSetAppearance> decode_agent_set_appearance(std::span<const st
     position += 2;
     if (position + texture_entry_size + 1 > payload.size()) return std::nullopt;
     const auto texture_entry = payload.subspan(position, texture_entry_size);
+    result.texture_entry.assign(texture_entry.begin(), texture_entry.end());
     position += texture_entry_size;
     const auto visual_count = std::to_integer<std::size_t>(payload[position++]);
     if (position + visual_count != payload.size()) return std::nullopt;
@@ -1487,6 +1488,29 @@ std::optional<AgentSetAppearance> decode_agent_set_appearance(std::span<const st
         }
     }
     return result;
+}
+
+std::vector<std::byte> encode_avatar_appearance(const AvatarAppearance& message) {
+    if (message.texture_entry.empty() || message.texture_entry.size() > 65535 ||
+        message.visual_params.empty() || message.visual_params.size() > 255)
+        return {};
+    constexpr std::array<std::byte, 4> message_id{
+        std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x9e}};
+    std::vector<std::byte> output(message_id.begin(), message_id.end());
+    append_uuid(output, message.sender_id);
+    output.push_back(std::byte{}); // not a trial avatar
+    append_le_u16(output, static_cast<std::uint16_t>(message.texture_entry.size()));
+    output.insert(output.end(), message.texture_entry.begin(), message.texture_entry.end());
+    output.push_back(static_cast<std::byte>(message.visual_params.size()));
+    for (const auto value : message.visual_params) output.push_back(static_cast<std::byte>(value));
+    output.push_back(std::byte{1}); // one appearance metadata block
+    output.push_back(std::byte{}); // legacy appearance version
+    append_le_u32(output, message.serial);
+    append_le_u32(output, 0); // no server-side appearance flags yet
+    output.push_back(std::byte{1}); // one hover-height block
+    for (const auto value : message.hover) append_f32(output, value);
+    output.push_back(std::byte{}); // no attachments in this update
+    return output;
 }
 
 std::optional<AgentAnimation> decode_agent_animation(std::span<const std::byte> payload) {

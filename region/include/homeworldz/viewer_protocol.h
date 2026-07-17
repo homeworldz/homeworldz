@@ -330,7 +330,16 @@ struct AgentSetAppearance : AgentMessage {
     std::array<float, 3> size{};
     std::vector<CachedTextureQuery> cache_entries;
     std::array<Uuid, 32> texture_ids{};
+    std::vector<std::byte> texture_entry;
     std::vector<std::uint8_t> visual_params;
+};
+
+struct AvatarAppearance {
+    Uuid sender_id{};
+    std::uint32_t serial{};
+    std::vector<std::byte> texture_entry;
+    std::vector<std::uint8_t> visual_params;
+    std::array<float, 3> hover{};
 };
 
 struct AgentAnimationEntry {
@@ -554,6 +563,7 @@ std::vector<std::byte> encode_logout_reply(const AgentMessage& message);
 std::optional<AgentCachedTexture> decode_agent_cached_texture(std::span<const std::byte> payload);
 std::vector<std::byte> encode_agent_cached_texture_response(const AgentCachedTexture& message);
 std::optional<AgentSetAppearance> decode_agent_set_appearance(std::span<const std::byte> payload);
+std::vector<std::byte> encode_avatar_appearance(const AvatarAppearance& message);
 std::optional<AgentAnimation> decode_agent_animation(std::span<const std::byte> payload);
 std::vector<std::byte> encode_avatar_animation(const AvatarAnimation& message);
 std::optional<AssetUploadRequest> decode_asset_upload_request(std::span<const std::byte> payload);

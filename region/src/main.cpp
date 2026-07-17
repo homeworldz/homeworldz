@@ -1136,6 +1136,7 @@ int main(int argc, char* argv[]) {
     std::unordered_set<std::string> established_events;
     std::unordered_map<std::string, LiveAvatar> avatars;
     std::unordered_map<std::string, homeworldz::viewer::AvatarGeometry> avatar_geometries;
+    std::unordered_map<std::string, homeworldz::viewer::AgentSetAppearance> avatar_appearances;
     std::unordered_map<std::string, std::vector<homeworldz::viewer::AvatarAnimationEntry>> avatar_animations;
     std::unordered_map<std::string, std::int32_t> next_animation_sequences;
     std::unordered_map<std::string, homeworldz::viewer::MovementAnimation> movement_animations;
@@ -1167,6 +1168,7 @@ int main(int argc, char* argv[]) {
         }
         avatars.erase(endpoint);
         avatar_geometries.erase(endpoint);
+        avatar_appearances.erase(endpoint);
         avatar_animations.erase(endpoint);
         next_animation_sequences.erase(endpoint);
         movement_animations.erase(endpoint);
@@ -2109,6 +2111,7 @@ int main(int argc, char* argv[]) {
                             homeworldz::viewer::decode_agent_set_appearance(packet->payload);
                         if (appearance && appearance->agent_id == identity->agent_id &&
                             appearance->session_id == identity->session_id) {
+                            avatar_appearances.insert_or_assign(endpoint, *appearance);
                             if (const auto geometry = homeworldz::viewer::avatar_geometry(*appearance)) {
                                 avatar_geometries[endpoint] = *geometry;
                                 if (const auto live = avatars.find(endpoint); live != avatars.end()) {
@@ -2309,8 +2312,21 @@ int main(int argc, char* argv[]) {
                                             std::cout << "{\"level\":\"error\",\"message\":\"wearable asset transfer failed\","
                                                          "\"error\":"
                                                       << homeworldz::api::json_string(error.what()) << "}"
-                                                      << std::endl;
-                                        }
+                                          << std::endl;
+                            const auto remote_appearance = homeworldz::viewer::encode_avatar_appearance({
+                                identity->agent_id, appearance->serial, appearance->texture_entry,
+                                appearance->visual_params});
+                            if (!remote_appearance.empty()) {
+                                for (const auto& [recipient_endpoint, recipient] : avatars) {
+                                    static_cast<void>(recipient);
+                                    if (recipient_endpoint == endpoint) continue;
+                                    if (const auto outgoing = circuits.send(
+                                            recipient_endpoint, remote_appearance, true, now, true))
+                                        static_cast<void>(send_udp(
+                                            viewer_server, recipient_endpoint, *outgoing));
+                                }
+                            }
+                        }
                                     }
                                     if (const auto outgoing = circuits.send(endpoint,
                                             homeworldz::viewer::encode_asset_upload_complete(
@@ -2561,6 +2577,17 @@ int main(int argc, char* argv[]) {
                             if (const auto outgoing = circuits.send(endpoint,
                                     homeworldz::viewer::encode_avatar_animation(animation_response), false, now))
                                 static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
+                            for (const auto& [appearance_endpoint, retained] : avatar_appearances) {
+                                if (appearance_endpoint == endpoint) continue;
+                                const auto retained_appearance =
+                                    homeworldz::viewer::encode_avatar_appearance({
+                                        retained.agent_id, retained.serial, retained.texture_entry,
+                                        retained.visual_params});
+                                if (retained_appearance.empty()) continue;
+                                if (const auto outgoing = circuits.send(
+                                        endpoint, retained_appearance, true, now, true))
+                                    static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
+                            }
                             for (std::uint8_t y = 0; y < 16; ++y) {
                                 std::array<homeworldz::viewer::TerrainPatch, 16> row{};
                                 for (std::uint8_t x = 0; x < 16; ++x) row[x] = {x, y};
