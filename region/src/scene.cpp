@@ -209,6 +209,14 @@ void Scene::restore(std::uint64_t revision, std::vector<Entity> entities) {
         static_cast<void>(position);
         if (!inserted) throw std::invalid_argument("restored scene contains duplicate entity IDs");
     }
+    for (const auto& [entity_id, entity] : restored) {
+        if (entity.parent_id == 0) continue;
+        const auto parent = restored.find(entity.parent_id);
+        if (entity.parent_id == entity_id || parent == restored.end())
+            throw std::invalid_argument("restored scene contains an invalid link parent");
+        if (parent->second.parent_id != 0)
+            throw std::invalid_argument("restored scene contains nested or cyclic links");
+    }
     entities_ = std::move(restored);
     next_id_ = next_id;
     revision_ = revision;

@@ -3,6 +3,7 @@
 
 #include <cmath>
 #include <iostream>
+#include <stdexcept>
 #include <vector>
 
 namespace {
@@ -69,6 +70,29 @@ int main() {
     if (scene.size() != 1 || scene.revision() != 42 || scene.simulation_steps() != 0 ||
         restored == nullptr || restored->name != "restored" || !near(restored->position.y, 8.0)) return 1;
     if (scene.create("after restore") != 8) return 1;
+
+    const auto rejects_restore = [](std::vector<homeworldz::scene::Entity> entities) {
+        homeworldz::scene::Scene invalid;
+        try {
+            invalid.restore(1, std::move(entities));
+        } catch (const std::invalid_argument&) {
+            return true;
+        }
+        return false;
+    };
+    homeworldz::scene::Entity orphan;
+    orphan.id = 1;
+    orphan.parent_id = 99;
+    if (!rejects_restore({orphan})) return 1;
+    homeworldz::scene::Entity nested_root;
+    nested_root.id = 1;
+    homeworldz::scene::Entity nested_child;
+    nested_child.id = 2;
+    nested_child.parent_id = 1;
+    homeworldz::scene::Entity nested_grandchild;
+    nested_grandchild.id = 3;
+    nested_grandchild.parent_id = 2;
+    if (!rejects_restore({nested_root, nested_child, nested_grandchild})) return 1;
 
     homeworldz::scene::Entity permissions;
     permissions.owner_id = "owner";
