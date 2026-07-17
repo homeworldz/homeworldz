@@ -22,7 +22,7 @@ export function App(props) {
               </div>
             </details>
             <A href="/" end class="brand" aria-label="HomeWorldz home">
-              <img src={homeworldzMark} alt="" />
+              <img src={homeworldzMark} alt="" width="64" height="64" />
               <span>HomeWorldz</span>
             </A>
           </div>

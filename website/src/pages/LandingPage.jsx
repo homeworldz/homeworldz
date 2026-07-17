@@ -13,7 +13,13 @@ export function LandingPage() {
         <div>
           <p class="eyebrow">A fresh way to build open virtual worlds</p>
           <figure class="world-mark">
-            <img src={homeworldzLogo} alt="HomeWorldz" />
+            <img
+              src={homeworldzLogo}
+              alt="HomeWorldz"
+              width="120"
+              height="88"
+              fetchpriority="high"
+            />
           </figure>
           <h1 id="hero-title">
             <span>Make a world.</span>
