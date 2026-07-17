@@ -79,7 +79,43 @@ bool task_inventory_codecs() {
         reply[20] != std::byte{0x34} || reply[21] != std::byte{0x12} ||
         reply[22] != std::byte{15}) return false;
     const auto empty = encode_reply_task_inventory({task, 0, {}});
-    return empty.size() == 23 && empty.back() == std::byte{};
+    if (empty.size() != 23 || empty.back() != std::byte{}) return false;
+
+    std::vector<std::byte> update(188);
+    update[0] = std::byte{0xff};
+    update[1] = std::byte{0xff};
+    update[2] = std::byte{0x01};
+    update[3] = std::byte{0x1e};
+    std::copy(agent.begin(), agent.end(), update.begin() + 4);
+    std::copy(session.begin(), session.end(), update.begin() + 20);
+    update[36] = std::byte{42};
+    update[40] = std::byte{1};
+    std::copy(task.begin(), task.end(), update.begin() + 41);
+    std::copy(session.begin(), session.end(), update.begin() + 142);
+    update[169] = std::byte{8};
+    std::copy_n(reinterpret_cast<const std::byte*>("Texture\0"), 8, update.begin() + 170);
+    update[178] = std::byte{1};
+    const auto decoded_update = decode_update_task_inventory(update);
+    if (!decoded_update || decoded_update->agent_id != agent ||
+        decoded_update->session_id != session || decoded_update->local_id != 42 ||
+        decoded_update->key != 1 || decoded_update->item_id != task ||
+        decoded_update->transaction_id != session) return false;
+    update.pop_back();
+    if (decode_update_task_inventory(update)) return false;
+
+    auto request_xfer = bytes({0xff, 0xff, 0x00, 0x9c,
+                               0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01,
+                               16});
+    for (const char value : std::string("inventory_1.tmp\0", 16))
+        request_xfer.push_back(static_cast<std::byte>(value));
+    request_xfer.insert(request_xfer.end(), 21, std::byte{});
+    const auto decoded_xfer = decode_request_xfer(request_xfer);
+    const auto xfer_payload = encode_send_xfer_packet(
+        0x0102030405060708ULL, 0x80000000U, bytes({1, 2, 3}));
+    return decoded_xfer && decoded_xfer->id == 0x0102030405060708ULL &&
+        decoded_xfer->filename == "inventory_1.tmp" && xfer_payload.size() == 18 &&
+        xfer_payload[0] == std::byte{18} && xfer_payload[9] == std::byte{} &&
+        xfer_payload[12] == std::byte{0x80} && xfer_payload[13] == std::byte{3};
 }
 
 bool message_codecs() {

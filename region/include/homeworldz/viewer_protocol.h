@@ -119,6 +119,18 @@ struct ReplyTaskInventory {
     std::string filename;
 };
 
+struct UpdateTaskInventory : AgentMessage {
+    std::uint32_t local_id{};
+    std::uint8_t key{};
+    Uuid item_id{};
+    Uuid transaction_id{};
+};
+
+struct RequestXfer {
+    std::uint64_t id{};
+    std::string filename;
+};
+
 struct ObjectAdd : AgentMessage {
     Uuid group_id{};
     std::uint8_t pcode{};
@@ -555,6 +567,10 @@ std::optional<MoveInventoryFolder> decode_move_inventory_folder(std::span<const 
 std::optional<MoveInventoryItem> decode_move_inventory_item(std::span<const std::byte> payload);
 std::optional<RequestTaskInventory> decode_request_task_inventory(std::span<const std::byte> payload);
 std::vector<std::byte> encode_reply_task_inventory(const ReplyTaskInventory& message);
+std::optional<UpdateTaskInventory> decode_update_task_inventory(std::span<const std::byte> payload);
+std::optional<RequestXfer> decode_request_xfer(std::span<const std::byte> payload);
+std::vector<std::byte> encode_send_xfer_packet(
+    std::uint64_t id, std::uint32_t packet, std::span<const std::byte> data);
 std::optional<ObjectAdd> decode_object_add(std::span<const std::byte> payload);
 std::optional<DeRezObject> decode_derez_object(std::span<const std::byte> payload);
 bool valid_derez_batch(std::uint8_t packet_count, std::uint8_t packet_number);

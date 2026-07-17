@@ -33,6 +33,28 @@ struct Vector3 {
     double z{};
 };
 
+struct TaskInventoryItem {
+    std::string item_id;
+    std::string asset_id;
+    std::string creator_id;
+    std::string owner_id;
+    std::string last_owner_id;
+    std::string group_id;
+    std::string name;
+    std::string description;
+    std::int8_t asset_type{-1};
+    std::int8_t inventory_type{-1};
+    std::uint32_t flags{};
+    std::uint32_t base_permissions{};
+    std::uint32_t current_permissions{};
+    std::uint32_t group_permissions{};
+    std::uint32_t everyone_permissions{};
+    std::uint32_t next_permissions{};
+    std::uint8_t sale_type{};
+    std::int32_t sale_price{};
+    std::uint64_t creation_date{};
+};
+
 struct Entity {
     EntityId id{};
     std::string name;
@@ -81,6 +103,8 @@ struct Entity {
     EntityId parent_id{};
     Vector3 local_position;
     Vector3 local_rotation;
+    std::uint16_t task_inventory_serial{};
+    std::vector<TaskInventoryItem> task_inventory;
 };
 
 struct RayIntersection {

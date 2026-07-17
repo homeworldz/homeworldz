@@ -60,6 +60,10 @@ constexpr std::array<std::byte, 4> request_task_inventory_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x21}};
 constexpr std::array<std::byte, 4> reply_task_inventory_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x22}};
+constexpr std::array<std::byte, 4> update_task_inventory_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x1e}};
+constexpr std::array<std::byte, 4> request_xfer_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x9c}};
 constexpr std::array<std::byte, 2> object_add_id{std::byte{0xff}, std::byte{0x01}};
 constexpr std::array<std::byte, 4> derez_object_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x23}};
@@ -855,6 +859,58 @@ std::vector<std::byte> encode_reply_task_inventory(const ReplyTaskInventory& mes
     output.push_back(static_cast<std::byte>(message.filename.size()));
     output.insert(output.end(), reinterpret_cast<const std::byte*>(message.filename.data()),
                   reinterpret_cast<const std::byte*>(message.filename.data() + message.filename.size()));
+    return output;
+}
+
+std::optional<UpdateTaskInventory> decode_update_task_inventory(
+    std::span<const std::byte> payload) {
+    constexpr std::size_t name_length_offset = 169;
+    if (payload.size() < name_length_offset + 1 ||
+        !std::equal(update_task_inventory_id.begin(), update_task_inventory_id.end(), payload.begin()))
+        return std::nullopt;
+    auto position = name_length_offset;
+    const auto name_size = std::to_integer<std::size_t>(payload[position++]);
+    if (position + name_size + 1 > payload.size()) return std::nullopt;
+    position += name_size;
+    const auto description_size = std::to_integer<std::size_t>(payload[position++]);
+    if (position + description_size + 8 != payload.size()) return std::nullopt;
+    UpdateTaskInventory result;
+    std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
+    result.local_id = read_le_u32(payload, 36);
+    result.key = std::to_integer<std::uint8_t>(payload[40]);
+    std::copy_n(payload.begin() + 41, 16, result.item_id.begin());
+    std::copy_n(payload.begin() + 142, 16, result.transaction_id.begin());
+    return result;
+}
+
+std::optional<RequestXfer> decode_request_xfer(std::span<const std::byte> payload) {
+    constexpr std::size_t filename_offset = 13;
+    constexpr std::size_t trailing_size = 21;
+    if (payload.size() < filename_offset + trailing_size ||
+        !std::equal(request_xfer_id.begin(), request_xfer_id.end(), payload.begin()))
+        return std::nullopt;
+    const auto filename_size = std::to_integer<std::size_t>(payload[12]);
+    if (payload.size() != filename_offset + filename_size + trailing_size) return std::nullopt;
+    RequestXfer result;
+    result.id = read_le_u32(payload, 4) |
+        (static_cast<std::uint64_t>(read_le_u32(payload, 8)) << 32);
+    result.filename.assign(
+        reinterpret_cast<const char*>(payload.data() + filename_offset), filename_size);
+    while (!result.filename.empty() && result.filename.back() == '\0') result.filename.pop_back();
+    if (result.filename.empty() || result.filename.find('\0') != std::string::npos)
+        return std::nullopt;
+    return result;
+}
+
+std::vector<std::byte> encode_send_xfer_packet(
+    std::uint64_t id, std::uint32_t packet, std::span<const std::byte> data) {
+    if (data.size() > 65535) return {};
+    std::vector<std::byte> output{std::byte{18}};
+    append_le_u64(output, id);
+    append_le_u32(output, packet);
+    append_le_u16(output, static_cast<std::uint16_t>(data.size()));
+    output.insert(output.end(), data.begin(), data.end());
     return output;
 }
 

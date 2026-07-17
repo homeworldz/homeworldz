@@ -15,6 +15,8 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <iomanip>
+#include <sstream>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -118,6 +120,86 @@ struct PendingWearableXfer {
     std::vector<std::byte> data;
     std::unordered_set<std::uint32_t> received_packets;
 };
+
+std::string task_inventory_type_name(std::int8_t type) {
+    switch (type) {
+    case 0: return "texture";
+    case 1: return "sound";
+    case 2: return "callcard";
+    case 3: return "landmark";
+    case 5: return "clothing";
+    case 6: return "object";
+    case 7: return "notecard";
+    case 10: return "lsltext";
+    case 13: return "bodypart";
+    case 20: return "animation";
+    case 21: return "gesture";
+    default: return "unknown";
+    }
+}
+
+std::string task_inventory_inv_type_name(std::int8_t type) {
+    switch (type) {
+    case 0: return "texture";
+    case 1: return "sound";
+    case 2: return "callcard";
+    case 3: return "landmark";
+    case 6: return "object";
+    case 7: return "notecard";
+    case 10: return "lsl";
+    case 15: return "snapshot";
+    case 17: return "attachment";
+    case 18: return "wearable";
+    case 19: return "animation";
+    case 20: return "gesture";
+    default: return "unknown";
+    }
+}
+
+std::string permission_hex(std::uint32_t value) {
+    std::ostringstream output;
+    output << std::hex << std::setfill('0') << std::setw(8) << value;
+    return output.str();
+}
+
+std::string task_inventory_field(std::string_view value) {
+    std::string result(value);
+    for (auto& character : result)
+        if (character == '|' || static_cast<unsigned char>(character) < 0x20)
+            character = ' ';
+    return result;
+}
+
+std::vector<std::byte> task_inventory_file(const homeworldz::scene::Entity& entity) {
+    std::string text = "\tinv_object\t0\n\t{\n\t\tobj_id\t" + entity.object_id +
+        "\n\t\tparent_id\t00000000-0000-0000-0000-000000000000\n"
+        "\t\ttype\tcategory\n\t\tname\tContents|\n";
+    for (const auto& item : entity.task_inventory) {
+        text += "\t}\n\tinv_item\t0\n\t{\n\t\titem_id\t" + item.item_id +
+            "\n\t\tparent_id\t" + entity.object_id +
+            "\n\tpermissions 0\n\t{\n\t\tbase_mask\t" + permission_hex(item.base_permissions) +
+            "\n\t\towner_mask\t" + permission_hex(item.current_permissions) +
+            "\n\t\tgroup_mask\t" + permission_hex(item.group_permissions) +
+            "\n\t\teveryone_mask\t" + permission_hex(item.everyone_permissions) +
+            "\n\t\tnext_owner_mask\t" + permission_hex(item.next_permissions) +
+            "\n\t\tcreator_id\t" + item.creator_id +
+            "\n\t\towner_id\t" + item.owner_id +
+            "\n\t\tlast_owner_id\t" + item.last_owner_id +
+            "\n\t\tgroup_id\t" + item.group_id +
+            "\n\t}\n\t\tasset_id\t" + item.asset_id +
+            "\n\t\ttype\t" + task_inventory_type_name(item.asset_type) +
+            "\n\t\tinv_type\t" + task_inventory_inv_type_name(item.inventory_type) +
+            "\n\t\tflags\t" + permission_hex(item.flags) +
+            "\n\tsale_info\t0\n\t{\n\t\tsale_type\tnot\n\t\tsale_price\t0\n\t}\n"
+            "\t\tname\t" + task_inventory_field(item.name) +
+            "|\n\t\tdesc\t" + task_inventory_field(item.description) +
+            "|\n\t\tcreation_date\t" + std::to_string(item.creation_date) + "\n";
+    }
+    text += "\t}";
+    text.push_back('\0');
+    return std::vector<std::byte>(reinterpret_cast<const std::byte*>(text.data()),
+                                  reinterpret_cast<const std::byte*>(text.data() + text.size()));
+}
 
 struct PendingEventResponse {
     socket_handle client{invalid_socket};
@@ -1147,6 +1229,7 @@ int main(int argc, char* argv[]) {
     std::unordered_map<std::string, PendingInventoryUpload> pending_inventory_uploads;
     std::unordered_map<std::string, PendingWearableUpload> pending_wearable_uploads;
     std::unordered_map<std::string, PendingWearableXfer> pending_wearable_xfers;
+    std::unordered_map<std::string, std::vector<std::byte>> pending_task_inventory_files;
     std::unordered_map<std::string, std::deque<std::string>> queued_viewer_events;
     std::vector<PendingEventResponse> pending_event_responses;
     std::uint64_t event_id{};
@@ -1184,6 +1267,9 @@ int main(int argc, char* argv[]) {
             return entry.first.starts_with(endpoint + '|');
         });
         std::erase_if(pending_wearable_xfers, [&](const auto& entry) {
+            return entry.first.starts_with(endpoint + '|');
+        });
+        std::erase_if(pending_task_inventory_files, [&](const auto& entry) {
             return entry.first.starts_with(endpoint + '|');
         });
         std::erase_if(pending_event_responses, [&](const PendingEventResponse& pending) {
@@ -1956,8 +2042,22 @@ int main(int argc, char* argv[]) {
                             if (entity && entity->owner_id == agent_id) {
                                 const auto task_id = homeworldz::viewer::parse_uuid(entity->object_id);
                                 if (task_id) {
+                                    std::string filename;
+                                    std::int16_t serial{};
+                                    if (!entity->task_inventory.empty()) {
+                                        filename = "inventory_" + homeworldz::viewer::random_uuid() + ".tmp";
+                                        const auto content = task_inventory_file(*entity);
+                                        if (content.size() <= 1000)
+                                            pending_task_inventory_files.insert_or_assign(
+                                                endpoint + '|' + filename, content);
+                                        else
+                                            filename.clear();
+                                        serial = static_cast<std::int16_t>(entity->task_inventory_serial);
+                                    }
+                                    auto wire_filename = filename;
+                                    if (!wire_filename.empty()) wire_filename.push_back('\0');
                                     const auto payload = homeworldz::viewer::encode_reply_task_inventory(
-                                        {*task_id, 0, {}});
+                                        {*task_id, serial, wire_filename});
                                     if (!payload.empty()) {
                                         if (const auto outgoing = circuits.send(
                                                 endpoint, payload, true, now, true))
@@ -1966,9 +2066,82 @@ int main(int argc, char* argv[]) {
                                 }
                             }
                             std::cout << "{\"level\":" << (sent ? "\"info\"" : "\"warn\"")
-                                      << ",\"message\":\"empty task inventory reply "
+                                      << ",\"message\":\"task inventory reply "
                                       << (sent ? "sent" : "rejected") << "\",\"localId\":"
-                                      << task_inventory_request->local_id << "}" << std::endl;
+                                      << task_inventory_request->local_id << ",\"items\":"
+                                      << (entity ? entity->task_inventory.size() : 0) << "}" << std::endl;
+                        }
+                        const auto task_inventory_update =
+                            homeworldz::viewer::decode_update_task_inventory(packet->payload);
+                        if (task_inventory_update &&
+                            task_inventory_update->agent_id == identity->agent_id &&
+                            task_inventory_update->session_id == identity->session_id) {
+                            auto* entity = scene.find(task_inventory_update->local_id);
+                            const auto agent_id = homeworldz::viewer::format_uuid(identity->agent_id);
+                            const auto source_id = homeworldz::viewer::format_uuid(task_inventory_update->item_id);
+                            bool copied = false;
+                            try {
+                                const auto source = viewer_grid
+                                    ? viewer_grid->find_inventory_item(agent_id, source_id)
+                                    : std::nullopt;
+                                if (entity && entity->owner_id == agent_id &&
+                                    (entity->owner_permissions & homeworldz::scene::permission_modify) != 0 &&
+                                    source &&
+                                    (source->current_permissions & homeworldz::scene::permission_copy) != 0) {
+                                    const auto created = static_cast<std::uint64_t>(
+                                        std::chrono::duration_cast<std::chrono::seconds>(
+                                            std::chrono::system_clock::now().time_since_epoch()).count());
+                                    entity->task_inventory.push_back({
+                                        homeworldz::viewer::random_uuid(), source->asset_id,
+                                        source->creator_id, agent_id, source->owner_id,
+                                        "00000000-0000-0000-0000-000000000000",
+                                        source->name, source->description,
+                                        static_cast<std::int8_t>(source->asset_type),
+                                        static_cast<std::int8_t>(source->inventory_type),
+                                        source->flags, source->base_permissions,
+                                        source->current_permissions, 0,
+                                        source->everyone_permissions, source->next_permissions,
+                                        static_cast<std::uint8_t>(source->sale_type),
+                                        source->sale_price, created});
+                                    entity->task_inventory_serial = static_cast<std::uint16_t>(
+                                        std::max<unsigned>(1, entity->task_inventory_serial + 1));
+                                    copied = true;
+                                }
+                            } catch (const std::exception& error) {
+                                std::cout << "{\"level\":\"error\",\"message\":\"task inventory copy failed\",\"error\":"
+                                          << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+                            }
+                            std::cout << "{\"level\":" << (copied ? "\"info\"" : "\"warn\"")
+                                      << ",\"message\":\"task inventory item copy "
+                                      << (copied ? "completed" : "rejected") << "\",\"localId\":"
+                                      << task_inventory_update->local_id << ",\"sourceItemId\":"
+                                      << homeworldz::api::json_string(source_id) << "}" << std::endl;
+                        }
+                        const auto task_inventory_xfer =
+                            homeworldz::viewer::decode_request_xfer(packet->payload);
+                        if (task_inventory_xfer) {
+                            const auto pending = pending_task_inventory_files.find(
+                                endpoint + '|' + task_inventory_xfer->filename);
+                            bool sent = false;
+                            if (pending != pending_task_inventory_files.end()) {
+                                std::vector<std::byte> xfer_data(4);
+                                const auto size = static_cast<std::uint32_t>(pending->second.size());
+                                for (unsigned index = 0; index < 4; ++index)
+                                    xfer_data[index] = static_cast<std::byte>(size >> (index * 8));
+                                xfer_data.insert(
+                                    xfer_data.end(), pending->second.begin(), pending->second.end());
+                                const auto payload = homeworldz::viewer::encode_send_xfer_packet(
+                                    task_inventory_xfer->id, 0x80000000U, xfer_data);
+                                if (const auto outgoing = circuits.send(
+                                        endpoint, payload, true, now, true))
+                                    sent = send_udp(viewer_server, endpoint, *outgoing);
+                                pending_task_inventory_files.erase(pending);
+                            }
+                            std::cout << "{\"level\":" << (sent ? "\"info\"" : "\"warn\"")
+                                      << ",\"message\":\"task inventory xfer "
+                                      << (sent ? "sent" : "rejected") << "\",\"filename\":"
+                                      << homeworldz::api::json_string(task_inventory_xfer->filename)
+                                      << "}" << std::endl;
                         }
                         const auto create_folder =
                             homeworldz::viewer::decode_create_inventory_folder(packet->payload);
