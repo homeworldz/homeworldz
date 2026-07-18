@@ -15,7 +15,10 @@ their upstream artwork provenance.
 `viewer-standard/` contains server-backed textures and UI sounds that
 Second Life-compatible viewers request by fixed UUID. These are protocol
 resources rather than user-visible Library inventory. Supplying them prevents
-grey fallback images and missing interaction sounds on a new grid.
+grey fallback images, missing interaction sounds, and missing environment
+settings on a new grid. The standard default-day settings asset is sourced
+from OpenSimulator's BSD-licensed asset set; its upstream notice is retained
+beside the asset.
 
 The Halcyon source is distributed under the 3-clause BSD license. The texture
 set's provenance notice says that some included textures derive from Second
