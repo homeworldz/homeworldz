@@ -35,6 +35,15 @@ int main() {
     root.scale = {1.0, 2.0, 3.0};
     root.rotation = {0.0, 0.0, 0.25};
     root.owner_permissions = 0x0008e000;
+    root.task_inventory_serial = 7;
+    root.task_inventory.push_back({
+        "30000000-0000-4000-8000-000000000003",
+        "40000000-0000-4000-8000-000000000004",
+        root.creator_id, "50000000-0000-4000-8000-000000000005",
+        "60000000-0000-4000-8000-000000000006",
+        "00000000-0000-0000-0000-000000000000", "Surface Texture", "Task content",
+        0, 0, 0x01020304, 0x0008e000, 0x0008a000, 0, 0x00008000, 0x00002000,
+        1, 25, 1234567890});
     homeworldz::scene::Entity child;
     child.id = 11;
     child.parent_id = root.id;
@@ -44,6 +53,9 @@ int main() {
     child.local_position = {2.0, -3.0, 4.0};
     child.local_rotation = {0.125, 0.0, -0.25};
     child.next_owner_permissions = 0x00082000;
+    child.task_inventory_serial = 2;
+    child.task_inventory.push_back(root.task_inventory.front());
+    child.task_inventory.front().name = "Child Texture";
     const std::array<const homeworldz::scene::Entity*, 1> children{&child};
     const auto linkset_text = homeworldz::asset::serialize_linkset_asset(root, children);
     const auto linkset = homeworldz::asset::parse_linkset_asset(std::span(
@@ -55,10 +67,18 @@ int main() {
         linkset->children[0].local_position.x != 2.0 ||
         linkset->children[0].local_position.y != -3.0 ||
         linkset->children[0].local_rotation.z != -0.25 ||
-        linkset->children[0].next_owner_permissions != 0x00082000)
+        linkset->children[0].next_owner_permissions != 0x00082000 ||
+        linkset->root.task_inventory_serial != 7 || linkset->root.task_inventory.size() != 1 ||
+        linkset->root.task_inventory[0].name != "Surface Texture" ||
+        linkset->root.task_inventory[0].flags != 0x01020304 ||
+        linkset->root.task_inventory[0].sale_price != 25 ||
+        linkset->children[0].task_inventory_serial != 2 ||
+        linkset->children[0].task_inventory.size() != 1 ||
+        linkset->children[0].task_inventory[0].name != "Child Texture")
         return 1;
     const auto single = homeworldz::asset::parse_linkset_asset(bytes);
     if (!single || !single->children.empty() || single->root.description != "Round \"prim\"")
         return 1;
+    if (single->root.task_inventory_serial != 0 || !single->root.task_inventory.empty()) return 1;
     return 0;
 }

@@ -645,6 +645,10 @@ void apply_object_asset(
     entity.profile_hollow = asset.profile_hollow;
     entity.physical = asset.physical;
     entity.phantom = asset.phantom;
+    entity.task_inventory_serial = asset.task_inventory_serial;
+    entity.task_inventory = asset.task_inventory;
+    for (auto& item : entity.task_inventory)
+        item.item_id = homeworldz::viewer::random_uuid();
 }
 
 std::optional<homeworldz::viewer::ObjectProperties> object_properties_from_entity(

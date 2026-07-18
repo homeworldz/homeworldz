@@ -70,6 +70,17 @@ std::optional<bool> boolean_after(std::string_view content, std::string_view mar
     return std::nullopt;
 }
 
+template <typename Integer>
+std::optional<Integer> integer_after(std::string_view content, std::string_view marker) {
+    const auto marker_position = content.find(marker);
+    if (marker_position == std::string_view::npos) return std::nullopt;
+    const auto start = marker_position + marker.size();
+    Integer value{};
+    const auto parsed = std::from_chars(content.data() + start, content.data() + content.size(), value);
+    if (parsed.ec != std::errc{} || parsed.ptr == content.data() + start) return std::nullopt;
+    return value;
+}
+
 std::optional<std::vector<std::byte>> bytes_from_hex(std::string_view value) {
     if (value.size() % 2 != 0 || value.size() > 131070) return std::nullopt;
     std::vector<std::byte> result(value.size() / 2);
@@ -109,6 +120,125 @@ std::string json_string(std::string_view value) {
     }
     result.push_back('"');
     return result;
+}
+
+std::optional<scene::TaskInventoryItem> parse_task_inventory_item(std::string_view text) {
+    scene::TaskInventoryItem item;
+    const auto item_id = string_after(text, R"("itemId":")");
+    const auto asset_id = string_after(text, R"("assetId":")");
+    const auto creator_id = string_after(text, R"("creatorId":")");
+    const auto owner_id = string_after(text, R"("ownerId":")");
+    const auto last_owner_id = string_after(text, R"("lastOwnerId":")");
+    const auto group_id = string_after(text, R"("groupId":")");
+    const auto name = string_after(text, R"("name":")");
+    const auto description = string_after(text, R"("description":")");
+    const auto asset_type = integer_after<int>(text, R"("assetType":)");
+    const auto inventory_type = integer_after<int>(text, R"("inventoryType":)");
+    const auto flags = integer_after<std::uint32_t>(text, R"("flags":)");
+    const auto base_permissions = integer_after<std::uint32_t>(text, R"("basePermissions":)");
+    const auto current_permissions = integer_after<std::uint32_t>(text, R"("currentPermissions":)");
+    const auto group_permissions = integer_after<std::uint32_t>(text, R"("groupPermissions":)");
+    const auto everyone_permissions = integer_after<std::uint32_t>(text, R"("everyonePermissions":)");
+    const auto next_permissions = integer_after<std::uint32_t>(text, R"("nextPermissions":)");
+    const auto sale_type = integer_after<unsigned>(text, R"("saleType":)");
+    const auto sale_price = integer_after<std::int32_t>(text, R"("salePrice":)");
+    const auto creation_date = integer_after<std::uint64_t>(text, R"("creationDate":)");
+    if (!item_id || !asset_id || !creator_id || !owner_id || !last_owner_id || !group_id ||
+        !name || !description || !asset_type || !inventory_type || !flags || !base_permissions ||
+        !current_permissions || !group_permissions || !everyone_permissions || !next_permissions ||
+        !sale_type || !sale_price || !creation_date || *asset_type < -1 || *asset_type > 127 ||
+        *inventory_type < -1 || *inventory_type > 127 || *sale_type > 255 ||
+        item_id->size() > 128 || asset_id->size() > 128 || creator_id->size() > 128 ||
+        owner_id->size() > 128 || last_owner_id->size() > 128 || group_id->size() > 128 ||
+        name->size() > 1024 || description->size() > 4096)
+        return std::nullopt;
+    item.item_id = *item_id;
+    item.asset_id = *asset_id;
+    item.creator_id = *creator_id;
+    item.owner_id = *owner_id;
+    item.last_owner_id = *last_owner_id;
+    item.group_id = *group_id;
+    item.name = *name;
+    item.description = *description;
+    item.asset_type = static_cast<std::int8_t>(*asset_type);
+    item.inventory_type = static_cast<std::int8_t>(*inventory_type);
+    item.flags = *flags;
+    item.base_permissions = *base_permissions;
+    item.current_permissions = *current_permissions;
+    item.group_permissions = *group_permissions;
+    item.everyone_permissions = *everyone_permissions;
+    item.next_permissions = *next_permissions;
+    item.sale_type = static_cast<std::uint8_t>(*sale_type);
+    item.sale_price = *sale_price;
+    item.creation_date = *creation_date;
+    return item;
+}
+
+std::optional<std::vector<scene::TaskInventoryItem>> parse_task_inventory(std::string_view text) {
+    const auto marker = text.find(R"("taskInventory":[)");
+    if (marker == std::string_view::npos) return std::vector<scene::TaskInventoryItem>{};
+    std::vector<scene::TaskInventoryItem> result;
+    std::size_t position = marker + 17;
+    while (position < text.size()) {
+        while (position < text.size() && (text[position] == ' ' || text[position] == ',')) ++position;
+        if (position < text.size() && text[position] == ']') return result;
+        if (position >= text.size() || text[position] != '{' || result.size() >= 1024)
+            return std::nullopt;
+        const auto start = position;
+        std::size_t depth = 0;
+        bool quoted = false;
+        bool escaped = false;
+        for (; position < text.size(); ++position) {
+            const auto character = text[position];
+            if (quoted) {
+                if (escaped) escaped = false;
+                else if (character == '\\') escaped = true;
+                else if (character == '"') quoted = false;
+                continue;
+            }
+            if (character == '"') quoted = true;
+            else if (character == '{') ++depth;
+            else if (character == '}' && --depth == 0) {
+                ++position;
+                break;
+            }
+        }
+        if (depth != 0) return std::nullopt;
+        const auto item = parse_task_inventory_item(text.substr(start, position - start));
+        if (!item) return std::nullopt;
+        result.push_back(*item);
+    }
+    return std::nullopt;
+}
+
+std::string task_inventory_json(const scene::Entity& entity) {
+    auto result = ",\"taskInventorySerial\":" + std::to_string(entity.task_inventory_serial) +
+        ",\"taskInventory\":[";
+    bool first = true;
+    for (const auto& item : entity.task_inventory) {
+        if (!first) result.push_back(',');
+        first = false;
+        result += "{\"itemId\":" + json_string(item.item_id) +
+            ",\"assetId\":" + json_string(item.asset_id) +
+            ",\"creatorId\":" + json_string(item.creator_id) +
+            ",\"ownerId\":" + json_string(item.owner_id) +
+            ",\"lastOwnerId\":" + json_string(item.last_owner_id) +
+            ",\"groupId\":" + json_string(item.group_id) +
+            ",\"name\":" + json_string(item.name) +
+            ",\"description\":" + json_string(item.description) +
+            ",\"assetType\":" + std::to_string(item.asset_type) +
+            ",\"inventoryType\":" + std::to_string(item.inventory_type) +
+            ",\"flags\":" + std::to_string(item.flags) +
+            ",\"basePermissions\":" + std::to_string(item.base_permissions) +
+            ",\"currentPermissions\":" + std::to_string(item.current_permissions) +
+            ",\"groupPermissions\":" + std::to_string(item.group_permissions) +
+            ",\"everyonePermissions\":" + std::to_string(item.everyone_permissions) +
+            ",\"nextPermissions\":" + std::to_string(item.next_permissions) +
+            ",\"saleType\":" + std::to_string(item.sale_type) +
+            ",\"salePrice\":" + std::to_string(item.sale_price) +
+            ",\"creationDate\":" + std::to_string(item.creation_date) + '}';
+    }
+    return result + ']';
 }
 
 std::string object_json(const scene::Entity& entity, bool child) {
@@ -158,7 +288,8 @@ std::string object_json(const scene::Entity& entity, bool child) {
         ",\"ownerPermissions\":" + std::to_string(entity.owner_permissions) +
         ",\"groupPermissions\":" + std::to_string(entity.group_permissions) +
         ",\"everyonePermissions\":" + std::to_string(entity.everyone_permissions) +
-        ",\"nextOwnerPermissions\":" + std::to_string(entity.next_owner_permissions);
+        ",\"nextOwnerPermissions\":" + std::to_string(entity.next_owner_permissions) +
+        task_inventory_json(entity);
     if (child)
         result += ",\"localPosition\":[" + std::to_string(entity.local_position.x) + ',' +
             std::to_string(entity.local_position.y) + ',' +
@@ -223,6 +354,14 @@ std::optional<ObjectAsset> parse_object_asset(std::span<const std::byte> content
     auto physical = boolean_after(text, R"("physical":)");
     auto phantom = boolean_after(text, R"("phantom":)");
     const auto texture_entry_hex = string_after(text, R"("textureEntry":")");
+    const auto task_inventory = parse_task_inventory(text);
+    const auto task_inventory_serial_marker = text.find(R"("taskInventorySerial":)");
+    const auto parsed_task_inventory_serial = integer_after<std::uint16_t>(
+        text, R"("taskInventorySerial":)");
+    if (task_inventory_serial_marker != std::string_view::npos &&
+        !parsed_task_inventory_serial)
+        return std::nullopt;
+    const auto task_inventory_serial = parsed_task_inventory_serial.value_or(0);
     if (!scale || !rotation || !description || !material ||
         scale->x <= 0.0 || scale->y <= 0.0 || scale->z <= 0.0 ||
         scale->x > 64.0 || scale->y > 64.0 || scale->z > 64.0 ||
@@ -265,7 +404,7 @@ std::optional<ObjectAsset> parse_object_asset(std::span<const std::byte> content
     auto texture_entry = texture_entry_hex
         ? bytes_from_hex(*texture_entry_hex)
         : std::optional<std::vector<std::byte>>(std::vector<std::byte>{});
-    if (!texture_entry) return std::nullopt;
+    if (!texture_entry || !task_inventory) return std::nullopt;
     ObjectAsset result;
     result.name = name.value_or("");
     result.creator_id = creator_id.value_or("");
@@ -304,6 +443,8 @@ std::optional<ObjectAsset> parse_object_asset(std::span<const std::byte> content
     result.group_permissions = static_cast<std::uint32_t>(group_permissions);
     result.everyone_permissions = static_cast<std::uint32_t>(everyone_permissions);
     result.next_owner_permissions = static_cast<std::uint32_t>(next_owner_permissions);
+    result.task_inventory_serial = task_inventory_serial;
+    result.task_inventory = *task_inventory;
     result.local_position = local_position.value_or(scene::Vector3{});
     result.local_rotation = result.rotation;
     return result;

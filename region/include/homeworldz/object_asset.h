@@ -49,6 +49,8 @@ struct ObjectAsset {
     std::uint32_t group_permissions{};
     std::uint32_t everyone_permissions{};
     std::uint32_t next_owner_permissions{scene::permission_all};
+    std::uint16_t task_inventory_serial{};
+    std::vector<scene::TaskInventoryItem> task_inventory;
     scene::Vector3 local_position;
     scene::Vector3 local_rotation;
 };
