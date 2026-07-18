@@ -45,6 +45,15 @@ type API struct {
 	locations     locations.Store
 }
 
+func (a *API) regionExtent(ctx context.Context, id string) float32 {
+	if a.provisioned != nil {
+		if region, err := a.provisioned.Get(ctx, id); err == nil {
+			return float32(region.Size * 256)
+		}
+	}
+	return 256
+}
+
 type Options struct {
 	ServiceToken      string
 	GridPublicURL     string

@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"errors"
 	"math"
 	"net/http"
@@ -23,7 +24,7 @@ func (a *API) transitsRoot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var request PrepareTransitRequest
-	if !decodeJSON(w, r, &request) || !validateTransitRequest(w, request) {
+	if !decodeJSON(w, r, &request) || !a.validateTransitRequest(r.Context(), w, request) {
 		return
 	}
 	session, err := a.identity.ValidateSession(r.Context(), request.SessionID)
@@ -107,14 +108,15 @@ func (a *API) transitByID(w http.ResponseWriter, r *http.Request) {
 	a.writeTransitResult(w, value, err)
 }
 
-func validateTransitRequest(w http.ResponseWriter, request PrepareTransitRequest) bool {
+func (a *API) validateTransitRequest(ctx context.Context, w http.ResponseWriter, request PrepareTransitRequest) bool {
 	finite := func(value float32) bool { return !float32NaNOrInf(value) }
 	validVector := func(value transit.Vector3) bool { return finite(value.X) && finite(value.Y) && finite(value.Z) }
+	extent := a.regionExtent(ctx, request.DestinationRegionID)
 	valid := validUUID(request.ID) && validUUID(request.AgentID) && validUUID(request.SessionID) &&
 		validUUID(request.SourceRegionID) && validUUID(request.DestinationRegionID) &&
 		request.SourceRegionID != request.DestinationRegionID && validVector(request.Position) &&
-		validVector(request.LookAt) && request.Position.X >= 0 && request.Position.X <= 256 &&
-		request.Position.Y >= 0 && request.Position.Y <= 256 && request.Position.Z >= -4096 &&
+		validVector(request.LookAt) && request.Position.X >= 0 && request.Position.X <= extent &&
+		request.Position.Y >= 0 && request.Position.Y <= extent && request.Position.Z >= -4096 &&
 		request.Position.Z <= 4096 && (request.LifetimeSeconds == 0 ||
 		(request.LifetimeSeconds >= 10 && request.LifetimeSeconds <= 120))
 	if !valid {

@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/homeworldz/homeworldz/grid/internal/provisioning"
 	"github.com/homeworldz/homeworldz/grid/internal/regions"
 	"github.com/homeworldz/homeworldz/grid/internal/transit"
 )
@@ -105,14 +108,26 @@ func TestAvatarTransitHTTPStateMachine(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	path := filepath.Join(t.TempDir(), "regions.json")
+	if err := os.WriteFile(path, []byte(`[
+{"id":"`+source+`","name":"Welcome","mapX":1000,"mapY":1000,"accessKey":"welcome-key"},
+{"id":"`+destination+`","name":"Sandbox","mapX":1001,"mapY":1000,"size":2,"accessKey":"sandbox-key"}
+]`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	provisioned, err := provisioning.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	store := newMemoryTransitStore(identities.now)
 	handler := New(checker{}, "test", Options{
-		ServiceToken: "secret", Identity: identities, Regions: regionStore, Transits: store,
+		ServiceToken: "secret", Identity: identities, Regions: regionStore,
+		Provisioned: provisioned, Transits: store,
 	})
 	const transitID = "33333333-3333-4333-8333-333333333333"
 	body := `{"id":"` + transitID + `","agentId":"` + user.ID + `","sessionId":"` + session.ID +
 		`","sourceRegionId":"` + source + `","destinationRegionId":"` + destination +
-		`","position":{"x":128,"y":64,"z":30},"lookAt":{"x":1,"y":0,"z":0},"flying":true}`
+		`","position":{"x":400,"y":384,"z":30},"lookAt":{"x":1,"y":0,"z":0},"flying":true}`
 	prepared := requestRegion[transit.Transit](t, handler, http.MethodPost, "/api/v1/transits", body, http.StatusOK)
 	if prepared.State != transit.Prepared || prepared.Generation != 1 {
 		t.Fatalf("prepared transit = %#v", prepared)
