@@ -2150,6 +2150,76 @@ int main(int argc, char* argv[]) {
                                       << ",\"refreshSent\":" << (refresh_sent ? "true" : "false")
                                       << "}" << std::endl;
                         }
+                        const auto task_inventory_remove =
+                            homeworldz::viewer::decode_remove_task_inventory(packet->payload);
+                        if (task_inventory_remove &&
+                            task_inventory_remove->agent_id == identity->agent_id &&
+                            task_inventory_remove->session_id == identity->session_id) {
+                            auto* entity = scene.find(task_inventory_remove->local_id);
+                            const auto agent_id = homeworldz::viewer::format_uuid(identity->agent_id);
+                            const auto item_id = homeworldz::viewer::format_uuid(task_inventory_remove->item_id);
+                            bool removed = false;
+                            if (entity && entity->owner_id == agent_id &&
+                                (entity->owner_permissions & homeworldz::scene::permission_modify) != 0) {
+                                const auto item = std::find_if(
+                                    entity->task_inventory.begin(), entity->task_inventory.end(),
+                                    [&](const auto& candidate) { return candidate.item_id == item_id; });
+                                if (item != entity->task_inventory.end()) {
+                                    const auto index = static_cast<std::size_t>(
+                                        item - entity->task_inventory.begin());
+                                    const auto previous_serial = entity->task_inventory_serial;
+                                    const auto original = *item;
+                                    entity->task_inventory.erase(item);
+                                    entity->task_inventory_serial = entity->task_inventory.empty()
+                                        ? 0
+                                        : (previous_serial == 65535
+                                            ? 1
+                                            : static_cast<std::uint16_t>(previous_serial + 1));
+                                    try {
+                                        if (storage) storage->save_snapshot(scene);
+                                        removed = true;
+                                    } catch (const std::exception& error) {
+                                        entity->task_inventory.insert(
+                                            entity->task_inventory.begin() + index, original);
+                                        entity->task_inventory_serial = previous_serial;
+                                        std::cout << "{\"level\":\"error\",\"message\":\"task inventory removal persistence failed\",\"error\":"
+                                                  << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+                                    }
+                                }
+                            }
+                            bool refresh_sent = false;
+                            if (removed && entity) {
+                                const auto task_id = homeworldz::viewer::parse_uuid(entity->object_id);
+                                if (task_id) {
+                                    std::string filename;
+                                    if (!entity->task_inventory.empty()) {
+                                        const auto content = task_inventory_file(*entity);
+                                        if (content.size() <= 1000) {
+                                            filename = "inventory_" +
+                                                homeworldz::viewer::random_uuid() + ".tmp";
+                                            pending_task_inventory_files.insert_or_assign(
+                                                endpoint + '|' + filename, content);
+                                        }
+                                    }
+                                    auto wire_filename = filename;
+                                    if (!wire_filename.empty()) wire_filename.push_back('\0');
+                                    const auto payload = homeworldz::viewer::encode_reply_task_inventory({
+                                        *task_id,
+                                        static_cast<std::int16_t>(entity->task_inventory_serial),
+                                        wire_filename});
+                                    if (const auto outgoing = circuits.send(
+                                            endpoint, payload, true, now, true))
+                                        refresh_sent = send_udp(viewer_server, endpoint, *outgoing);
+                                }
+                            }
+                            std::cout << "{\"level\":" << (removed ? "\"info\"" : "\"warn\"")
+                                      << ",\"message\":\"task inventory item removal "
+                                      << (removed ? "completed" : "rejected") << "\",\"localId\":"
+                                      << task_inventory_remove->local_id << ",\"itemId\":"
+                                      << homeworldz::api::json_string(item_id)
+                                      << ",\"refreshSent\":" << (refresh_sent ? "true" : "false")
+                                      << "}" << std::endl;
+                        }
                         const auto task_inventory_xfer =
                             homeworldz::viewer::decode_request_xfer(packet->payload);
                         if (task_inventory_xfer) {

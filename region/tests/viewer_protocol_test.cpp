@@ -103,6 +103,16 @@ bool task_inventory_codecs() {
     update.pop_back();
     if (decode_update_task_inventory(update)) return false;
 
+    auto remove = bytes({0xff, 0xff, 0x01, 0x1f});
+    remove.insert(remove.end(), agent.begin(), agent.end());
+    remove.insert(remove.end(), session.begin(), session.end());
+    remove.insert(remove.end(), {std::byte{42}, std::byte{}, std::byte{}, std::byte{}});
+    remove.insert(remove.end(), task.begin(), task.end());
+    const auto decoded_remove = decode_remove_task_inventory(remove);
+    if (!decoded_remove || decoded_remove->agent_id != agent ||
+        decoded_remove->session_id != session || decoded_remove->local_id != 42 ||
+        decoded_remove->item_id != task) return false;
+
     auto request_xfer = bytes({0xff, 0xff, 0x00, 0x9c,
                                0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01,
                                16});

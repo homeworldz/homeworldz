@@ -126,6 +126,11 @@ struct UpdateTaskInventory : AgentMessage {
     Uuid transaction_id{};
 };
 
+struct RemoveTaskInventory : AgentMessage {
+    std::uint32_t local_id{};
+    Uuid item_id{};
+};
+
 struct RequestXfer {
     std::uint64_t id{};
     std::string filename;
@@ -568,6 +573,7 @@ std::optional<MoveInventoryItem> decode_move_inventory_item(std::span<const std:
 std::optional<RequestTaskInventory> decode_request_task_inventory(std::span<const std::byte> payload);
 std::vector<std::byte> encode_reply_task_inventory(const ReplyTaskInventory& message);
 std::optional<UpdateTaskInventory> decode_update_task_inventory(std::span<const std::byte> payload);
+std::optional<RemoveTaskInventory> decode_remove_task_inventory(std::span<const std::byte> payload);
 std::optional<RequestXfer> decode_request_xfer(std::span<const std::byte> payload);
 std::vector<std::byte> encode_send_xfer_packet(
     std::uint64_t id, std::uint32_t packet, std::span<const std::byte> data);
