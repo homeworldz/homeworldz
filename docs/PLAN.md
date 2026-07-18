@@ -76,7 +76,7 @@ than runtime dependencies.
 - [x] Add persistent nonphysical linksets with root and child transforms,
   whole-object and Edit Linked scaling, duplication, take, take-copy, return,
   derez, inventory round trips, and static child collision.
-- [ ] Add object contents inventory and its permissions, mutation, copy, derez,
+- [x] Add object contents inventory and its permissions, mutation, copy, derez,
   return, and inventory round-trip lifecycle.
 - [ ] Represent physical linksets as compound physics bodies rather than
   independent self-colliding child bodies.
