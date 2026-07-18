@@ -876,3 +876,11 @@ texture asset in its Contents. Deleting that task item from `Contents2` did
 not affect the item in `Contents1`, where it remained present and openable.
 This verifies that object duplication preserves content while assigning new
 task-item UUIDs to every duplicated prim.
+
+Task-item metadata mutation passed live acceptance on 2026-07-18. Renaming the
+remaining texture in `Contents1` to `Contents Texture Renamed` appeared almost
+immediately, followed by Firestorm's authoritative inventory refresh about one
+second later. The new name survived closing and reopening Edit and a complete
+Welcome Region restart. The Region received two idempotent viewer updates,
+persisted each serial revision, and retained immutable asset and creator
+identity fields.
