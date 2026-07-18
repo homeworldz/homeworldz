@@ -19,7 +19,7 @@ public:
                                         std::string_view body) override {
         requests.push_back({std::string(method), std::string(path), std::string(body)});
         if (method == "POST" && path.starts_with("/api/v1/region-runtime/"))
-            return {200, R"({"id":"22222222-2222-4222-8222-222222222222","name":"Sandbox Region","gridX":1001,"gridY":1000,"publicEndpoint":"https://sandbox.example/region","viewerPort":43002,"gridName":"HomeWorldz Test","gridPublicUrl":"https://grid.example"})"};
+            return {200, R"({"id":"22222222-2222-4222-8222-222222222222","name":"Sandbox Region","gridX":1001,"gridY":1000,"sizeX":256,"sizeY":256,"maturity":0,"publicEndpoint":"https://sandbox.example/region","viewerPort":43002,"gridName":"HomeWorldz Test","gridPublicUrl":"https://grid.example"})"};
         if (method == "GET" && path.ends_with("/neighbors"))
             return {200, R"({"neighbors":[{"direction":"west","region":{"id":"11111111-1111-4111-8111-111111111111","name":"Welcome","gridX":1000,"gridY":1000,"sizeX":256,"sizeY":256,"maturity":0,"publicEndpoint":"http://grid.example:42011","viewerPort":42012,"online":true}}]})"};
         if (method == "POST" && path == "/api/v1/transits")
@@ -106,7 +106,8 @@ int main() {
         "Sandbox Region", provisioned_settings);
     if (!provisioned || provisioned->id != "22222222-2222-4222-8222-222222222222" ||
         provisioned->name != "Sandbox Region" || provisioned->grid_x != 1001 ||
-        provisioned->grid_y != 1000 || provisioned->public_endpoint != "https://sandbox.example/region" ||
+		provisioned->grid_y != 1000 || provisioned->size_x != 256 || provisioned->size_y != 256 ||
+		provisioned->maturity != 0 || provisioned->public_endpoint != "https://sandbox.example/region" ||
         provisioned->viewer_port != 43002 || provisioned->grid_name != "HomeWorldz Test" ||
         provisioned->grid_public_url != "https://grid.example" ||
         transport->requests.back().path != "/api/v1/region-runtime/Sandbox%20Region" ||

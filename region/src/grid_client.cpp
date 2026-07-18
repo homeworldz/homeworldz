@@ -492,16 +492,24 @@ std::optional<RegisteredRegion> Client::register_provisioned_region(
     RegisteredRegion region{json_field(response.body, "id"), json_field(response.body, "name")};
     const auto grid_x = json_int(response.body, "gridX");
     const auto grid_y = json_int(response.body, "gridY");
+	const auto size_x = json_int(response.body, "sizeX");
+	const auto size_y = json_int(response.body, "sizeY");
+	const auto maturity = json_int(response.body, "maturity");
     const auto viewer_port = json_int(response.body, "viewerPort");
     region.public_endpoint = json_field(response.body, "publicEndpoint");
     region.grid_name = json_field(response.body, "gridName");
     region.grid_public_url = json_field(response.body, "gridPublicUrl");
-    if (region.id.empty() || region.name.empty() || !grid_x || !grid_y ||
+	if (region.id.empty() || region.name.empty() || !grid_x || !grid_y || !size_x || !size_y ||
+		(*size_x != 256 && *size_x != 512 && *size_x != 1024) || *size_x != *size_y ||
+		!maturity || *maturity < 0 || *maturity > 2 ||
         region.public_endpoint.empty() || !viewer_port || *viewer_port < 1 || *viewer_port > 65535 ||
         region.grid_name.empty() || region.grid_public_url.empty()) return std::nullopt;
     region.grid_x = *grid_x;
     region.grid_y = *grid_y;
 	region.viewer_port = *viewer_port;
+	region.size_x = *size_x;
+	region.size_y = *size_y;
+	region.maturity = *maturity;
     return region;
 }
 

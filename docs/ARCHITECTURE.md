@@ -109,7 +109,9 @@ that deterministic order. A Region fetches and validates this topology at
 startup, retains the snapshot in runtime state, and refreshes it every five
 seconds so independently started or restarted neighbors converge without a
 required start order. Offline neighbors remain visible as topology but are
-never eligible teleport destinations. Border crossing is not enabled by
+never eligible teleport destinations. Rectangle adjacency permits multiple
+smaller neighbors along one edge of a larger allocation and rejects overlaps
+at the PostgreSQL constraint boundary. Border crossing is not enabled by
 discovery alone;
 until the crossing handoff exists, the simulation continues to contain entities
 at every region edge.

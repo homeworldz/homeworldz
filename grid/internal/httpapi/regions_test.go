@@ -329,6 +329,7 @@ func TestProvisionedRegionRegistrationUsesPerRegionCredentials(t *testing.T) {
 	}
 	if registered.ID != "22222222-2222-4222-8222-222222222222" || registered.Name != "Sandbox" ||
 		registered.GridX != 1001 || registered.GridY != 1000 ||
+		registered.SizeX != 256 || registered.SizeY != 256 || registered.Maturity != 0 ||
 		registered.PublicEndpoint != "https://sandbox.example/region" || registered.ViewerPort != 43002 ||
 		registered.GridName != "HomeWorldz Test" || registered.GridPublicURL != "https://grid.example" {
 		t.Fatalf("unexpected registered region: %#v", registered)
@@ -365,6 +366,36 @@ func TestProvisionedRegionRegistrationUsesPerRegionCredentials(t *testing.T) {
 	}
 	if retained, ok := store.regions[registered.ID]; !ok || retained.LeaseExpiresAt.After(store.now) {
 		t.Fatalf("provisioned shutdown removed identity or left lease online: %#v", retained)
+	}
+}
+
+func TestVariableExtentTopologyAllowsMultipleNeighborsPerBorder(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "regions.json")
+	if err := os.WriteFile(path, []byte(`[
+  {"id":"11111111-1111-4111-8111-111111111111","name":"Large Center","mapX":1000,"mapY":1000,"size":2,"accessKey":"center-key"},
+  {"id":"22222222-2222-4222-8222-222222222222","name":"East South","mapX":1002,"mapY":1000,"size":1,"accessKey":"south-key"},
+  {"id":"33333333-3333-4333-8333-333333333333","name":"East North","mapX":1002,"mapY":1001,"size":1,"accessKey":"north-key"}
+]`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	registry, err := provisioning.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := newMemoryRegionStore()
+	_, err = store.RegisterProvisioned(context.Background(), "11111111-1111-4111-8111-111111111111",
+		regions.Registration{Name: "Large Center", GridX: 1000, GridY: 1000,
+			PublicEndpoint: "http://center.example:42001", ViewerPort: 42002, LeaseDuration: time.Minute})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := New(checker{}, "test", Options{ServiceToken: "secret", Regions: store, Provisioned: registry})
+	response := requestRegion[RegionNeighborList](t, handler, http.MethodGet,
+		"/api/v1/regions/11111111-1111-4111-8111-111111111111/neighbors", "", http.StatusOK)
+	if len(response.Neighbors) != 2 || response.Neighbors[0].Direction != "east" ||
+		response.Neighbors[1].Direction != "east" || response.Neighbors[0].Region.GridY != 1000 ||
+		response.Neighbors[1].Region.GridY != 1001 {
+		t.Fatalf("variable extent topology = %#v", response.Neighbors)
 	}
 }
 

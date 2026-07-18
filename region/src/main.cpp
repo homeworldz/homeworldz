@@ -791,6 +791,9 @@ int main(int argc, char* argv[]) {
     std::string region_name;
     int region_grid_x{};
     int region_grid_y{};
+	int region_size_x{256};
+	int region_size_y{256};
+	int region_maturity{};
     auto region_public_endpoint = configured_value(
         "region.public_endpoint", "http://localhost:" + std::to_string(configured_port()));
     auto grid_public_endpoint = configured_value(
@@ -829,13 +832,25 @@ int main(int argc, char* argv[]) {
                 return false;
             }
             for (const auto& neighbor : *discovered) {
-                int expected_x = region_grid_x;
-                int expected_y = region_grid_y;
-                if (neighbor.direction == "north") ++expected_y;
-                else if (neighbor.direction == "east") ++expected_x;
-                else if (neighbor.direction == "south") --expected_y;
-                else if (neighbor.direction == "west") --expected_x;
-                if (neighbor.grid_x != expected_x || neighbor.grid_y != expected_y) {
+				const auto source_size = region_size_x / 256;
+				const auto neighbor_size = neighbor.size_x / 256;
+				const auto overlaps = [](int first, int first_size, int second, int second_size) {
+					return first < second + second_size && second < first + first_size;
+				};
+				bool adjacent{};
+				if (neighbor.direction == "north")
+					adjacent = neighbor.grid_y == region_grid_y + source_size &&
+						overlaps(region_grid_x, source_size, neighbor.grid_x, neighbor_size);
+				else if (neighbor.direction == "east")
+					adjacent = neighbor.grid_x == region_grid_x + source_size &&
+						overlaps(region_grid_y, source_size, neighbor.grid_y, neighbor_size);
+				else if (neighbor.direction == "south")
+					adjacent = neighbor.grid_y + neighbor_size == region_grid_y &&
+						overlaps(region_grid_x, source_size, neighbor.grid_x, neighbor_size);
+				else if (neighbor.direction == "west")
+					adjacent = neighbor.grid_x + neighbor_size == region_grid_x &&
+						overlaps(region_grid_y, source_size, neighbor.grid_y, neighbor_size);
+				if (!adjacent) {
                     std::cerr << "{\"level\":\"" << (required ? "error" : "warning")
                               << "\",\"message\":\"invalid region neighbor topology\"}" << std::endl;
                     next_neighbor_refresh = retry_at;
@@ -893,12 +908,24 @@ int main(int argc, char* argv[]) {
             region_name = provisioned->name;
             region_grid_x = provisioned->grid_x;
             region_grid_y = provisioned->grid_y;
+			region_size_x = provisioned->size_x;
+			region_size_y = provisioned->size_y;
+			region_maturity = provisioned->maturity;
 			region_public_endpoint = provisioned->public_endpoint;
 			region_viewer_port = provisioned->viewer_port;
 			grid_public_endpoint = provisioned->grid_public_url;
 			settings.public_endpoint = region_public_endpoint;
 			settings.viewer_port = region_viewer_port;
 			provisioned_region_id = provisioned->id;
+			if (region_size_x != 256 || region_size_y != 256) {
+				static_cast<void>(registration_client.deregister_provisioned(provisioned->id));
+				std::cerr << "{\"level\":\"error\",\"message\":\"variable-size region simulation is not implemented\",\"sizeX\":"
+						  << region_size_x << ",\"sizeY\":" << region_size_y << "}" << std::endl;
+#ifdef _WIN32
+				WSACleanup();
+#endif
+				return 1;
+			}
             auto viewer_transport = homeworldz::grid::socket_transport(grid_url, service_token);
             viewer_grid = std::make_unique<homeworldz::grid::Client>(std::move(viewer_transport));
             if (!refresh_region_neighbors(true)) {

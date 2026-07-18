@@ -45,6 +45,9 @@ struct RegisteredRegion {
 	int viewer_port{};
 	std::string grid_name;
 	std::string grid_public_url;
+	int size_x{256};
+	int size_y{256};
+	int maturity{};
 };
 
 struct RegionNeighbor {

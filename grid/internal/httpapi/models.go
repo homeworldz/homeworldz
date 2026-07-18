@@ -51,6 +51,9 @@ type ProvisionedRegionRuntimeResult struct {
 	regions.Region
 	GridName      string `json:"gridName"`
 	GridPublicURL string `json:"gridPublicUrl"`
+	SizeX         int    `json:"sizeX"`
+	SizeY         int    `json:"sizeY"`
+	Maturity      int    `json:"maturity"`
 }
 
 type RegionList struct {

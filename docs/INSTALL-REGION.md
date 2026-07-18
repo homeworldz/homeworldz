@@ -181,6 +181,10 @@ returns the canonical UUID, name, coordinates, assigned public endpoint and
 viewer port, Grid display name, and public Grid URL. Operator-assigned endpoint
 values override their transitional local INI counterparts before the viewer
 socket opens. Host-local bind addresses and storage paths remain local.
+The current Region executable deliberately rejects an assigned extent larger
+than 256×256 metres after releasing its startup lease; provisioning 2×2 and
+4×4 allocations is supported, but their terrain, physics, and viewer runtime
+will be enabled in subsequent milestones.
 
 Default endpoints:
 

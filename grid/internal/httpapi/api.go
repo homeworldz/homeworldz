@@ -166,7 +166,9 @@ func (a *API) provisionedRegionRuntime(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusInternalServerError, Error{Code: "region_store_error", Message: "region registration failed"})
 		} else {
 			writeJSON(w, http.StatusOK, ProvisionedRegionRuntimeResult{
-				Region: region, GridName: a.gridName, GridPublicURL: a.publicURL})
+				Region: region, GridName: a.gridName, GridPublicURL: a.publicURL,
+				SizeX: provisioned.Size * 256, SizeY: provisioned.Size * 256,
+				Maturity: provisioned.Maturity})
 		}
 		return
 	}
@@ -320,7 +322,14 @@ func (a *API) regionNeighbors(w http.ResponseWriter, r *http.Request, id string)
 		liveByID[item.ID] = item
 	}
 	topology := make([]RegionTopology, 0, len(liveItems))
+	sourceSize := 1
 	if a.provisioned != nil {
+		provisionedSource, sourceErr := a.provisioned.Get(r.Context(), id)
+		if sourceErr != nil {
+			writeProvisioningError(w, sourceErr)
+			return
+		}
+		sourceSize = provisionedSource.Size
 		provisioned, provisionErr := a.provisioned.List(r.Context())
 		if provisionErr != nil {
 			writeJSON(w, http.StatusInternalServerError, Error{Code: "region_store_error", Message: "region topology discovery failed"})
@@ -343,11 +352,29 @@ func (a *API) regionNeighbors(w http.ResponseWriter, r *http.Request, id string)
 		}
 	}
 	neighbors := make([]RegionNeighbor, 0, len(directions))
+	overlaps := func(firstStart, firstSize, secondStart, secondSize int) bool {
+		return firstStart < secondStart+secondSize && secondStart < firstStart+firstSize
+	}
 	for _, direction := range directions {
 		for _, candidate := range topology {
-			if candidate.GridX == source.GridX+direction.dx && candidate.GridY == source.GridY+direction.dy {
+			candidateSize := candidate.SizeX / 256
+			adjacent := false
+			switch direction.name {
+			case "north":
+				adjacent = candidate.GridY == source.GridY+sourceSize &&
+					overlaps(source.GridX, sourceSize, candidate.GridX, candidateSize)
+			case "east":
+				adjacent = candidate.GridX == source.GridX+sourceSize &&
+					overlaps(source.GridY, sourceSize, candidate.GridY, candidateSize)
+			case "south":
+				adjacent = candidate.GridY+candidateSize == source.GridY &&
+					overlaps(source.GridX, sourceSize, candidate.GridX, candidateSize)
+			case "west":
+				adjacent = candidate.GridX+candidateSize == source.GridX &&
+					overlaps(source.GridY, sourceSize, candidate.GridY, candidateSize)
+			}
+			if adjacent {
 				neighbors = append(neighbors, RegionNeighbor{Direction: direction.name, Region: candidate})
-				break
 			}
 		}
 	}
