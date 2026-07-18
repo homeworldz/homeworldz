@@ -140,6 +140,42 @@ bool contain_body_without_neighbors(BodyState& state, double region_extent) {
     return constrained;
 }
 
+bool within_viewer_interest(const scene::Vector3 observer, const scene::Vector3 subject,
+                            const double draw_distance, const double subject_radius) {
+    if (draw_distance <= 0.0) return true;
+    const auto dx = subject.x - observer.x;
+    const auto dy = subject.y - observer.y;
+    const auto dz = subject.z - observer.z;
+    const auto range = draw_distance + (std::max)(0.0, subject_radius);
+    return dx * dx + dy * dy + dz * dz <= range * range;
+}
+
+bool body_transform_changed(const BodyState& previous, const BodyState& current,
+                            const double position_epsilon, const double velocity_epsilon,
+                            const double rotation_epsilon) {
+    const auto vector_changed = [](const scene::Vector3& first, const scene::Vector3& second,
+                                   const double epsilon) {
+        const auto dx = first.x - second.x;
+        const auto dy = first.y - second.y;
+        const auto dz = first.z - second.z;
+        return dx * dx + dy * dy + dz * dz > epsilon * epsilon;
+    };
+    if (vector_changed(previous.position, current.position, position_epsilon) ||
+        vector_changed(previous.linear_velocity, current.linear_velocity, velocity_epsilon) ||
+        previous.sleeping != current.sleeping)
+        return true;
+    double rotation_delta{};
+    double negated_rotation_delta{};
+    for (std::size_t index = 0; index < current.rotation.size(); ++index) {
+        const auto delta = previous.rotation[index] - current.rotation[index];
+        rotation_delta += delta * delta;
+        const auto negated_delta = previous.rotation[index] + current.rotation[index];
+        negated_rotation_delta += negated_delta * negated_delta;
+    }
+    return (std::min)(rotation_delta, negated_rotation_delta) >
+        rotation_epsilon * rotation_epsilon;
+}
+
 bool StaticSceneMirror::synchronize(
     const scene::Entity& entity, std::optional<MotionType> linked_motion) {
     if (entity.object_id.empty() || (entity.parent_id != 0 && !linked_motion) || entity.phantom ||

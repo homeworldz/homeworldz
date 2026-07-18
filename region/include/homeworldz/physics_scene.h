@@ -26,6 +26,12 @@ scene::Vector3 rotate_vector(scene::Vector3 value, const std::array<double, 4>& 
 scene::Vector3 rotated_box_half_extents(
     scene::Vector3 scale, const std::array<double, 4>& rotation);
 bool contain_body_without_neighbors(BodyState& state, double region_extent = 256.0);
+bool within_viewer_interest(scene::Vector3 observer, scene::Vector3 subject,
+                            double draw_distance, double subject_radius = 0.0);
+bool body_transform_changed(const BodyState& previous, const BodyState& current,
+                            double position_epsilon = 0.01,
+                            double velocity_epsilon = 0.01,
+                            double rotation_epsilon = 0.001);
 
 class StaticSceneMirror {
 public:

@@ -88,6 +88,23 @@ int main() {
         !close(escaped.linear_velocity.z, -5.0) ||
         physics::contain_body_without_neighbors(escaped))
         return 11;
+    if (!physics::within_viewer_interest({0.0, 0.0, 0.0}, {10.0, 0.0, 0.0}, 9.0, 1.0) ||
+        physics::within_viewer_interest({0.0, 0.0, 0.0}, {10.01, 0.0, 0.0}, 9.0, 1.0) ||
+        !physics::within_viewer_interest({0.0, 0.0, 0.0}, {1000.0, 0.0, 0.0}, 0.0))
+        return 17;
+    physics::BodyState previous_transform;
+    physics::BodyState current_transform;
+    current_transform.position.x = 0.009;
+    if (physics::body_transform_changed(previous_transform, current_transform)) return 18;
+    current_transform.position.x = 0.011;
+    if (!physics::body_transform_changed(previous_transform, current_transform)) return 19;
+    current_transform = previous_transform;
+    current_transform.sleeping = true;
+    if (!physics::body_transform_changed(previous_transform, current_transform)) return 20;
+    previous_transform.rotation = {0.0, 0.0, 0.0, 1.0};
+    current_transform = previous_transform;
+    current_transform.rotation = {0.0, 0.0, 0.0, -1.0};
+    if (physics::body_transform_changed(previous_transform, current_transform)) return 21;
 
     RecordingWorld world;
     physics::StaticSceneMirror mirror(world);

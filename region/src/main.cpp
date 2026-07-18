@@ -140,6 +140,11 @@ struct PendingTaskInventoryXfer {
     std::uint32_t awaiting_confirmation{};
 };
 
+struct SentDynamicTransform {
+    homeworldz::physics::BodyState state;
+    std::chrono::steady_clock::time_point sent_at;
+};
+
 std::string task_inventory_type_name(std::int8_t type) {
     switch (type) {
     case 0: return "texture";
@@ -1403,6 +1408,9 @@ int main(int argc, char* argv[]) {
     std::unordered_map<std::string, PendingInventoryAssetXfer> pending_inventory_asset_xfers;
     std::unordered_map<std::string, std::vector<std::byte>> pending_task_inventory_files;
     std::unordered_map<std::string, PendingTaskInventoryXfer> pending_task_inventory_xfers;
+    std::unordered_map<std::string,
+        std::unordered_map<homeworldz::scene::EntityId, SentDynamicTransform>>
+        sent_dynamic_transforms;
     std::unordered_map<std::string, std::deque<std::string>> queued_viewer_events;
     std::vector<PendingEventResponse> pending_event_responses;
     std::uint64_t event_id{};
@@ -1451,6 +1459,7 @@ int main(int argc, char* argv[]) {
         std::erase_if(pending_task_inventory_xfers, [&](const auto& entry) {
             return entry.first.starts_with(endpoint + '|');
         });
+        sent_dynamic_transforms.erase(endpoint);
         std::erase_if(pending_event_responses, [&](const PendingEventResponse& pending) {
             if (pending.session_id != session_id) return false;
             close_socket(pending.client);
@@ -5301,13 +5310,41 @@ int main(int argc, char* argv[]) {
                 entity->velocity = state.linear_velocity;
                 entity->rotation = {state.rotation[0], state.rotation[1], state.rotation[2]};
                 for (const auto& [recipient_endpoint, recipient] : avatars) {
+                    const auto radius = 0.5 * std::sqrt(
+                        entity->scale.x * entity->scale.x +
+                        entity->scale.y * entity->scale.y +
+                        entity->scale.z * entity->scale.z);
+                    auto& recipient_cache = sent_dynamic_transforms[recipient_endpoint];
+                    if (!homeworldz::physics::within_viewer_interest(
+                            recipient.controller.state().position, entity->position,
+                            recipient.controller.state().draw_distance, radius)) {
+                        recipient_cache.erase(entity_id);
+                        continue;
+                    }
+                    const auto previous = recipient_cache.find(entity_id);
+                    const bool heartbeat_due = previous != recipient_cache.end() &&
+                        now - previous->second.sent_at >= std::chrono::seconds(1);
+                    if (previous != recipient_cache.end() && !heartbeat_due &&
+                        !homeworldz::physics::body_transform_changed(
+                            previous->second.state, state))
+                        continue;
                     const auto object = static_object_from_entity(scene, *entity, recipient.user_id);
                     if (!object) continue;
                     if (const auto sent = circuits.send(recipient_endpoint,
                             homeworldz::viewer::encode_static_object_update(
-                                region_handle, *object), false, now, true))
-                        static_cast<void>(send_udp(viewer_server, recipient_endpoint, *sent));
+                                region_handle, *object), false, now, true)) {
+                        if (send_udp(viewer_server, recipient_endpoint, *sent))
+                            recipient_cache.insert_or_assign(
+                                entity_id, SentDynamicTransform{state, now});
+                    }
                 }
+            }
+            for (auto& [recipient_endpoint, cache] : sent_dynamic_transforms) {
+                static_cast<void>(recipient_endpoint);
+                std::erase_if(cache, [&](const auto& entry) {
+                    const auto* entity = scene.find(entry.first);
+                    return !entity || !entity->physical || entity->phantom;
+                });
             }
             next_dynamic_sync = now + std::chrono::milliseconds(100);
         }

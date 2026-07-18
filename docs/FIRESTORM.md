@@ -977,3 +977,13 @@ updates only that task item's asset reference, increments the task-inventory
 serial, and persists the complete scene snapshot. LSL source is stored but is
 reported as not compiled until the Phase 4 HomeWorldz runtime is available.
 Live Firestorm save-and-restart acceptance remains pending.
+
+Dynamic physical-object synchronization now combines the previously accepted
+10 Hz viewer updates with per-viewer interest and change tracking. A physical
+body is sent only while its bounding radius intersects that viewer's draw
+distance, only after a meaningful position, velocity, rotation, or sleep-state
+change, and otherwise at a one-second heartbeat. Leaving interest clears the
+per-viewer cache so re-entry forces a complete update. Earlier live tests
+already confirmed smooth falling, collision, rolling, rotation, avatar pushes,
+editing, and restart restoration; the new distance and transform predicates
+have deterministic boundary tests.
