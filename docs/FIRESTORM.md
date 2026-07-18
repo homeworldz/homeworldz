@@ -884,3 +884,12 @@ second later. The new name survived closing and reopening Edit and a complete
 Welcome Region restart. The Region received two idempotent viewer updates,
 persisted each serial revision, and retained immutable asset and creator
 identity fields.
+
+Task-item Next Owner permission mutation passed live acceptance on 2026-07-18.
+The uploaded source texture initially carried Firestorm's configured
+`0x00082000` move-plus-transfer default, so Modify and Copy were clear rather
+than being replaced by a HomeWorldz default. Enabling Copy persisted after
+closing and reopening the item Properties, closing and reopening object Edit,
+and restarting the Welcome Region. Creator, owner, base, and asset identity
+remained server-authoritative while mutable masks stayed bounded by base and
+current permissions.
