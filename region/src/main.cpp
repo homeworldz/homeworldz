@@ -2374,12 +2374,16 @@ int main(int argc, char* argv[]) {
                                         static_cast<std::uint32_t>(target->grid_y * 256);
                                     enqueue_viewer_event(session_id,
                                         homeworldz::viewer::enable_simulator_event_xml(
-                                            target_handle, *simulator));
+                                            target_handle, *simulator,
+                                            static_cast<std::uint32_t>(target->size_x),
+                                            static_cast<std::uint32_t>(target->size_y)));
                                     enqueue_viewer_event(session_id,
                                         homeworldz::viewer::teleport_finish_event_xml({
                                             agent_id, target_handle, *simulator,
                                             target->public_endpoint + "/caps/seed/" + session_id +
-                                                "/" + transit_id, 13, teleport_flags}));
+                                                "/" + transit_id, 13, teleport_flags,
+                                            static_cast<std::uint32_t>(target->size_x),
+                                            static_cast<std::uint32_t>(target->size_y)}));
                                     std::cout << "{\"level\":\"info\",\"message\":\"avatar teleport signaled\",\"transitId\":"
                                               << homeworldz::api::json_string(transit_id)
                                               << ",\"destinationRegionId\":"

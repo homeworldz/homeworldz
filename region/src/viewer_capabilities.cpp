@@ -166,12 +166,16 @@ std::string establish_agent_communication_event_xml(const EstablishAgentCommunic
 }
 
 std::string enable_simulator_event_xml(std::uint64_t region_handle,
-                                       const SimulatorEventEndpoint& simulator) {
+                                       const SimulatorEventEndpoint& simulator,
+                                       std::uint32_t region_size_x,
+                                       std::uint32_t region_size_y) {
     return "<map><key>message</key><string>EnableSimulator</string><key>body</key><map>"
            "<key>SimulatorInfo</key><array><map><key>Handle</key><binary>" +
            region_handle_binary(region_handle) + "</binary><key>IP</key><binary>" +
            ip_binary(simulator) + "</binary><key>Port</key><integer>" +
-           std::to_string(simulator.port) + "</integer></map></array></map></map>";
+           std::to_string(simulator.port) + "</integer><key>RegionSizeX</key><integer>" +
+           std::to_string(region_size_x) + "</integer><key>RegionSizeY</key><integer>" +
+           std::to_string(region_size_y) + "</integer></map></array></map></map>";
 }
 
 std::string teleport_finish_event_xml(const TeleportFinish& event) {
@@ -184,6 +188,8 @@ std::string teleport_finish_event_xml(const TeleportFinish& event) {
            "</integer><key>SimIP</key><binary>" + ip_binary(event.simulator) +
            "</binary><key>SimPort</key><integer>" + std::to_string(event.simulator.port) +
            "</integer><key>TeleportFlags</key><integer>" + std::to_string(event.teleport_flags) +
+           "</integer><key>RegionSizeX</key><integer>" + std::to_string(event.region_size_x) +
+           "</integer><key>RegionSizeY</key><integer>" + std::to_string(event.region_size_y) +
            "</integer></map></array></map></map>";
 }
 

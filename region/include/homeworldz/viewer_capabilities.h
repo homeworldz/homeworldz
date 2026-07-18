@@ -30,6 +30,8 @@ struct TeleportFinish {
     std::string seed_capability;
     std::uint8_t simulator_access{};
     std::uint32_t teleport_flags{teleport_flags_via_location};
+    std::uint32_t region_size_x{256};
+    std::uint32_t region_size_y{256};
 };
 
 struct NewFileInventoryUpload {
@@ -54,7 +56,9 @@ std::string seed_capability_xml(std::string_view public_endpoint, std::string_vi
                                 std::string_view session_id, std::string_view visit_id = {});
 std::string establish_agent_communication_event_xml(const EstablishAgentCommunication& event);
 std::string enable_simulator_event_xml(std::uint64_t region_handle,
-                                       const SimulatorEventEndpoint& simulator);
+                                       const SimulatorEventEndpoint& simulator,
+                                       std::uint32_t region_size_x = 256,
+                                       std::uint32_t region_size_y = 256);
 std::string teleport_finish_event_xml(const TeleportFinish& event);
 std::string event_queue_xml(std::uint64_t id, const std::vector<std::string>& events = {});
 std::string simulator_features_xml(std::string_view currency = "C$",

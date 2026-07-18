@@ -167,19 +167,24 @@ int main() {
     passed &= contains(event, "session&amp;amp;id");
     const homeworldz::viewer::SimulatorEventEndpoint event_endpoint{{192, 0, 2, 10}, 42002};
     const auto enable = homeworldz::viewer::enable_simulator_event_xml(
-        0x0102030405060708ULL, event_endpoint);
+        0x0102030405060708ULL, event_endpoint, 512, 512);
     passed &= contains(enable, "<string>EnableSimulator</string>");
     passed &= contains(enable, "<key>Handle</key><binary>AQIDBAUGBwg=</binary>");
     passed &= contains(enable, "<key>IP</key><binary>wAACCg==</binary>");
     passed &= contains(enable, "<key>Port</key><integer>42002</integer>");
+    passed &= contains(enable, "<key>RegionSizeX</key><integer>512</integer>");
+    passed &= contains(enable, "<key>RegionSizeY</key><integer>512</integer>");
     const auto teleport_finish = homeworldz::viewer::teleport_finish_event_xml({
         "11111111-2222-4333-8444-555555555555", 0x0102030405060708ULL, event_endpoint,
-        "https://region.example/caps/seed/session&amp;id", 13});
+        "https://region.example/caps/seed/session&amp;id", 13,
+        homeworldz::viewer::teleport_flags_via_location, 1024, 1024});
     passed &= contains(teleport_finish, "<string>TeleportFinish</string>");
     passed &= contains(teleport_finish, "<key>RegionHandle</key><binary>AQIDBAUGBwg=</binary>");
     passed &= contains(teleport_finish, "<key>SeedCapability</key><string>https://region.example/caps/seed/session&amp;amp;id</string>");
     passed &= contains(teleport_finish, "<key>SimAccess</key><integer>13</integer>");
     passed &= contains(teleport_finish, "<key>TeleportFlags</key><integer>16</integer>");
+    passed &= contains(teleport_finish, "<key>RegionSizeX</key><integer>1024</integer>");
+    passed &= contains(teleport_finish, "<key>RegionSizeY</key><integer>1024</integer>");
     const auto flying_finish = homeworldz::viewer::teleport_finish_event_xml({
         "11111111-2222-4333-8444-555555555555", 0x0102030405060708ULL, event_endpoint,
         "https://region.example/caps/seed/session", 13,
