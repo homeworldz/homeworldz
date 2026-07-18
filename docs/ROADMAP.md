@@ -28,7 +28,7 @@ when scope or implementation evidence changes.
 | --- | --- | ---: |
 | 1. Functional Single-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="98" aria-label="Phase 1 progress: 98%">98%</progress> | 98% |
 | 2. Interactive Physical World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="39" aria-label="Phase 2 progress: 39%">39%</progress> | 39% |
-| 3. Connected Multi-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="64" aria-label="Phase 3 progress: 64%">64%</progress> | 64% |
+| 3. Connected Multi-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="66" aria-label="Phase 3 progress: 66%">66%</progress> | 66% |
 | 4. LSL Scripting | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="2" aria-label="Phase 4 progress: 2%">2%</progress> | 2% |
 | 5. Social and Creator Platform | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="7" aria-label="Phase 5 progress: 7%">7%</progress> | 7% |
 | 6. Reliable Operations and Distribution | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="10" aria-label="Phase 6 progress: 10%">10%</progress> | 10% |
@@ -197,9 +197,12 @@ but stays unchecked until its complete wording is satisfied.
   disposable 512 m and 1024 m process-start checks.
 - [x] Generalize terrain, physics bounds, viewer coordinates, storage, map
   tiles, and interest management to the three supported sizes.
-- [ ] Complete live Firestorm acceptance for continuous movement, terrain,
-  editing, objects, map display, and restart persistence in 2x2 and 4x4
-  Regions. A deployed 2x2 Beta Region is ready for this test.
+- [x] Complete initial live Firestorm acceptance of a 2x2 Region as one
+  continuous 512 by 512 metre simulator. Movement, terrain, and minimap
+  position remained correct through all four quadrants and across both
+  internal 256 metre lines.
+- [ ] Complete the remaining 2x2 editing, object, map-idle, and restart tests,
+  then repeat the full acceptance suite in a 4x4 Region.
 - [x] Prevent overlaps and invalid neighbor layouts and define behavior beside
   offline or differently sized regions.
 
@@ -213,6 +216,8 @@ but stays unchecked until its complete wording is satisfied.
 - [x] Teleport between registered regions with destination validation, viewer
   circuit establishment, arrival placement, source retirement, and durable
   last-location login.
+- [x] Teleport within the current Region without creating a Grid transit,
+  preserving flight state and returning Firestorm's `TeleportLocal` response.
 - [x] Detect avatar border exits, select the online neighbor covering the exact
   mixed-size border coordinate, translate destination-local position, prepare
   the authenticated transit, emit Firestorm's crossing event, contain failed

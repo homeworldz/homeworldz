@@ -1022,3 +1022,26 @@ retired its authority. Both transitions retained the original session and
 completed without a rollback or duplicate active Region. Broader acceptance
 for appearance, held controls, velocity, camera continuity, repeated crossings,
 mixed-size borders, attachments, sitting, and failure recovery remains open.
+
+Initial 2x2 Region acceptance passed on 2026-07-18. Firestorm originally
+constructed Beta as 256 by 256 metres after a Sandbox-to-Beta crossing because
+HomeWorldz omitted the OpenSim `RegionSizeX` and `RegionSizeY` extension fields
+from `CrossedRegion`; the viewer consequently treated the internal 256 metre
+line like a Region edge. Repeating both dimensions in `CrossedRegion.RegionData`
+made Firestorm construct Beta as one 512 by 512 metre Region. Jim Tarber then
+flew a clockwise loop around the four-quadrant centre and returned to the
+northwest quadrant at `(223, 273, 23)`. Terrain, movement, and minimap position
+remained continuous across both internal 256 metre lines.
+
+Same-region location teleport also passed on 2026-07-18. The Region recognizes
+its own handle, updates the avatar controller and Jolt character in place, and
+returns reliable UDP `TeleportLocal` without creating a Grid transit. A local
+teleport in Beta completed immediately at `(240, 140, 23.56)`. The preceding
+rapid Beta-to-Sandbox-to-Beta sequence also exposed a separate EEP follow-up:
+Firestorm requested an environment `settings_id` that was not present in the
+asset service and briefly displayed a UUID load error.
+
+The initial self-appearance completion echo passed in the same session. On a
+clean last-location login, Firestorm received five wearable-cache hits and the
+Region echoed the viewer's first complete nonempty `AvatarAppearance`; the
+avatar resolved immediately with all six COF links worn.
