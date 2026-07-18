@@ -61,6 +61,7 @@ int main() {
             "Stored Texture", "task inventory persistence",
             0, 0, 0x00000001, 0x0009e000, 0x0008e000, 0x00000000,
             0x00000000, 0x0008e000, 0, 0, 123456789});
+        scene.find(first)->task_inventory_serial = 9;
         std::filesystem::create_directories(path);
         sqlite3* legacy_database = nullptr;
         if (sqlite3_open((path / "region.db").string().c_str(), &legacy_database) != SQLITE_OK) return 1;
@@ -104,6 +105,8 @@ int main() {
             const auto* restored_second = restored.find(second);
             if (restored_first == nullptr || restored_first->position.x != 2.0 ||
                 restored_first->velocity.x != 1.0 || !restored_first->avatar_flying ||
+                restored_first->task_inventory_serial != 9 ||
+                !restored_first->task_inventory.empty() ||
                 restored_second == nullptr ||
                 restored_second->name != "second \"line\"\n" ||
                 restored_second->object_id != primitive->object_id ||
