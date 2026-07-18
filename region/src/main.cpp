@@ -71,6 +71,17 @@ constexpr std::string_view default_map_tile_asset_id = "00000000-0000-1111-9999-
 homeworldz::config::RegionSettings configured_values;
 
 struct LiveAvatar {
+    LiveAvatar(homeworldz::viewer::AvatarController initial_controller,
+               homeworldz::scene::EntityId initial_entity_id, std::string initial_user_id,
+               std::chrono::steady_clock::time_point initial_next_ping,
+               std::chrono::steady_clock::time_point initial_next_presence,
+               std::chrono::steady_clock::time_point initial_next_transform,
+               homeworldz::scene::Vector3 initial_sent_position)
+        : controller(std::move(initial_controller)), entity_id(initial_entity_id),
+          user_id(std::move(initial_user_id)), next_ping(initial_next_ping),
+          next_presence(initial_next_presence), next_transform(initial_next_transform),
+          last_sent_position(initial_sent_position) {}
+
     homeworldz::viewer::AvatarController controller;
     homeworldz::scene::EntityId entity_id{};
     std::string user_id;
@@ -86,6 +97,9 @@ struct LiveAvatar {
     bool has_agent_update{};
     homeworldz::physics::CharacterId physics_character{};
     std::chrono::steady_clock::time_point restored_flying_until{};
+    std::string outbound_transit_id;
+    std::chrono::steady_clock::time_point outbound_transit_expires{};
+    std::chrono::steady_clock::time_point next_crossing_attempt{};
 };
 
 bool sequence_is_newer(std::uint32_t candidate, std::uint32_t current) {
@@ -5267,6 +5281,16 @@ int main(int argc, char* argv[]) {
         const auto fixed_steps = simulation.advance(elapsed);
         std::vector<std::pair<std::string, std::string>> departed_avatars;
         for (auto& [endpoint, avatar] : avatars) {
+            if (!avatar.outbound_transit_id.empty() && now >= avatar.outbound_transit_expires) {
+                if (viewer_grid && registration)
+                    static_cast<void>(viewer_grid->rollback_avatar_transit(
+                        avatar.outbound_transit_id, registration->region_id(),
+                        "viewer did not activate border crossing"));
+                std::cout << "{\"level\":\"warning\",\"message\":\"avatar border crossing expired\","
+                             "\"transitId\":"
+                          << homeworldz::api::json_string(avatar.outbound_transit_id) << "}" << std::endl;
+                avatar.outbound_transit_id.clear();
+            }
             if (physics_world && avatar.physics_character != 0)
                 if (const auto state = physics_world->character_state(avatar.physics_character))
                     avatar.controller.synchronize_physics(
@@ -5301,7 +5325,84 @@ int main(int argc, char* argv[]) {
             }
             avatar.controller.set_ground_height(
                 collision_ground_height(avatar.controller.state().position));
+            const bool has_online_neighbor = std::any_of(
+                region_neighbors.begin(), region_neighbors.end(),
+                [](const auto& neighbor) { return neighbor.online; });
+            avatar.controller.set_border_crossing_enabled(
+                has_online_neighbor && avatar.outbound_transit_id.empty());
+            if (!avatar.outbound_transit_id.empty())
+                avatar.controller.expire_transient_controls();
             avatar.controller.step(elapsed);
+            if (avatar.outbound_transit_id.empty()) {
+                const auto& position = avatar.controller.state().position;
+                const auto crossing = homeworldz::region::plan_avatar_border_crossing(
+                    region_grid_x, region_grid_y, region_size_x, region_size_y,
+                    {position.x, position.y, position.z}, region_neighbors);
+                if (crossing && now >= avatar.next_crossing_attempt) {
+                    const auto* identity = circuits.identity(endpoint);
+                    const auto simulator = simulator_event_endpoint(
+                        crossing->destination.public_endpoint,
+                        crossing->destination.viewer_port);
+                    bool prepared = false;
+                    std::string transit_id;
+                    try {
+                        if (!identity || !viewer_grid || !registration || !simulator)
+                            throw std::runtime_error("crossing services are unavailable");
+                        const auto session_id = homeworldz::viewer::format_uuid(identity->session_id);
+                        const auto agent_id = homeworldz::viewer::format_uuid(identity->agent_id);
+                        transit_id = homeworldz::viewer::random_uuid();
+                        const auto look_direction = avatar.controller.look_direction();
+                        const bool flying = avatar.controller.state().flying;
+                        const homeworldz::grid::AvatarTransitRequest request{
+                            transit_id, agent_id, session_id, registration->region_id(),
+                            crossing->destination.id, crossing->position, look_direction, flying, 30};
+                        const auto transit = viewer_grid->prepare_avatar_transit(request);
+                        prepared = transit && transit->state == "prepared";
+                        if (!prepared)
+                            throw std::runtime_error("grid rejected border crossing preparation");
+                        auto destination = homeworldz::grid::socket_transport(
+                            crossing->destination.public_endpoint, service_token);
+                        if (!homeworldz::grid::prepare_avatar_arrival(*destination, transit_id))
+                            throw std::runtime_error("destination rejected border crossing preparation");
+                        const auto target_handle =
+                            (static_cast<std::uint64_t>(crossing->destination.grid_x * 256) << 32) |
+                            static_cast<std::uint32_t>(crossing->destination.grid_y * 256);
+                        enqueue_viewer_event(session_id,
+                            homeworldz::viewer::enable_simulator_event_xml(
+                                target_handle, *simulator,
+                                static_cast<std::uint32_t>(crossing->destination.size_x),
+                                static_cast<std::uint32_t>(crossing->destination.size_y)));
+                        enqueue_viewer_event(session_id,
+                            homeworldz::viewer::crossed_region_event_xml({
+                                agent_id, session_id, target_handle, *simulator,
+                                crossing->destination.public_endpoint + "/caps/seed/" + session_id +
+                                    "/" + transit_id,
+                                crossing->position, look_direction}));
+                        avatar.outbound_transit_id = transit_id;
+                        avatar.outbound_transit_expires = now + std::chrono::seconds(30);
+                        std::cout << "{\"level\":\"info\",\"message\":\"avatar border crossing signaled\","
+                                     "\"transitId\":"
+                                  << homeworldz::api::json_string(transit_id)
+                                  << ",\"destinationRegionId\":"
+                                  << homeworldz::api::json_string(crossing->destination.id) << "}"
+                                  << std::endl;
+                    } catch (const std::exception& error) {
+                        if (prepared && viewer_grid && registration)
+                            static_cast<void>(viewer_grid->rollback_avatar_transit(
+                                transit_id, registration->region_id(), error.what()));
+                        std::cout << "{\"level\":\"error\",\"message\":\"avatar border crossing preparation failed\","
+                                     "\"error\":"
+                                  << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+                        avatar.next_crossing_attempt = now + std::chrono::seconds(1);
+                    }
+                    avatar.controller.contain_horizontal();
+                } else if (position.x < 0.0 || position.x > region_size_x ||
+                           position.y < 0.0 || position.y > region_size_y) {
+                    avatar.controller.contain_horizontal();
+                }
+            } else {
+                avatar.controller.contain_horizontal();
+            }
             if (physics_world && avatar.physics_character != 0) {
                 const auto& controller_state = avatar.controller.state();
                 physics_world->set_character_velocity(avatar.physics_character, controller_state.velocity);
