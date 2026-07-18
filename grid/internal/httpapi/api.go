@@ -299,7 +299,7 @@ func (a *API) regionNeighbors(w http.ResponseWriter, r *http.Request, id string)
 		a.writeRegionResult(w, regions.Region{}, err)
 		return
 	}
-	items, err := a.regions.List(r.Context())
+	liveItems, err := a.regions.List(r.Context())
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, Error{Code: "region_store_error", Message: "region discovery failed"})
 		return
@@ -315,9 +315,36 @@ func (a *API) regionNeighbors(w http.ResponseWriter, r *http.Request, id string)
 		{name: "south", dy: -1},
 		{name: "west", dx: -1},
 	}
+	liveByID := make(map[string]regions.Region, len(liveItems))
+	for _, item := range liveItems {
+		liveByID[item.ID] = item
+	}
+	topology := make([]RegionTopology, 0, len(liveItems))
+	if a.provisioned != nil {
+		provisioned, provisionErr := a.provisioned.List(r.Context())
+		if provisionErr != nil {
+			writeJSON(w, http.StatusInternalServerError, Error{Code: "region_store_error", Message: "region topology discovery failed"})
+			return
+		}
+		for _, item := range provisioned {
+			entry := RegionTopology{ID: item.ID, Name: item.Name, GridX: item.MapX, GridY: item.MapY,
+				SizeX: 256, SizeY: 256, Maturity: 0, PublicEndpoint: item.PublicEndpoint,
+				ViewerPort: item.ViewerPort}
+			if live, online := liveByID[item.ID]; online {
+				entry.PublicEndpoint, entry.ViewerPort, entry.Online = live.PublicEndpoint, live.ViewerPort, true
+			}
+			topology = append(topology, entry)
+		}
+	} else {
+		for _, item := range liveItems {
+			topology = append(topology, RegionTopology{ID: item.ID, Name: item.Name,
+				GridX: item.GridX, GridY: item.GridY, SizeX: 256, SizeY: 256, Maturity: 0,
+				PublicEndpoint: item.PublicEndpoint, ViewerPort: item.ViewerPort, Online: true})
+		}
+	}
 	neighbors := make([]RegionNeighbor, 0, len(directions))
 	for _, direction := range directions {
-		for _, candidate := range items {
+		for _, candidate := range topology {
 			if candidate.GridX == source.GridX+direction.dx && candidate.GridY == source.GridY+direction.dy {
 				neighbors = append(neighbors, RegionNeighbor{Direction: direction.name, Region: candidate})
 				break

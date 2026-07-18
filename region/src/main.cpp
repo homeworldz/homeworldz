@@ -2207,6 +2207,7 @@ int main(int argc, char* argv[]) {
                                     map_image_id});
                             }
                             for (const auto& neighbor : region_neighbors) {
+								if (!neighbor.online) continue;
                                 if (neighbor.grid_x < 0 || neighbor.grid_x > 65535 ||
                                     neighbor.grid_y < 0 || neighbor.grid_y > 65535) continue;
                                 regions.push_back(homeworldz::viewer::MapBlock{
@@ -2302,7 +2303,8 @@ int main(int argc, char* argv[]) {
                                             {identity->agent_id, std::move(reason)}), true, now, true))
                                     static_cast<void>(send_udp(viewer_server, endpoint, *failed));
                             };
-                            if (target == region_neighbors.end() || !viewer_grid || !registration) {
+                            if (target == region_neighbors.end() || !target->online ||
+								!viewer_grid || !registration) {
                                 fail_teleport("Destination region is unavailable");
                             } else if (const auto simulator = simulator_event_endpoint(
                                            target->public_endpoint, target->viewer_port)) {

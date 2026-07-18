@@ -587,16 +587,25 @@ std::optional<std::vector<RegionNeighbor>> Client::find_region_neighbors(
         const auto grid_x = json_int(object, "gridX");
         const auto grid_y = json_int(object, "gridY");
         const auto viewer_port = json_int(object, "viewerPort");
+		const auto size_x = json_int(object, "sizeX");
+		const auto size_y = json_int(object, "sizeY");
+		const auto maturity = json_int(object, "maturity");
+		const auto online = json_bool(object, "online");
         const auto valid_direction = neighbor.direction == "north" ||
             neighbor.direction == "east" || neighbor.direction == "south" ||
             neighbor.direction == "west";
-        if (!valid_direction || neighbor.id.empty() || neighbor.name.empty() ||
-            neighbor.public_endpoint.empty() || !grid_x || !grid_y || !viewer_port ||
-            *viewer_port < 1 || *viewer_port > 65535)
+		if (!valid_direction || neighbor.id.empty() || neighbor.name.empty() || !grid_x || !grid_y ||
+			!size_x || !size_y || *size_x < 256 || *size_y < 256 || !maturity || !online ||
+			(*online && (neighbor.public_endpoint.empty() || !viewer_port ||
+			 *viewer_port < 1 || *viewer_port > 65535)))
             return std::nullopt;
         neighbor.grid_x = *grid_x;
         neighbor.grid_y = *grid_y;
-        neighbor.viewer_port = *viewer_port;
+		neighbor.size_x = *size_x;
+		neighbor.size_y = *size_y;
+		neighbor.maturity = *maturity;
+		neighbor.online = *online;
+		neighbor.viewer_port = viewer_port.value_or(0);
         neighbors.push_back(std::move(neighbor));
         position = object_end + 1;
     }

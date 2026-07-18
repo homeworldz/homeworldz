@@ -94,21 +94,23 @@ registration or renewal failure stops the region rather than leaving an active
 simulation undiscoverable. The dependency-free socket transport is limited to
 development `http://` URLs; deployed HTTPS will use a maintained TLS transport.
 
-This registration flow is transitional. ADR 0024 defines persistent grid-owned
-region provisioning: UUID, unique name, owner, coordinates, endpoints, enabled
-state, and a per-region credential hash. A future region bootstrap file holds
-only the grid URL, region UUID or name, and access key; authenticated startup
-fetches effective configuration before acquiring an online lease. Going offline
-does not delete the provisioned record.
+ADR 0024 defines persistent grid-owned region provisioning: UUID, unique name,
+owner, coordinates, endpoints, enabled state, and a per-region credential hash.
+A Region authenticates by UUID or unique name plus access key, fetches effective
+configuration, and then acquires an online lease. Going offline does not delete
+the provisioned record.
 
-An authenticated region can discover the currently leased cardinal neighbors
+An authenticated Region can discover its provisioned cardinal neighbors
 of any online region with `GET /api/v1/regions/{uuid}/neighbors`. The Grid
-derives north, east, south, and west adjacency from registered coordinates,
-excludes diagonal and expired leases, and returns results in that deterministic
-order. A Region fetches and validates this topology at startup, retains the
-snapshot in runtime state, and refreshes it every five seconds so independently
-started or restarted neighbors converge without a required start order. Border
-crossing is not enabled by discovery alone;
+derives north, east, south, and west adjacency from persistent coordinates,
+excludes diagonals, and returns canonical UUID, name, coordinates, 256-metre
+extents, maturity, assigned or live endpoints, and explicit online state in
+that deterministic order. A Region fetches and validates this topology at
+startup, retains the snapshot in runtime state, and refreshes it every five
+seconds so independently started or restarted neighbors converge without a
+required start order. Offline neighbors remain visible as topology but are
+never eligible teleport destinations. Border crossing is not enabled by
+discovery alone;
 until the crossing handoff exists, the simulation continues to contain entities
 at every region edge.
 

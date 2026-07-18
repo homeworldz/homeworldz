@@ -53,8 +53,12 @@ struct RegionNeighbor {
     std::string name;
     int grid_x{};
     int grid_y{};
+	int size_x{256};
+	int size_y{256};
+	int maturity{};
     std::string public_endpoint;
     int viewer_port{};
+	bool online{};
     bool operator==(const RegionNeighbor&) const = default;
 };
 

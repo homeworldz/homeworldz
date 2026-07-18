@@ -184,7 +184,9 @@ func TestRegionNeighborDiscoveryReturnsCardinalLiveRegions(t *testing.T) {
 		t.Fatalf("neighbors = %#v", response.Neighbors)
 	}
 	for index, neighbor := range response.Neighbors {
-		if neighbor.Direction != wantDirections[index] || neighbor.Region.Name != wantNames[index] {
+		if neighbor.Direction != wantDirections[index] || neighbor.Region.Name != wantNames[index] ||
+			!neighbor.Region.Online || neighbor.Region.SizeX != 256 || neighbor.Region.SizeY != 256 ||
+			neighbor.Region.Maturity != 0 {
 			t.Fatalf("neighbor %d = %#v", index, neighbor)
 		}
 	}
@@ -198,6 +200,36 @@ func TestRegionNeighborDiscoveryReturnsCardinalLiveRegions(t *testing.T) {
 		"/api/v1/regions/88888888-8888-4888-8888-888888888888/neighbors", "", http.StatusNotFound)
 	if missing.Code != "region_not_found" {
 		t.Fatalf("missing response = %#v", missing)
+	}
+}
+
+func TestRegionNeighborDiscoveryIncludesOfflineProvisionedState(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "regions.json")
+	if err := os.WriteFile(path, []byte(`[
+  {"id":"11111111-1111-4111-8111-111111111111","name":"Center","mapX":1000,"mapY":1000,"accessKey":"center-key"},
+  {"id":"22222222-2222-4222-8222-222222222222","name":"Offline East","mapX":1001,"mapY":1000,"publicEndpoint":"https://east.example/region","viewerPort":42022,"accessKey":"east-key"}
+]`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	registry, err := provisioning.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := newMemoryRegionStore()
+	_, err = store.RegisterProvisioned(context.Background(), "11111111-1111-4111-8111-111111111111",
+		regions.Registration{Name: "Center", GridX: 1000, GridY: 1000,
+			PublicEndpoint: "http://center.example:42001", ViewerPort: 42002, LeaseDuration: time.Minute})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := New(checker{}, "test", Options{ServiceToken: "secret", Regions: store, Provisioned: registry})
+	response := requestRegion[RegionNeighborList](t, handler, http.MethodGet,
+		"/api/v1/regions/11111111-1111-4111-8111-111111111111/neighbors", "", http.StatusOK)
+	if len(response.Neighbors) != 1 || response.Neighbors[0].Direction != "east" ||
+		response.Neighbors[0].Region.Name != "Offline East" || response.Neighbors[0].Region.Online ||
+		response.Neighbors[0].Region.PublicEndpoint != "https://east.example/region" ||
+		response.Neighbors[0].Region.ViewerPort != 42022 {
+		t.Fatalf("offline topology response = %#v", response)
 	}
 }
 

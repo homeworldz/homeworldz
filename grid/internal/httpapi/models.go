@@ -59,7 +59,20 @@ type RegionList struct {
 
 type RegionNeighbor struct {
 	Direction string         `json:"direction"`
-	Region    regions.Region `json:"region"`
+	Region    RegionTopology `json:"region"`
+}
+
+type RegionTopology struct {
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	GridX          int    `json:"gridX"`
+	GridY          int    `json:"gridY"`
+	SizeX          int    `json:"sizeX"`
+	SizeY          int    `json:"sizeY"`
+	Maturity       int    `json:"maturity"`
+	PublicEndpoint string `json:"publicEndpoint,omitempty"`
+	ViewerPort     int    `json:"viewerPort,omitempty"`
+	Online         bool   `json:"online"`
 }
 
 type RegionNeighborList struct {
