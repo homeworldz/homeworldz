@@ -33,6 +33,24 @@ int main() {
     if (registry.authorize(transit.agent_id, transit.session_id, now + 10s) ||
         registry.size(now + 10s) != 0) return 1;
 
+    homeworldz::region::CapabilityArrivalGate arrival_gate;
+    if (arrival_gate.mark_seed_served({}, transit.id) ||
+        arrival_gate.mark_seed_served(transit.session_id, {}) ||
+        arrival_gate.consume_seed(transit.session_id, transit.id)) return 1;
+    if (!arrival_gate.mark_seed_served(transit.session_id, transit.id) ||
+        arrival_gate.mark_seed_served(transit.session_id, transit.id) ||
+        arrival_gate.size() != 1 ||
+        !arrival_gate.consume_seed(transit.session_id, transit.id) ||
+        arrival_gate.consume_seed(transit.session_id, transit.id) ||
+        arrival_gate.size() != 0) return 1;
+    if (!arrival_gate.mark_seed_served(transit.session_id, transit.id)) return 1;
+    auto second_transit = transit;
+    second_transit.id = "44444444-4444-4444-8444-444444444444";
+    if (!arrival_gate.mark_seed_served(transit.session_id, second_transit.id) ||
+        arrival_gate.size() != 2) return 1;
+    arrival_gate.clear_session(transit.session_id);
+    if (arrival_gate.size() != 0) return 1;
+
     const homeworldz::grid::RegionNeighbor beta{
         "east", "beta", "Beta", 1002, 1000, 512, 512, 13,
         "http://region.example:42021", 42022, true};

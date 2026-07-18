@@ -246,6 +246,14 @@ struct PendingEventResponse {
     std::chrono::steady_clock::time_point deadline{};
 };
 
+struct PendingAgentMovementComplete {
+    std::string endpoint;
+    std::string session_id;
+    std::string visit_id;
+    std::vector<std::byte> payload;
+    std::chrono::steady_clock::time_point deadline{};
+};
+
 void stop(int) { running = false; }
 
 std::string configured_value(std::string_view name, std::string fallback = {}) {
@@ -1404,6 +1412,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     homeworldz::region::InboundTransitRegistry inbound_transits;
+    homeworldz::region::CapabilityArrivalGate capability_arrival_gate;
     homeworldz::viewer::CircuitRegistry circuits([&](const homeworldz::viewer::UseCircuitCode& request) {
         const auto reject = [&](std::string_view reason) {
             std::cout << "{\"level\":\"warn\",\"message\":\"viewer circuit rejected\",\"reason\":"
@@ -1466,6 +1475,7 @@ int main(int argc, char* argv[]) {
         temporary_expirations;
     std::unordered_map<std::string, std::deque<std::string>> queued_viewer_events;
     std::vector<PendingEventResponse> pending_event_responses;
+    std::vector<PendingAgentMovementComplete> pending_agent_movement_completes;
     std::uint64_t event_id{};
     std::uint64_t next_inventory_asset_xfer{1};
     const auto clear_viewer_endpoint = [&](const std::string& endpoint, const std::string& session_id) {
@@ -1494,6 +1504,11 @@ int main(int argc, char* argv[]) {
         handshake_replies.erase(endpoint);
         established_events.erase(session_id);
         queued_viewer_events.erase(session_id);
+        capability_arrival_gate.clear_session(session_id);
+        std::erase_if(pending_agent_movement_completes,
+            [&](const PendingAgentMovementComplete& pending) {
+                return pending.endpoint == endpoint;
+            });
         texture_packets.erase(endpoint);
         std::erase_if(active_texture_transfers, [&](const std::string& key) {
             return key.starts_with(endpoint + '|');
@@ -1574,6 +1589,23 @@ int main(int argc, char* argv[]) {
                       << ",\"status\":" << response.status_code << "}" << std::endl;
             return true;
         });
+        std::erase_if(pending_agent_movement_completes,
+            [&](const PendingAgentMovementComplete& pending) {
+                const bool seed_served = capability_arrival_gate.consume_seed(
+                    pending.session_id, pending.visit_id);
+                if (!seed_served && pending.deadline > http_now) return false;
+                if (const auto outgoing = circuits.send(
+                        pending.endpoint, pending.payload, true, http_now))
+                    static_cast<void>(send_udp(viewer_server, pending.endpoint, *outgoing));
+                if (!seed_served) {
+                    std::cout << "{\"level\":\"warning\",\"message\":\"agent movement capability gate timed out\","
+                                 "\"sessionId\":"
+                              << homeworldz::api::json_string(pending.session_id)
+                              << ",\"visitId\":"
+                              << homeworldz::api::json_string(pending.visit_id) << "}" << std::endl;
+                }
+                return true;
+            });
         fd_set readable;
         FD_ZERO(&readable);
         FD_SET(server, &readable);
@@ -1835,6 +1867,9 @@ int main(int argc, char* argv[]) {
                                 homeworldz::viewer::seed_capability_xml(
                                     region_public_endpoint, grid_public_endpoint, session_id,
                                     capability_visit_id));
+                            if (!capability_visit_id.empty())
+                                static_cast<void>(capability_arrival_gate.mark_seed_served(
+                                    session_id, capability_visit_id));
                         } else if (authorized && event_queue) {
                             if (established_events.insert(session_id).second) {
                                 if (authorized_session) {
@@ -3720,9 +3755,19 @@ int main(int argc, char* argv[]) {
                                         endpoint, existing_avatar_update, true, now, true))
                                     static_cast<void>(send_udp(viewer_server, endpoint, *avatar));
                             }
-                            if (const auto outgoing = circuits.send(endpoint,
-                                    homeworldz::viewer::encode_agent_movement_complete(response), true, now))
-                                static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
+                            auto movement_complete =
+                                homeworldz::viewer::encode_agent_movement_complete(response);
+                            const bool arrival_seed_served = !arrival ||
+                                capability_arrival_gate.consume_seed(session_id, arrival->id);
+                            if (arrival_seed_served) {
+                                if (const auto outgoing = circuits.send(
+                                        endpoint, movement_complete, true, now))
+                                    static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
+                            } else {
+                                pending_agent_movement_completes.push_back({
+                                    endpoint, session_id, arrival->id, std::move(movement_complete),
+                                    now + std::chrono::milliseconds(500)});
+                            }
                             const homeworldz::viewer::AvatarAnimation animation_response{
                                 identity->agent_id, animations};
                             const auto new_animation =

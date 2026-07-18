@@ -116,4 +116,33 @@ void InboundTransitRegistry::purge(std::chrono::steady_clock::time_point now) {
     std::erase_if(entries_, [&](const auto& entry) { return entry.second.expires_at <= now; });
 }
 
+bool CapabilityArrivalGate::mark_seed_served(
+    std::string_view session_id, std::string_view visit_id) {
+    if (session_id.empty() || visit_id.empty()) return false;
+    return served_seeds_.insert(key(session_id, visit_id)).second;
+}
+
+bool CapabilityArrivalGate::consume_seed(
+    std::string_view session_id, std::string_view visit_id) {
+    if (session_id.empty() || visit_id.empty()) return false;
+    return served_seeds_.erase(key(session_id, visit_id)) != 0;
+}
+
+void CapabilityArrivalGate::clear_session(std::string_view session_id) {
+    if (session_id.empty()) return;
+    const auto prefix = std::string(session_id) + '|';
+    std::erase_if(served_seeds_, [&](const std::string& value) {
+        return value.starts_with(prefix);
+    });
+}
+
+std::size_t CapabilityArrivalGate::size() const {
+    return served_seeds_.size();
+}
+
+std::string CapabilityArrivalGate::key(
+    std::string_view session_id, std::string_view visit_id) {
+    return std::string(session_id) + '|' + std::string(visit_id);
+}
+
 } // namespace homeworldz::region

@@ -10,6 +10,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace homeworldz::region {
 
@@ -43,6 +44,18 @@ private:
 
     void purge(std::chrono::steady_clock::time_point now);
     std::unordered_map<std::string, Entry> entries_;
+};
+
+class CapabilityArrivalGate {
+public:
+    bool mark_seed_served(std::string_view session_id, std::string_view visit_id);
+    bool consume_seed(std::string_view session_id, std::string_view visit_id);
+    void clear_session(std::string_view session_id);
+    std::size_t size() const;
+
+private:
+    static std::string key(std::string_view session_id, std::string_view visit_id);
+    std::unordered_set<std::string> served_seeds_;
 };
 
 } // namespace homeworldz::region
