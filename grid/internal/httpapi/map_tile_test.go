@@ -126,6 +126,33 @@ func TestMapTileFetchesAndCachesLiveRegionTerrain(t *testing.T) {
 	}
 }
 
+func TestTerrainCacheSeparatesRegionWidths(t *testing.T) {
+	var requests atomic.Int32
+	regionServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		request := requests.Add(1)
+		width := 256
+		if request == 2 {
+			width = 512
+		}
+		_, _ = w.Write(encodedHeightmapSize(width, 20))
+	}))
+	defer regionServer.Close()
+
+	api := &API{terrainHTTP: regionServer.Client(), terrainCache: newTerrainTileCache()}
+	region := regions.Region{PublicEndpoint: regionServer.URL}
+	first, ok := api.regionTerrainTile(context.Background(), region, 256)
+	if !ok || first.Bounds().Dx() != 256 {
+		t.Fatalf("first terrain tile = %v/%d, want true/256", ok, first.Bounds().Dx())
+	}
+	second, ok := api.regionTerrainTile(context.Background(), region, 512)
+	if !ok || second.Bounds().Dx() != 512 {
+		t.Fatalf("second terrain tile = %v/%d, want true/512", ok, second.Bounds().Dx())
+	}
+	if requests.Load() != 2 {
+		t.Fatalf("heightmap requests = %d, want one fetch per region width", requests.Load())
+	}
+}
+
 func TestMapTileFetchesLargeRegionTerrainSlice(t *testing.T) {
 	heightmap := encodedHeightmapSize(512, 20)
 	for y := 0; y < 512; y++ {

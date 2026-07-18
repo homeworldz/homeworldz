@@ -172,9 +172,10 @@ func (a *API) regionTerrainTile(ctx context.Context, region regions.Region, widt
 		return nil, false
 	}
 	endpoint := strings.TrimRight(region.PublicEndpoint, "/") + "/map/terrain.raw"
+	cacheKey := endpoint + "#" + strconv.Itoa(width)
 	now := time.Now()
 	a.terrainCache.mu.Lock()
-	if cached, ok := a.terrainCache.entries[endpoint]; ok && cached.expiresAt.After(now) {
+	if cached, ok := a.terrainCache.entries[cacheKey]; ok && cached.expiresAt.After(now) {
 		a.terrainCache.mu.Unlock()
 		return cached.image, cached.image != nil
 	}
@@ -187,18 +188,18 @@ func (a *API) regionTerrainTile(ctx context.Context, region regions.Region, widt
 	request.Header.Set("Authorization", "Bearer "+a.serviceToken)
 	response, err := a.terrainHTTP.Do(request)
 	if err != nil {
-		a.cacheTerrainTile(endpoint, nil, now.Add(5*time.Second))
+		a.cacheTerrainTile(cacheKey, nil, now.Add(5*time.Second))
 		return nil, false
 	}
 	defer response.Body.Close()
 	byteCount := width * width * 4
 	body, err := io.ReadAll(io.LimitReader(response.Body, int64(byteCount+1)))
 	if err != nil || response.StatusCode != http.StatusOK || len(body) != byteCount {
-		a.cacheTerrainTile(endpoint, nil, now.Add(5*time.Second))
+		a.cacheTerrainTile(cacheKey, nil, now.Add(5*time.Second))
 		return nil, false
 	}
 	tile := renderTerrainHeightmap(body, width)
-	a.cacheTerrainTile(endpoint, tile, now.Add(60*time.Second))
+	a.cacheTerrainTile(cacheKey, tile, now.Add(60*time.Second))
 	return tile, true
 }
 
