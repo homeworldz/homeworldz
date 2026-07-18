@@ -151,5 +151,61 @@ int main() {
             task_item, "Invalid", "", 0, 0, 0, 0, 0, 4, -1) ||
         task_item.name != unchanged.name || task_item.current_permissions != unchanged.current_permissions)
         return 1;
+
+    homeworldz::scene::Entity innermost;
+    innermost.owner_permissions = homeworldz::scene::permission_creator;
+    innermost.next_owner_permissions = homeworldz::scene::permission_creator;
+    homeworldz::scene::TaskInventoryItem restricted_item;
+    restricted_item.current_permissions = homeworldz::scene::permission_creator &
+        ~homeworldz::scene::permission_copy;
+    restricted_item.next_permissions = homeworldz::scene::permission_creator;
+    innermost.task_inventory.push_back(restricted_item);
+    const auto inner_effective = homeworldz::scene::effective_permissions(innermost);
+    if ((inner_effective.owner & homeworldz::scene::permission_copy) != 0 ||
+        (inner_effective.owner & homeworldz::scene::permission_export) != 0 ||
+        (inner_effective.next_owner & homeworldz::scene::permission_copy) != 0)
+        return 1;
+
+    const auto nested_item = [&](const homeworldz::scene::EffectivePermissions& folded) {
+        homeworldz::scene::TaskInventoryItem item;
+        item.current_permissions = folded.owner;
+        item.next_permissions = folded.next_owner;
+        return item;
+    };
+    homeworldz::scene::Entity middle;
+    middle.owner_permissions = homeworldz::scene::permission_creator;
+    middle.next_owner_permissions = homeworldz::scene::permission_creator;
+    middle.task_inventory.push_back(nested_item(inner_effective));
+    const auto middle_effective = homeworldz::scene::effective_permissions(middle);
+    homeworldz::scene::Entity outer;
+    outer.owner_permissions = homeworldz::scene::permission_creator;
+    outer.next_owner_permissions = homeworldz::scene::permission_creator;
+    outer.task_inventory.push_back(nested_item(middle_effective));
+    const auto outer_effective = homeworldz::scene::effective_permissions(outer);
+    if ((outer_effective.owner & homeworldz::scene::permission_copy) != 0 ||
+        (outer_effective.next_owner & homeworldz::scene::permission_copy) != 0 ||
+        (outer_effective.owner & homeworldz::scene::permission_modify) == 0 ||
+        (outer_effective.owner & homeworldz::scene::permission_transfer) == 0)
+        return 1;
+
+    homeworldz::scene::Entity permission_root;
+    permission_root.id = 20;
+    permission_root.owner_permissions = homeworldz::scene::permission_creator;
+    permission_root.next_owner_permissions = homeworldz::scene::permission_creator;
+    homeworldz::scene::Entity permission_child;
+    permission_child.id = 21;
+    permission_child.parent_id = permission_root.id;
+    permission_child.owner_permissions = homeworldz::scene::permission_creator;
+    permission_child.next_owner_permissions = homeworldz::scene::permission_creator;
+    permission_child.task_inventory.push_back(nested_item(inner_effective));
+    homeworldz::scene::Scene permission_scene;
+    permission_scene.restore(1, {permission_root, permission_child});
+    const auto* restored_permission_root = permission_scene.find(permission_root.id);
+    if (!restored_permission_root) return 1;
+    const auto linkset_effective = homeworldz::scene::effective_permissions(
+        permission_scene, *restored_permission_root);
+    if ((linkset_effective.owner & homeworldz::scene::permission_copy) != 0 ||
+        (linkset_effective.next_owner & homeworldz::scene::permission_copy) != 0)
+        return 1;
     return 0;
 }

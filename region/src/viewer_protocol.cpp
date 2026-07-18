@@ -1440,9 +1440,9 @@ std::vector<std::byte> encode_object_properties(std::span<const ObjectProperties
         output.push_back(std::byte{}); // not for sale
         append_le_u32(output, 0); // sale price
         std::uint8_t aggregate_permissions = 0;
-        if ((object.owner_permissions & 0x00008000) != 0) aggregate_permissions |= 0x03; // copy
-        if ((object.owner_permissions & 0x00004000) != 0) aggregate_permissions |= 0x0c; // modify
-        if ((object.owner_permissions & 0x00002000) != 0) aggregate_permissions |= 0x30; // transfer
+        if ((object.folded_owner_permissions & 0x00008000) != 0) aggregate_permissions |= 0x03; // copy
+        if ((object.folded_owner_permissions & 0x00004000) != 0) aggregate_permissions |= 0x0c; // modify
+        if ((object.folded_owner_permissions & 0x00002000) != 0) aggregate_permissions |= 0x30; // transfer
         output.push_back(static_cast<std::byte>(aggregate_permissions));
         output.insert(output.end(), 2, std::byte{}); // aggregate texture permissions
         append_le_u32(output, 0); // category

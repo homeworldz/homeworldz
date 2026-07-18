@@ -121,6 +121,41 @@ bool apply_task_inventory_update(
     return true;
 }
 
+EffectivePermissions effective_permissions(const Entity& entity) {
+    EffectivePermissions result{entity.owner_permissions, entity.next_owner_permissions};
+    constexpr auto restricted = permission_modify | permission_copy | permission_transfer;
+    for (const auto& item : entity.task_inventory) {
+        for (const auto permission : {permission_modify, permission_copy, permission_transfer}) {
+            if ((item.current_permissions & permission) == 0)
+                result.owner &= ~permission;
+            if ((item.current_permissions & item.next_permissions & permission) == 0)
+                result.next_owner &= ~permission;
+        }
+    }
+    if ((result.owner & restricted) != restricted)
+        result.owner &= ~permission_export;
+    if ((result.next_owner & restricted) != restricted)
+        result.next_owner &= ~permission_export;
+    return result;
+}
+
+EffectivePermissions effective_permissions(const Scene& scene, const Entity& selected) {
+    const auto root_id = selected.parent_id != 0 ? selected.parent_id : selected.id;
+    EffectivePermissions result{permission_creator, permission_creator};
+    for (const auto& [entity_id, entity] : scene.entities()) {
+        if (entity_id != root_id && entity.parent_id != root_id) continue;
+        const auto part = effective_permissions(entity);
+        result.owner &= part.owner;
+        result.next_owner &= part.next_owner;
+    }
+    constexpr auto restricted = permission_modify | permission_copy | permission_transfer;
+    if ((result.owner & restricted) != restricted)
+        result.owner &= ~permission_export;
+    if ((result.next_owner & restricted) != restricted)
+        result.next_owner &= ~permission_export;
+    return result;
+}
+
 std::optional<RayIntersection> intersect_box(
     Vector3 ray_start, Vector3 ray_end, Vector3 center, Vector3 scale) {
     const std::array start{ray_start.x, ray_start.y, ray_start.z};

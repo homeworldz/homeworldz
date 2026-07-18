@@ -551,7 +551,8 @@ void apply_extra_physics(
 }
 
 std::optional<homeworldz::viewer::StaticObject> static_object_from_entity(
-    const homeworldz::scene::Entity& entity, std::string_view recipient_id) {
+    const homeworldz::scene::Scene& scene, const homeworldz::scene::Entity& entity,
+    std::string_view recipient_id) {
     constexpr std::uint32_t object_modify = 0x00000004;
     constexpr std::uint32_t object_copy = 0x00000008;
     constexpr std::uint32_t object_any_owner = 0x00000010;
@@ -572,7 +573,8 @@ std::optional<homeworldz::viewer::StaticObject> static_object_from_entity(
     object.id = *object_id;
     object.owner_id = *owner_id;
     const bool is_owner = entity.owner_id == recipient_id;
-    const auto permissions = is_owner ? entity.owner_permissions : entity.everyone_permissions;
+    const auto folded = homeworldz::scene::effective_permissions(scene, entity);
+    const auto permissions = is_owner ? folded.owner : entity.everyone_permissions & folded.owner;
     object.update_flags = object_any_owner;
     if (entity.physical) object.update_flags |= object_physics;
     if (entity.phantom) object.update_flags |= object_phantom;
@@ -656,7 +658,7 @@ void apply_object_asset(
 }
 
 std::optional<homeworldz::viewer::ObjectProperties> object_properties_from_entity(
-    const homeworldz::scene::Entity& entity) {
+    const homeworldz::scene::Scene& scene, const homeworldz::scene::Entity& entity) {
     const auto object_id = homeworldz::viewer::parse_uuid(entity.object_id);
     const auto creator_id = homeworldz::viewer::parse_uuid(entity.creator_id);
     const auto owner_id = homeworldz::viewer::parse_uuid(entity.owner_id);
@@ -670,6 +672,9 @@ std::optional<homeworldz::viewer::ObjectProperties> object_properties_from_entit
     properties.group_permissions = entity.group_permissions;
     properties.everyone_permissions = entity.everyone_permissions;
     properties.next_owner_permissions = entity.next_owner_permissions;
+    const auto folded = homeworldz::scene::effective_permissions(scene, entity);
+    properties.folded_owner_permissions = folded.owner;
+    properties.folded_next_owner_permissions = folded.next_owner;
     properties.creation_date = entity.creation_date;
     properties.name = entity.name;
     properties.description = entity.description;
@@ -3383,7 +3388,7 @@ int main(int argc, char* argv[]) {
                             }
                             for (const auto& [entity_id, entity] : scene.entities()) {
                                 static_cast<void>(entity_id);
-                                const auto restored_object = static_object_from_entity(entity, live_avatar.user_id);
+                                const auto restored_object = static_object_from_entity(scene, entity, live_avatar.user_id);
                                 if (!restored_object) continue;
                                 if (const auto object = circuits.send(endpoint,
                                         homeworldz::viewer::encode_static_object_update(
@@ -3447,7 +3452,7 @@ int main(int argc, char* argv[]) {
                                     for (const auto entity_id : updates) {
                                         const auto* entity = scene.find(entity_id);
                                         const auto object = entity
-                                            ? static_object_from_entity(*entity, recipient.user_id) : std::nullopt;
+                                            ? static_object_from_entity(scene, *entity, recipient.user_id) : std::nullopt;
                                         if (!object) continue;
                                         if (const auto sent = circuits.send(recipient_endpoint,
                                                 homeworldz::viewer::encode_static_object_update(
@@ -3499,7 +3504,7 @@ int main(int argc, char* argv[]) {
                                     if (!entity) continue;
                                     synchronize_physics_object(*entity);
                                     for (const auto& [recipient_endpoint, recipient] : avatars) {
-                                        const auto object = static_object_from_entity(*entity, recipient.user_id);
+                                        const auto object = static_object_from_entity(scene, *entity, recipient.user_id);
                                         if (!object) continue;
                                         if (const auto sent = circuits.send(recipient_endpoint,
                                                 homeworldz::viewer::encode_static_object_update(
@@ -3529,7 +3534,7 @@ int main(int argc, char* argv[]) {
                                     ++physics_edit_suspended[entity->id];
                                     synchronize_physics_object(*entity);
                                 }
-                                if (const auto object = object_properties_from_entity(*entity))
+                                if (const auto object = object_properties_from_entity(scene, *entity))
                                     properties.push_back(*object);
                             }
                             auto response = homeworldz::viewer::encode_object_properties(properties);
@@ -3637,7 +3642,7 @@ int main(int argc, char* argv[]) {
                             for (const auto& [entity_id, entity] : scene.entities()) {
                                 static_cast<void>(entity_id);
                                 if (entity.object_id != requested_id) continue;
-                                const auto properties = object_properties_from_entity(entity);
+                                const auto properties = object_properties_from_entity(scene, entity);
                                 if (properties) {
                                     auto response = homeworldz::viewer::encode_object_properties_family(
                                         family_request->request_flags, *properties);
@@ -3790,7 +3795,7 @@ int main(int argc, char* argv[]) {
                                 if (!entity) continue;
                                 if (persisted) synchronize_physics_object(*entity);
                                 for (const auto& [recipient_endpoint, recipient] : avatars) {
-                                    const auto object = static_object_from_entity(*entity, recipient.user_id);
+                                    const auto object = static_object_from_entity(scene, *entity, recipient.user_id);
                                     if (!object) continue;
                                     if (const auto sent = circuits.send(recipient_endpoint,
                                             homeworldz::viewer::encode_static_object_update(
@@ -3836,7 +3841,7 @@ int main(int argc, char* argv[]) {
                             properties.reserve(requested_entities.size());
                             for (const auto entity_id : requested_entities) {
                                 if (const auto* entity = scene.find(entity_id)) {
-                                    if (const auto current = object_properties_from_entity(*entity))
+                                    if (const auto current = object_properties_from_entity(scene, *entity))
                                         properties.push_back(*current);
                                 }
                             }
@@ -3886,7 +3891,7 @@ int main(int argc, char* argv[]) {
                             properties.reserve(requested_entities.size());
                             for (const auto entity_id : requested_entities) {
                                 if (const auto* entity = scene.find(entity_id)) {
-                                    if (const auto current = object_properties_from_entity(*entity))
+                                    if (const auto current = object_properties_from_entity(scene, *entity))
                                         properties.push_back(*current);
                                 }
                             }
@@ -3956,7 +3961,7 @@ int main(int argc, char* argv[]) {
                             properties.reserve(requested_entities.size());
                             for (const auto entity_id : requested_entities) {
                                 if (const auto* entity = scene.find(entity_id)) {
-                                    if (const auto current = object_properties_from_entity(*entity))
+                                    if (const auto current = object_properties_from_entity(scene, *entity))
                                         properties.push_back(*current);
                                 }
                             }
@@ -3975,7 +3980,7 @@ int main(int argc, char* argv[]) {
                                     const auto* entity = scene.find(entity_id);
                                     if (!entity) continue;
                                     for (const auto& [recipient_endpoint, recipient] : avatars) {
-                                        const auto object = static_object_from_entity(*entity, recipient.user_id);
+                                        const auto object = static_object_from_entity(scene, *entity, recipient.user_id);
                                         if (!object) continue;
                                         if (const auto sent = circuits.send(recipient_endpoint,
                                                 homeworldz::viewer::encode_static_object_update(
@@ -4009,23 +4014,23 @@ int main(int argc, char* argv[]) {
                                         ? selected->parent_id : selected->id;
                                     if (!requested_roots.insert(root_id).second) continue;
                                     const auto* source = scene.find(root_id);
-                                    if (!source || source->owner_id != user_id ||
-                                        (source->owner_permissions & homeworldz::scene::permission_copy) == 0)
+                                    if (!source || source->owner_id != user_id)
                                         continue;
                                     std::vector<const homeworldz::scene::Entity*> source_children;
                                     bool permitted = true;
                                     for (const auto& [candidate_id, candidate] : scene.entities()) {
                                         static_cast<void>(candidate_id);
                                         if (candidate.parent_id != root_id) continue;
-                                        if (candidate.owner_id != user_id ||
-                                            (candidate.owner_permissions &
-                                                homeworldz::scene::permission_copy) == 0) {
+                                        if (candidate.owner_id != user_id) {
                                             permitted = false;
                                             break;
                                         }
                                         source_children.push_back(&candidate);
                                     }
-                                    if (!permitted) continue;
+                                    const auto folded = homeworldz::scene::effective_permissions(scene, *source);
+                                    if (!permitted ||
+                                        (folded.owner & homeworldz::scene::permission_copy) == 0)
+                                        continue;
                                     const auto source_copy = *source;
                                     const homeworldz::scene::Vector3 position{
                                         source_copy.position.x + object_duplicate->offset[0],
@@ -4087,7 +4092,7 @@ int main(int argc, char* argv[]) {
                                     if (!entity) continue;
                                     synchronize_physics_object(*entity);
                                     for (const auto& [recipient_endpoint, recipient] : avatars) {
-                                        auto object = static_object_from_entity(*entity, recipient.user_id);
+                                        auto object = static_object_from_entity(scene, *entity, recipient.user_id);
                                         if (!object) continue;
                                         if (recipient_endpoint == endpoint)
                                             object->update_flags |=
@@ -4155,7 +4160,7 @@ int main(int argc, char* argv[]) {
                                 const auto* entity = scene.find(entity_id);
                                 if (!entity) continue;
                                 for (const auto& [recipient_endpoint, recipient] : avatars) {
-                                    const auto object = static_object_from_entity(*entity, recipient.user_id);
+                                    const auto object = static_object_from_entity(scene, *entity, recipient.user_id);
                                     if (!object) continue;
                                     if (const auto sent = circuits.send(recipient_endpoint,
                                             homeworldz::viewer::encode_static_object_update(
@@ -4215,7 +4220,7 @@ int main(int argc, char* argv[]) {
                                 const auto* entity = scene.find(entity_id);
                                 if (!entity) continue;
                                 for (const auto& [recipient_endpoint, recipient] : avatars) {
-                                    const auto object = static_object_from_entity(*entity, recipient.user_id);
+                                    const auto object = static_object_from_entity(scene, *entity, recipient.user_id);
                                     if (!object) continue;
                                     if (const auto sent = circuits.send(recipient_endpoint,
                                             homeworldz::viewer::encode_static_object_update(
@@ -4270,7 +4275,7 @@ int main(int argc, char* argv[]) {
                                         (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
                                         static_cast<std::uint32_t>(region_grid_y * 256);
                                     for (const auto& [recipient_endpoint, recipient] : avatars) {
-                                        const auto object = static_object_from_entity(*entity, recipient.user_id);
+                                        const auto object = static_object_from_entity(scene, *entity, recipient.user_id);
                                         if (!object) continue;
                                         if (const auto sent = circuits.send(recipient_endpoint,
                                                 homeworldz::viewer::encode_static_object_update(
@@ -4429,7 +4434,7 @@ int main(int argc, char* argv[]) {
                                         (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
                                         static_cast<std::uint32_t>(region_grid_y * 256);
                                     for (const auto& [recipient_endpoint, recipient] : avatars) {
-                                        auto object = static_object_from_entity(*entity, recipient.user_id);
+                                        auto object = static_object_from_entity(scene, *entity, recipient.user_id);
                                         if (!object) continue;
                                         if (recipient.user_id == entity->owner_id &&
                                             (object_add->add_flags & add_create_selected) != 0)
@@ -4494,27 +4499,25 @@ int main(int argc, char* argv[]) {
                                         ? selected->parent_id : local_id;
                                     const auto* entity = scene.find(root_id);
                                     if (!processed_roots.insert(root_id).second || !entity ||
-                                        entity->object_id.empty() || entity->owner_id != user_id ||
-                                        (derez->destination == derez_take_copy &&
-                                         (entity->owner_permissions &
-                                             homeworldz::scene::permission_copy) == 0))
+                                        entity->object_id.empty() || entity->owner_id != user_id)
                                         continue;
                                     std::vector<const homeworldz::scene::Entity*> children;
                                     std::vector<homeworldz::scene::EntityId> part_ids{root_id};
                                     bool valid_linkset = true;
                                     for (const auto& [candidate_id, candidate] : scene.entities()) {
                                         if (candidate.parent_id != root_id) continue;
-                                        if (candidate.owner_id != user_id ||
-                                            (derez->destination == derez_take_copy &&
-                                             (candidate.owner_permissions &
-                                                 homeworldz::scene::permission_copy) == 0)) {
+                                        if (candidate.owner_id != user_id) {
                                             valid_linkset = false;
                                             break;
                                         }
                                         children.push_back(&candidate);
                                         part_ids.push_back(candidate_id);
                                     }
-                                    if (!valid_linkset) continue;
+                                    const auto folded = homeworldz::scene::effective_permissions(scene, *entity);
+                                    if (!valid_linkset ||
+                                        (derez->destination == derez_take_copy &&
+                                         (folded.owner & homeworldz::scene::permission_copy) == 0))
+                                        continue;
                                     const auto asset_id = homeworldz::viewer::random_uuid();
                                     const auto item_id = homeworldz::viewer::random_uuid();
                                     const auto content_text =
@@ -4522,15 +4525,14 @@ int main(int argc, char* argv[]) {
                                     const auto content = std::span(
                                         reinterpret_cast<const std::byte*>(content_text.data()), content_text.size());
                                     auto base_permissions = entity->base_permissions;
-                                    auto owner_permissions = entity->owner_permissions;
+                                    auto owner_permissions = folded.owner;
                                     auto everyone_permissions = entity->everyone_permissions;
-                                    auto next_owner_permissions = entity->next_owner_permissions;
+                                    auto next_owner_permissions = folded.next_owner;
                                     for (const auto* child : children) {
                                         base_permissions &= child->base_permissions;
-                                        owner_permissions &= child->owner_permissions;
                                         everyone_permissions &= child->everyone_permissions;
-                                        next_owner_permissions &= child->next_owner_permissions;
                                     }
+                                    everyone_permissions &= owner_permissions;
                                     bool item_created = false;
                                     try {
                                         const auto metadata = storage->store_asset(
@@ -4730,7 +4732,7 @@ int main(int argc, char* argv[]) {
                                         (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
                                         static_cast<std::uint32_t>(region_grid_y * 256);
                                     for (const auto& [recipient_endpoint, recipient] : avatars) {
-                                        const auto object = static_object_from_entity(*entity, recipient.user_id);
+                                        const auto object = static_object_from_entity(scene, *entity, recipient.user_id);
                                         if (!object) continue;
                                         if (const auto outgoing = circuits.send(
                                                 recipient_endpoint,
@@ -5012,7 +5014,7 @@ int main(int argc, char* argv[]) {
                 entity->velocity = state.linear_velocity;
                 entity->rotation = {state.rotation[0], state.rotation[1], state.rotation[2]};
                 for (const auto& [recipient_endpoint, recipient] : avatars) {
-                    const auto object = static_object_from_entity(*entity, recipient.user_id);
+                    const auto object = static_object_from_entity(scene, *entity, recipient.user_id);
                     if (!object) continue;
                     if (const auto sent = circuits.send(recipient_endpoint,
                             homeworldz::viewer::encode_static_object_update(

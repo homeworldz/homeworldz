@@ -353,6 +353,8 @@ struct ObjectProperties {
     std::uint32_t group_permissions{};
     std::uint32_t everyone_permissions{};
     std::uint32_t next_owner_permissions{0x0008e000};
+    std::uint32_t folded_owner_permissions{0x0009e000};
+    std::uint32_t folded_next_owner_permissions{0x0008e000};
     std::uint64_t creation_date{};
     std::string name;
     std::string description;

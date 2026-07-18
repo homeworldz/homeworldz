@@ -55,6 +55,11 @@ struct TaskInventoryItem {
     std::uint64_t creation_date{};
 };
 
+struct EffectivePermissions {
+    std::uint32_t owner{};
+    std::uint32_t next_owner{};
+};
+
 struct Entity {
     EntityId id{};
     std::string name;
@@ -122,6 +127,8 @@ bool apply_task_inventory_update(
     std::uint32_t group_permissions, std::uint32_t everyone_permissions,
     std::uint32_t next_permissions, std::uint8_t sale_type, std::int32_t sale_price);
 
+EffectivePermissions effective_permissions(const Entity& entity);
+
 std::optional<RayIntersection> intersect_box(
     Vector3 ray_start, Vector3 ray_end, Vector3 center, Vector3 scale);
 
@@ -149,5 +156,7 @@ private:
     std::uint64_t simulation_steps_{};
     std::unordered_map<EntityId, Entity> entities_;
 };
+
+EffectivePermissions effective_permissions(const Scene& scene, const Entity& selected);
 
 } // namespace homeworldz::scene

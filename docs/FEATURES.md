@@ -161,6 +161,23 @@ deformation. Attachments remain non-colliding by default. Engine-specific Jolt
 and PhysX cooked shapes are caches, not authoritative assets. See
 [`ADR 0023`](adr/0023-portable-mesh-collision-representations.md).
 
+### Recursively folded object permissions
+
+HomeWorldz treats Halcyon's effective-permission behavior as the compatibility
+reference for nested object contents. Modify, Copy, Transfer, and derived
+Export restrictions are folded across every prim in a linkset and every task
+inventory item. A containing object inventory item records those effective
+current and Next Owner masks when the object is taken, so the restriction
+remains compositional when an object is placed inside another object, taken
+again, rezzed, returned, duplicated, or eventually transferred to another
+user. The literal masks on each underlying item remain intact; viewer aggregate
+permissions and action authorization consume the folded result.
+
+This deliberately includes nested cases that Second Life has historically left
+unsupported or incomplete and must not be simplified to OpenSimulator's
+permission behavior. The permission core has a three-level nested-object test
+as well as linkset-child Contents coverage.
+
 ### AIS-first viewer inventory
 
 HomeWorldz requires Second Life AIS v3 for supported viewer-facing inventory

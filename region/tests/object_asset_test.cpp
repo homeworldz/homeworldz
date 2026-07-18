@@ -71,6 +71,10 @@ int main() {
         linkset->root.task_inventory_serial != 7 || linkset->root.task_inventory.size() != 1 ||
         linkset->root.task_inventory[0].name != "Surface Texture" ||
         linkset->root.task_inventory[0].flags != 0x01020304 ||
+        linkset->root.task_inventory[0].base_permissions != 0x0008e000 ||
+        linkset->root.task_inventory[0].current_permissions != 0x0008a000 ||
+        linkset->root.task_inventory[0].everyone_permissions != 0x00008000 ||
+        linkset->root.task_inventory[0].next_permissions != 0x00002000 ||
         linkset->root.task_inventory[0].sale_price != 25 ||
         linkset->children[0].task_inventory_serial != 2 ||
         linkset->children[0].task_inventory.size() != 1 ||

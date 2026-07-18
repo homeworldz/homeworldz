@@ -479,6 +479,7 @@ bool message_codecs() {
     properties.object_id = expected.agent_id;
     properties.creator_id = expected.agent_id;
     properties.owner_id = expected.session_id;
+    properties.folded_owner_permissions &= ~0x00008000;
     properties.creation_date = 123;
     properties.name = "Primitive";
     const std::array property_list{properties};
@@ -627,7 +628,7 @@ bool message_codecs() {
            encoded_properties.size() > 180 && encoded_properties[0] == std::byte{0xff} &&
            encoded_properties[1] == std::byte{0x09} && encoded_properties[2] == std::byte{1} &&
            encoded_properties[75] == std::byte{0x00} && encoded_properties[76] == std::byte{0xe0} &&
-           encoded_properties[77] == std::byte{0x09} && encoded_properties[104] == std::byte{0x3f} &&
+           encoded_properties[77] == std::byte{0x09} && encoded_properties[104] == std::byte{0x3c} &&
            encoded_family.size() > 100 && encoded_family[1] == std::byte{0x0a} &&
            encoded_family[2] == std::byte{0x04} && encoded_family[54] == std::byte{0x00} &&
            encoded_family[55] == std::byte{0xe0} && encoded_family[56] == std::byte{0x09} &&
