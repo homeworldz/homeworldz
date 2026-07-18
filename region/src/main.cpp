@@ -1196,7 +1196,8 @@ int main(int argc, char* argv[]) {
               << (physics_terrain_ready ? "true" : "false") << "}" << std::endl;
     std::unique_ptr<homeworldz::physics::StaticSceneMirror> physics_scene;
     std::unordered_map<homeworldz::scene::EntityId, std::size_t> physics_edit_suspended;
-    std::unordered_map<std::string, std::unordered_set<homeworldz::scene::EntityId>>
+    std::unordered_map<std::string,
+        std::unordered_map<homeworldz::scene::EntityId, homeworldz::scene::EntityId>>
         physics_edit_selections;
     if (physics_world) {
         try {
@@ -1213,26 +1214,11 @@ int main(int argc, char* argv[]) {
     const auto synchronize_physics_object = [&](const homeworldz::scene::Entity& entity) {
         if (!physics_scene) return;
         try {
-            const auto synchronize_entity = [&](const homeworldz::scene::Entity& candidate) {
-                auto synchronized_entity = candidate;
-                if (physics_edit_suspended.contains(candidate.id)) synchronized_entity.physical = false;
-                std::optional<homeworldz::physics::MotionType> linked_motion;
-                if (candidate.parent_id != 0) {
-                    const auto* root = scene.find(candidate.parent_id);
-                    if (root && !root->physical)
-                        linked_motion = homeworldz::physics::MotionType::Static;
-                }
-                if (!physics_scene->synchronize(synchronized_entity, linked_motion))
-                    std::cerr << "{\"level\":\"warning\",\"message\":\"static object physics synchronization rejected\","
-                                 "\"entityId\":" << candidate.id << "}" << std::endl;
-            };
-            synchronize_entity(entity);
-            if (entity.parent_id == 0) {
-                for (const auto& [candidate_id, candidate] : scene.entities()) {
-                    static_cast<void>(candidate_id);
-                    if (candidate.parent_id == entity.id) synchronize_entity(candidate);
-                }
-            }
+            const auto root_id = entity.parent_id == 0 ? entity.id : entity.parent_id;
+            if (!physics_scene->synchronize_linkset(
+                    scene, root_id, physics_edit_suspended.contains(root_id)))
+                std::cerr << "{\"level\":\"warning\",\"message\":\"object physics synchronization rejected\","
+                             "\"entityId\":" << root_id << "}" << std::endl;
         } catch (const std::exception& error) {
             std::cerr << "{\"level\":\"error\",\"message\":\"static object physics synchronization failed\","
                          "\"entityId\":" << entity.id << ",\"error\":"
@@ -1243,7 +1229,9 @@ int main(int argc, char* argv[]) {
         physics_edit_suspended.erase(entity_id);
         for (auto& [selection_endpoint, selected] : physics_edit_selections) {
             static_cast<void>(selection_endpoint);
-            selected.erase(entity_id);
+            std::erase_if(selected, [&](const auto& entry) {
+                return entry.first == entity_id || entry.second == entity_id;
+            });
         }
         if (physics_scene) physics_scene->remove(entity_id);
     };
@@ -1425,12 +1413,13 @@ int main(int argc, char* argv[]) {
             physics_world->remove_character(live->second.physics_character);
         if (const auto selected = physics_edit_selections.find(endpoint);
             selected != physics_edit_selections.end()) {
-            for (const auto entity_id : selected->second) {
-                const auto suspended = physics_edit_suspended.find(entity_id);
+            for (const auto& [selected_id, root_id] : selected->second) {
+                static_cast<void>(selected_id);
+                const auto suspended = physics_edit_suspended.find(root_id);
                 if (suspended == physics_edit_suspended.end()) continue;
                 if (--suspended->second == 0) {
                     physics_edit_suspended.erase(suspended);
-                    if (const auto* entity = scene.find(entity_id)) synchronize_physics_object(*entity);
+                    if (const auto* entity = scene.find(root_id)) synchronize_physics_object(*entity);
                 }
             }
             physics_edit_selections.erase(selected);
@@ -3718,8 +3707,6 @@ int main(int argc, char* argv[]) {
                                     (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
                                     static_cast<std::uint32_t>(region_grid_y * 256);
                                 synchronize_physics_object(*root);
-                                for (const auto entity_id : changed)
-                                    if (const auto* child = scene.find(entity_id)) synchronize_physics_object(*child);
                                 std::vector<homeworldz::scene::EntityId> updates{root->id};
                                 updates.insert(updates.end(), changed.begin(), changed.end());
                                 for (const auto& [recipient_endpoint, recipient] : avatars) {
@@ -3746,12 +3733,14 @@ int main(int argc, char* argv[]) {
                             const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
                             std::unordered_map<homeworldz::scene::EntityId, homeworldz::scene::Entity> originals;
                             std::vector<homeworldz::scene::EntityId> changed;
+                            std::unordered_set<homeworldz::scene::EntityId> affected_roots;
                             for (const auto local_id : object_delink->local_ids) {
                                 auto* entity = scene.find(local_id);
                                 if (!entity || entity->parent_id == 0 || entity->owner_id != user_id ||
                                     (entity->owner_permissions & homeworldz::scene::permission_modify) == 0)
                                     continue;
                                 originals.emplace(entity->id, *entity);
+                                affected_roots.insert(entity->parent_id);
                                 entity->parent_id = 0;
                                 entity->local_position = {};
                                 entity->local_rotation = {};
@@ -3773,6 +3762,9 @@ int main(int argc, char* argv[]) {
                                 const auto region_handle =
                                     (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
                                     static_cast<std::uint32_t>(region_grid_y * 256);
+                                for (const auto root_id : affected_roots)
+                                    if (const auto* root = scene.find(root_id))
+                                        synchronize_physics_object(*root);
                                 for (const auto entity_id : changed) {
                                     const auto* entity = scene.find(entity_id);
                                     if (!entity) continue;
@@ -3804,9 +3796,14 @@ int main(int argc, char* argv[]) {
                                 auto& selected = physics_edit_selections[endpoint];
                                 if (entity->owner_id == user_id &&
                                     (entity->owner_permissions & homeworldz::scene::permission_modify) != 0 &&
-                                    selected.insert(entity->id).second) {
-                                    ++physics_edit_suspended[entity->id];
-                                    synchronize_physics_object(*entity);
+                                    !selected.contains(entity->id)) {
+                                    const auto* root = entity->parent_id == 0
+                                        ? entity : scene.find(entity->parent_id);
+                                    const auto physics_id = root && root->physical ? root->id : entity->id;
+                                    selected.emplace(entity->id, physics_id);
+                                    ++physics_edit_suspended[physics_id];
+                                    if (const auto* physics_entity = scene.find(physics_id))
+                                        synchronize_physics_object(*physics_entity);
                                 }
                                 if (const auto object = object_properties_from_entity(scene, *entity))
                                     properties.push_back(*object);
@@ -3824,14 +3821,17 @@ int main(int argc, char* argv[]) {
                             object_deselect->session_id == identity->session_id) {
                             for (const auto local_id : object_deselect->local_ids) {
                                 const auto selected = physics_edit_selections.find(endpoint);
-                                if (selected == physics_edit_selections.end() ||
-                                    selected->second.erase(local_id) == 0)
+                                if (selected == physics_edit_selections.end())
                                     continue;
-                                const auto suspended = physics_edit_suspended.find(local_id);
+                                const auto selected_part = selected->second.find(local_id);
+                                if (selected_part == selected->second.end()) continue;
+                                const auto physics_id = selected_part->second;
+                                selected->second.erase(selected_part);
+                                const auto suspended = physics_edit_suspended.find(physics_id);
                                 if (suspended != physics_edit_suspended.end() &&
                                     --suspended->second == 0) {
                                     physics_edit_suspended.erase(suspended);
-                                    if (auto* entity = scene.find(local_id)) {
+                                    if (auto* entity = scene.find(physics_id)) {
                                         const auto original_position = entity->position;
                                         const auto original_velocity = entity->velocity;
                                         if (raise_physical_object_above_terrain(*entity)) {
@@ -3857,14 +3857,17 @@ int main(int argc, char* argv[]) {
                             physics_scene) {
                             const auto object_id = homeworldz::viewer::format_uuid(grab_update->object_id);
                             const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
-                            for (const auto& [entity_id, entity] : scene.entities()) {
-                                if (entity.object_id != object_id) continue;
-                                const bool may_move = entity.owner_id == user_id ||
-                                    (entity.everyone_permissions & homeworldz::scene::permission_move) != 0;
-                                if (!may_move || !entity.physical || entity.phantom ||
-                                    physics_edit_suspended.contains(entity_id))
+                            for (const auto& [entity_id, clicked] : scene.entities()) {
+                                if (clicked.object_id != object_id) continue;
+                                const auto root_id = clicked.parent_id == 0 ? entity_id : clicked.parent_id;
+                                const auto* entity = scene.find(root_id);
+                                if (!entity) break;
+                                const bool may_move = entity->owner_id == user_id ||
+                                    (entity->everyone_permissions & homeworldz::scene::permission_move) != 0;
+                                if (!may_move || !entity->physical || entity->phantom ||
+                                    physics_edit_suspended.contains(root_id))
                                     break;
-                                const auto body_id = physics_scene->body_id(entity_id);
+                                const auto body_id = physics_scene->body_id(root_id);
                                 const auto state = physics_world->body_state(body_id);
                                 if (!state) break;
                                 constexpr double grab_response_seconds = 0.25;
@@ -3874,10 +3877,25 @@ int main(int argc, char* argv[]) {
                                 // object origin in object-local coordinates. Preserve the
                                 // offset as the body rotates instead of pulling the origin to
                                 // the surface point.
-                                const homeworldz::scene::Vector3 local_offset{
+                                homeworldz::scene::Vector3 local_offset{
                                     grab_update->grab_offset_initial[0],
                                     grab_update->grab_offset_initial[1],
                                     grab_update->grab_offset_initial[2]};
+                                if (clicked.parent_id != 0) {
+                                    const auto squared = clicked.local_rotation.x * clicked.local_rotation.x +
+                                        clicked.local_rotation.y * clicked.local_rotation.y +
+                                        clicked.local_rotation.z * clicked.local_rotation.z;
+                                    const std::array<double, 4> child_rotation{
+                                        clicked.local_rotation.x, clicked.local_rotation.y,
+                                        clicked.local_rotation.z,
+                                        std::sqrt((std::max)(0.0, 1.0 - squared))};
+                                    const auto rotated_offset = homeworldz::physics::rotate_vector(
+                                        local_offset, child_rotation);
+                                    local_offset = {
+                                        clicked.local_position.x + rotated_offset.x,
+                                        clicked.local_position.y + rotated_offset.y,
+                                        clicked.local_position.z + rotated_offset.z};
+                                }
                                 const auto world_offset = homeworldz::physics::rotate_vector(
                                     local_offset, state->rotation);
                                 const homeworldz::scene::Vector3 target_origin{
@@ -3901,7 +3919,7 @@ int main(int argc, char* argv[]) {
                                     delta_velocity.y *= scale;
                                     delta_velocity.z *= scale;
                                 }
-                                const auto mass = homeworldz::physics::entity_mass(entity);
+                                const auto mass = homeworldz::physics::linkset_mass(scene, *entity);
                                 physics_world->apply_impulse(body_id, {
                                     delta_velocity.x * mass, delta_velocity.y * mass,
                                     delta_velocity.z * mass});
@@ -5330,11 +5348,15 @@ int main(int argc, char* argv[]) {
                 entity->position = state.position;
                 entity->velocity = state.linear_velocity;
                 entity->rotation = {state.rotation[0], state.rotation[1], state.rotation[2]};
+                std::vector<homeworldz::scene::EntityId> linked_children;
+                for (const auto& [candidate_id, candidate] : scene.entities())
+                    if (candidate.parent_id == entity_id) linked_children.push_back(candidate_id);
+                for (const auto child_id : linked_children)
+                    if (auto* child = scene.find(child_id))
+                        homeworldz::scene::update_linked_world_transform(*child, *entity);
                 for (const auto& [recipient_endpoint, recipient] : avatars) {
-                    const auto radius = 0.5 * std::sqrt(
-                        entity->scale.x * entity->scale.x +
-                        entity->scale.y * entity->scale.y +
-                        entity->scale.z * entity->scale.z);
+                    const auto radius = homeworldz::physics::linkset_bounding_radius(
+                        scene, *entity);
                     auto& recipient_cache = sent_dynamic_transforms[recipient_endpoint];
                     if (!homeworldz::physics::within_viewer_interest(
                             recipient.controller.state().position, entity->position,

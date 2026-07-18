@@ -996,3 +996,15 @@ expiry the Region removes their physics bodies and scene entities and sends a
 reliable kill update to every connected viewer. Automated storage acceptance
 proves a temporary object cannot reappear after restart; live viewer timing
 acceptance remains pending.
+
+Physical linksets are ready for live Firestorm acceptance. A physical root and
+all collidable children now form one native Jolt compound using the children's
+root-local positions, rotations, and analytic or convex prim shapes. The body
+uses summed mass and mass-weighted contact settings; its authoritative root
+motion continuously rebuilds the children’s derived world transforms. Linking,
+delinking, whole-linkset and Edit Linked changes rebuild the compound, and
+selecting a physical child suspends/restores the root body. Automated adapter
+acceptance ray-casts against an offset, rotated child and verifies that the
+complete linkset falls as one body. A viewer test covering collision on both
+root and child, rotation while falling, editing, delink, and restart remains
+pending before the Roadmap checkbox is closed.

@@ -136,6 +136,39 @@ bool static_scene_mirror_test() {
     return mirror.size() == 0;
 }
 
+bool jolt_compound_linkset_test() {
+    using namespace homeworldz;
+    auto world = physics::make_jolt_world();
+    physics::BodyDefinition floor;
+    floor.entity_id = 300;
+    floor.shape.half_extents = {10, 10, 0.5};
+    floor.position = {0, 0, -0.5};
+    world->create_body(floor);
+    scene::Scene scene;
+    const auto root_id = scene.create("root", {0, 0, 4});
+    const auto child_id = scene.create("child", {1.5, 0, 4});
+    auto* root = scene.find(root_id);
+    auto* child = scene.find(child_id);
+    root->object_id = "00000000-0000-4000-8000-000000000301";
+    child->object_id = "00000000-0000-4000-8000-000000000302";
+    root->physical = true;
+    child->scale = {2.0, 0.5, 0.5};
+    constexpr double half_sqrt_two = 0.7071067811865476;
+    child->rotation = {0.0, 0.0, half_sqrt_two};
+    scene::establish_link(*child, *root);
+    physics::StaticSceneMirror mirror(*world);
+    mirror.synchronize(scene);
+    const auto body_id = mirror.body_id(root_id);
+    if (mirror.size() != 1 || body_id == 0 || mirror.body_id(child_id) != 0) return false;
+    const auto root_hit = world->ray_cast({0, 0, 10}, {0, 0, -1}, 10);
+    const auto child_hit = world->ray_cast({1.5, 0.8, 10}, {0, 0, -1}, 10);
+    if (!root_hit || !child_hit || root_hit->body != body_id || child_hit->body != body_id)
+        return false;
+    for (int tick = 0; tick < 30; ++tick) world->step(1.0 / 60.0);
+    const auto falling = world->body_state(body_id);
+    return falling && falling->position.z < 4.0 && falling->linear_velocity.z < 0.0;
+}
+
 bool jolt_character_collision_test() {
     auto world = homeworldz::physics::make_jolt_world();
     homeworldz::physics::BodyDefinition floor;
@@ -253,6 +286,7 @@ int main() {
     if (!jolt_heightfield_test()) return 1;
     if (!jolt_restitution_combine_test()) return 1;
     if (!static_scene_mirror_test()) return 1;
+    if (!jolt_compound_linkset_test()) return 1;
     if (!jolt_character_collision_test()) return 1;
     if (!jolt_character_step_test()) return 1;
     if (!jolt_character_mass_response_test()) return 1;

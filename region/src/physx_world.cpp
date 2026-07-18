@@ -80,6 +80,11 @@ public:
             // Portable hull cooking is required before convex prims can run on
             // the experimental PhysX adapter.
             break;
+        case ShapeType::Compound:
+            // Compound cooking is implemented first in the production Jolt
+            // adapter. Reject it explicitly until PhysX can attach every
+            // portable child shape without changing collision behavior.
+            break;
         case ShapeType::Box:
         default:
             shape = physics_->createShape(physx::PxBoxGeometry(vec(definition.shape.half_extents)), *material);

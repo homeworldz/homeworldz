@@ -283,6 +283,23 @@ This distinction is also the basis for vehicles: scripted forces, impulses,
 motors, and constraints act on physics-engine mass and inertia rather than a
 parallel approximation in region or script code.
 
+Physical linksets use one engine body rooted at the authoritative root prim.
+The portable physics contract describes a compound as analytic or convex child
+shapes plus each prim's root-local translation and rotation. Jolt builds these
+parts into a native static-compound shape, derives inertia from the complete
+geometry, and receives the sum of the collidable prim masses. Because Jolt
+applies friction, restitution, and gravity factor at body scope, HomeWorldz
+uses mass-weighted values across the compound parts. Child prims never become
+independent self-colliding dynamic bodies. Root motion updates every child's
+derived world transform while the viewer continues receiving the stable local
+link transforms. Interest range uses the full compound bound rather than only
+the root prim's scale.
+
+The engine-neutral representation is available to every adapter, but the
+experimental PhysX adapter rejects compounds explicitly until its portable
+convex cooking path can attach all children without substituting box shapes.
+This preserves the documented Jolt-first, PhysX-eventually boundary.
+
 Jolt's virtual-character controller separates character mass from maximum
 horizontal contact force: mass contributes downward force when standing on an
 object, while the force ceiling bounds how strongly a non-rigid character can

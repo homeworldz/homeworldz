@@ -22,6 +22,8 @@ double cylinder_mass(scene::Vector3 scale, double density);
 double prism_mass(scene::Vector3 scale, double density);
 double pyramid_mass(scene::Vector3 scale, double density);
 double entity_mass(const scene::Entity& entity);
+double linkset_mass(const scene::Scene& scene, const scene::Entity& root);
+double linkset_bounding_radius(const scene::Scene& scene, const scene::Entity& root);
 scene::Vector3 rotate_vector(scene::Vector3 value, const std::array<double, 4>& rotation);
 scene::Vector3 rotated_box_half_extents(
     scene::Vector3 scale, const std::array<double, 4>& rotation);
@@ -40,6 +42,8 @@ public:
     bool synchronize(
         const scene::Entity& entity,
         std::optional<MotionType> linked_motion = std::nullopt);
+    bool synchronize_linkset(const scene::Scene& scene, scene::EntityId entity_id,
+                             bool suspend_dynamic = false);
     void synchronize(const scene::Scene& scene);
     bool remove(scene::EntityId entity_id);
     BodyId body_id(scene::EntityId entity_id) const;

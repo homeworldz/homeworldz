@@ -15,6 +15,7 @@
 #include <Jolt/Physics/Collision/Shape/HeightFieldShape.h>
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
+#include <Jolt/Physics/Collision/Shape/StaticCompoundShape.h>
 #include <Jolt/Physics/Character/CharacterVirtual.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/RegisterTypes.h>
@@ -107,6 +108,26 @@ JPH::ShapeRefC make_shape(const Shape& shape) {
         if (result.HasError())
             throw std::runtime_error(
                 std::string("Jolt could not create a convex hull: ") + result.GetError().c_str());
+        return result.Get();
+    }
+    case ShapeType::Compound: {
+        if (shape.compound_parts.empty())
+            throw std::invalid_argument("compound shape has no parts");
+        JPH::StaticCompoundShapeSettings settings;
+        for (const auto& part : shape.compound_parts) {
+            Shape child;
+            child.type = part.type;
+            child.half_extents = part.half_extents;
+            child.radius = part.radius;
+            child.height = part.height;
+            child.hull_points = part.hull_points;
+            settings.AddShape(
+                vec(part.local_position), quat(part.local_rotation), make_shape(child));
+        }
+        auto result = settings.Create();
+        if (result.HasError())
+            throw std::runtime_error(
+                std::string("Jolt could not create a compound: ") + result.GetError().c_str());
         return result.Get();
     }
     case ShapeType::Box:

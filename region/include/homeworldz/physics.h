@@ -14,7 +14,17 @@ using BodyId = std::uint64_t;
 using CharacterId = std::uint64_t;
 
 enum class MotionType { Static, Kinematic, Dynamic };
-enum class ShapeType { Box, Sphere, Capsule, Cylinder, ConvexHull };
+enum class ShapeType { Box, Sphere, Capsule, Cylinder, ConvexHull, Compound };
+
+struct CompoundShapePart {
+    ShapeType type{ShapeType::Box};
+    scene::Vector3 half_extents{0.5, 0.5, 0.5};
+    double radius{0.5};
+    double height{1.0};
+    std::vector<scene::Vector3> hull_points;
+    scene::Vector3 local_position;
+    std::array<double, 4> local_rotation{0.0, 0.0, 0.0, 1.0};
+};
 
 struct Shape {
     ShapeType type{ShapeType::Box};
@@ -22,6 +32,7 @@ struct Shape {
     double radius{0.5};
     double height{1.0};
     std::vector<scene::Vector3> hull_points;
+    std::vector<CompoundShapePart> compound_parts;
 };
 
 struct BodyDefinition {

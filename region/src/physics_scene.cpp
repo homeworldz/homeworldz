@@ -89,6 +89,37 @@ double entity_mass(const scene::Entity& entity) {
         (pyramid ? pyramid_mass(entity.scale, density) : box_mass(entity.scale, density))));
 }
 
+double linkset_mass(const scene::Scene& scene, const scene::Entity& root) {
+    const auto collidable = [](const scene::Entity& entity) {
+        return !entity.object_id.empty() && !entity.phantom && entity.physics_shape_type != 0x01;
+    };
+    double result = collidable(root) ? entity_mass(root) : 0.0;
+    for (const auto& [entity_id, child] : scene.entities()) {
+        static_cast<void>(entity_id);
+        if (child.parent_id == root.id && collidable(child)) result += entity_mass(child);
+    }
+    return std::max(0.001, result);
+}
+
+double linkset_bounding_radius(const scene::Scene& scene, const scene::Entity& root) {
+    const auto part_radius = [](const scene::Entity& entity) {
+        return 0.5 * std::sqrt(entity.scale.x * entity.scale.x +
+                               entity.scale.y * entity.scale.y +
+                               entity.scale.z * entity.scale.z);
+    };
+    double result = part_radius(root);
+    for (const auto& [entity_id, child] : scene.entities()) {
+        static_cast<void>(entity_id);
+        if (child.parent_id != root.id) continue;
+        const auto offset = std::sqrt(
+            child.local_position.x * child.local_position.x +
+            child.local_position.y * child.local_position.y +
+            child.local_position.z * child.local_position.z);
+        result = std::max(result, offset + part_radius(child));
+    }
+    return result;
+}
+
 scene::Vector3 rotate_vector(scene::Vector3 value, const std::array<double, 4>& rotation) {
     const scene::Vector3 quaternion_vector{rotation[0], rotation[1], rotation[2]};
     const auto cross = [](scene::Vector3 first, scene::Vector3 second) {
@@ -247,20 +278,154 @@ bool StaticSceneMirror::synchronize(
     return true;
 }
 
+bool StaticSceneMirror::synchronize_linkset(
+    const scene::Scene& scene, scene::EntityId entity_id, bool suspend_dynamic) {
+    const auto* selected = scene.find(entity_id);
+    if (!selected) return false;
+    const auto root_id = selected->parent_id == 0 ? selected->id : selected->parent_id;
+    const auto* root = scene.find(root_id);
+    if (!root || root->parent_id != 0) return false;
+
+    std::vector<const scene::Entity*> children;
+    for (const auto& [candidate_id, candidate] : scene.entities()) {
+        static_cast<void>(candidate_id);
+        if (candidate.parent_id == root_id) children.push_back(&candidate);
+    }
+    if (root->phantom) {
+        static_cast<void>(remove(root_id));
+        for (const auto* child : children) static_cast<void>(remove(child->id));
+        return true;
+    }
+    if (!root->physical || children.empty()) {
+        auto synchronized_root = *root;
+        if (suspend_dynamic) synchronized_root.physical = false;
+        if (!synchronize(synchronized_root)) return false;
+        for (const auto* child : children) {
+            if (!synchronize(*child, MotionType::Static)) return false;
+        }
+        return true;
+    }
+
+    const auto quaternion = [](scene::Vector3 rotation) {
+        const auto squared = rotation.x * rotation.x + rotation.y * rotation.y +
+                             rotation.z * rotation.z;
+        return std::array<double, 4>{rotation.x, rotation.y, rotation.z,
+            std::sqrt(std::max(0.0, 1.0 - squared))};
+    };
+    const auto part_for = [&](const scene::Entity& entity, scene::Vector3 position,
+                              std::array<double, 4> rotation)
+        -> std::optional<CompoundShapePart> {
+        if (entity.phantom || entity.physics_shape_type == 0x01 || entity.object_id.empty())
+            return std::nullopt;
+        CompoundShapePart part;
+        const bool sphere = entity.path_curve == 0x20 && (entity.profile_curve & 0x0f) == 0x05;
+        const bool cylinder = entity.path_curve == 0x10 && (entity.profile_curve & 0x0f) == 0x00;
+        const bool prism = entity.path_curve == 0x10 && (entity.profile_curve & 0x0f) == 0x01 &&
+            entity.path_scale_x == 200 && entity.path_scale_y == 100 &&
+            entity.path_shear_x == 0xce && entity.path_shear_y == 0;
+        const bool pyramid = entity.path_curve == 0x10 && (entity.profile_curve & 0x0f) == 0x01 &&
+            entity.path_scale_x == 200 && entity.path_scale_y == 200 &&
+            entity.path_shear_x == 0 && entity.path_shear_y == 0;
+        part.type = sphere ? ShapeType::Sphere :
+            (cylinder ? ShapeType::Cylinder :
+            ((prism || pyramid) ? ShapeType::ConvexHull : ShapeType::Box));
+        part.half_extents = {
+            entity.scale.x * 0.5, entity.scale.y * 0.5, entity.scale.z * 0.5};
+        if (sphere) part.radius = std::min({entity.scale.x, entity.scale.y, entity.scale.z}) * 0.5;
+        if (cylinder) {
+            part.radius = std::min(entity.scale.x, entity.scale.y) * 0.5;
+            part.height = entity.scale.z;
+        }
+        if (prism) {
+            const auto x = entity.scale.x * 0.5;
+            const auto y = entity.scale.y * 0.5;
+            const auto z = entity.scale.z * 0.5;
+            part.hull_points = {
+                {-x, -y, -z}, {-x, y, -z}, {x, -y, -z}, {x, y, -z},
+                {-x, -y, z}, {-x, y, z}};
+        }
+        if (pyramid) {
+            const auto x = entity.scale.x * 0.5;
+            const auto y = entity.scale.y * 0.5;
+            const auto z = entity.scale.z * 0.5;
+            part.hull_points = {
+                {-x, -y, -z}, {-x, y, -z}, {x, -y, -z}, {x, y, -z}, {0.0, 0.0, z}};
+        }
+        part.local_position = position;
+        part.local_rotation = rotation;
+        return part;
+    };
+
+    BodyDefinition definition;
+    definition.entity_id = root_id;
+    definition.motion = suspend_dynamic ? MotionType::Static : MotionType::Dynamic;
+    definition.shape.type = ShapeType::Compound;
+    double total_mass{};
+    double weighted_friction{};
+    double weighted_restitution{};
+    double weighted_gravity{};
+    const auto add_part = [&](const scene::Entity& entity, scene::Vector3 position,
+                              std::array<double, 4> rotation) {
+        const auto part = part_for(entity, position, rotation);
+        if (!part) return;
+        definition.shape.compound_parts.push_back(*part);
+        const auto mass = entity_mass(entity);
+        const auto properties = material_properties(entity.material);
+        const auto friction = std::isfinite(entity.physics_friction)
+            ? std::clamp(entity.physics_friction, 0.0, 255.0) : properties.friction;
+        const auto restitution = std::isfinite(entity.physics_restitution)
+            ? std::clamp(entity.physics_restitution, 0.0, 1.0) : properties.restitution;
+        const auto gravity = std::isfinite(entity.physics_gravity_multiplier)
+            ? std::clamp(entity.physics_gravity_multiplier, -1.0, 28.0) : 1.0;
+        total_mass += mass;
+        weighted_friction += mass * friction;
+        weighted_restitution += mass * restitution;
+        weighted_gravity += mass * gravity;
+    };
+    add_part(*root, {}, {0.0, 0.0, 0.0, 1.0});
+    for (const auto* child : children)
+        add_part(*child, child->local_position, quaternion(child->local_rotation));
+    if (definition.shape.compound_parts.empty()) {
+        static_cast<void>(remove(root_id));
+        for (const auto* child : children) static_cast<void>(remove(child->id));
+        return true;
+    }
+    definition.position = root->position;
+    definition.velocity = root->velocity;
+    definition.mass = total_mass;
+    definition.friction = weighted_friction / total_mass;
+    definition.restitution = weighted_restitution / total_mass;
+    definition.gravity_multiplier = weighted_gravity / total_mass;
+    definition.rotation = quaternion(root->rotation);
+    const auto replacement = world_.create_body(definition);
+    if (replacement == 0) return false;
+    if (const auto found = bodies_.find(root_id); found != bodies_.end())
+        world_.remove_body(found->second);
+    bodies_[root_id] = replacement;
+    for (const auto* child : children) static_cast<void>(remove(child->id));
+    return true;
+}
+
 void StaticSceneMirror::synchronize(const scene::Scene& scene) {
     std::unordered_set<scene::EntityId> present;
     for (const auto& [entity_id, entity] : scene.entities()) {
-        std::optional<MotionType> linked_motion;
-        if (entity.parent_id != 0) {
-            const auto* root = scene.find(entity.parent_id);
-            if (!root || root->physical) continue;
-            linked_motion = MotionType::Static;
+        if (entity.parent_id != 0) continue;
+        if (!synchronize_linkset(scene, entity_id)) continue;
+        const bool collidable_child = std::any_of(
+            scene.entities().begin(), scene.entities().end(), [&](const auto& entry) {
+                const auto& child = entry.second;
+                return child.parent_id == entity_id && !child.object_id.empty() &&
+                    !child.phantom && child.physics_shape_type != 0x01;
+            });
+        if (!entity.object_id.empty() && !entity.phantom &&
+            (entity.physics_shape_type != 0x01 || (entity.physical && collidable_child)))
+            present.insert(entity_id);
+        if (!entity.physical) {
+            for (const auto& [child_id, child] : scene.entities())
+                if (child.parent_id == entity_id && !child.object_id.empty() && !child.phantom &&
+                    child.physics_shape_type != 0x01)
+                    present.insert(child_id);
         }
-        if (entity.object_id.empty() || entity.phantom ||
-            entity.physics_shape_type == 0x01)
-            continue;
-        present.insert(entity_id);
-        synchronize(entity, linked_motion);
     }
     for (auto iterator = bodies_.begin(); iterator != bodies_.end();) {
         if (present.contains(iterator->first)) {

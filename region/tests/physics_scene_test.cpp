@@ -192,7 +192,7 @@ int main() {
     const auto child_id = linked_scene.create("child", {2.0, 0.0, 0.0});
     linked_scene.find(root_id)->object_id = "root";
     linked_scene.find(child_id)->object_id = "child";
-    linked_scene.find(child_id)->parent_id = root_id;
+    scene::establish_link(*linked_scene.find(child_id), *linked_scene.find(root_id));
     RecordingWorld linked_world;
     physics::StaticSceneMirror linked_mirror(linked_world);
     linked_mirror.synchronize(linked_scene);
@@ -201,7 +201,14 @@ int main() {
     linked_scene.find(root_id)->physical = true;
     linked_mirror.synchronize(linked_scene);
     if (linked_mirror.size() != 1 || linked_mirror.body_id(root_id) == 0 ||
-        linked_mirror.body_id(child_id) != 0)
+        linked_mirror.body_id(child_id) != 0 ||
+        linked_world.last_definition.shape.type != physics::ShapeType::Compound ||
+        linked_world.last_definition.shape.compound_parts.size() != 2 ||
+        !close(linked_world.last_definition.shape.compound_parts[1].local_position.x, 2.0) ||
+        !close(linked_world.last_definition.mass, 2000.0) ||
+        !close(physics::linkset_mass(linked_scene, *linked_scene.find(root_id)), 2000.0) ||
+        !close(physics::linkset_bounding_radius(
+            linked_scene, *linked_scene.find(root_id)), 2.8660254037844386))
         return 16;
     return 0;
 }
