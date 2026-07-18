@@ -150,6 +150,8 @@ int main() {
     passed &= contains(seed, "<key>UpdateNotecardAgentInventory</key><uri>http://region.example:42001/caps/update-notecard/session-id</uri>");
     passed &= contains(seed, "<key>UpdateScriptAgent</key><uri>http://region.example:42001/caps/update-script/session-id</uri>");
     passed &= contains(seed, "<key>UpdateGestureAgentInventory</key><uri>http://region.example:42001/caps/update-gesture/session-id</uri>");
+    passed &= contains(seed, "<key>UpdateNotecardTaskInventory</key><uri>http://region.example:42001/caps/update-task-notecard/session-id</uri>");
+    passed &= contains(seed, "<key>UpdateScriptTask</key><uri>http://region.example:42001/caps/update-task-script/session-id</uri>");
     passed &= contains(seed, "<key>FetchInventoryDescendents2</key><uri>http://grid.example:42000/caps/inventory/descendents/session-id</uri>");
     passed &= contains(seed, "<key>FetchInventory2</key><uri>http://grid.example:42000/caps/inventory/items/session-id</uri>");
     passed &= contains(seed, "<key>CreateInventoryCategory</key><uri>http://grid.example:42000/caps/inventory/create-folder/session-id</uri>");
@@ -250,6 +252,13 @@ int main() {
         "<key>target</key><string>mono</string></map></llsd>");
     passed &= item_update && item_update->item_id == "11111111-1111-4111-8111-111111111111" &&
               item_update->target == "mono";
+    const auto task_update = homeworldz::viewer::parse_inventory_asset_update(
+        "<llsd><map><key>item_id</key><uuid>11111111-1111-4111-8111-111111111111</uuid>"
+        "<key>task_id</key><uuid>22222222-2222-4222-8222-222222222222</uuid>"
+        "<key>target</key><string>lsl2</string>"
+        "<key>is_script_running</key><boolean>true</boolean></map></llsd>");
+    passed &= task_update && task_update->task_id == "22222222-2222-4222-8222-222222222222" &&
+              task_update->target == "lsl2" && task_update->script_running;
     passed &= !homeworldz::viewer::parse_inventory_asset_update(
         "<llsd><map><key>item_id</key><uuid>bad</uuid></map></llsd>");
     const auto update_upload = homeworldz::viewer::inventory_asset_update_upload_xml(

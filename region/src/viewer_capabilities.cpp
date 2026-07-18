@@ -54,7 +54,7 @@ std::optional<std::string> llsd_value(std::string_view xml, std::string_view key
     auto position = found + marker.size();
     while (position < xml.size() && (xml[position] == ' ' || xml[position] == '\r' ||
            xml[position] == '\n' || xml[position] == '\t')) ++position;
-    for (const std::string_view tag : {"string", "uuid", "integer"}) {
+    for (const std::string_view tag : {"string", "uuid", "integer", "boolean"}) {
         const auto open = '<' + std::string(tag) + '>';
         if (!xml.substr(position).starts_with(open)) continue;
         position += open.size();
@@ -122,6 +122,10 @@ std::string seed_capability_xml(std::string_view public_endpoint, std::string_vi
     const auto notecard_update_url = xml_escape(base + "/caps/update-notecard/" + std::string(session_id));
     const auto script_update_url = xml_escape(base + "/caps/update-script/" + std::string(session_id));
     const auto gesture_update_url = xml_escape(base + "/caps/update-gesture/" + std::string(session_id));
+    const auto task_notecard_update_url =
+        xml_escape(base + "/caps/update-task-notecard/" + std::string(session_id));
+    const auto task_script_update_url =
+        xml_escape(base + "/caps/update-task-script/" + std::string(session_id));
     auto grid_base = std::string(grid_public_endpoint);
     while (!grid_base.empty() && grid_base.back() == '/') grid_base.pop_back();
     const auto inventory_url = xml_escape(grid_base + "/caps/inventory/descendents/" + std::string(session_id));
@@ -143,6 +147,8 @@ std::string seed_capability_xml(std::string_view public_endpoint, std::string_vi
            "</uri><key>UpdateScriptAgentInventory</key><uri>" + script_update_url +
            "</uri><key>UpdateScriptAgent</key><uri>" + script_update_url +
            "</uri><key>UpdateGestureAgentInventory</key><uri>" + gesture_update_url +
+           "</uri><key>UpdateNotecardTaskInventory</key><uri>" + task_notecard_update_url +
+           "</uri><key>UpdateScriptTask</key><uri>" + task_script_update_url +
            "</uri><key>FetchInventoryDescendents2</key><uri>" + inventory_url +
            "</uri><key>FetchInventory2</key><uri>" + inventory_items_url +
            "</uri><key>CreateInventoryCategory</key><uri>" + create_inventory_folder_url +
@@ -287,10 +293,19 @@ std::optional<InventoryAssetUpdate> parse_inventory_asset_update(std::string_vie
     if (!xml.starts_with("<?xml") && !xml.starts_with("<llsd")) return std::nullopt;
     const auto item_id = llsd_value(xml, "item_id");
     if (!item_id || !parse_uuid(*item_id)) return std::nullopt;
-    InventoryAssetUpdate result{*item_id, {}};
+    InventoryAssetUpdate result{*item_id, {}, {}, false};
     if (const auto target = llsd_value(xml, "target")) {
         if (*target != "lsl2" && *target != "mono") return std::nullopt;
         result.target = *target;
+    }
+    if (const auto task_id = llsd_value(xml, "task_id")) {
+        if (!parse_uuid(*task_id)) return std::nullopt;
+        result.task_id = *task_id;
+    }
+    if (const auto running = llsd_value(xml, "is_script_running")) {
+        if (*running != "true" && *running != "false" && *running != "1" && *running != "0")
+            return std::nullopt;
+        result.script_running = *running == "true" || *running == "1";
     }
     return result;
 }

@@ -113,6 +113,8 @@ struct PendingInventoryAssetUpdate {
     std::string asset_id;
     std::int8_t asset_type{};
     std::int8_t inventory_type{};
+    std::string task_id;
+    bool script_running{};
 };
 
 struct PendingInventoryAssetUpload {
@@ -1731,12 +1733,21 @@ int main(int argc, char* argv[]) {
                         capability_session(response.path, "/caps/update-gesture/");
                     const bool gesture_update = !gesture_update_session.empty();
                     if (gesture_update) session_id = gesture_update_session;
+                    const auto task_notecard_update_session =
+                        capability_session(response.path, "/caps/update-task-notecard/");
+                    const bool task_notecard_update = !task_notecard_update_session.empty();
+                    if (task_notecard_update) session_id = task_notecard_update_session;
+                    const auto task_script_update_session =
+                        capability_session(response.path, "/caps/update-task-script/");
+                    const bool task_script_update = !task_script_update_session.empty();
+                    if (task_script_update) session_id = task_script_update_session;
                     const auto inventory_asset_update_data =
                         inventory_asset_update_data_request(response.path);
                     if (inventory_asset_update_data) session_id = inventory_asset_update_data->first;
                     if (seed || event_queue || texture || viewer_asset || simulator_features || environment_settings ||
                         baked_upload || baked_upload_data || file_upload || file_upload_data ||
-                        notecard_update || script_update || gesture_update || inventory_asset_update_data) {
+                        notecard_update || script_update || gesture_update ||
+                        task_notecard_update || task_script_update || inventory_asset_update_data) {
                         bool authorized = false;
                         std::string authorized_agent_id;
                         std::optional<homeworldz::grid::ViewerSession> authorized_session;
@@ -1928,28 +1939,57 @@ int main(int argc, char* argv[]) {
                                     pending_inventory_uploads.erase(pending);
                                 }
                             }
-                        } else if (authorized &&
-                                   (notecard_update || script_update || gesture_update)) {
+                        } else if (authorized && (notecard_update || script_update || gesture_update ||
+                                                  task_notecard_update || task_script_update)) {
                             const auto update = homeworldz::viewer::parse_inventory_asset_update(
                                 http_request_body(request));
-                            const std::int8_t expected_asset_type = notecard_update ? 7 : script_update ? 10 : 21;
-                            const std::int8_t expected_inventory_type = notecard_update ? 7 : script_update ? 10 : 20;
-                            const auto item = update && viewer_grid
+                            const bool task_update = task_notecard_update || task_script_update;
+                            const bool script_asset = script_update || task_script_update;
+                            const std::int8_t expected_asset_type =
+                                notecard_update || task_notecard_update ? 7 : script_asset ? 10 : 21;
+                            const std::int8_t expected_inventory_type =
+                                notecard_update || task_notecard_update ? 7 : script_asset ? 10 : 20;
+                            const auto personal_item = update && !task_update && viewer_grid
                                 ? viewer_grid->find_inventory_item(authorized_agent_id, update->item_id)
                                 : std::nullopt;
+                            const homeworldz::scene::TaskInventoryItem* task_item = nullptr;
+                            const homeworldz::scene::Entity* task_entity = nullptr;
+                            if (update && task_update) {
+                                for (const auto& [id, candidate] : scene.entities()) {
+                                    static_cast<void>(id);
+                                    if (candidate.object_id == update->task_id) {
+                                        task_entity = &candidate;
+                                        break;
+                                    }
+                                }
+                                if (task_entity && task_entity->owner_id == authorized_agent_id &&
+                                    (task_entity->owner_permissions & homeworldz::scene::permission_modify) != 0) {
+                                    const auto found = std::find_if(
+                                        task_entity->task_inventory.begin(), task_entity->task_inventory.end(),
+                                        [&](const auto& candidate) { return candidate.item_id == update->item_id; });
+                                    if (found != task_entity->task_inventory.end()) task_item = &*found;
+                                }
+                            }
                             const bool valid_target = update &&
-                                (script_update ? !update->target.empty() : update->target.empty());
-                            if (!item || !valid_target || item->asset_type != expected_asset_type ||
-                                item->inventory_type != expected_inventory_type ||
-                                (item->current_permissions & homeworldz::scene::permission_modify) == 0) {
+                                (script_asset ? !update->target.empty() : update->target.empty()) &&
+                                (task_update ? !update->task_id.empty() : update->task_id.empty());
+                            const auto valid_item = task_update ?
+                                task_item && task_item->asset_type == expected_asset_type &&
+                                    task_item->inventory_type == expected_inventory_type &&
+                                    (task_item->current_permissions & homeworldz::scene::permission_modify) != 0 :
+                                personal_item && personal_item->asset_type == expected_asset_type &&
+                                    personal_item->inventory_type == expected_inventory_type &&
+                                    (personal_item->current_permissions & homeworldz::scene::permission_modify) != 0;
+                            if (!update || !valid_target || !valid_item) {
                                 response = homeworldz::http::response_for_content(
                                     request, 400, "application/llsd+xml", "<llsd><undef/></llsd>");
                             } else {
                                 const auto token = homeworldz::viewer::random_uuid();
                                 pending_inventory_asset_updates.insert_or_assign(token,
                                     PendingInventoryAssetUpdate{session_id, authorized_agent_id,
-                                        item->item_id, homeworldz::viewer::random_uuid(),
-                                        expected_asset_type, expected_inventory_type});
+                                        update->item_id, homeworldz::viewer::random_uuid(),
+                                        expected_asset_type, expected_inventory_type,
+                                        update->task_id, update->script_running});
                                 auto base = region_public_endpoint;
                                 while (!base.empty() && base.back() == '/') base.pop_back();
                                 const auto uploader = base + "/caps/update-inventory-asset-data/" +
@@ -1982,8 +2022,48 @@ int main(int argc, char* argv[]) {
                                     const bool registered = viewer_grid && viewer_grid->register_asset(
                                         metadata.viewer_id, metadata.creator_id, metadata.sha256,
                                         metadata.size, region_public_endpoint, true);
-                                    stored = registered && viewer_grid->update_inventory_item_asset(
-                                        authorized_agent_id, update.item_id, update.asset_id);
+                                    if (registered && update.task_id.empty()) {
+                                        stored = viewer_grid->update_inventory_item_asset(
+                                            authorized_agent_id, update.item_id, update.asset_id);
+                                    } else if (registered) {
+                                        homeworldz::scene::Entity* task_entity = nullptr;
+                                        for (const auto& [id, candidate] : scene.entities()) {
+                                            if (candidate.object_id == update.task_id) {
+                                                task_entity = scene.find(id);
+                                                break;
+                                            }
+                                        }
+                                        if (task_entity && task_entity->owner_id == authorized_agent_id &&
+                                            (task_entity->owner_permissions &
+                                                homeworldz::scene::permission_modify) != 0) {
+                                            const auto item = std::find_if(
+                                                task_entity->task_inventory.begin(),
+                                                task_entity->task_inventory.end(),
+                                                [&](const auto& candidate) {
+                                                    return candidate.item_id == update.item_id &&
+                                                        candidate.asset_type == update.asset_type &&
+                                                        candidate.inventory_type == update.inventory_type &&
+                                                        (candidate.current_permissions &
+                                                            homeworldz::scene::permission_modify) != 0;
+                                                });
+                                            if (item != task_entity->task_inventory.end()) {
+                                                const auto previous_asset_id = item->asset_id;
+                                                const auto previous_serial = task_entity->task_inventory_serial;
+                                                item->asset_id = update.asset_id;
+                                                task_entity->task_inventory_serial = previous_serial == 65535
+                                                    ? 1
+                                                    : static_cast<std::uint16_t>(previous_serial + 1);
+                                                try {
+                                                    storage->save_snapshot(scene);
+                                                    stored = true;
+                                                } catch (...) {
+                                                    item->asset_id = previous_asset_id;
+                                                    task_entity->task_inventory_serial = previous_serial;
+                                                    throw;
+                                                }
+                                            }
+                                        }
+                                    }
                                 } catch (const std::exception& error) {
                                     std::cerr << "{\"level\":\"error\",\"message\":\"inventory asset update failed\",\"error\":"
                                               << homeworldz::api::json_string(error.what()) << "}" << std::endl;
@@ -2001,6 +2081,7 @@ int main(int argc, char* argv[]) {
                                           << homeworldz::api::json_string(update.item_id)
                                           << ",\"assetId\":" << homeworldz::api::json_string(update.asset_id)
                                           << ",\"assetType\":" << static_cast<int>(update.asset_type)
+                                          << ",\"taskId\":" << homeworldz::api::json_string(update.task_id)
                                           << ",\"bytes\":" << body.size() << "}" << std::endl;
                                 pending_inventory_asset_updates.erase(pending);
                             }
@@ -3144,7 +3225,7 @@ int main(int argc, char* argv[]) {
                                         pending_inventory_asset_xfers.insert_or_assign(
                                             endpoint + '|' + std::to_string(xfer_id),
                                             PendingInventoryAssetXfer{transaction_id, asset_id, asset_uuid,
-                                                asset_upload->asset_type});
+                                                asset_upload->asset_type, 0, 1000, {}, {}});
                                         if (const auto outgoing = circuits.send(endpoint,
                                                 homeworldz::viewer::encode_request_xfer(
                                                     xfer_id, asset_uuid, asset_upload->asset_type),

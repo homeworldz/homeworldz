@@ -46,6 +46,8 @@ struct NewFileInventoryUpload {
 struct InventoryAssetUpdate {
     std::string item_id;
     std::string target;
+    std::string task_id;
+    bool script_running{};
 };
 
 std::string seed_capability_xml(std::string_view public_endpoint, std::string_view grid_public_endpoint,

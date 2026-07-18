@@ -968,3 +968,12 @@ position. These server-created assets use fresh UUIDs, record the creating
 avatar as creator, and are registered with the Grid for cross-region
 replication. Firestorm visual creation, editing, playback, and relog tests are
 still required before the corresponding Roadmap item is marked complete.
+
+Object Contents editing now advertises the viewer-standard
+`UpdateNotecardTaskInventory` and `UpdateScriptTask` capabilities as well.
+Each request must identify an owned, modifiable object and a matching
+modifiable task item. Its upload creates an immutable creator-attributed asset,
+updates only that task item's asset reference, increments the task-inventory
+serial, and persists the complete scene snapshot. LSL source is stored but is
+reported as not compiled until the Phase 4 HomeWorldz runtime is available.
+Live Firestorm save-and-restart acceptance remains pending.
