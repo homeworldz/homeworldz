@@ -1070,6 +1070,29 @@ int main(int argc, char* argv[]) {
             std::cerr << "{\"level\":\"warning\",\"message\":\"pending task inventory extraction reconciliation failed\",\"error\":"
                       << homeworldz::api::json_string(error.what()) << "}" << std::endl;
         }
+        try {
+            const auto pending = viewer_grid->pending_object_rezzes(provisioned_region_id);
+            if (!pending) throw std::runtime_error("load pending object rezzes");
+            std::size_t reconciled = 0;
+            for (const auto& rez : *pending) {
+                const auto exists = std::any_of(scene.entities().begin(), scene.entities().end(),
+                    [&](const auto& entry) { return entry.second.object_id == rez.object_id; });
+                const auto completed = exists
+                    ? viewer_grid->finalize_object_rez(rez.id, provisioned_region_id)
+                    : viewer_grid->rollback_object_rez(rez.id, provisioned_region_id);
+                if (completed) ++reconciled;
+            }
+            if (!pending->empty()) {
+                std::cout << "{\"level\":"
+                          << (reconciled == pending->size() ? "\"info\"" : "\"warning\"")
+                          << ",\"message\":\"pending object rezzes reconciled\",\"completed\":"
+                          << reconciled << ",\"pending\":" << pending->size() << "}"
+                          << std::endl;
+            }
+        } catch (const std::exception& error) {
+            std::cerr << "{\"level\":\"warning\",\"message\":\"pending object rez reconciliation failed\",\"error\":"
+                      << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+        }
     }
     const auto read_federated_asset = [&](std::string_view asset_id) -> std::vector<std::byte> {
         try {
@@ -4617,13 +4640,14 @@ int main(int argc, char* argv[]) {
                             const auto item_id = homeworldz::viewer::format_uuid(rez->item_id);
                             bool created = false;
                             std::string object_id;
+                            std::string object_rez_id;
+                            bool object_rez_prepared = false;
+                            bool scene_persisted = false;
                             std::vector<homeworldz::scene::EntityId> entity_ids;
                             try {
-                                const auto item = viewer_grid
+                                auto item = viewer_grid
                                     ? viewer_grid->find_inventory_item(user_id, item_id) : std::nullopt;
-                                if (item && item->asset_type == 6 && item->inventory_type == 6 &&
-                                    (!rez->remove_item ||
-                                    (item->current_permissions & homeworldz::scene::permission_copy) != 0)) {
+                                if (item && item->asset_type == 6 && item->inventory_type == 6) {
                                     const auto content = read_federated_asset(item->asset_id);
                                     const auto linkset = homeworldz::asset::parse_linkset_asset(content);
                                     const auto* asset = linkset ? &linkset->root : nullptr;
@@ -4669,6 +4693,20 @@ int main(int argc, char* argv[]) {
                                         placement->z >= -64.0 && placement->z <= 4096.0;
                                     if (asset && valid_position) {
                                         object_id = homeworldz::viewer::random_uuid();
+                                        const bool no_copy =
+                                            (item->current_permissions & homeworldz::scene::permission_copy) == 0;
+                                        if (rez->remove_item && no_copy) {
+                                            object_rez_id = homeworldz::viewer::random_uuid();
+                                            const auto prepared = viewer_grid
+                                                ? viewer_grid->prepare_object_rez({
+                                                    object_rez_id, user_id, item_id,
+                                                    provisioned_region_id, object_id})
+                                                : std::nullopt;
+                                            if (!prepared) throw std::runtime_error("prepare no-copy object rez");
+                                            item = prepared->item;
+                                            object_id = prepared->object_id;
+                                            object_rez_prepared = true;
+                                        }
                                         const auto root_id = scene.create(item->name, *placement);
                                         entity_ids.push_back(root_id);
                                         if (auto* entity = scene.find(root_id)) {
@@ -4713,6 +4751,7 @@ int main(int argc, char* argv[]) {
                                                 homeworldz::scene::update_linked_world_transform(*child, *entity);
                                             }
                                             storage->save_snapshot(scene);
+                                            scene_persisted = true;
                                             created = true;
                                         }
                                     }
@@ -4722,6 +4761,16 @@ int main(int argc, char* argv[]) {
                                     scene.remove(*entity);
                                 std::cout << "{\"level\":\"error\",\"message\":\"primitive rez failed\",\"error\":"
                                           << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+                            }
+                            if (object_rez_prepared && !scene_persisted && viewer_grid) {
+                                if (!viewer_grid->rollback_object_rez(object_rez_id, provisioned_region_id))
+                                    std::cerr << "{\"level\":\"warning\",\"message\":\"object rez rollback awaits reconciliation\",\"rezId\":"
+                                              << homeworldz::api::json_string(object_rez_id) << "}" << std::endl;
+                            }
+                            if (object_rez_prepared && scene_persisted && viewer_grid) {
+                                if (!viewer_grid->finalize_object_rez(object_rez_id, provisioned_region_id))
+                                    std::cerr << "{\"level\":\"warning\",\"message\":\"object rez finalization awaits reconciliation\",\"rezId\":"
+                                              << homeworldz::api::json_string(object_rez_id) << "}" << std::endl;
                             }
                             if (created) {
                                 for (const auto entity_id : entity_ids) {

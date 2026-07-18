@@ -394,6 +394,57 @@ std::optional<std::vector<TaskInventoryExtraction>> task_extraction_list_from_js
     return std::nullopt;
 }
 
+std::optional<ObjectRez> object_rez_from_json(std::string_view body) {
+    ObjectRez value;
+    value.id = json_field(body, "id");
+    value.user_id = json_field(body, "userId");
+    value.source_item_id = json_field(body, "sourceItemId");
+    value.region_id = json_field(body, "regionId");
+    value.object_id = json_field(body, "objectId");
+    value.state = json_field(body, "state");
+    const auto item = json_object(body, "item");
+    if (!item) return std::nullopt;
+    const auto parsed_item = inventory_item_from_json(*item, value.user_id);
+    if (value.id.empty() || value.user_id.empty() || value.source_item_id.empty() ||
+        value.region_id.empty() || value.object_id.empty() || value.state.empty() || !parsed_item)
+        return std::nullopt;
+    value.item = *parsed_item;
+    return value;
+}
+
+std::optional<std::vector<ObjectRez>> object_rez_list_from_json(std::string_view body) {
+    std::vector<ObjectRez> result;
+    std::size_t position = body.find('[');
+    if (position == std::string_view::npos) return std::nullopt;
+    ++position;
+    while (position < body.size()) {
+        while (position < body.size() && (body[position] == ' ' || body[position] == ',')) ++position;
+        if (position < body.size() && body[position] == ']') return result;
+        if (position >= body.size() || body[position] != '{') return std::nullopt;
+        const auto start = position;
+        std::size_t depth = 0;
+        bool quoted = false;
+        bool escaped = false;
+        for (; position < body.size(); ++position) {
+            const auto character = body[position];
+            if (quoted) {
+                if (escaped) escaped = false;
+                else if (character == '\\') escaped = true;
+                else if (character == '"') quoted = false;
+                continue;
+            }
+            if (character == '"') quoted = true;
+            else if (character == '{') ++depth;
+            else if (character == '}' && --depth == 0) { ++position; break; }
+        }
+        if (depth != 0) return std::nullopt;
+        const auto parsed = object_rez_from_json(body.substr(start, position - start));
+        if (!parsed) return std::nullopt;
+        result.push_back(*parsed);
+    }
+    return std::nullopt;
+}
+
 } // namespace
 
 std::shared_ptr<Transport> socket_transport(std::string grid_url, std::string service_token) {
@@ -747,6 +798,34 @@ std::optional<TaskInventoryExtraction> Client::finalize_task_inventory_extractio
     const auto response = transport_->send("POST", "/api/v1/task-extractions/" +
         std::string(extraction_id) + "/finalize", body);
     return response.status_code == 200 ? task_extraction_from_json(response.body) : std::nullopt;
+}
+
+std::optional<ObjectRez> Client::prepare_object_rez(const ObjectRezRequest& request) {
+    const auto body = "{\"id\":" + api::json_string(request.id) +
+        ",\"userId\":" + api::json_string(request.user_id) +
+        ",\"sourceItemId\":" + api::json_string(request.source_item_id) +
+        ",\"regionId\":" + api::json_string(request.region_id) +
+        ",\"objectId\":" + api::json_string(request.object_id) + '}';
+    const auto response = transport_->send("POST", "/api/v1/object-rezzes", body);
+    return response.status_code == 200 ? object_rez_from_json(response.body) : std::nullopt;
+}
+
+std::optional<std::vector<ObjectRez>> Client::pending_object_rezzes(std::string_view region_id) {
+    const auto response = transport_->send(
+        "GET", "/api/v1/object-rezzes?regionId=" + std::string(region_id), {});
+    return response.status_code == 200 ? object_rez_list_from_json(response.body) : std::nullopt;
+}
+
+bool Client::finalize_object_rez(std::string_view rez_id, std::string_view region_id) {
+    const auto body = "{\"regionId\":" + api::json_string(region_id) + '}';
+    return transport_->send("POST", "/api/v1/object-rezzes/" +
+        std::string(rez_id) + "/finalize", body).status_code == 200;
+}
+
+bool Client::rollback_object_rez(std::string_view rez_id, std::string_view region_id) {
+    const auto body = "{\"regionId\":" + api::json_string(region_id) + '}';
+    return transport_->send("POST", "/api/v1/object-rezzes/" +
+        std::string(rez_id) + "/rollback", body).status_code == 200;
 }
 
 bool Client::register_asset(std::string_view asset_id, std::string_view creator_id,

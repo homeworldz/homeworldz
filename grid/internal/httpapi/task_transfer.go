@@ -29,6 +29,14 @@ type prepareTaskExtractionRequest struct {
 	Item                tasktransferItemRequest `json:"item"`
 }
 
+type prepareObjectRezRequest struct {
+	ID           string `json:"id"`
+	UserID       string `json:"userId"`
+	SourceItemID string `json:"sourceItemId"`
+	RegionID     string `json:"regionId"`
+	ObjectID     string `json:"objectId"`
+}
+
 type tasktransferItemRequest struct {
 	CreatorUserID       string `json:"creatorUserId"`
 	OwnerUserID         string `json:"ownerUserId"`
@@ -217,5 +225,90 @@ func (a *API) writeTaskExtractionResult(w http.ResponseWriter, value tasktransfe
 		writeJSON(w, http.StatusBadRequest, Error{Code: "invalid_task_extraction", Message: "only owned no-copy task inventory can leave through this transfer"})
 	default:
 		writeJSON(w, http.StatusInternalServerError, Error{Code: "task_transfer_store_error", Message: "task inventory extraction failed"})
+	}
+}
+
+func (a *API) objectRezzesRoot(w http.ResponseWriter, r *http.Request) {
+	if a.taskTransfers == nil {
+		writeJSON(w, http.StatusServiceUnavailable, Error{Code: "object_rez_unavailable", Message: "object rez coordination is unavailable"})
+		return
+	}
+	if r.Method == http.MethodGet {
+		regionID := r.URL.Query().Get("regionId")
+		if !validUUID(regionID) {
+			writeJSON(w, http.StatusBadRequest, Error{Code: "invalid_object_rez", Message: "regionId must be a UUID"})
+			return
+		}
+		values, err := a.taskTransfers.PendingObjectRezzes(r.Context(), regionID)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, Error{Code: "object_rez_store_error", Message: "pending object rezzes could not be loaded"})
+			return
+		}
+		if values == nil {
+			values = []tasktransfer.ObjectRez{}
+		}
+		writeJSON(w, http.StatusOK, values)
+		return
+	}
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", "GET, POST")
+		writeJSON(w, http.StatusMethodNotAllowed, Error{Code: "method_not_allowed", Message: "only GET and POST are supported"})
+		return
+	}
+	var request prepareObjectRezRequest
+	if !decodeJSON(w, r, &request) {
+		return
+	}
+	if !validUUID(request.ID) || !validUUID(request.UserID) ||
+		!validUUID(request.SourceItemID) || !validUUID(request.RegionID) ||
+		!validUUID(request.ObjectID) {
+		writeJSON(w, http.StatusBadRequest, Error{Code: "invalid_object_rez", Message: "object rez identity is invalid"})
+		return
+	}
+	value, err := a.taskTransfers.PrepareObjectRez(r.Context(), tasktransfer.PrepareObjectRez{
+		ID: request.ID, UserID: request.UserID, SourceItemID: request.SourceItemID,
+		RegionID: request.RegionID, ObjectID: request.ObjectID})
+	a.writeObjectRezResult(w, value, err)
+}
+
+func (a *API) objectRezByID(w http.ResponseWriter, r *http.Request) {
+	if a.taskTransfers == nil {
+		writeJSON(w, http.StatusServiceUnavailable, Error{Code: "object_rez_unavailable", Message: "object rez coordination is unavailable"})
+		return
+	}
+	parts := strings.Split(strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/object-rezzes/"), "/"), "/")
+	if len(parts) != 2 || !validUUID(parts[0]) ||
+		(parts[1] != "finalize" && parts[1] != "rollback") || r.Method != http.MethodPost {
+		a.notFound(w, r)
+		return
+	}
+	var request struct {
+		RegionID string `json:"regionId"`
+	}
+	if !decodeJSON(w, r, &request) || !validUUID(request.RegionID) {
+		return
+	}
+	var value tasktransfer.ObjectRez
+	var err error
+	if parts[1] == "finalize" {
+		value, err = a.taskTransfers.FinalizeObjectRez(r.Context(), parts[0], request.RegionID)
+	} else {
+		value, err = a.taskTransfers.RollbackObjectRez(r.Context(), parts[0], request.RegionID)
+	}
+	a.writeObjectRezResult(w, value, err)
+}
+
+func (a *API) writeObjectRezResult(w http.ResponseWriter, value tasktransfer.ObjectRez, err error) {
+	switch {
+	case err == nil:
+		writeJSON(w, http.StatusOK, value)
+	case errors.Is(err, tasktransfer.ErrNotFound):
+		writeJSON(w, http.StatusNotFound, Error{Code: "object_rez_not_found", Message: "object rez or source item was not found"})
+	case errors.Is(err, tasktransfer.ErrConflict):
+		writeJSON(w, http.StatusConflict, Error{Code: "object_rez_conflict", Message: "object rez conflicts with durable state"})
+	case errors.Is(err, tasktransfer.ErrInvalid):
+		writeJSON(w, http.StatusBadRequest, Error{Code: "invalid_object_rez", Message: "only no-copy object inventory can use this transfer"})
+	default:
+		writeJSON(w, http.StatusInternalServerError, Error{Code: "object_rez_store_error", Message: "object rez transfer failed"})
 	}
 }

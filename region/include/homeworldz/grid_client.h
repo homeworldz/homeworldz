@@ -191,6 +191,24 @@ struct TaskInventoryExtraction {
     std::string state;
 };
 
+struct ObjectRezRequest {
+    std::string id;
+    std::string user_id;
+    std::string source_item_id;
+    std::string region_id;
+    std::string object_id;
+};
+
+struct ObjectRez {
+    std::string id;
+    std::string user_id;
+    std::string source_item_id;
+    std::string region_id;
+    std::string object_id;
+    InventoryItem item;
+    std::string state;
+};
+
 class Client {
 public:
     explicit Client(std::shared_ptr<Transport> transport) : transport_(std::move(transport)) {}
@@ -241,6 +259,10 @@ public:
         std::string_view region_id);
     std::optional<TaskInventoryExtraction> finalize_task_inventory_extraction(
         std::string_view extraction_id, std::string_view region_id);
+    std::optional<ObjectRez> prepare_object_rez(const ObjectRezRequest& request);
+    std::optional<std::vector<ObjectRez>> pending_object_rezzes(std::string_view region_id);
+    bool finalize_object_rez(std::string_view rez_id, std::string_view region_id);
+    bool rollback_object_rez(std::string_view rez_id, std::string_view region_id);
     bool register_asset(std::string_view asset_id, std::string_view creator_id,
                         std::string_view sha256, std::uint64_t size,
                         std::string_view endpoint, bool origin);

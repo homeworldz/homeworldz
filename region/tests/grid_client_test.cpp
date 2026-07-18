@@ -43,6 +43,15 @@ public:
             return {200, "[" + extraction("prepared") + "]"};
         if (method == "POST" && path.starts_with("/api/v1/task-extractions/") && path.ends_with("/finalize"))
             return {200, extraction("finalized")};
+        const auto object_rez = [](std::string_view state) {
+            return std::string{R"({"id":"eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee","userId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","sourceItemId":"44444444-4444-4444-8444-444444444444","regionId":"22222222-2222-4222-8222-222222222222","objectId":"55555555-5555-4555-8555-555555555555","item":{"id":"44444444-4444-4444-8444-444444444444","ownerUserId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","creatorUserId":"77777777-7777-4777-8777-777777777777","folderId":"88888888-8888-4888-8888-888888888888","assetId":"dddddddd-dddd-4ddd-8ddd-dddddddddddd","assetType":6,"inventoryType":6,"name":"No Copy Object","description":"","flags":0,"basePermissions":647168,"currentPermissions":548864,"everyonePermissions":0,"nextPermissions":532480,"saleType":0,"salePrice":0},"state":")"} + std::string(state) + R"(","createdAt":"2026-07-18T00:00:00Z","updatedAt":"2026-07-18T00:00:00Z"})";
+        };
+        if (method == "POST" && path == "/api/v1/object-rezzes")
+            return {200, object_rez("prepared")};
+        if (method == "GET" && path.starts_with("/api/v1/object-rezzes?"))
+            return {200, "[" + object_rez("prepared") + "]"};
+        if (method == "POST" && path.starts_with("/api/v1/object-rezzes/") && path.ends_with("/finalize"))
+            return {200, object_rez("finalized")};
         if (method == "POST" && path.ends_with("/finalize"))
             return {200, R"({"id":"99999999-9999-4999-8999-999999999999","state":"finalized"})"};
         if (method == "POST" && path.ends_with("/prepare-arrival"))
@@ -182,6 +191,24 @@ int main() {
     if (!finalized_extraction || finalized_extraction->state != "finalized" ||
         transport->requests.back().path !=
             "/api/v1/task-extractions/" + extraction->id + "/finalize") return 1;
+    const homeworldz::grid::ObjectRezRequest object_rez_request{
+        "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", transit_request.agent_id,
+        "44444444-4444-4444-8444-444444444444", transit_request.destination_region_id,
+        "55555555-5555-4555-8555-555555555555"};
+    const auto object_rez = client.prepare_object_rez(object_rez_request);
+    if (!object_rez || object_rez->state != "prepared" ||
+        object_rez->item.name != "No Copy Object" ||
+        object_rez->item.current_permissions != 0x00086000 ||
+        transport->requests.back().body.find(
+            R"("sourceItemId":"44444444-4444-4444-8444-444444444444")") == std::string::npos)
+        return 1;
+    const auto pending_object_rezzes = client.pending_object_rezzes(
+        transit_request.destination_region_id);
+    if (!pending_object_rezzes || pending_object_rezzes->size() != 1 ||
+        pending_object_rezzes->front().id != object_rez->id) return 1;
+    if (!client.finalize_object_rez(object_rez->id, transit_request.destination_region_id) ||
+        transport->requests.back().path !=
+            "/api/v1/object-rezzes/" + object_rez->id + "/finalize") return 1;
     homeworldz::grid::RegistrationLifecycle provisioned_lifecycle(
         client, provisioned_settings, provisioned->id);
     if (!provisioned_lifecycle.start(started) ||

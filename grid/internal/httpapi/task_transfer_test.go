@@ -49,6 +49,25 @@ func (s *memoryTaskTransferStore) FinalizeExtraction(_ context.Context, id, regi
 	return tasktransfer.Extraction{ID: id, RegionID: regionID, State: tasktransfer.Finalized}, nil
 }
 
+func (s *memoryTaskTransferStore) PrepareObjectRez(_ context.Context, input tasktransfer.PrepareObjectRez) (tasktransfer.ObjectRez, error) {
+	return tasktransfer.ObjectRez{ID: input.ID, UserID: input.UserID,
+		SourceItemID: input.SourceItemID, RegionID: input.RegionID, ObjectID: input.ObjectID,
+		Item: inventory.Item{ID: input.SourceItemID, Name: "No Copy Object"}, State: tasktransfer.Prepared}, nil
+}
+
+func (s *memoryTaskTransferStore) PendingObjectRezzes(_ context.Context, regionID string) ([]tasktransfer.ObjectRez, error) {
+	return []tasktransfer.ObjectRez{{ID: "a0000000-0000-4000-8000-00000000000a",
+		RegionID: regionID, State: tasktransfer.Prepared}}, nil
+}
+
+func (s *memoryTaskTransferStore) FinalizeObjectRez(_ context.Context, id, regionID string) (tasktransfer.ObjectRez, error) {
+	return tasktransfer.ObjectRez{ID: id, RegionID: regionID, State: tasktransfer.Finalized}, nil
+}
+
+func (s *memoryTaskTransferStore) RollbackObjectRez(_ context.Context, id, regionID string) (tasktransfer.ObjectRez, error) {
+	return tasktransfer.ObjectRez{ID: id, RegionID: regionID, State: tasktransfer.RolledBack}, nil
+}
+
 func TestTaskTransferAPI(t *testing.T) {
 	store := &memoryTaskTransferStore{}
 	handler := New(nil, "test", Options{ServiceToken: "secret", TaskTransfers: store})
@@ -112,5 +131,34 @@ func TestTaskExtractionAPI(t *testing.T) {
 		`{"regionId":"`+regionID+`"}`, 200)
 	if finalized.State != tasktransfer.Finalized {
 		t.Fatalf("finalized extraction = %#v", finalized)
+	}
+}
+
+func TestObjectRezAPI(t *testing.T) {
+	store := &memoryTaskTransferStore{}
+	handler := New(nil, "test", Options{ServiceToken: "secret", TaskTransfers: store})
+	const rezID = "a0000000-0000-4000-8000-00000000000a"
+	const userID = "20000000-0000-4000-8000-000000000002"
+	const sourceID = "30000000-0000-4000-8000-000000000003"
+	const regionID = "40000000-0000-4000-8000-000000000004"
+	const objectID = "50000000-0000-4000-8000-000000000005"
+	body := `{"id":"` + rezID + `","userId":"` + userID +
+		`","sourceItemId":"` + sourceID + `","regionId":"` + regionID +
+		`","objectId":"` + objectID + `"}`
+	prepared := requestRegion[tasktransfer.ObjectRez](t, handler, "POST",
+		"/api/v1/object-rezzes", body, 200)
+	if prepared.State != tasktransfer.Prepared || prepared.Item.Name != "No Copy Object" {
+		t.Fatalf("prepared object rez = %#v", prepared)
+	}
+	pending := requestRegion[[]tasktransfer.ObjectRez](t, handler, "GET",
+		"/api/v1/object-rezzes?regionId="+regionID, "", 200)
+	if len(pending) != 1 || pending[0].ID != rezID {
+		t.Fatalf("pending object rezzes = %#v", pending)
+	}
+	finalized := requestRegion[tasktransfer.ObjectRez](t, handler, "POST",
+		"/api/v1/object-rezzes/"+rezID+"/finalize",
+		`{"regionId":"`+regionID+`"}`, 200)
+	if finalized.State != tasktransfer.Finalized {
+		t.Fatalf("finalized object rez = %#v", finalized)
 	}
 }

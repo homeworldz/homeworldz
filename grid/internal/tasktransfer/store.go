@@ -62,6 +62,22 @@ type PrepareExtraction struct {
 	Item inventory.Item
 }
 
+type ObjectRez struct {
+	ID           string         `json:"id"`
+	UserID       string         `json:"userId"`
+	SourceItemID string         `json:"sourceItemId"`
+	RegionID     string         `json:"regionId"`
+	ObjectID     string         `json:"objectId"`
+	Item         inventory.Item `json:"item"`
+	State        State          `json:"state"`
+	CreatedAt    time.Time      `json:"createdAt"`
+	UpdatedAt    time.Time      `json:"updatedAt"`
+}
+
+type PrepareObjectRez struct {
+	ID, UserID, SourceItemID, RegionID, ObjectID string
+}
+
 type Store interface {
 	Prepare(context.Context, Prepare) (Transfer, error)
 	Pending(context.Context, string) ([]Transfer, error)
@@ -69,6 +85,10 @@ type Store interface {
 	PrepareExtraction(context.Context, PrepareExtraction) (Extraction, error)
 	PendingExtractions(context.Context, string) ([]Extraction, error)
 	FinalizeExtraction(context.Context, string, string) (Extraction, error)
+	PrepareObjectRez(context.Context, PrepareObjectRez) (ObjectRez, error)
+	PendingObjectRezzes(context.Context, string) ([]ObjectRez, error)
+	FinalizeObjectRez(context.Context, string, string) (ObjectRez, error)
+	RollbackObjectRez(context.Context, string, string) (ObjectRez, error)
 }
 
 type PostgresStore struct{ db *sql.DB }
@@ -359,4 +379,188 @@ func (s *PostgresStore) FinalizeExtraction(ctx context.Context, id, regionID str
 		return Extraction{}, fmt.Errorf("commit final task extraction: %w", err)
 	}
 	return value, nil
+}
+
+const objectRezColumns = `id, user_id, source_item_id, region_id, object_id,
+item, state, created_at, updated_at`
+
+func scanObjectRez(row scanner) (ObjectRez, error) {
+	var value ObjectRez
+	var encoded []byte
+	err := row.Scan(&value.ID, &value.UserID, &value.SourceItemID, &value.RegionID,
+		&value.ObjectID, &encoded, &value.State, &value.CreatedAt, &value.UpdatedAt)
+	if err == nil {
+		err = json.Unmarshal(encoded, &value.Item)
+	}
+	return value, err
+}
+
+func sameObjectRez(value ObjectRez, input PrepareObjectRez) bool {
+	return value.ID == input.ID && value.UserID == input.UserID &&
+		value.SourceItemID == input.SourceItemID && value.RegionID == input.RegionID &&
+		value.ObjectID == input.ObjectID
+}
+
+func (s *PostgresStore) PrepareObjectRez(ctx context.Context, input PrepareObjectRez) (ObjectRez, error) {
+	if input.ID == "" || input.UserID == "" || input.SourceItemID == "" ||
+		input.RegionID == "" || input.ObjectID == "" {
+		return ObjectRez{}, ErrInvalid
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return ObjectRez{}, fmt.Errorf("begin object rez: %w", err)
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock(hashtext($1))",
+		input.UserID+"/"+input.SourceItemID); err != nil {
+		return ObjectRez{}, fmt.Errorf("lock object rez: %w", err)
+	}
+	existing, err := scanObjectRez(tx.QueryRowContext(ctx, "SELECT "+objectRezColumns+
+		" FROM inventory_object_rezzes WHERE user_id=$1 AND source_item_id=$2 FOR UPDATE",
+		input.UserID, input.SourceItemID))
+	if err == nil {
+		if existing.State == RolledBack {
+			if _, err := tx.ExecContext(ctx, "DELETE FROM inventory_object_rezzes WHERE id=$1", existing.ID); err != nil {
+				return ObjectRez{}, fmt.Errorf("clear rolled back object rez: %w", err)
+			}
+			err = sql.ErrNoRows
+		} else if !sameObjectRez(existing, input) {
+			return ObjectRez{}, ErrConflict
+		} else {
+			return existing, tx.Commit()
+		}
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return ObjectRez{}, fmt.Errorf("find object rez: %w", err)
+	}
+	const zero = "00000000-0000-0000-0000-000000000000"
+	var item inventory.Item
+	err = tx.QueryRowContext(ctx, `DELETE FROM inventory_items WHERE id=$1 AND owner_user_id=$2
+		RETURNING id, owner_user_id, COALESCE(creator_user_id::text,$3), folder_id, asset_id,
+		asset_type, inventory_type, name, description, flags, base_permissions,
+		current_permissions, everyone_permissions, next_permissions, sale_type, sale_price, created_at`,
+		input.SourceItemID, input.UserID, zero).Scan(&item.ID, &item.OwnerUserID, &item.CreatorUserID,
+		&item.FolderID, &item.AssetID, &item.AssetType, &item.InventoryType, &item.Name,
+		&item.Description, &item.Flags, &item.BasePermissions, &item.CurrentPermissions,
+		&item.EveryonePermissions, &item.NextPermissions, &item.SaleType, &item.SalePrice,
+		&item.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ObjectRez{}, ErrNotFound
+	}
+	if err != nil {
+		return ObjectRez{}, fmt.Errorf("withdraw object rez item: %w", err)
+	}
+	if item.AssetType != 6 || item.InventoryType != 6 || item.CurrentPermissions&0x00008000 != 0 {
+		return ObjectRez{}, ErrInvalid
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE inventory_folders SET version=version+1,
+		updated_at=now() WHERE id=$1 AND owner_user_id=$2`, item.FolderID, input.UserID); err != nil {
+		return ObjectRez{}, fmt.Errorf("update object rez folder: %w", err)
+	}
+	encoded, err := json.Marshal(item)
+	if err != nil {
+		return ObjectRez{}, fmt.Errorf("encode object rez item: %w", err)
+	}
+	value, err := scanObjectRez(tx.QueryRowContext(ctx, `INSERT INTO inventory_object_rezzes
+		(id,user_id,source_item_id,region_id,object_id,item,state)
+		VALUES($1,$2,$3,$4,$5,$6,'prepared') RETURNING `+objectRezColumns,
+		input.ID, input.UserID, input.SourceItemID, input.RegionID, input.ObjectID, encoded))
+	if err != nil {
+		return ObjectRez{}, fmt.Errorf("insert object rez: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return ObjectRez{}, fmt.Errorf("commit object rez: %w", err)
+	}
+	return value, nil
+}
+
+func (s *PostgresStore) PendingObjectRezzes(ctx context.Context, regionID string) ([]ObjectRez, error) {
+	rows, err := s.db.QueryContext(ctx, "SELECT "+objectRezColumns+
+		" FROM inventory_object_rezzes WHERE region_id=$1 AND state='prepared' ORDER BY created_at", regionID)
+	if err != nil {
+		return nil, fmt.Errorf("list pending object rezzes: %w", err)
+	}
+	defer rows.Close()
+	var result []ObjectRez
+	for rows.Next() {
+		value, err := scanObjectRez(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan pending object rez: %w", err)
+		}
+		result = append(result, value)
+	}
+	return result, rows.Err()
+}
+
+func (s *PostgresStore) FinalizeObjectRez(ctx context.Context, id, regionID string) (ObjectRez, error) {
+	return s.transitionObjectRez(ctx, id, regionID, Finalized)
+}
+
+func (s *PostgresStore) RollbackObjectRez(ctx context.Context, id, regionID string) (ObjectRez, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return ObjectRez{}, fmt.Errorf("begin object rez rollback: %w", err)
+	}
+	defer tx.Rollback()
+	value, err := scanObjectRez(tx.QueryRowContext(ctx, "SELECT "+objectRezColumns+
+		" FROM inventory_object_rezzes WHERE id=$1 FOR UPDATE", id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return ObjectRez{}, ErrNotFound
+	}
+	if err != nil || value.RegionID != regionID || value.State == Finalized {
+		return ObjectRez{}, ErrConflict
+	}
+	if value.State == RolledBack {
+		return value, tx.Commit()
+	}
+	item := value.Item
+	_, err = tx.ExecContext(ctx, `INSERT INTO inventory_items
+		(id,owner_user_id,creator_user_id,folder_id,asset_id,asset_type,inventory_type,name,
+		description,flags,base_permissions,current_permissions,everyone_permissions,next_permissions,
+		sale_type,sale_price,created_at,updated_at)
+		VALUES($1,$2,NULLIF($3,'')::uuid,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,now())`,
+		item.ID, value.UserID, item.CreatorUserID, item.FolderID, item.AssetID,
+		item.AssetType, item.InventoryType, item.Name, item.Description, item.Flags,
+		item.BasePermissions, item.CurrentPermissions, item.EveryonePermissions,
+		item.NextPermissions, item.SaleType, item.SalePrice, item.CreatedAt)
+	if err != nil {
+		return ObjectRez{}, fmt.Errorf("restore rolled back object item: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE inventory_folders SET version=version+1,
+		updated_at=now() WHERE id=$1 AND owner_user_id=$2`, item.FolderID, value.UserID); err != nil {
+		return ObjectRez{}, fmt.Errorf("update rolled back object folder: %w", err)
+	}
+	value, err = scanObjectRez(tx.QueryRowContext(ctx, `UPDATE inventory_object_rezzes
+		SET state='rolled_back',updated_at=now() WHERE id=$1 RETURNING `+objectRezColumns, id))
+	if err != nil {
+		return ObjectRez{}, fmt.Errorf("mark object rez rolled back: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return ObjectRez{}, fmt.Errorf("commit object rez rollback: %w", err)
+	}
+	return value, nil
+}
+
+func (s *PostgresStore) transitionObjectRez(ctx context.Context, id, regionID string, state State) (ObjectRez, error) {
+	value, err := scanObjectRez(s.db.QueryRowContext(ctx, `UPDATE inventory_object_rezzes
+		SET state=$3,updated_at=now() WHERE id=$1 AND region_id=$2 AND state='prepared'
+		RETURNING `+objectRezColumns, id, regionID, state))
+	if err == nil {
+		return value, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return ObjectRez{}, fmt.Errorf("transition object rez: %w", err)
+	}
+	existing, getErr := scanObjectRez(s.db.QueryRowContext(ctx, "SELECT "+objectRezColumns+
+		" FROM inventory_object_rezzes WHERE id=$1", id))
+	if errors.Is(getErr, sql.ErrNoRows) {
+		return ObjectRez{}, ErrNotFound
+	}
+	if getErr != nil {
+		return ObjectRez{}, getErr
+	}
+	if existing.RegionID == regionID && existing.State == state {
+		return existing, nil
+	}
+	return ObjectRez{}, ErrConflict
 }
