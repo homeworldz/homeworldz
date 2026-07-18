@@ -507,6 +507,8 @@ std::string snapshot_json(const scene::Scene& scene) {
     entities.reserve(scene.entities().size());
     for (const auto& [id, entity] : scene.entities()) {
         static_cast<void>(id);
+        const auto* root = entity.parent_id == 0 ? nullptr : scene.find(entity.parent_id);
+        if (entity.temporary || (root && root->temporary)) continue;
         entities.push_back(&entity);
     }
     std::sort(entities.begin(), entities.end(), [](const auto* left, const auto* right) {

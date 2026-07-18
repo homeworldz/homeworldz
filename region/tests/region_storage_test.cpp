@@ -61,6 +61,8 @@ int main() {
             "Stored Texture", "task inventory persistence",
             0, 0, 0x00000001, 0x0009e000, 0x0008e000, 0x00000000,
             0x00000000, 0x0008e000, 0, 0, 123456789});
+        const auto temporary = scene.create("temporary", {7, 8, 9});
+        scene.find(temporary)->temporary = true;
         scene.find(first)->task_inventory_serial = 9;
         std::filesystem::create_directories(path);
         sqlite3* legacy_database = nullptr;
@@ -87,6 +89,7 @@ int main() {
                 const std::string snapshot((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
                 if (snapshot.find(R"("name":"first")") == std::string::npos ||
                     snapshot.find(R"("name":"second \"line\"\n")") == std::string::npos ||
+                    snapshot.find(R"("name":"temporary")") != std::string::npos ||
                     snapshot.find(R"("taskInventorySerial":7)") == std::string::npos ||
                     snapshot.find(R"("name":"Stored Texture")") == std::string::npos) return 1;
             }

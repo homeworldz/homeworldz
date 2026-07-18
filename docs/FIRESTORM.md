@@ -987,3 +987,12 @@ per-viewer cache so re-entry forces a complete update. Earlier live tests
 already confirmed smooth falling, collision, rolling, rotation, avatar pushes,
 editing, and restart restoration; the new distance and transform predicates
 have deterministic boundary tests.
+
+Temporary-on-rez now has an authoritative Region lifecycle. Firestorm's
+temporary flag is retained in object updates, starts or refreshes a 60-second
+lease, and can be cleared before expiry. Temporary roots and their linked
+children are deliberately omitted from every durable scene snapshot. At
+expiry the Region removes their physics bodies and scene entities and sends a
+reliable kill update to every connected viewer. Automated storage acceptance
+proves a temporary object cannot reappear after restart; live viewer timing
+acceptance remains pending.

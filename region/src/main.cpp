@@ -582,6 +582,7 @@ std::optional<homeworldz::viewer::StaticObject> static_object_from_entity(
     constexpr std::uint32_t object_owner_modify = 0x10000000;
     constexpr std::uint32_t object_physics = 0x00000001;
     constexpr std::uint32_t object_phantom = 0x00000400;
+    constexpr std::uint32_t object_temporary = 0x40000000;
     if (entity.object_id.empty() || entity.id > (std::numeric_limits<std::uint32_t>::max)())
         return std::nullopt;
     const auto object_id = homeworldz::viewer::parse_uuid(entity.object_id);
@@ -598,6 +599,7 @@ std::optional<homeworldz::viewer::StaticObject> static_object_from_entity(
     object.update_flags = object_any_owner;
     if (entity.physical) object.update_flags |= object_physics;
     if (entity.phantom) object.update_flags |= object_phantom;
+    if (entity.temporary) object.update_flags |= object_temporary;
     if ((permissions & homeworldz::scene::permission_modify) != 0) object.update_flags |= object_modify;
     if ((permissions & homeworldz::scene::permission_copy) != 0) object.update_flags |= object_copy;
     if ((permissions & homeworldz::scene::permission_move) != 0) object.update_flags |= object_move;
@@ -1411,6 +1413,8 @@ int main(int argc, char* argv[]) {
     std::unordered_map<std::string,
         std::unordered_map<homeworldz::scene::EntityId, SentDynamicTransform>>
         sent_dynamic_transforms;
+    std::unordered_map<homeworldz::scene::EntityId, std::chrono::steady_clock::time_point>
+        temporary_expirations;
     std::unordered_map<std::string, std::deque<std::string>> queued_viewer_events;
     std::vector<PendingEventResponse> pending_event_responses;
     std::uint64_t event_id{};
@@ -4508,11 +4512,14 @@ int main(int argc, char* argv[]) {
                         if (object_flags && object_flags->agent_id == identity->agent_id &&
                             object_flags->session_id == identity->session_id) {
                             auto* entity = scene.find(object_flags->local_id);
+                            if (entity && entity->parent_id != 0)
+                                entity = scene.find(entity->parent_id);
                             const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
                             if (entity && entity->owner_id == user_id &&
                                 (entity->owner_permissions & homeworldz::scene::permission_modify) != 0) {
                                 const auto original_physical = entity->physical;
                                 const auto original_phantom = entity->phantom;
+                                const auto original_temporary = entity->temporary;
                                 const auto original_physics_shape_type = entity->physics_shape_type;
                                 const auto original_physics_density = entity->physics_density;
                                 const auto original_physics_friction = entity->physics_friction;
@@ -4521,6 +4528,7 @@ int main(int argc, char* argv[]) {
                                     entity->physics_gravity_multiplier;
                                 entity->physical = object_flags->use_physics;
                                 entity->phantom = object_flags->phantom;
+                                entity->temporary = object_flags->temporary;
                                 if (object_flags->has_extra_physics)
                                     apply_extra_physics(*entity, *object_flags);
                                 bool persisted = false;
@@ -4530,6 +4538,7 @@ int main(int argc, char* argv[]) {
                                 } catch (const std::exception& error) {
                                     entity->physical = original_physical;
                                     entity->phantom = original_phantom;
+                                    entity->temporary = original_temporary;
                                     entity->physics_shape_type = original_physics_shape_type;
                                     entity->physics_density = original_physics_density;
                                     entity->physics_friction = original_physics_friction;
@@ -4540,6 +4549,11 @@ int main(int argc, char* argv[]) {
                                               << homeworldz::api::json_string(error.what()) << "}" << std::endl;
                                 }
                                 if (persisted) {
+                                    if (entity->temporary)
+                                        temporary_expirations.insert_or_assign(
+                                            entity->id, now + std::chrono::seconds(60));
+                                    else
+                                        temporary_expirations.erase(entity->id);
                                     synchronize_physics_object(*entity);
                                     const auto region_handle =
                                         (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
@@ -4558,6 +4572,8 @@ int main(int argc, char* argv[]) {
                                               << (entity->physical ? "true" : "false")
                                               << ",\"phantom\":"
                                               << (entity->phantom ? "true" : "false")
+                                              << ",\"temporary\":"
+                                              << (entity->temporary ? "true" : "false")
                                               << ",\"physicsShapeType\":"
                                               << static_cast<unsigned>(entity->physics_shape_type)
                                               << ",\"physicsDensity\":" << entity->physics_density
@@ -4574,6 +4590,7 @@ int main(int argc, char* argv[]) {
                             object_add->session_id == identity->session_id) {
                             constexpr std::uint32_t add_use_physics = 0x00000001;
                             constexpr std::uint32_t add_create_selected = 0x00000002;
+                            constexpr std::uint32_t add_temporary = 0x40000000;
                             const auto valid_scale = std::all_of(
                                 object_add->scale.begin(), object_add->scale.end(),
                                 [](float value) { return value >= 0.01F && value <= 64.0F; });
@@ -4663,6 +4680,7 @@ int main(int argc, char* argv[]) {
                                                         object_add->rotation[2]};
                                     entity->material = object_add->material;
                                     entity->physical = (object_add->add_flags & add_use_physics) != 0;
+                                    entity->temporary = (object_add->add_flags & add_temporary) != 0;
                                     entity->path_curve = object_add->path_curve;
                                     entity->profile_curve = object_add->profile_curve;
                                     entity->path_begin = object_add->path_begin;
@@ -4699,6 +4717,9 @@ int main(int argc, char* argv[]) {
                             if (created) {
                                 const auto* entity = scene.find(entity_id);
                                 if (entity) {
+                                    if (entity->temporary)
+                                        temporary_expirations.insert_or_assign(
+                                            entity->id, now + std::chrono::seconds(60));
                                     synchronize_physics_object(*entity);
                                     const auto region_handle =
                                         (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
@@ -5347,6 +5368,42 @@ int main(int argc, char* argv[]) {
                 });
             }
             next_dynamic_sync = now + std::chrono::milliseconds(100);
+        }
+        std::unordered_set<homeworldz::scene::EntityId> expired_temporary_roots;
+        std::vector<homeworldz::scene::EntityId> stale_temporary_expirations;
+        for (const auto& [entity_id, expires_at] : temporary_expirations) {
+            const auto* entity = scene.find(entity_id);
+            if (!entity || !entity->temporary) {
+                stale_temporary_expirations.push_back(entity_id);
+                continue;
+            }
+            if (now < expires_at) continue;
+            expired_temporary_roots.insert(
+                entity->parent_id == 0 ? entity_id : entity->parent_id);
+        }
+        for (const auto entity_id : stale_temporary_expirations)
+            temporary_expirations.erase(entity_id);
+        for (const auto root_id : expired_temporary_roots) {
+            std::vector<homeworldz::scene::EntityId> part_ids{root_id};
+            for (const auto& [candidate_id, candidate] : scene.entities())
+                if (candidate.parent_id == root_id) part_ids.push_back(candidate_id);
+            std::vector<std::uint32_t> local_ids;
+            local_ids.reserve(part_ids.size());
+            for (const auto part_id : part_ids) {
+                local_ids.push_back(static_cast<std::uint32_t>(part_id));
+                if (physics_scene) static_cast<void>(physics_scene->remove(part_id));
+                static_cast<void>(scene.remove(part_id));
+                temporary_expirations.erase(part_id);
+            }
+            const auto payload = homeworldz::viewer::encode_kill_object(local_ids);
+            for (const auto& [recipient_endpoint, recipient] : avatars) {
+                static_cast<void>(recipient);
+                if (const auto outgoing = circuits.send(
+                        recipient_endpoint, payload, true, now, true))
+                    static_cast<void>(send_udp(viewer_server, recipient_endpoint, *outgoing));
+            }
+            std::cout << "{\"level\":\"info\",\"message\":\"temporary object expired\",\"rootEntityId\":"
+                      << root_id << ",\"parts\":" << part_ids.size() << "}" << std::endl;
         }
         previous_tick = now;
         if (now >= next_snapshot) {

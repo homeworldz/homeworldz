@@ -82,6 +82,7 @@ struct Entity {
     bool avatar_flying{};
     bool physical{};
     bool phantom{};
+    bool temporary{};
     std::uint8_t physics_shape_type{};
     double physics_density{1000.0};
     double physics_friction{0.6};
