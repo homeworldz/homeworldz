@@ -148,13 +148,13 @@ func (a *API) inventoryItemAssetByUser(w http.ResponseWriter, r *http.Request, u
 		return
 	}
 	if asset.CreatorUserID != userID {
-		writeJSON(w, http.StatusForbidden, Error{Code: "asset_creator_mismatch", Message: "wearable asset was not created by its uploader"})
+		writeJSON(w, http.StatusForbidden, Error{Code: "asset_creator_mismatch", Message: "inventory asset was not created by its uploader"})
 		return
 	}
 	item, err := a.inventory.UpdateItemAsset(r.Context(), userID, itemID, request.AssetID)
 	switch {
 	case errors.Is(err, inventory.ErrInvalidItem):
-		writeJSON(w, http.StatusForbidden, Error{Code: "inventory_item_not_editable", Message: "inventory item cannot accept a wearable asset update"})
+		writeJSON(w, http.StatusForbidden, Error{Code: "inventory_item_not_editable", Message: "inventory item cannot accept an asset update"})
 	case errors.Is(err, inventory.ErrItemNotFound):
 		writeJSON(w, http.StatusNotFound, Error{Code: "inventory_item_not_found", Message: "inventory item was not found"})
 	case err != nil:
@@ -432,7 +432,11 @@ func (a *API) inventoryItemsByUser(w http.ResponseWriter, r *http.Request, userI
 	validType := (request.AssetType == 0 && request.InventoryType == 0) ||
 		(request.AssetType == 0 && request.InventoryType == 15) ||
 		(request.AssetType == 1 && request.InventoryType == 1) ||
+		(request.AssetType == 3 && request.InventoryType == 3) ||
+		(request.AssetType == 7 && request.InventoryType == 7) ||
+		(request.AssetType == 10 && request.InventoryType == 10) ||
 		(request.AssetType == 20 && request.InventoryType == 19) ||
+		(request.AssetType == 21 && request.InventoryType == 20) ||
 		(request.AssetType == 6 && request.InventoryType == 6) ||
 		((request.AssetType == 5 || request.AssetType == 13) && request.InventoryType == 18)
 	if !validUUID(request.ID) || !validUUID(request.CreatorUserID) ||

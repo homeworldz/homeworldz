@@ -633,7 +633,11 @@ func (s *PostgresStore) UpdateItemAsset(ctx context.Context, ownerID, itemID, as
 	} else if err != nil {
 		return Item{}, fmt.Errorf("find inventory item for asset update: %w", err)
 	}
-	if (item.AssetType != 5 && item.AssetType != 13) || item.InventoryType != 18 ||
+	editableType := ((item.AssetType == 5 || item.AssetType == 13) && item.InventoryType == 18) ||
+		(item.AssetType == 7 && item.InventoryType == 7) ||
+		(item.AssetType == 10 && item.InventoryType == 10) ||
+		(item.AssetType == 21 && item.InventoryType == 20)
+	if !editableType ||
 		item.CurrentPermissions&0x00004000 == 0 {
 		return Item{}, ErrInvalidItem
 	}
