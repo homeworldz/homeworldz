@@ -210,6 +210,10 @@ std::string crossed_region_event_xml(const CrossedRegion& event) {
            "</binary><key>SeedCapability</key><string>" + xml_escape(event.seed_capability) +
            "</string><key>SimIP</key><binary>" + ip_binary(event.simulator) +
            "</binary><key>SimPort</key><integer>" + std::to_string(event.simulator.port) +
+           "</integer><key>RegionSizeX</key><integer>" +
+           std::to_string(event.region_size_x) +
+           "</integer><key>RegionSizeY</key><integer>" +
+           std::to_string(event.region_size_y) +
            "</integer></map></array></map></map>";
 }
 

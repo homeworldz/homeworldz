@@ -42,6 +42,8 @@ struct CrossedRegion {
     std::string seed_capability;
     std::array<float, 3> position{};
     std::array<float, 3> look_at{};
+    std::uint32_t region_size_x{256};
+    std::uint32_t region_size_y{256};
 };
 
 struct NewFileInventoryUpload {

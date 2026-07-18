@@ -196,7 +196,7 @@ int main() {
         "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
         0x0102030405060708ULL, event_endpoint,
         "https://region.example/caps/seed/session&amp;id",
-        {1.25F, 255.5F, 30.0F}, {0.5F, -0.25F, 0.0F}});
+        {1.25F, 255.5F, 30.0F}, {0.5F, -0.25F, 0.0F}, 512, 768});
     passed &= contains(crossed, "<string>CrossedRegion</string>");
     passed &= contains(crossed, "<key>AgentID</key><uuid>11111111-2222-4333-8444-555555555555</uuid>");
     passed &= contains(crossed, "<key>SessionID</key><uuid>aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee</uuid>");
@@ -204,6 +204,8 @@ int main() {
     passed &= contains(crossed, "<key>SeedCapability</key><string>https://region.example/caps/seed/session&amp;amp;id</string>");
     passed &= contains(crossed, "<key>SimIP</key><binary>wAACCg==</binary>");
     passed &= contains(crossed, "<key>SimPort</key><integer>42002</integer>");
+    passed &= contains(crossed, "<key>RegionSizeX</key><integer>512</integer>");
+    passed &= contains(crossed, "<key>RegionSizeY</key><integer>768</integer>");
     passed &= contains(crossed, "<key>Position</key><array><real>1.250000</real><real>255.500000</real><real>30.000000</real></array>");
     passed &= contains(crossed, "<key>LookAt</key><array><real>0.500000</real><real>-0.250000</real><real>0.000000</real></array>");
     const auto simulator_features = homeworldz::viewer::simulator_features_xml(

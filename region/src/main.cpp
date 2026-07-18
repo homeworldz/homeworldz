@@ -5377,7 +5377,9 @@ int main(int argc, char* argv[]) {
                                 agent_id, session_id, target_handle, *simulator,
                                 crossing->destination.public_endpoint + "/caps/seed/" + session_id +
                                     "/" + transit_id,
-                                crossing->position, look_direction}));
+                                crossing->position, look_direction,
+                                static_cast<std::uint32_t>(crossing->destination.size_x),
+                                static_cast<std::uint32_t>(crossing->destination.size_y)}));
                         avatar.outbound_transit_id = transit_id;
                         avatar.outbound_transit_expires = now + std::chrono::seconds(30);
                         std::cout << "{\"level\":\"info\",\"message\":\"avatar border crossing signaled\","
