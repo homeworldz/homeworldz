@@ -944,6 +944,23 @@ bool flat_terrain_codec() {
            encode_terrain(patches, std::span<const float>(heightmap.data(), 100)).empty();
 }
 
+bool extended_terrain_codec() {
+    std::vector<float> medium(512 * 512, 20.0F);
+    medium[400 * 512 + 300] = 24.0F;
+    const std::array<TerrainPatch, 1> medium_patch{{{18, 25}}};
+    const auto encoded_medium = encode_terrain(medium_patch, medium);
+    if (encoded_medium.size() <= 20 || encoded_medium[0] != std::byte{11} ||
+        encoded_medium[1] != std::byte{0x4d}) return false;
+
+    std::vector<float> maximum(1024 * 1024, 22.0F);
+    maximum[900 * 1024 + 800] = 28.0F;
+    const std::array<TerrainPatch, 1> maximum_patch{{{50, 56}}};
+    const auto encoded_maximum = encode_terrain(maximum_patch, maximum);
+    const std::array<TerrainPatch, 1> invalid_patch{{{64, 0}}};
+    return encoded_maximum.size() > 20 && encoded_maximum[1] == std::byte{0x4d} &&
+           encode_terrain(invalid_patch, maximum).empty();
+}
+
 bool static_object_codec() {
     StaticObject object;
     object.parent_local_id = 0x12345678;
@@ -1113,6 +1130,7 @@ int main() {
     if (!wearable_asset_codecs()) return 8;
     if (!chat_codecs()) return 9;
     if (!flat_terrain_codec()) return 10;
+    if (!extended_terrain_codec()) return 21;
     if (!static_object_codec()) return 11;
     if (!object_relationship_codecs()) return 19;
     if (!object_flag_codec()) return 14;
