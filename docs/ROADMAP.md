@@ -12,7 +12,7 @@ acceptance tests pass.
 
 ## Progress snapshot
 
-Updated 2026-07-17. These bars are effort-weighted engineering estimates, not
+Updated 2026-07-18. These bars are effort-weighted engineering estimates, not
 simple checkbox ratios. Later scripting, crossings, social systems, security,
 recovery, and scale items are substantially larger than many completed viewer
 protocol tasks. Percentages are deliberately approximate and should be revised
@@ -26,7 +26,7 @@ when scope or implementation evidence changes.
 
 | Phase | Progress | Estimate |
 | --- | --- | ---: |
-| 1. Functional Single-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="94" aria-label="Phase 1 progress: 94%">94%</progress> | 94% |
+| 1. Functional Single-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="97" aria-label="Phase 1 progress: 97%">97%</progress> | 97% |
 | 2. Interactive Physical World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="25" aria-label="Phase 2 progress: 25%">25%</progress> | 25% |
 | 3. Connected Multi-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="30" aria-label="Phase 3 progress: 30%">30%</progress> | 30% |
 | 4. LSL Scripting | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="2" aria-label="Phase 4 progress: 2%">2%</progress> | 2% |
@@ -106,7 +106,7 @@ but stays unchecked until its complete wording is satisfied.
 - [x] Implement persistent nonphysical linksets with root and child transforms,
   whole-object and Edit Linked scaling, duplication, take, take-copy, return,
   derez, inventory round trips, and static child collision.
-- [ ] Implement task inventory (object contents) and complete its permissions,
+- [x] Implement task inventory (object contents) and complete its permissions,
   mutation, copy, derez, return, and inventory round-trip lifecycle.
 - [ ] Add the remaining fundamental content types needed by appearance,
   building, attachments, and scripts, including animations, sounds, gestures,

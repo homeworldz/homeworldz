@@ -938,3 +938,11 @@ Region logged exactly one completed rez with the transaction's object UUID.
 Prepared object rezzes are durable: Region startup finalizes one whose object is
 already in its scene snapshot or rolls it back to the original inventory folder
 when no object was persisted.
+
+Return-to-owner completed the task-inventory lifecycle acceptance on
+2026-07-18. Returning the rezzed no-copy `Contents1` removed it from the scene
+and created exactly one no-copy object in Jim Tarber's Objects folder. Rezzing
+that returned object consumed the inventory item exactly once, retained
+`No Copy Transfer Test` in Contents, disabled Take Copy, and rejected
+Shift-drag duplication. The Region recorded derez destination `9`, followed by
+one finalized durable object-rez transaction and one new scene object UUID.
