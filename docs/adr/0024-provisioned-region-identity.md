@@ -53,6 +53,8 @@ stale seed file. File-backed operation remains available for development.
 Authenticated operator endpoints create, inspect, edit, enable, disable,
 relocate, rotate the access key for, and remove provisioned records. Access keys
 are returned only by create and rotate responses. The region supplies
-`--region-id` and `--access-key`, while its local INI keeps host-specific ports,
-endpoints, paths, and the grid URL. Moving effective endpoint configuration
-into the provisioned record remains before the complete model above is closed.
+`--region-id` and `--access-key`, while its local INI keeps host-specific paths
+and the grid URL. The persistent record also carries optional operator-assigned
+`publicEndpoint` and `viewerPort` values independently of its online lease;
+applying those as fetched effective startup configuration remains a later
+bootstrap step.

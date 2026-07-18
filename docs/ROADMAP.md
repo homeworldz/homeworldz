@@ -20,15 +20,15 @@ when scope or implementation evidence changes.
 
 <label class="roadmap-overall-progress">
   <span>Overall progress</span>
-  <progress data-color="primary" max="100" value="20">20%</progress>
-  <strong>20%</strong>
+  <progress data-color="primary" max="100" value="21">21%</progress>
+  <strong>21%</strong>
 </label>
 
 | Phase | Progress | Estimate |
 | --- | --- | ---: |
 | 1. Functional Single-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="97" aria-label="Phase 1 progress: 97%">97%</progress> | 97% |
 | 2. Interactive Physical World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="34" aria-label="Phase 2 progress: 34%">34%</progress> | 34% |
-| 3. Connected Multi-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="38" aria-label="Phase 3 progress: 38%">38%</progress> | 38% |
+| 3. Connected Multi-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="42" aria-label="Phase 3 progress: 42%">42%</progress> | 42% |
 | 4. LSL Scripting | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="2" aria-label="Phase 4 progress: 2%">2%</progress> | 2% |
 | 5. Social and Creator Platform | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="7" aria-label="Phase 5 progress: 7%">7%</progress> | 7% |
 | 6. Reliable Operations and Distribution | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="10" aria-label="Phase 6 progress: 10%">10%</progress> | 10% |
@@ -179,7 +179,7 @@ but stays unchecked until its complete wording is satisfied.
 - [x] Add authenticated grid-management endpoints to create, inspect, update,
   enable, disable, relocate, remove, and rotate credentials for provisioned
   regions.
-- [ ] Persist each region's UUID, unique name, owner UUID, X/Y location,
+- [x] Persist each region's UUID, unique name, owner UUID, X/Y location,
   endpoints, enabled state, and per-region access-key hash independently of its
   online lease.
 - [ ] Let a region authenticate by UUID or unique name plus its access key and

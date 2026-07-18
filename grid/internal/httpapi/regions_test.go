@@ -346,9 +346,11 @@ func TestProvisionedRegionManagementLifecycle(t *testing.T) {
 	id := "11111111-1111-4111-8111-111111111111"
 	created := requestRegion[ProvisionedRegionResult](t, handler, http.MethodPost,
 		"/api/v1/provisioned-regions",
-		`{"id":"`+id+`","name":"Welcome","mapX":1000,"mapY":1000}`,
+		`{"id":"`+id+`","name":"Welcome","mapX":1000,"mapY":1000,`+
+			`"publicEndpoint":"https://welcome.example/region","viewerPort":42012}`,
 		http.StatusCreated)
 	if created.Region.ID != id || created.Region.Name != "Welcome" || !created.Region.Enabled ||
+		created.Region.PublicEndpoint != "https://welcome.example/region" || created.Region.ViewerPort != 42012 ||
 		len(created.AccessKey) != 64 {
 		t.Fatalf("created provisioned region = %#v", created)
 	}

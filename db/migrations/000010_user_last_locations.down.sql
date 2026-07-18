@@ -9,3 +9,4 @@ ALTER TABLE users
     DROP COLUMN IF EXISTS last_position_y,
     DROP COLUMN IF EXISTS last_position_x,
     DROP COLUMN IF EXISTS last_region_id;
+DELETE FROM schema_metadata WHERE version = 10;

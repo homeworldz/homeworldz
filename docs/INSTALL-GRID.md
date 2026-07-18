@@ -265,8 +265,10 @@ The create response is the only response that contains the new plaintext
 `accessKey`; give that UUID and key to the Region owner. `GET` on the collection
 or an individual record never returns a key. `PATCH
 /api/v1/provisioned-regions/<uuid>` changes `name`, `ownerUserId`, `mapX`,
-`mapY`, or `enabled`. Set `enabled` to `false` to reject subsequent startup and
-lease-renewal authentication without deleting the identity. `POST
+`mapY`, `publicEndpoint`, `viewerPort`, or `enabled`. The endpoint fields are an
+operator-owned assignment and remain independent of the Region's current live
+lease. Set `enabled` to `false` to reject subsequent startup and lease-renewal
+authentication without deleting the identity. `POST
 /api/v1/provisioned-regions/<uuid>/rotate-access-key` invalidates the old key
 and returns its replacement once. `DELETE` permanently removes the provisioned
 record. All successful mutations are committed to PostgreSQL.

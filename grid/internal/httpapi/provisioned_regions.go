@@ -48,6 +48,7 @@ func (a *API) provisionedRegionsRoot(w http.ResponseWriter, r *http.Request) {
 		}
 		region, err := a.provisioned.Create(r.Context(), provisioning.Region{ID: id, Name: request.Name,
 			OwnerUserID: request.OwnerUserID, MapX: request.MapX, MapY: request.MapY,
+			PublicEndpoint: request.PublicEndpoint, ViewerPort: request.ViewerPort,
 			Enabled: enabled, AccessKey: accessKey})
 		if !writeProvisioningError(w, err) {
 			writeJSON(w, http.StatusCreated, ProvisionedRegionResult{Region: region, AccessKey: accessKey})
@@ -102,7 +103,8 @@ func (a *API) provisionedRegionByID(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		region, err := a.provisioned.Update(r.Context(), id, provisioning.Update{Name: request.Name,
-			OwnerUserID: request.OwnerUserID, MapX: request.MapX, MapY: request.MapY, Enabled: request.Enabled})
+			OwnerUserID: request.OwnerUserID, MapX: request.MapX, MapY: request.MapY,
+			PublicEndpoint: request.PublicEndpoint, ViewerPort: request.ViewerPort, Enabled: request.Enabled})
 		if !writeProvisioningError(w, err) {
 			writeJSON(w, http.StatusOK, ProvisionedRegionResult{Region: region})
 		}

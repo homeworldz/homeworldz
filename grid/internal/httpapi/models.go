@@ -61,20 +61,24 @@ type RegionNeighborList struct {
 }
 
 type CreateProvisionedRegionRequest struct {
-	ID          string `json:"id,omitempty"`
-	Name        string `json:"name"`
-	OwnerUserID string `json:"ownerUserId,omitempty"`
-	MapX        int    `json:"mapX"`
-	MapY        int    `json:"mapY"`
-	Enabled     *bool  `json:"enabled,omitempty"`
+	ID             string `json:"id,omitempty"`
+	Name           string `json:"name"`
+	OwnerUserID    string `json:"ownerUserId,omitempty"`
+	MapX           int    `json:"mapX"`
+	MapY           int    `json:"mapY"`
+	PublicEndpoint string `json:"publicEndpoint,omitempty"`
+	ViewerPort     int    `json:"viewerPort,omitempty"`
+	Enabled        *bool  `json:"enabled,omitempty"`
 }
 
 type UpdateProvisionedRegionRequest struct {
-	Name        *string `json:"name,omitempty"`
-	OwnerUserID *string `json:"ownerUserId,omitempty"`
-	MapX        *int    `json:"mapX,omitempty"`
-	MapY        *int    `json:"mapY,omitempty"`
-	Enabled     *bool   `json:"enabled,omitempty"`
+	Name           *string `json:"name,omitempty"`
+	OwnerUserID    *string `json:"ownerUserId,omitempty"`
+	MapX           *int    `json:"mapX,omitempty"`
+	MapY           *int    `json:"mapY,omitempty"`
+	PublicEndpoint *string `json:"publicEndpoint,omitempty"`
+	ViewerPort     *int    `json:"viewerPort,omitempty"`
+	Enabled        *bool   `json:"enabled,omitempty"`
 }
 
 type ProvisionedRegionResult struct {

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -25,31 +26,37 @@ var (
 )
 
 type Region struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	OwnerUserID string `json:"ownerUserId,omitempty"`
-	MapX        int    `json:"mapX"`
-	MapY        int    `json:"mapY"`
-	Enabled     bool   `json:"enabled"`
-	AccessKey   string `json:"-"`
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	OwnerUserID    string `json:"ownerUserId,omitempty"`
+	MapX           int    `json:"mapX"`
+	MapY           int    `json:"mapY"`
+	PublicEndpoint string `json:"publicEndpoint,omitempty"`
+	ViewerPort     int    `json:"viewerPort,omitempty"`
+	Enabled        bool   `json:"enabled"`
+	AccessKey      string `json:"-"`
 }
 
 type Update struct {
-	Name        *string
-	OwnerUserID *string
-	MapX        *int
-	MapY        *int
-	Enabled     *bool
+	Name           *string
+	OwnerUserID    *string
+	MapX           *int
+	MapY           *int
+	PublicEndpoint *string
+	ViewerPort     *int
+	Enabled        *bool
 }
 
 type fileRegion struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	OwnerUserID string `json:"ownerUserId,omitempty"`
-	MapX        int    `json:"mapX"`
-	MapY        int    `json:"mapY"`
-	Enabled     *bool  `json:"enabled,omitempty"`
-	AccessKey   string `json:"accessKey"`
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	OwnerUserID    string `json:"ownerUserId,omitempty"`
+	MapX           int    `json:"mapX"`
+	MapY           int    `json:"mapY"`
+	PublicEndpoint string `json:"publicEndpoint,omitempty"`
+	ViewerPort     int    `json:"viewerPort,omitempty"`
+	Enabled        *bool  `json:"enabled,omitempty"`
+	AccessKey      string `json:"accessKey"`
 }
 
 type Registry struct {
@@ -89,7 +96,8 @@ func Load(path string) (*Registry, error) {
 			enabled = *item.Enabled
 		}
 		region := Region{ID: item.ID, Name: item.Name, OwnerUserID: item.OwnerUserID,
-			MapX: item.MapX, MapY: item.MapY, Enabled: enabled, AccessKey: item.AccessKey}
+			MapX: item.MapX, MapY: item.MapY, PublicEndpoint: item.PublicEndpoint,
+			ViewerPort: item.ViewerPort, Enabled: enabled, AccessKey: item.AccessKey}
 		if err := validate(region); err != nil {
 			return nil, fmt.Errorf("invalid provisioned region at index %d: %w", index, err)
 		}
@@ -158,6 +166,7 @@ func (r *Registry) Create(_ context.Context, item Region) (Region, error) {
 	}
 	item.Name = strings.TrimSpace(item.Name)
 	item.OwnerUserID = strings.TrimSpace(item.OwnerUserID)
+	item.PublicEndpoint = strings.TrimSpace(item.PublicEndpoint)
 	if err := validate(item); err != nil {
 		return Region{}, err
 	}
@@ -199,6 +208,12 @@ func (r *Registry) Update(_ context.Context, id string, update Update) (Region, 
 	}
 	if update.MapY != nil {
 		item.MapY = *update.MapY
+	}
+	if update.PublicEndpoint != nil {
+		item.PublicEndpoint = strings.TrimSpace(*update.PublicEndpoint)
+	}
+	if update.ViewerPort != nil {
+		item.ViewerPort = *update.ViewerPort
 	}
 	if update.Enabled != nil {
 		item.Enabled = *update.Enabled
@@ -264,7 +279,8 @@ func (r *Registry) persist(items map[string]Region) error {
 	for _, item := range items {
 		enabled := item.Enabled
 		stored = append(stored, fileRegion{ID: item.ID, Name: item.Name, OwnerUserID: item.OwnerUserID,
-			MapX: item.MapX, MapY: item.MapY, Enabled: &enabled, AccessKey: item.AccessKey})
+			MapX: item.MapX, MapY: item.MapY, PublicEndpoint: item.PublicEndpoint,
+			ViewerPort: item.ViewerPort, Enabled: &enabled, AccessKey: item.AccessKey})
 	}
 	sort.Slice(stored, func(i, j int) bool {
 		if stored[i].MapY != stored[j].MapY {
@@ -309,11 +325,18 @@ func (r *Registry) persist(items map[string]Region) error {
 
 func validate(item Region) error {
 	if !uuidPattern.MatchString(item.ID) || strings.TrimSpace(item.Name) == "" || len(item.Name) > 128 ||
-		item.MapX < 0 || item.MapY < 0 || strings.TrimSpace(item.AccessKey) == "" {
+		item.MapX < 0 || item.MapY < 0 || item.ViewerPort < 0 || item.ViewerPort > 65535 ||
+		strings.TrimSpace(item.AccessKey) == "" {
 		return fmt.Errorf("%w: UUID, name, coordinates, or access key is invalid", ErrInvalid)
 	}
 	if item.OwnerUserID != "" && !uuidPattern.MatchString(item.OwnerUserID) {
 		return fmt.Errorf("%w: owner user UUID is invalid", ErrInvalid)
+	}
+	if item.PublicEndpoint != "" {
+		endpoint, err := url.ParseRequestURI(item.PublicEndpoint)
+		if err != nil || (endpoint.Scheme != "http" && endpoint.Scheme != "https") || endpoint.Host == "" {
+			return fmt.Errorf("%w: public endpoint is invalid", ErrInvalid)
+		}
 	}
 	return nil
 }

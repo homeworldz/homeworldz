@@ -188,6 +188,25 @@ func applyMigrations(ctx context.Context, connection *pgx.Conn, directory string
 			if applied {
 				continue
 			}
+			// Migration 10 originally omitted its schema_metadata insert. Repair
+			// databases created by that released migration before attempting to
+			// replay its already-present ALTER TABLE statements.
+			if version == 10 {
+				var legacyApplied bool
+				if err := connection.QueryRow(ctx, `SELECT EXISTS (
+					SELECT 1 FROM information_schema.columns
+					WHERE table_schema='public' AND table_name='users' AND column_name='last_region_id'
+				)`).Scan(&legacyApplied); err != nil {
+					return fmt.Errorf("check legacy migration 10: %w", err)
+				}
+				if legacyApplied {
+					if _, err := connection.Exec(ctx,
+						"INSERT INTO schema_metadata (version) VALUES (10) ON CONFLICT DO NOTHING"); err != nil {
+						return fmt.Errorf("repair legacy migration 10 metadata: %w", err)
+					}
+					continue
+				}
+			}
 		}
 		migration, err := os.ReadFile(path)
 		if err != nil {
