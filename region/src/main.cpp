@@ -240,16 +240,26 @@ std::string configured_value(std::string_view name, std::string fallback = {}) {
     return fallback;
 }
 
-std::unique_ptr<homeworldz::terrain::Heightmap> load_raw_heightmap(const std::filesystem::path& path) {
+std::unique_ptr<homeworldz::terrain::Heightmap> load_raw_heightmap(
+    const std::filesystem::path& path, std::size_t width) {
     std::ifstream input(path, std::ios::binary | std::ios::ate);
-    if (!input || input.tellg() != 256 * 256) return {};
+    if (!input) return {};
+    const auto byte_count = static_cast<std::size_t>(input.tellg());
+    const auto source_width = byte_count == width * width ? width :
+        (byte_count == 256 * 256 ? std::size_t{256} : std::size_t{});
+    if (source_width == 0) return {};
     input.seekg(0);
-    std::array<unsigned char, 256 * 256> source{};
+    std::vector<unsigned char> source(byte_count);
     input.read(reinterpret_cast<char*>(source.data()), source.size());
     if (!input) return {};
-    auto result = std::make_unique<homeworldz::terrain::Heightmap>();
-    std::transform(source.begin(), source.end(), result->begin(),
-                   [](unsigned char height) { return static_cast<float>(height); });
+    auto result = std::make_unique<homeworldz::terrain::Heightmap>(width);
+    for (std::size_t y = 0; y < width; ++y) {
+        const auto source_y = y * (source_width - 1) / (width - 1);
+        for (std::size_t x = 0; x < width; ++x) {
+            const auto source_x = x * (source_width - 1) / (width - 1);
+            (*result)[y * width + x] = static_cast<float>(source[source_y * source_width + source_x]);
+        }
+    }
     return result;
 }
 
@@ -804,19 +814,6 @@ int main(int argc, char* argv[]) {
     const auto region_data_path = std::filesystem::path(
         configured_value("region.data_path", "var/region"));
     const auto terrain_state_path = region_data_path / "terrain.f32";
-    const auto default_heightmap = load_raw_heightmap(configured_value(
-        "region.terrain_path", "assets/region/terrain/plateau-square.raw"));
-    auto revert_heightmap = default_heightmap ?
-        std::make_unique<homeworldz::terrain::Heightmap>(*default_heightmap) :
-        std::make_unique<homeworldz::terrain::Heightmap>();
-    if (!default_heightmap) revert_heightmap->fill(25.0F);
-    auto terrain_heightmap = homeworldz::terrain::load_state(terrain_state_path);
-    if (!terrain_heightmap)
-        terrain_heightmap = std::make_unique<homeworldz::terrain::Heightmap>(*revert_heightmap);
-    std::cout << "{\"level\":\"info\",\"message\":\"terrain heightmap loaded\",\"source\":\""
-              << (std::filesystem::exists(terrain_state_path) ? "region-state" :
-                  (default_heightmap ? "packaged-default" : "flat-fallback")) << "\"}" << std::endl;
-    const auto initial_spawn = default_spawn(*terrain_heightmap);
     std::unique_ptr<homeworldz::grid::RegistrationLifecycle> registration;
     std::unique_ptr<homeworldz::grid::Client> viewer_grid;
     std::unique_ptr<homeworldz::grid::ViewerSessionCache> viewer_sessions;
@@ -918,15 +915,6 @@ int main(int argc, char* argv[]) {
 			settings.public_endpoint = region_public_endpoint;
 			settings.viewer_port = region_viewer_port;
 			provisioned_region_id = provisioned->id;
-			if (region_size_x != 256 || region_size_y != 256) {
-				static_cast<void>(registration_client.deregister_provisioned(provisioned->id));
-				std::cerr << "{\"level\":\"error\",\"message\":\"variable-size region simulation is not implemented\",\"sizeX\":"
-						  << region_size_x << ",\"sizeY\":" << region_size_y << "}" << std::endl;
-#ifdef _WIN32
-				WSACleanup();
-#endif
-				return 1;
-			}
             auto viewer_transport = homeworldz::grid::socket_transport(grid_url, service_token);
             viewer_grid = std::make_unique<homeworldz::grid::Client>(std::move(viewer_transport));
             if (!refresh_region_neighbors(true)) {
@@ -954,6 +942,23 @@ int main(int argc, char* argv[]) {
             return 1;
         }
     }
+
+    const auto terrain_width = static_cast<std::size_t>(region_size_x);
+    const auto default_heightmap = load_raw_heightmap(configured_value(
+        "region.terrain_path", "assets/region/terrain/plateau-square.raw"), terrain_width);
+    auto revert_heightmap = default_heightmap ?
+        std::make_unique<homeworldz::terrain::Heightmap>(*default_heightmap) :
+        std::make_unique<homeworldz::terrain::Heightmap>(terrain_width);
+    if (!default_heightmap) revert_heightmap->fill(25.0F);
+    auto terrain_heightmap = homeworldz::terrain::load_state(terrain_state_path, terrain_width);
+    const bool loaded_region_state = static_cast<bool>(terrain_heightmap);
+    if (!terrain_heightmap)
+        terrain_heightmap = std::make_unique<homeworldz::terrain::Heightmap>(*revert_heightmap);
+    std::cout << "{\"level\":\"info\",\"message\":\"terrain heightmap loaded\",\"source\":\""
+              << (loaded_region_state ? "region-state" :
+                  (default_heightmap ? "packaged-default" : "flat-fallback"))
+              << "\",\"width\":" << terrain_width << "}" << std::endl;
+    const auto initial_spawn = default_spawn(*terrain_heightmap);
 
     homeworldz::scene::Scene scene;
     std::unique_ptr<homeworldz::storage::RegionStorage> storage;
@@ -1212,10 +1217,10 @@ int main(int argc, char* argv[]) {
             homeworldz::physics::HeightFieldDefinition definition;
             definition.samples.assign(terrain_heightmap->begin(), terrain_heightmap->end());
             definition.sample_count = static_cast<std::uint32_t>(terrain_heightmap->width());
-            // Terrain samples describe the complete 256 m region. There are
+            // Terrain samples describe the complete region extent. There are
             // sample_count - 1 intervals between the first sample at 0 and the
-            // far region border at 256; unit spacing would incorrectly end the
-            // collision surface at 255 and let edge-bound bodies fall off.
+            // far region border; unit spacing would incorrectly end the collision
+            // surface one metre early and let edge-bound bodies fall off.
             definition.spacing = static_cast<double>(terrain_heightmap->width()) /
                 static_cast<double>(definition.sample_count - 1);
             const auto replacement = physics_world->create_heightfield(definition);
@@ -1295,19 +1300,21 @@ int main(int argc, char* argv[]) {
             std::sqrt((std::max)(0.0, 1.0 - squared))};
         const auto half_extents =
             homeworldz::physics::rotated_box_half_extents(entity.scale, rotation);
+        const auto terrain_maximum = static_cast<int>(terrain_width - 1);
         const auto minimum_x = std::clamp(
-            static_cast<int>(std::floor(entity.position.x - half_extents.x)), 0, 255);
+            static_cast<int>(std::floor(entity.position.x - half_extents.x)), 0, terrain_maximum);
         const auto maximum_x = std::clamp(
-            static_cast<int>(std::ceil(entity.position.x + half_extents.x)), 0, 255);
+            static_cast<int>(std::ceil(entity.position.x + half_extents.x)), 0, terrain_maximum);
         const auto minimum_y = std::clamp(
-            static_cast<int>(std::floor(entity.position.y - half_extents.y)), 0, 255);
+            static_cast<int>(std::floor(entity.position.y - half_extents.y)), 0, terrain_maximum);
         const auto maximum_y = std::clamp(
-            static_cast<int>(std::ceil(entity.position.y + half_extents.y)), 0, 255);
+            static_cast<int>(std::ceil(entity.position.y + half_extents.y)), 0, terrain_maximum);
         double maximum_ground = -std::numeric_limits<double>::infinity();
         for (int y = minimum_y; y <= maximum_y; ++y)
             for (int x = minimum_x; x <= maximum_x; ++x)
                 maximum_ground = (std::max)(maximum_ground,
-                    static_cast<double>((*terrain_heightmap)[static_cast<std::size_t>(y) * 256 + x]));
+                    static_cast<double>((*terrain_heightmap)[
+                        static_cast<std::size_t>(y) * terrain_width + x]));
         constexpr double terrain_clearance = 0.01;
         const auto required_origin_z = maximum_ground + half_extents.z + terrain_clearance;
         if (entity.position.z >= required_origin_z) return false;
@@ -1327,8 +1334,8 @@ int main(int argc, char* argv[]) {
         if (!entity || !entity->physical) continue;
         const auto original_x = entity->position.x;
         const auto original_y = entity->position.y;
-        entity->position.x = std::clamp(entity->position.x, 0.0, 256.0);
-        entity->position.y = std::clamp(entity->position.y, 0.0, 256.0);
+        entity->position.x = std::clamp(entity->position.x, 0.0, static_cast<double>(region_size_x));
+        entity->position.y = std::clamp(entity->position.y, 0.0, static_cast<double>(region_size_y));
         const bool escaped = entity->position.x != original_x || entity->position.y != original_y;
         if (escaped) {
             entity->velocity.x = 0.0;
@@ -3549,7 +3556,9 @@ int main(int argc, char* argv[]) {
                                     homeworldz::viewer::AvatarGeometry{} : known_geometry->second;
                                 homeworldz::viewer::AvatarController controller{
                                     spawn, collision_ground_height(spawn),
-                                    geometry.height, geometry.hip_offset};
+                                    geometry.height, geometry.hip_offset,
+                                    static_cast<double>(region_size_x),
+                                    static_cast<double>(region_size_y)};
                                 if (arrival) {
                                     const auto yaw = std::atan2(arrival->look_at[1], arrival->look_at[0]);
                                     const std::array<float, 3> rotation{
@@ -3687,14 +3696,26 @@ int main(int argc, char* argv[]) {
                                         endpoint, retained_appearance, true, now, true))
                                     static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
                             }
-                            for (std::uint8_t y = 0; y < 16; ++y) {
-                                std::array<homeworldz::viewer::TerrainPatch, 16> row{};
-                                for (std::uint8_t x = 0; x < 16; ++x) row[x] = {x, y};
-                                const auto terrain_payload =
-                                    homeworldz::viewer::encode_terrain(row, *terrain_heightmap);
-                                if (const auto terrain = circuits.send(endpoint, terrain_payload, true, now))
-                                    static_cast<void>(send_udp(viewer_server, endpoint, *terrain));
-                            }
+                            const auto terrain_patches_per_axis = terrain_width / 16;
+                            constexpr std::size_t terrain_patches_per_packet = 16;
+                            for (std::size_t y = 0; y < terrain_patches_per_axis; ++y)
+                                for (std::size_t first_x = 0; first_x < terrain_patches_per_axis;
+                                     first_x += terrain_patches_per_packet) {
+                                    std::array<homeworldz::viewer::TerrainPatch,
+                                        terrain_patches_per_packet> row{};
+                                    const auto count = (std::min)(terrain_patches_per_packet,
+                                        terrain_patches_per_axis - first_x);
+                                    for (std::size_t index = 0; index < count; ++index)
+                                        row[index] = {
+                                            static_cast<std::uint8_t>(first_x + index),
+                                            static_cast<std::uint8_t>(y)};
+                                    const auto terrain_payload = homeworldz::viewer::encode_terrain(
+                                        std::span<const homeworldz::viewer::TerrainPatch>(
+                                            row.data(), count), *terrain_heightmap);
+                                    if (const auto terrain = circuits.send(
+                                            endpoint, terrain_payload, true, now))
+                                        static_cast<void>(send_udp(viewer_server, endpoint, *terrain));
+                                }
                             for (const auto& [entity_id, entity] : scene.entities()) {
                                 static_cast<void>(entity_id);
                                 const auto restored_object = static_object_from_entity(scene, entity, live_avatar.user_id);
@@ -4021,8 +4042,10 @@ int main(int argc, char* argv[]) {
                                                [](float component) {
                                                    return component >= -4096.0F && component <= 4096.0F;
                                                })
-                                         : ((*update.position)[0] >= 0.0F && (*update.position)[0] <= 256.0F &&
-                                            (*update.position)[1] >= 0.0F && (*update.position)[1] <= 256.0F &&
+                                         : ((*update.position)[0] >= 0.0F &&
+                                            (*update.position)[0] <= static_cast<float>(region_size_x) &&
+                                            (*update.position)[1] >= 0.0F &&
+                                            (*update.position)[1] <= static_cast<float>(region_size_y) &&
                                             (*update.position)[2] >= -64.0F && (*update.position)[2] <= 4096.0F)));
                                 const bool valid_rotation = !update.rotation ||
                                     (finite_vector(*update.rotation) &&
@@ -4374,8 +4397,8 @@ int main(int argc, char* argv[]) {
                                         source_copy.position.x + object_duplicate->offset[0],
                                         source_copy.position.y + object_duplicate->offset[1],
                                         source_copy.position.z + object_duplicate->offset[2]};
-                                    if (position.x < 0.0 || position.x > 256.0 ||
-                                        position.y < 0.0 || position.y > 256.0 ||
+                                    if (position.x < 0.0 || position.x > region_size_x ||
+                                        position.y < 0.0 || position.y > region_size_y ||
                                         position.z < -64.0 || position.z > 4096.0)
                                         continue;
                                     const auto duplicate_root_id = scene.create(source_copy.name, position);
@@ -4723,8 +4746,9 @@ int main(int argc, char* argv[]) {
                                     }
                                 }
                             }
-                            const bool valid_position = placement && placement->x >= 0.0 && placement->x <= 256.0 &&
-                                placement->y >= 0.0 && placement->y <= 256.0 &&
+                            const bool valid_position = placement && placement->x >= 0.0 &&
+                                placement->x <= region_size_x && placement->y >= 0.0 &&
+                                placement->y <= region_size_y &&
                                 placement->z >= -64.0 && placement->z <= 4096.0;
                             bool created = false;
                             std::string object_id;
@@ -5020,8 +5044,8 @@ int main(int argc, char* argv[]) {
                                         }
                                     }
                                     const bool valid_position = placement &&
-                                        placement->x >= 0.0 && placement->x <= 256.0 &&
-                                        placement->y >= 0.0 && placement->y <= 256.0 &&
+                                        placement->x >= 0.0 && placement->x <= region_size_x &&
+                                        placement->y >= 0.0 && placement->y <= region_size_y &&
                                         placement->z >= -64.0 && placement->z <= 4096.0;
                                     if (asset && valid_position) {
                                         object_id = homeworldz::viewer::random_uuid();
@@ -5387,7 +5411,8 @@ int main(int argc, char* argv[]) {
                 // this region and cancel only velocity still pointing through a
                 // crossed edge. Neighbor discovery will replace this with a
                 // crossing handoff when an accepting neighbor exists.
-                if (homeworldz::physics::contain_body_without_neighbors(state))
+                if (homeworldz::physics::contain_body_without_neighbors(
+                        state, static_cast<double>(region_size_x)))
                     physics_world->set_body_state(state);
                 auto* entity = scene.find(entity_id);
                 if (!entity) continue;
