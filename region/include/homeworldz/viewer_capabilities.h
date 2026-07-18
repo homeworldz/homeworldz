@@ -43,6 +43,11 @@ struct NewFileInventoryUpload {
     std::uint32_t next_permissions{0x7fffffff};
 };
 
+struct InventoryAssetUpdate {
+    std::string item_id;
+    std::string target;
+};
+
 std::string seed_capability_xml(std::string_view public_endpoint, std::string_view grid_public_endpoint,
                                 std::string_view session_id, std::string_view visit_id = {});
 std::string establish_agent_communication_event_xml(const EstablishAgentCommunication& event);
@@ -58,6 +63,9 @@ std::string baked_texture_complete_xml(std::string_view asset_id);
 std::optional<NewFileInventoryUpload> parse_new_file_inventory_upload(std::string_view xml);
 bool valid_new_file_inventory_upload_content(const NewFileInventoryUpload& upload,
                                              std::string_view content);
+std::optional<InventoryAssetUpdate> parse_inventory_asset_update(std::string_view xml);
+std::string inventory_asset_update_upload_xml(std::string_view uploader);
+std::string inventory_asset_update_complete_xml(std::string_view asset_id, bool script);
 std::string new_file_inventory_upload_xml(std::string_view uploader);
 std::string new_file_inventory_complete_xml(std::string_view item_id, std::string_view asset_id,
                                             std::uint32_t everyone_permissions,

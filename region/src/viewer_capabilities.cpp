@@ -119,6 +119,9 @@ std::string seed_capability_xml(std::string_view public_endpoint, std::string_vi
     const auto environment_url = xml_escape(base + "/caps/environment/" + std::string(session_id));
     const auto baked_upload_url = xml_escape(base + "/caps/upload-baked/" + std::string(session_id));
     const auto file_upload_url = xml_escape(base + "/caps/upload-file/" + std::string(session_id));
+    const auto notecard_update_url = xml_escape(base + "/caps/update-notecard/" + std::string(session_id));
+    const auto script_update_url = xml_escape(base + "/caps/update-script/" + std::string(session_id));
+    const auto gesture_update_url = xml_escape(base + "/caps/update-gesture/" + std::string(session_id));
     auto grid_base = std::string(grid_public_endpoint);
     while (!grid_base.empty() && grid_base.back() == '/') grid_base.pop_back();
     const auto inventory_url = xml_escape(grid_base + "/caps/inventory/descendents/" + std::string(session_id));
@@ -136,6 +139,10 @@ std::string seed_capability_xml(std::string_view public_endpoint, std::string_vi
            "</uri><key>EnvironmentSettings</key><uri>" + environment_url +
            "</uri><key>UploadBakedTexture</key><uri>" + baked_upload_url +
            "</uri><key>NewFileAgentInventory</key><uri>" + file_upload_url +
+           "</uri><key>UpdateNotecardAgentInventory</key><uri>" + notecard_update_url +
+           "</uri><key>UpdateScriptAgentInventory</key><uri>" + script_update_url +
+           "</uri><key>UpdateScriptAgent</key><uri>" + script_update_url +
+           "</uri><key>UpdateGestureAgentInventory</key><uri>" + gesture_update_url +
            "</uri><key>FetchInventoryDescendents2</key><uri>" + inventory_url +
            "</uri><key>FetchInventory2</key><uri>" + inventory_items_url +
            "</uri><key>CreateInventoryCategory</key><uri>" + create_inventory_folder_url +
@@ -274,6 +281,30 @@ bool valid_new_file_inventory_upload_content(const NewFileInventoryUpload& uploa
                static_cast<unsigned char>(content[2]) == 0x00 &&
                static_cast<unsigned char>(content[3]) == 0x00;
     return false;
+}
+
+std::optional<InventoryAssetUpdate> parse_inventory_asset_update(std::string_view xml) {
+    if (!xml.starts_with("<?xml") && !xml.starts_with("<llsd")) return std::nullopt;
+    const auto item_id = llsd_value(xml, "item_id");
+    if (!item_id || !parse_uuid(*item_id)) return std::nullopt;
+    InventoryAssetUpdate result{*item_id, {}};
+    if (const auto target = llsd_value(xml, "target")) {
+        if (*target != "lsl2" && *target != "mono") return std::nullopt;
+        result.target = *target;
+    }
+    return result;
+}
+
+std::string inventory_asset_update_upload_xml(std::string_view uploader) {
+    return "<?xml version=\"1.0\"?><llsd><map><key>state</key><string>upload</string>"
+           "<key>uploader</key><uri>" + xml_escape(uploader) + "</uri></map></llsd>";
+}
+
+std::string inventory_asset_update_complete_xml(std::string_view asset_id, bool script) {
+    return "<?xml version=\"1.0\"?><llsd><map><key>state</key><string>complete</string>"
+           "<key>new_asset</key><uuid>" + xml_escape(asset_id) + "</uuid>" +
+           (script ? "<key>compiled</key><boolean>false</boolean>" : "") +
+           "</map></llsd>";
 }
 
 std::string new_file_inventory_upload_xml(std::string_view uploader) {

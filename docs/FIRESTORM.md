@@ -146,6 +146,15 @@ advertises that zero price, while `SimulatorFeatures.OpenSimExtras.currency`
 identifies the grid's viewer-facing currency as credits (`C$`). Mesh, object,
 bulk, and variable-price uploads remain outside this slice.
 
+The Region also advertises Firestorm's agent-inventory update capabilities for
+notecards, gestures, and LSL source. Each request is bound to the authenticated
+session and an owned, modifiable item of the exact expected type. Its one-shot
+uploader stores a fresh asset with the editor's creator UUID, registers that
+origin with the Grid, and atomically relinks the personal inventory item.
+Notecard and gesture completion returns the new asset UUID. LSL source is
+preserved now but compilation is intentionally reported as unavailable until
+the Phase 4 HomeWorldz compiler and runtime are implemented.
+
 Each region registers its viewer UDP port with the grid. Login advertises that
 stored port, while `region.viewer_port` controls the matching region listener
 (default `42002`). The first reliable `UseCircuitCode` datagram is

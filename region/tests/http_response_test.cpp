@@ -147,6 +147,9 @@ int main() {
     passed &= contains(seed, "<key>EnvironmentSettings</key><uri>http://region.example:42001/caps/environment/session-id</uri>");
     passed &= contains(seed, "<key>UploadBakedTexture</key><uri>http://region.example:42001/caps/upload-baked/session-id</uri>");
     passed &= contains(seed, "<key>NewFileAgentInventory</key><uri>http://region.example:42001/caps/upload-file/session-id</uri>");
+    passed &= contains(seed, "<key>UpdateNotecardAgentInventory</key><uri>http://region.example:42001/caps/update-notecard/session-id</uri>");
+    passed &= contains(seed, "<key>UpdateScriptAgent</key><uri>http://region.example:42001/caps/update-script/session-id</uri>");
+    passed &= contains(seed, "<key>UpdateGestureAgentInventory</key><uri>http://region.example:42001/caps/update-gesture/session-id</uri>");
     passed &= contains(seed, "<key>FetchInventoryDescendents2</key><uri>http://grid.example:42000/caps/inventory/descendents/session-id</uri>");
     passed &= contains(seed, "<key>FetchInventory2</key><uri>http://grid.example:42000/caps/inventory/items/session-id</uri>");
     passed &= contains(seed, "<key>CreateInventoryCategory</key><uri>http://grid.example:42000/caps/inventory/create-folder/session-id</uri>");
@@ -242,6 +245,21 @@ int main() {
     passed &= contains(file_complete, "<key>new_inventory_item</key><uuid>22222222-2222-4222-8222-222222222222</uuid>") &&
               contains(file_complete, "<key>new_asset</key><uuid>33333333-3333-4333-8333-333333333333</uuid>") &&
               contains(file_complete, "<key>new_everyone_mask</key><integer>8</integer>");
+    const auto item_update = homeworldz::viewer::parse_inventory_asset_update(
+        "<llsd><map><key>item_id</key><uuid>11111111-1111-4111-8111-111111111111</uuid>"
+        "<key>target</key><string>mono</string></map></llsd>");
+    passed &= item_update && item_update->item_id == "11111111-1111-4111-8111-111111111111" &&
+              item_update->target == "mono";
+    passed &= !homeworldz::viewer::parse_inventory_asset_update(
+        "<llsd><map><key>item_id</key><uuid>bad</uuid></map></llsd>");
+    const auto update_upload = homeworldz::viewer::inventory_asset_update_upload_xml(
+        "http://region.example/update?a=1&amp;b=2");
+    passed &= contains(update_upload, "<key>state</key><string>upload</string>") &&
+              contains(update_upload, "update?a=1&amp;amp;b=2");
+    const auto update_complete = homeworldz::viewer::inventory_asset_update_complete_xml(
+        "33333333-3333-4333-8333-333333333333", true);
+    passed &= contains(update_complete, "<key>new_asset</key><uuid>33333333-3333-4333-8333-333333333333</uuid>") &&
+              contains(update_complete, "<key>compiled</key><boolean>false</boolean>");
     const auto random_id = homeworldz::viewer::random_uuid();
     passed &= random_id.size() == 36 && random_id[14] == '4' && random_id[19] >= '8' && random_id[19] <= 'b';
 
