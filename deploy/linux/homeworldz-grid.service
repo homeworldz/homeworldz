@@ -15,6 +15,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
+ReadWritePaths=/etc/homeworldz/grid
 
 [Install]
 WantedBy=multi-user.target

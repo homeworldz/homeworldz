@@ -3,6 +3,7 @@ package httpapi
 import (
 	"github.com/homeworldz/homeworldz/grid/internal/inventory"
 	"github.com/homeworldz/homeworldz/grid/internal/presence"
+	"github.com/homeworldz/homeworldz/grid/internal/provisioning"
 	"github.com/homeworldz/homeworldz/grid/internal/regions"
 	"github.com/homeworldz/homeworldz/grid/internal/transit"
 )
@@ -57,6 +58,32 @@ type RegionNeighbor struct {
 
 type RegionNeighborList struct {
 	Neighbors []RegionNeighbor `json:"neighbors"`
+}
+
+type CreateProvisionedRegionRequest struct {
+	ID          string `json:"id,omitempty"`
+	Name        string `json:"name"`
+	OwnerUserID string `json:"ownerUserId,omitempty"`
+	MapX        int    `json:"mapX"`
+	MapY        int    `json:"mapY"`
+	Enabled     *bool  `json:"enabled,omitempty"`
+}
+
+type UpdateProvisionedRegionRequest struct {
+	Name        *string `json:"name,omitempty"`
+	OwnerUserID *string `json:"ownerUserId,omitempty"`
+	MapX        *int    `json:"mapX,omitempty"`
+	MapY        *int    `json:"mapY,omitempty"`
+	Enabled     *bool   `json:"enabled,omitempty"`
+}
+
+type ProvisionedRegionResult struct {
+	Region    provisioning.Region `json:"region"`
+	AccessKey string              `json:"accessKey,omitempty"`
+}
+
+type ProvisionedRegionList struct {
+	Regions []provisioning.Region `json:"regions"`
 }
 
 type PrepareTransitRequest struct {

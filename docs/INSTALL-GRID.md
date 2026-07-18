@@ -243,6 +243,37 @@ passed with `-config`; the packaged systemd unit uses `/etc/homeworldz/grid`.
 Stop a foreground process with Ctrl+C or the Ubuntu service with
 `sudo systemctl stop homeworldz-grid`; both perform a graceful HTTP shutdown.
 
+## Manage provisioned regions
+
+After initial startup, Grid operators may update `regions.json` through the
+authenticated management API instead of editing it by hand. Use the Grid
+service token from `grid.ini` as a Bearer token. For example, create an enabled
+region with an automatically generated UUID and access key:
+
+```text
+POST /api/v1/provisioned-regions
+Authorization: Bearer <grid-service-token>
+Content-Type: application/json
+
+{"name":"Sandbox","mapX":1001,"mapY":1000}
+```
+
+The create response is the only response that contains the new plaintext
+`accessKey`; give that UUID and key to the Region owner. `GET` on the collection
+or an individual record never returns a key. `PATCH
+/api/v1/provisioned-regions/<uuid>` changes `name`, `ownerUserId`, `mapX`,
+`mapY`, or `enabled`. Set `enabled` to `false` to reject subsequent startup and
+lease-renewal authentication without deleting the identity. `POST
+/api/v1/provisioned-regions/<uuid>/rotate-access-key` invalidates the old key
+and returns its replacement once. `DELETE` permanently removes the provisioned
+record. All successful mutations are written atomically to `regions.json`.
+
+The current file-backed stage necessarily retains plaintext keys in that
+operator-private file. Restrict it to the Grid service account and include it
+in protected configuration backups.
+
+## Operational endpoints
+
 The default operational endpoints are:
 
 - Grid/login service: `127.0.0.1:8002/tcp`

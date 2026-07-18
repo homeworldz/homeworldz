@@ -333,6 +333,61 @@ func TestProvisionedRegionRegistrationUsesPerRegionCredentials(t *testing.T) {
 	}
 }
 
+func TestProvisionedRegionManagementLifecycle(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "regions.json")
+	if err := os.WriteFile(path, []byte("[]\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	registry, err := provisioning.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := New(checker{}, "test", Options{ServiceToken: "secret", Provisioned: registry})
+	id := "11111111-1111-4111-8111-111111111111"
+	created := requestRegion[ProvisionedRegionResult](t, handler, http.MethodPost,
+		"/api/v1/provisioned-regions",
+		`{"id":"`+id+`","name":"Welcome","mapX":1000,"mapY":1000}`,
+		http.StatusCreated)
+	if created.Region.ID != id || created.Region.Name != "Welcome" || !created.Region.Enabled ||
+		len(created.AccessKey) != 64 {
+		t.Fatalf("created provisioned region = %#v", created)
+	}
+	listed := requestRegion[ProvisionedRegionList](t, handler, http.MethodGet,
+		"/api/v1/provisioned-regions", "", http.StatusOK)
+	if len(listed.Regions) != 1 || listed.Regions[0].AccessKey != "" {
+		t.Fatalf("listed provisioned regions = %#v", listed)
+	}
+
+	updated := requestRegion[ProvisionedRegionResult](t, handler, http.MethodPatch,
+		"/api/v1/provisioned-regions/"+id,
+		`{"name":"Welcome Region","mapX":1002,"enabled":false}`,
+		http.StatusOK)
+	if updated.Region.Name != "Welcome Region" || updated.Region.MapX != 1002 || updated.Region.Enabled ||
+		updated.AccessKey != "" {
+		t.Fatalf("updated provisioned region = %#v", updated)
+	}
+	rotated := requestRegion[ProvisionedRegionResult](t, handler, http.MethodPost,
+		"/api/v1/provisioned-regions/"+id+"/rotate-access-key", "{}", http.StatusOK)
+	if len(rotated.AccessKey) != 64 || rotated.AccessKey == created.AccessKey {
+		t.Fatalf("rotated access key was not returned exactly once: %#v", rotated)
+	}
+	if _, ok := registry.Authenticate(id, rotated.AccessKey); ok {
+		t.Fatal("disabled region authenticated with its rotated key")
+	}
+
+	requestRegion[struct{}](t, handler, http.MethodDelete,
+		"/api/v1/provisioned-regions/"+id, "", http.StatusNoContent)
+	missing := requestRegion[Error](t, handler, http.MethodGet,
+		"/api/v1/provisioned-regions/"+id, "", http.StatusNotFound)
+	if missing.Code != "provisioned_region_not_found" {
+		t.Fatalf("missing response = %#v", missing)
+	}
+	reloaded, err := provisioning.Load(path)
+	if err != nil || len(reloaded.List()) != 0 {
+		t.Fatalf("deleted configuration was not persisted: %#v, %v", reloaded.List(), err)
+	}
+}
+
 func requestRegion[T any](t *testing.T, handler http.Handler, method, path, body string, wantStatus int) T {
 	t.Helper()
 	r := httptest.NewRequest(method, path, bytes.NewBufferString(body))

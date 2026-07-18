@@ -41,10 +41,16 @@ replaced by per-region credentials and bootstrap configuration. This decision
 supersedes the identity and deletion aspects of ADR 0008 and ADR 0012 while
 retaining renewable leases as the online-liveness mechanism.
 
-The first implementation uses a private grid-side `regions.json` array as the
-provisioning authority. Each row contains `id`, `name`, `mapX`, `mapY`, and a
-plaintext `accessKey`; startup rejects duplicate UUIDs, names, or coordinates.
-The region supplies `--region-id` and `--access-key`, while its local INI keeps
-host-specific ports, endpoints, paths, and the grid URL. This deliberately
-small file-backed stage enables multiple fixed-identity regions before the
-management endpoints and hashed database representation above are available.
+The current implementation uses a private grid-side `regions.json` array as
+the provisioning authority. Each row contains `id`, `name`, optional
+`ownerUserId`, `mapX`, `mapY`, `enabled`, and a plaintext `accessKey`; startup
+rejects duplicate UUIDs, case-insensitive names, or coordinates. Authenticated
+operator endpoints create, inspect, edit, enable, disable, relocate, rotate the
+access key for, and remove these rows. Mutations replace the file atomically,
+and access keys are returned only by create and rotate responses. The region
+supplies `--region-id` and `--access-key`, while its local INI keeps host-specific
+ports, endpoints, paths, and the grid URL.
+
+This remains the deliberately small file-backed stage. Moving the records and
+access-key hashes into PostgreSQL remains required before the Grid can claim
+the final persistence and secret-storage model described above.

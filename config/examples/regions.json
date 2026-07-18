@@ -4,6 +4,7 @@
     "name": "Welcome",
     "mapX": 1000,
     "mapY": 1000,
+    "enabled": true,
     "accessKey": "replace-with-a-unique-random-access-key"
   },
   {
@@ -11,6 +12,7 @@
     "name": "Sandbox",
     "mapX": 1001,
     "mapY": 1000,
+    "enabled": true,
     "accessKey": "replace-with-another-unique-random-access-key"
   }
 ]
