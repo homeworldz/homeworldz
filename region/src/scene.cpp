@@ -94,6 +94,33 @@ bool apply_permission_update(
     return true;
 }
 
+bool apply_task_inventory_update(
+    TaskInventoryItem& item, std::string_view name, std::string_view description,
+    std::uint32_t flags, std::uint32_t owner_permissions,
+    std::uint32_t group_permissions, std::uint32_t everyone_permissions,
+    std::uint32_t next_permissions, std::uint8_t sale_type, std::int32_t sale_price) {
+    if (name.size() > 255 || description.size() > 255 || sale_type > 3 || sale_price < 0)
+        return false;
+    item.name = name;
+    item.description = description;
+    item.flags = flags;
+    item.current_permissions = owner_permissions & item.base_permissions;
+    item.current_permissions |= permission_move & item.base_permissions;
+    item.group_permissions = group_permissions & item.current_permissions;
+    item.everyone_permissions = everyone_permissions & item.current_permissions;
+    item.everyone_permissions &= ~permission_modify;
+    item.next_permissions = next_permissions & item.base_permissions;
+    if (item.next_permissions != 0)
+        item.next_permissions |= permission_move & item.base_permissions;
+    if ((item.next_permissions & permission_copy) == 0)
+        item.next_permissions |= permission_transfer & item.base_permissions;
+    if ((item.next_permissions & permission_all) != permission_all)
+        item.everyone_permissions &= ~permission_export;
+    item.sale_type = sale_type;
+    item.sale_price = sale_price;
+    return true;
+}
+
 std::optional<RayIntersection> intersect_box(
     Vector3 ray_start, Vector3 ray_end, Vector3 center, Vector3 scale) {
     const std::array start{ray_start.x, ray_start.y, ray_start.z};

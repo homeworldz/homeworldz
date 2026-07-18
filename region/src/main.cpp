@@ -2095,51 +2095,81 @@ int main(int argc, char* argv[]) {
                             auto* entity = scene.find(task_inventory_update->local_id);
                             const auto agent_id = homeworldz::viewer::format_uuid(identity->agent_id);
                             const auto source_id = homeworldz::viewer::format_uuid(task_inventory_update->item_id);
-                            bool copied = false;
+                            bool changed = false;
+                            std::string operation{"copy"};
                             try {
-                                const auto source = viewer_grid
-                                    ? viewer_grid->find_inventory_item(agent_id, source_id)
-                                    : std::nullopt;
                                 if (entity && entity->owner_id == agent_id &&
-                                    (entity->owner_permissions & homeworldz::scene::permission_modify) != 0 &&
-                                    source &&
-                                    (source->current_permissions & homeworldz::scene::permission_copy) != 0) {
-                                    const auto created = static_cast<std::uint64_t>(
-                                        std::chrono::duration_cast<std::chrono::seconds>(
-                                            std::chrono::system_clock::now().time_since_epoch()).count());
+                                    (entity->owner_permissions & homeworldz::scene::permission_modify) != 0) {
                                     const auto previous_serial = entity->task_inventory_serial;
-                                    entity->task_inventory.push_back({
-                                        homeworldz::viewer::random_uuid(), source->asset_id,
-                                        source->creator_id, agent_id, source->owner_id,
-                                        "00000000-0000-0000-0000-000000000000",
-                                        source->name, source->description,
-                                        static_cast<std::int8_t>(source->asset_type),
-                                        static_cast<std::int8_t>(source->inventory_type),
-                                        source->flags, source->base_permissions,
-                                        source->current_permissions, 0,
-                                        source->everyone_permissions, source->next_permissions,
-                                        static_cast<std::uint8_t>(source->sale_type),
-                                        source->sale_price, created});
-                                    entity->task_inventory_serial = previous_serial == 65535
-                                        ? 1
-                                        : static_cast<std::uint16_t>(previous_serial + 1);
-                                    if (storage) {
-                                        try {
-                                            storage->save_snapshot(scene);
-                                            copied = true;
-                                        } catch (...) {
-                                            entity->task_inventory.pop_back();
-                                            entity->task_inventory_serial = previous_serial;
-                                            throw;
+                                    const auto existing = std::find_if(
+                                        entity->task_inventory.begin(), entity->task_inventory.end(),
+                                        [&](const auto& item) { return item.item_id == source_id; });
+                                    if (existing != entity->task_inventory.end()) {
+                                        operation = "update";
+                                        const auto original = *existing;
+                                        if (homeworldz::scene::apply_task_inventory_update(
+                                                *existing, task_inventory_update->name,
+                                                task_inventory_update->description,
+                                                task_inventory_update->flags,
+                                                task_inventory_update->owner_permissions,
+                                                task_inventory_update->group_permissions,
+                                                task_inventory_update->everyone_permissions,
+                                                task_inventory_update->next_owner_permissions,
+                                                task_inventory_update->sale_type,
+                                                task_inventory_update->sale_price)) {
+                                            entity->task_inventory_serial = previous_serial == 65535
+                                                ? 1
+                                                : static_cast<std::uint16_t>(previous_serial + 1);
+                                            try {
+                                                if (storage) storage->save_snapshot(scene);
+                                                changed = true;
+                                            } catch (...) {
+                                                *existing = original;
+                                                entity->task_inventory_serial = previous_serial;
+                                                throw;
+                                            }
+                                        }
+                                    } else {
+                                        const auto source = viewer_grid
+                                            ? viewer_grid->find_inventory_item(agent_id, source_id)
+                                            : std::nullopt;
+                                        if (source && (source->current_permissions &
+                                                homeworldz::scene::permission_copy) != 0) {
+                                            const auto created = static_cast<std::uint64_t>(
+                                                std::chrono::duration_cast<std::chrono::seconds>(
+                                                    std::chrono::system_clock::now().time_since_epoch()).count());
+                                            entity->task_inventory.push_back({
+                                                homeworldz::viewer::random_uuid(), source->asset_id,
+                                                source->creator_id, agent_id, source->owner_id,
+                                                "00000000-0000-0000-0000-000000000000",
+                                                source->name, source->description,
+                                                static_cast<std::int8_t>(source->asset_type),
+                                                static_cast<std::int8_t>(source->inventory_type),
+                                                source->flags, source->base_permissions,
+                                                source->current_permissions, 0,
+                                                source->everyone_permissions, source->next_permissions,
+                                                static_cast<std::uint8_t>(source->sale_type),
+                                                source->sale_price, created});
+                                            entity->task_inventory_serial = previous_serial == 65535
+                                                ? 1
+                                                : static_cast<std::uint16_t>(previous_serial + 1);
+                                            try {
+                                                if (storage) storage->save_snapshot(scene);
+                                                changed = true;
+                                            } catch (...) {
+                                                entity->task_inventory.pop_back();
+                                                entity->task_inventory_serial = previous_serial;
+                                                throw;
+                                            }
                                         }
                                     }
                                 }
                             } catch (const std::exception& error) {
-                                std::cout << "{\"level\":\"error\",\"message\":\"task inventory copy failed\",\"error\":"
+                                std::cout << "{\"level\":\"error\",\"message\":\"task inventory mutation failed\",\"error\":"
                                           << homeworldz::api::json_string(error.what()) << "}" << std::endl;
                             }
                             bool refresh_sent = false;
-                            if (copied && entity) {
+                            if (changed && entity) {
                                 const auto task_id = homeworldz::viewer::parse_uuid(entity->object_id);
                                 const auto content = task_inventory_file(*entity);
                                 if (task_id) {
@@ -2158,10 +2188,10 @@ int main(int argc, char* argv[]) {
                                         refresh_sent = send_udp(viewer_server, endpoint, *outgoing);
                                 }
                             }
-                            std::cout << "{\"level\":" << (copied ? "\"info\"" : "\"warn\"")
-                                      << ",\"message\":\"task inventory item copy "
-                                      << (copied ? "completed" : "rejected") << "\",\"localId\":"
-                                      << task_inventory_update->local_id << ",\"sourceItemId\":"
+                            std::cout << "{\"level\":" << (changed ? "\"info\"" : "\"warn\"")
+                                      << ",\"message\":\"task inventory item " << operation << ' '
+                                      << (changed ? "completed" : "rejected") << "\",\"localId\":"
+                                      << task_inventory_update->local_id << ",\"itemId\":"
                                       << homeworldz::api::json_string(source_id)
                                       << ",\"refreshSent\":" << (refresh_sent ? "true" : "false")
                                       << "}" << std::endl;

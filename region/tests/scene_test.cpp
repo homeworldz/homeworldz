@@ -127,5 +127,29 @@ int main() {
         (permissions.owner_permissions & homeworldz::scene::permission_move) == 0 ||
         (permissions.owner_permissions & homeworldz::scene::permission_modify) != 0)
         return 1;
+    homeworldz::scene::TaskInventoryItem task_item;
+    task_item.name = "Old";
+    task_item.base_permissions = homeworldz::scene::permission_creator;
+    if (!homeworldz::scene::apply_task_inventory_update(
+            task_item, "Renamed", "Description", 0x01020304,
+            homeworldz::scene::permission_all, homeworldz::scene::permission_copy,
+            homeworldz::scene::permission_modify | homeworldz::scene::permission_copy |
+                homeworldz::scene::permission_export,
+            homeworldz::scene::permission_modify, 1, 25) ||
+        task_item.name != "Renamed" || task_item.description != "Description" ||
+        task_item.flags != 0x01020304 ||
+        (task_item.current_permissions & homeworldz::scene::permission_move) == 0 ||
+        task_item.group_permissions != homeworldz::scene::permission_copy ||
+        (task_item.everyone_permissions & homeworldz::scene::permission_modify) != 0 ||
+        (task_item.everyone_permissions & homeworldz::scene::permission_export) != 0 ||
+        (task_item.next_permissions & homeworldz::scene::permission_copy) != 0 ||
+        (task_item.next_permissions & homeworldz::scene::permission_transfer) == 0 ||
+        task_item.sale_type != 1 || task_item.sale_price != 25)
+        return 1;
+    const auto unchanged = task_item;
+    if (homeworldz::scene::apply_task_inventory_update(
+            task_item, "Invalid", "", 0, 0, 0, 0, 0, 4, -1) ||
+        task_item.name != unchanged.name || task_item.current_permissions != unchanged.current_permissions)
+        return 1;
     return 0;
 }

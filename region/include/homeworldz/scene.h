@@ -116,6 +116,12 @@ bool apply_permission_update(
     Entity& entity, std::string_view agent_id, std::uint8_t field, bool set,
     std::uint32_t mask);
 
+bool apply_task_inventory_update(
+    TaskInventoryItem& item, std::string_view name, std::string_view description,
+    std::uint32_t flags, std::uint32_t owner_permissions,
+    std::uint32_t group_permissions, std::uint32_t everyone_permissions,
+    std::uint32_t next_permissions, std::uint8_t sale_type, std::int32_t sale_price);
+
 std::optional<RayIntersection> intersect_box(
     Vector3 ray_start, Vector3 ray_end, Vector3 center, Vector3 scale);
 
