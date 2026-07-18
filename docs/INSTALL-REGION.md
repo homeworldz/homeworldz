@@ -17,7 +17,8 @@ Before installation, ask for:
 - The grid API URL reachable from the region host.
 - The grid public URL advertised to viewers.
 - The assigned region UUID and its unique startup access key.
-- The approved region name and X/Y map coordinates, for reference.
+- The approved region name, X/Y map coordinates, and assigned size (1x1,
+  2x2, or 4x4), for reference.
 - The transitional service token used by non-registration grid APIs.
 - The public hostname or address viewers will use for this region.
 - Approved HTTP/TCP and viewer/UDP ports.
@@ -181,10 +182,18 @@ returns the canonical UUID, name, coordinates, assigned public endpoint and
 viewer port, Grid display name, and public Grid URL. Operator-assigned endpoint
 values override their transitional local INI counterparts before the viewer
 socket opens. Host-local bind addresses and storage paths remain local.
-The current Region executable deliberately rejects an assigned extent larger
-than 256×256 metres after releasing its startup lease; provisioning 2×2 and
-4×4 allocations is supported, but their terrain, physics, and viewer runtime
-will be enabled in subsequent milestones.
+The Grid assigns exactly one of three square extents: 1x1 (256 metres), 2x2
+(512 metres), or 4x4 (1024 metres). The Region constructs terrain storage,
+Jolt bounds, viewer terrain packets, object/avatar coordinate bounds, map
+output, and teleport validation from that authenticated assignment. No local
+size setting can disagree with the authoritative provisioned record.
+
+A packaged 256x256 RAW default terrain is scaled over a larger new Region.
+An exact-width RAW file may instead contain one unsigned height byte per metre
+(512x512 or 1024x1024). Persistent `terrain.f32` contains one little-endian
+float per metre and is accepted only when its dimensions match the current
+assignment. Changing the provisioned size therefore requires a stopped Region,
+a backup, and intentional terrain migration or regeneration.
 
 Default endpoints:
 
@@ -213,7 +222,7 @@ confirm registration at the assigned coordinates before inviting viewers.
 | `grid.service_token` | Transitional internal-API authentication secret | Required |
 | `region.data_path` | Local scene and uploaded-asset state | `var/region` |
 | `region.asset_path` | Static assets imported at startup | `assets/region` |
-| `region.terrain_path` | 256×256 byte RAW terrain | `assets/region/terrain/plateau-square.raw` |
+| `region.terrain_path` | Assigned-width byte RAW terrain; a packaged 256×256 default is scaled when needed | `assets/region/terrain/plateau-square.raw` |
 
 Bind addresses must be IPv4 addresses. Invalid numeric values fall back to
 their defaults.

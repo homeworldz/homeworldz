@@ -10,7 +10,8 @@ than runtime dependencies.
 - [x] Define initial OpenAPI contracts and common error responses.
 - [x] Define the external Postgres requirement and add initial schema migrations.
 - [x] Add a cross-platform Go grid bootstrap and separate region-local bootstrap.
-- [x] Establish INI configuration files with environment-variable overrides.
+- [x] Establish INI configuration files as the authoritative persistent
+  runtime-settings source.
 - [x] Implement `/ping`, `/ready`, and `/version` in both services.
 - [x] Add Windows and Linux CI for builds, tests, and migrations.
 - [x] Add generated or validated C++ and Go API models.
@@ -78,7 +79,7 @@ than runtime dependencies.
   derez, inventory round trips, and static child collision.
 - [x] Add object contents inventory and its permissions, mutation, copy, derez,
   return, and inventory round-trip lifecycle.
-- [ ] Represent physical linksets as compound physics bodies rather than
+- [x] Represent physical linksets as compound physics bodies rather than
   independent self-colliding child bodies.
 - [x] Define the engine-independent script runtime boundary.
 - [x] Select a single-threaded custom C++ bytecode interpreter for Second Life

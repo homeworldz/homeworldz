@@ -118,12 +118,17 @@ and unique startup access key:
     "name": "Welcome",
     "mapX": 1000,
     "mapY": 1000,
+    "size": 1,
+    "maturity": 0,
+    "enabled": true,
     "accessKey": "replace-with-a-unique-random-access-key"
   }
 ]
 ```
 
-UUIDs and map coordinates must be unique. The grid refuses to start if this
+UUIDs and names must be unique, and covered map rectangles may not overlap.
+`size` is exactly `1`, `2`, or `4`, representing a square 256, 512, or 1024
+metre Region; omitted values default to `1`. The grid refuses to start if this
 file is absent or invalid. Protect it like a password file and restart the grid
 after changing it.
 

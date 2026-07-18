@@ -203,13 +203,15 @@ for legacy mutation workflows or a commitment to any particular older viewer.
 
 ### Variable-sized regions
 
-HomeWorldz plans to support exactly three OpenSimulator-style region sizes:
+HomeWorldz supports exactly three OpenSimulator-style region sizes:
 1x1 (256 by 256 metres), 2x2 (512 by 512 metres), and 4x4 (1024 by 1024
 metres). Larger sizes and arbitrary whole multiples are intentionally out of
 scope. This differs from Second Life's public 256-by-256-metre region model
-while preserving the most useful OpenSim content convention. The first
-implementation remains fixed at 1x1, and larger regions must not be simulated
-as loosely joined independent regions.
+while preserving the most useful OpenSim content convention. A larger Region
+is one authority with one scene, terrain, physics world, inventory endpoint,
+and access key—not a group of loosely joined 256-metre Regions. Provisioned
+extents drive terrain persistence and extended viewer packets, Jolt heightfield
+and movement bounds, login/teleport/map size metadata, and live map slicing.
 
 ## Maintenance rule
 

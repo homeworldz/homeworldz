@@ -209,9 +209,11 @@ evolve.
 
 HomeWorldz uses INI files under `config/`. Grid hosts use `grid.ini` and
 `db.ini`; region hosts use `region.ini` and `grid.ini`. Files are separated by
-operational ownership, and environment variables override file values for
-service-manager and deployment integration. Configuration containing secrets is
-not committed.
+operational ownership and are the authoritative persistent settings source.
+Runtime settings do not have environment-variable overrides. The Linux Region
+unit uses a protected environment file only to substitute the provisioned UUID
+and access key into explicit command-line arguments. Configuration containing
+secrets is not committed.
 
 ### Default Ports
 
