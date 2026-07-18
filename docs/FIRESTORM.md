@@ -840,3 +840,12 @@ Opening the Contents tab of the newly created owned prim `Contents1` displayed
 error. The Welcome Region recorded the matching authenticated
 `RequestTaskInventory` and sent the empty `ReplyTaskInventory` for the prim's
 persistent object UUID.
+
+Task-inventory copy, listing, and persistence passed live acceptance on
+2026-07-17. A newly uploaded copyable texture was dragged from Jim Tarber's
+personal Inventory into `Contents1`; Firestorm displayed the copied task item
+immediately after the Region's serial refresh and Xfer response. Closing and
+reopening Edit retained the listing. After a complete Welcome Region restart,
+the item remained in Contents and its texture asset opened successfully in
+Firestorm, confirming the task item UUID, asset reference, creator and owner
+metadata, permission masks, and serial survived the scene-snapshot round trip.
