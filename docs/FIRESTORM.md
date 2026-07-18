@@ -849,3 +849,15 @@ reopening Edit retained the listing. After a complete Welcome Region restart,
 the item remained in Contents and its texture asset opened successfully in
 Firestorm, confirming the task item UUID, asset reference, creator and owner
 metadata, permission masks, and serial survived the scene-snapshot round trip.
+
+Task-inventory multi-item transfer and removal passed live acceptance on
+2026-07-17. Three copies of a personal texture were added to `Contents1`; the
+viewer displayed all three after the inventory file streamed through Xfer
+packets 0, 1, and 2. Removing an item from the middle and then the start of the
+list updated Firestorm within milliseconds and retained the remaining items.
+The first last-item removal exposed a several-second viewer delay because the
+Region reset the serial to zero and omitted the inventory file. Matching
+Halcyon's distinction between a never-populated inventory and a mutated empty
+inventory—incrementing the serial and transferring an actual empty file—made
+the final-row removal display immediately. Task-item deletion remained durable
+across a Region restart and did not remove the copyable personal source item.
