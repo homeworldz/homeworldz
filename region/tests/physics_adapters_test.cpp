@@ -280,6 +280,27 @@ bool jolt_flying_hover_test() {
     const auto state = world->character_state(character);
     return state && std::abs(state->position.z - 2.6) < 0.001;
 }
+
+bool jolt_character_spawn_depenetration_test() {
+    auto world = homeworldz::physics::make_jolt_world();
+    homeworldz::physics::BodyDefinition platform;
+    platform.entity_id = 500;
+    platform.shape.half_extents = {2, 2, 0.25};
+    platform.position = {10, 20, 4.75};
+    world->create_body(platform);
+
+    // Center Z 5.8 puts the 1.8 m capsule's feet at 4.9, slightly inside the
+    // platform whose top is 5.0. Creation must preserve X/Y and lift it clear.
+    const auto embedded = world->create_character({501, {10, 20, 5.8}, 0.3, 1.8, 0.4});
+    const auto recovered = world->character_state(embedded);
+    if (!recovered || recovered->position.x != 10 || recovered->position.y != 20 ||
+        recovered->position.z <= 5.8)
+        return false;
+
+    const auto clear = world->create_character({502, {15, 20, 8}, 0.3, 1.8, 0.4});
+    const auto unchanged = world->character_state(clear);
+    return unchanged && std::abs(unchanged->position.z - 8.0) < 0.001;
+}
 }
 
 int main() {
@@ -291,6 +312,7 @@ int main() {
     if (!jolt_character_step_test()) return 1;
     if (!jolt_character_mass_response_test()) return 1;
     if (!jolt_flying_hover_test()) return 1;
+    if (!jolt_character_spawn_depenetration_test()) return 1;
     if (!smoke_test(homeworldz::physics::make_jolt_world())) return 1;
     if (!smoke_test(homeworldz::physics::make_physx_world())) return 1;
     return 0;

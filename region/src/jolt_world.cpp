@@ -7,6 +7,8 @@
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Body/BodyFilter.h>
 #include <Jolt/Physics/Collision/CastResult.h>
+#include <Jolt/Physics/Collision/CollideShape.h>
+#include <Jolt/Physics/Collision/CollisionCollectorImpl.h>
 #include <Jolt/Physics/Collision/RayCast.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
@@ -272,9 +274,42 @@ public:
         settings.mMass = static_cast<float>(std::max(1.0, definition.mass));
         settings.mMaxStrength = static_cast<float>(std::max(
             0.0, definition.mass * definition.maximum_horizontal_acceleration));
-        const scene::Vector3 feet{
+        scene::Vector3 feet{
             definition.position.x, definition.position.y,
             definition.position.z - definition.height * 0.5};
+        // Match Halcyon's mature sky-platform login behavior: if the restored
+        // capsule overlaps scene geometry, search upward only for the nearest
+        // clear creation point. A fixed offset can still leave a capsule inside
+        // thick geometry or unnecessarily move avatars that were already clear.
+        const auto overlaps = [&](const scene::Vector3& candidate) {
+            JPH::CollideShapeSettings collide_settings;
+            JPH::ClosestHitCollisionCollector<JPH::CollideShapeCollector> collector;
+            const auto center_of_mass = JPH::RVec3(vec(candidate)) +
+                JPH::RVec3(settings.mShape->GetCenterOfMass());
+            system_.GetNarrowPhaseQuery().CollideShape(
+                settings.mShape, JPH::Vec3::sOne(),
+                JPH::RMat44::sTranslation(center_of_mass), collide_settings,
+                JPH::RVec3::sZero(), collector);
+            // Jolt can report exact surface contact as a zero-depth hit. That is
+            // already a valid standing position and must not trigger a login lift.
+            return collector.HadHit() && collector.mHit.mPenetrationDepth > 0.001F;
+        };
+        if (overlaps(feet)) {
+            constexpr int maximum_attempts = 8;
+            constexpr double push_multiplier = 1.5;
+            double push = 0.1;
+            auto candidate = feet;
+            bool found_clear = false;
+            for (int attempt = 0; attempt < maximum_attempts; ++attempt) {
+                candidate.z += push;
+                if (!overlaps(candidate)) {
+                    found_clear = true;
+                    break;
+                }
+                push *= push_multiplier;
+            }
+            if (found_clear) feet = candidate;
+        }
         auto character = JPH::Ref<JPH::CharacterVirtual>(new JPH::CharacterVirtual(
             &settings, JPH::RVec3(vec(feet)),
             JPH::Quat::sIdentity(), &system_));
