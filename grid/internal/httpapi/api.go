@@ -107,6 +107,8 @@ func New(ready ReadinessChecker, version string, options Options) http.Handler {
 	mux.HandleFunc("/api/v1/transits/", a.transitByID)
 	mux.HandleFunc("/api/v1/task-transfers", a.taskTransfersRoot)
 	mux.HandleFunc("/api/v1/task-transfers/", a.taskTransferByID)
+	mux.HandleFunc("/api/v1/task-extractions", a.taskExtractionsRoot)
+	mux.HandleFunc("/api/v1/task-extractions/", a.taskExtractionByID)
 	mux.HandleFunc("/", a.notFound)
 	return withRequestID(withRequestLogging(
 		authenticateInternal(mux, options.ServiceToken), options.Logger,

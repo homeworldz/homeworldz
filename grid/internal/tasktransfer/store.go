@@ -42,10 +42,33 @@ type Prepare struct {
 	ID, UserID, SourceItemID, RegionID, ObjectID, TaskItemID string
 }
 
+type Extraction struct {
+	ID                  string         `json:"id"`
+	UserID              string         `json:"userId"`
+	RegionID            string         `json:"regionId"`
+	ObjectID            string         `json:"objectId"`
+	SourceTaskItemID    string         `json:"sourceTaskItemId"`
+	DestinationFolderID string         `json:"destinationFolderId"`
+	PersonalItemID      string         `json:"personalItemId"`
+	Item                inventory.Item `json:"item"`
+	State               State          `json:"state"`
+	CreatedAt           time.Time      `json:"createdAt"`
+	UpdatedAt           time.Time      `json:"updatedAt"`
+}
+
+type PrepareExtraction struct {
+	ID, UserID, RegionID, ObjectID, SourceTaskItemID, DestinationFolderID,
+	PersonalItemID string
+	Item inventory.Item
+}
+
 type Store interface {
 	Prepare(context.Context, Prepare) (Transfer, error)
 	Pending(context.Context, string) ([]Transfer, error)
 	Finalize(context.Context, string, string) (Transfer, error)
+	PrepareExtraction(context.Context, PrepareExtraction) (Extraction, error)
+	PendingExtractions(context.Context, string) ([]Extraction, error)
+	FinalizeExtraction(context.Context, string, string) (Extraction, error)
 }
 
 type PostgresStore struct{ db *sql.DB }
@@ -186,4 +209,154 @@ func (s *PostgresStore) transition(ctx context.Context, id, regionID string, sta
 		return existing, nil
 	}
 	return Transfer{}, ErrConflict
+}
+
+const extractionColumns = `id, user_id, region_id, object_id, source_task_item_id,
+destination_folder_id, personal_item_id, item, state, created_at, updated_at`
+
+func scanExtraction(row scanner) (Extraction, error) {
+	var value Extraction
+	var encoded []byte
+	err := row.Scan(&value.ID, &value.UserID, &value.RegionID, &value.ObjectID,
+		&value.SourceTaskItemID, &value.DestinationFolderID, &value.PersonalItemID,
+		&encoded, &value.State, &value.CreatedAt, &value.UpdatedAt)
+	if err == nil {
+		err = json.Unmarshal(encoded, &value.Item)
+	}
+	return value, err
+}
+
+func sameExtraction(value Extraction, input PrepareExtraction) bool {
+	return value.ID == input.ID && value.UserID == input.UserID &&
+		value.RegionID == input.RegionID && value.ObjectID == input.ObjectID &&
+		value.SourceTaskItemID == input.SourceTaskItemID &&
+		value.DestinationFolderID == input.DestinationFolderID &&
+		value.PersonalItemID == input.PersonalItemID
+}
+
+func (s *PostgresStore) PrepareExtraction(ctx context.Context, input PrepareExtraction) (Extraction, error) {
+	if input.ID == "" || input.UserID == "" || input.RegionID == "" || input.ObjectID == "" ||
+		input.SourceTaskItemID == "" || input.DestinationFolderID == "" || input.PersonalItemID == "" ||
+		input.Item.AssetID == "" || input.Item.CurrentPermissions&0x00008000 != 0 {
+		return Extraction{}, ErrInvalid
+	}
+	if input.Item.OwnerUserID != input.UserID {
+		return Extraction{}, ErrInvalid
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Extraction{}, fmt.Errorf("begin task extraction: %w", err)
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock(hashtext($1))",
+		input.RegionID+"/"+input.ObjectID+"/"+input.SourceTaskItemID); err != nil {
+		return Extraction{}, fmt.Errorf("lock task extraction: %w", err)
+	}
+	existing, err := scanExtraction(tx.QueryRowContext(ctx, "SELECT "+extractionColumns+
+		" FROM task_inventory_extractions WHERE region_id=$1 AND object_id=$2 AND source_task_item_id=$3 FOR UPDATE",
+		input.RegionID, input.ObjectID, input.SourceTaskItemID))
+	if err == nil {
+		if !sameExtraction(existing, input) {
+			return Extraction{}, ErrConflict
+		}
+		return existing, tx.Commit()
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return Extraction{}, fmt.Errorf("find task extraction: %w", err)
+	}
+	var folderOwner string
+	if err := tx.QueryRowContext(ctx, `SELECT owner_user_id FROM inventory_folders
+		WHERE id=$1 FOR UPDATE`, input.DestinationFolderID).Scan(&folderOwner); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Extraction{}, ErrNotFound
+		}
+		return Extraction{}, fmt.Errorf("find task extraction folder: %w", err)
+	}
+	if folderOwner != input.UserID {
+		return Extraction{}, ErrInvalid
+	}
+	input.Item.ID = input.PersonalItemID
+	input.Item.FolderID = input.DestinationFolderID
+	encoded, err := json.Marshal(input.Item)
+	if err != nil {
+		return Extraction{}, fmt.Errorf("encode task extraction item: %w", err)
+	}
+	value, err := scanExtraction(tx.QueryRowContext(ctx, `INSERT INTO task_inventory_extractions
+		(id,user_id,region_id,object_id,source_task_item_id,destination_folder_id,personal_item_id,item,state)
+		VALUES($1,$2,$3,$4,$5,$6,$7,$8,'prepared') RETURNING `+extractionColumns,
+		input.ID, input.UserID, input.RegionID, input.ObjectID, input.SourceTaskItemID,
+		input.DestinationFolderID, input.PersonalItemID, encoded))
+	if err != nil {
+		return Extraction{}, fmt.Errorf("insert task extraction: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return Extraction{}, fmt.Errorf("commit task extraction: %w", err)
+	}
+	return value, nil
+}
+
+func (s *PostgresStore) PendingExtractions(ctx context.Context, regionID string) ([]Extraction, error) {
+	rows, err := s.db.QueryContext(ctx, "SELECT "+extractionColumns+
+		" FROM task_inventory_extractions WHERE region_id=$1 AND state='prepared' ORDER BY created_at", regionID)
+	if err != nil {
+		return nil, fmt.Errorf("list pending task extractions: %w", err)
+	}
+	defer rows.Close()
+	var result []Extraction
+	for rows.Next() {
+		value, err := scanExtraction(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan pending task extraction: %w", err)
+		}
+		result = append(result, value)
+	}
+	return result, rows.Err()
+}
+
+func (s *PostgresStore) FinalizeExtraction(ctx context.Context, id, regionID string) (Extraction, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Extraction{}, fmt.Errorf("begin final task extraction: %w", err)
+	}
+	defer tx.Rollback()
+	value, err := scanExtraction(tx.QueryRowContext(ctx, "SELECT "+extractionColumns+
+		" FROM task_inventory_extractions WHERE id=$1 FOR UPDATE", id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return Extraction{}, ErrNotFound
+	}
+	if err != nil {
+		return Extraction{}, fmt.Errorf("find final task extraction: %w", err)
+	}
+	if value.RegionID != regionID {
+		return Extraction{}, ErrConflict
+	}
+	if value.State == Finalized {
+		return value, tx.Commit()
+	}
+	item := value.Item
+	_, err = tx.ExecContext(ctx, `INSERT INTO inventory_items
+		(id,owner_user_id,creator_user_id,folder_id,asset_id,asset_type,inventory_type,name,
+		description,flags,base_permissions,current_permissions,everyone_permissions,next_permissions,
+		sale_type,sale_price,created_at,updated_at)
+		VALUES($1,$2,NULLIF($3,'')::uuid,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,now(),now())`,
+		value.PersonalItemID, value.UserID, item.CreatorUserID, value.DestinationFolderID,
+		item.AssetID, item.AssetType, item.InventoryType, item.Name, item.Description, item.Flags,
+		item.BasePermissions, item.CurrentPermissions, item.EveryonePermissions,
+		item.NextPermissions, item.SaleType, item.SalePrice)
+	if err != nil {
+		return Extraction{}, fmt.Errorf("create extracted inventory item: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE inventory_folders SET version=version+1,
+		updated_at=now() WHERE id=$1 AND owner_user_id=$2`, value.DestinationFolderID, value.UserID); err != nil {
+		return Extraction{}, fmt.Errorf("update extraction folder: %w", err)
+	}
+	value, err = scanExtraction(tx.QueryRowContext(ctx, `UPDATE task_inventory_extractions
+		SET state='finalized',updated_at=now() WHERE id=$1 RETURNING `+extractionColumns, id))
+	if err != nil {
+		return Extraction{}, fmt.Errorf("finalize task extraction: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return Extraction{}, fmt.Errorf("commit final task extraction: %w", err)
+	}
+	return value, nil
 }

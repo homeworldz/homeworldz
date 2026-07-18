@@ -34,6 +34,15 @@ public:
             return {200, R"({"id":"99999999-9999-4999-8999-999999999999","userId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","sourceItemId":"44444444-4444-4444-8444-444444444444","regionId":"22222222-2222-4222-8222-222222222222","objectId":"55555555-5555-4555-8555-555555555555","taskItemId":"66666666-6666-4666-8666-666666666666","item":{"id":"44444444-4444-4444-8444-444444444444","ownerUserId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","creatorUserId":"77777777-7777-4777-8777-777777777777","folderId":"88888888-8888-4888-8888-888888888888","assetId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","assetType":0,"inventoryType":0,"name":"No Copy Texture","description":"","flags":0,"basePermissions":647168,"currentPermissions":614400,"everyonePermissions":0,"nextPermissions":532480,"saleType":0,"salePrice":0,"createdAt":"2026-07-18T00:00:00Z"},"state":"prepared","createdAt":"2026-07-18T00:00:00Z","updatedAt":"2026-07-18T00:00:00Z"})"};
         if (method == "GET" && path.starts_with("/api/v1/task-transfers?"))
             return {200, R"([{"id":"99999999-9999-4999-8999-999999999999","userId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","sourceItemId":"44444444-4444-4444-8444-444444444444","regionId":"22222222-2222-4222-8222-222222222222","objectId":"55555555-5555-4555-8555-555555555555","taskItemId":"66666666-6666-4666-8666-666666666666","item":{"id":"44444444-4444-4444-8444-444444444444","ownerUserId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","creatorUserId":"77777777-7777-4777-8777-777777777777","folderId":"88888888-8888-4888-8888-888888888888","assetId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","assetType":0,"inventoryType":0,"name":"No Copy Texture","description":"","flags":0,"basePermissions":647168,"currentPermissions":614400,"everyonePermissions":0,"nextPermissions":532480,"saleType":0,"salePrice":0,"createdAt":"2026-07-18T00:00:00Z"},"state":"prepared","createdAt":"2026-07-18T00:00:00Z","updatedAt":"2026-07-18T00:00:00Z"}])"};
+        const auto extraction = [](std::string_view state) {
+            return std::string{R"({"id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","userId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","regionId":"22222222-2222-4222-8222-222222222222","objectId":"55555555-5555-4555-8555-555555555555","sourceTaskItemId":"66666666-6666-4666-8666-666666666666","destinationFolderId":"88888888-8888-4888-8888-888888888888","personalItemId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","item":{"id":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","ownerUserId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","creatorUserId":"77777777-7777-4777-8777-777777777777","folderId":"88888888-8888-4888-8888-888888888888","assetId":"dddddddd-dddd-4ddd-8ddd-dddddddddddd","assetType":0,"inventoryType":0,"name":"No Copy Texture","description":"","flags":0,"basePermissions":647168,"currentPermissions":614400,"everyonePermissions":0,"nextPermissions":565248,"saleType":0,"salePrice":0},"state":")"} + std::string(state) + R"(","createdAt":"2026-07-18T00:00:00Z","updatedAt":"2026-07-18T00:00:00Z"})";
+        };
+        if (method == "POST" && path == "/api/v1/task-extractions")
+            return {200, extraction("prepared")};
+        if (method == "GET" && path.starts_with("/api/v1/task-extractions?"))
+            return {200, "[" + extraction("prepared") + "]"};
+        if (method == "POST" && path.starts_with("/api/v1/task-extractions/") && path.ends_with("/finalize"))
+            return {200, extraction("finalized")};
         if (method == "POST" && path.ends_with("/finalize"))
             return {200, R"({"id":"99999999-9999-4999-8999-999999999999","state":"finalized"})"};
         if (method == "POST" && path.ends_with("/prepare-arrival"))
@@ -149,6 +158,30 @@ int main() {
             task_transfer->id, transit_request.destination_region_id) ||
         transport->requests.back().path !=
             "/api/v1/task-transfers/" + task_transfer->id + "/finalize") return 1;
+    const homeworldz::grid::TaskInventoryExtractionRequest extraction_request{
+        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", transit_request.agent_id,
+        transit_request.destination_region_id, "55555555-5555-4555-8555-555555555555",
+        "66666666-6666-4666-8666-666666666666", "88888888-8888-4888-8888-888888888888",
+        "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        {"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "77777777-7777-4777-8777-777777777777",
+         transit_request.agent_id, "88888888-8888-4888-8888-888888888888",
+         "dddddddd-dddd-4ddd-8ddd-dddddddddddd", 0, 0, "No Copy Texture", "", 0,
+         0x0009e000, 0x00096000, 0, 0x0008a000, 0, 0}};
+    const auto extraction = client.prepare_task_inventory_extraction(extraction_request);
+    if (!extraction || extraction->state != "prepared" ||
+        extraction->item.current_permissions != 0x00096000 ||
+        transport->requests.back().body.find(
+            R"("sourceTaskItemId":"66666666-6666-4666-8666-666666666666")") == std::string::npos)
+        return 1;
+    const auto pending_extractions = client.pending_task_inventory_extractions(
+        transit_request.destination_region_id);
+    if (!pending_extractions || pending_extractions->size() != 1 ||
+        pending_extractions->front().id != extraction->id) return 1;
+    const auto finalized_extraction = client.finalize_task_inventory_extraction(
+        extraction->id, transit_request.destination_region_id);
+    if (!finalized_extraction || finalized_extraction->state != "finalized" ||
+        transport->requests.back().path !=
+            "/api/v1/task-extractions/" + extraction->id + "/finalize") return 1;
     homeworldz::grid::RegistrationLifecycle provisioned_lifecycle(
         client, provisioned_settings, provisioned->id);
     if (!provisioned_lifecycle.start(started) ||

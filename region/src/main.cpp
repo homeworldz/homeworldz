@@ -992,6 +992,44 @@ int main(int argc, char* argv[]) {
         return viewer_grid && viewer_grid->finalize_task_inventory_transfer(
             transfer.id, provisioned_region_id);
     };
+    const auto apply_task_inventory_extraction = [&](const homeworldz::grid::TaskInventoryExtraction& extraction)
+        -> std::optional<homeworldz::grid::TaskInventoryExtraction> {
+        homeworldz::scene::Entity* target = nullptr;
+        for (const auto& [entity_id, entity] : scene.entities()) {
+            if (entity.object_id == extraction.object_id) {
+                target = scene.find(entity_id);
+                break;
+            }
+        }
+        if (!target || target->owner_id != extraction.user_id) return std::nullopt;
+        const auto found = std::find_if(
+            target->task_inventory.begin(), target->task_inventory.end(),
+            [&](const auto& item) { return item.item_id == extraction.source_task_item_id; });
+        if (found != target->task_inventory.end()) {
+            if (found->owner_id != extraction.user_id ||
+                found->asset_id != extraction.item.asset_id ||
+                (found->current_permissions & homeworldz::scene::permission_copy) != 0)
+                return std::nullopt;
+            const auto index = static_cast<std::size_t>(
+                std::distance(target->task_inventory.begin(), found));
+            const auto removed = *found;
+            const auto previous_serial = target->task_inventory_serial;
+            target->task_inventory.erase(found);
+            target->task_inventory_serial = previous_serial == 65535
+                ? 1 : static_cast<std::uint16_t>(previous_serial + 1);
+            try {
+                storage->save_snapshot(scene);
+            } catch (...) {
+                target->task_inventory.insert(
+                    target->task_inventory.begin() + static_cast<std::ptrdiff_t>(index), removed);
+                target->task_inventory_serial = previous_serial;
+                throw;
+            }
+        }
+        return viewer_grid
+            ? viewer_grid->finalize_task_inventory_extraction(extraction.id, provisioned_region_id)
+            : std::nullopt;
+    };
     if (viewer_grid) {
         try {
             const auto pending = viewer_grid->pending_task_inventory_transfers(provisioned_region_id);
@@ -1008,6 +1046,23 @@ int main(int argc, char* argv[]) {
             }
         } catch (const std::exception& error) {
             std::cerr << "{\"level\":\"warning\",\"message\":\"pending task inventory transfer reconciliation failed\",\"error\":"
+                      << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+        }
+        try {
+            const auto pending = viewer_grid->pending_task_inventory_extractions(provisioned_region_id);
+            if (!pending) throw std::runtime_error("load pending task inventory extractions");
+            std::size_t reconciled = 0;
+            for (const auto& extraction : *pending)
+                if (apply_task_inventory_extraction(extraction)) ++reconciled;
+            if (!pending->empty()) {
+                std::cout << "{\"level\":"
+                          << (reconciled == pending->size() ? "\"info\"" : "\"warning\"")
+                          << ",\"message\":\"pending task inventory extractions reconciled\",\"completed\":"
+                          << reconciled << ",\"pending\":" << pending->size() << "}"
+                          << std::endl;
+            }
+        } catch (const std::exception& error) {
+            std::cerr << "{\"level\":\"warning\",\"message\":\"pending task inventory extraction reconciliation failed\",\"error\":"
                       << homeworldz::api::json_string(error.what()) << "}" << std::endl;
         }
     }
@@ -2350,32 +2405,45 @@ int main(int argc, char* argv[]) {
                             const auto task_item_id = homeworldz::viewer::format_uuid(
                                 task_inventory_move->item_id);
                             const auto* entity = scene.find(task_inventory_move->local_id);
-                            const homeworldz::scene::TaskInventoryItem* task_item = nullptr;
+                            std::optional<homeworldz::scene::TaskInventoryItem> task_item;
                             if (entity && entity->owner_id == agent_id) {
                                 const auto found = std::find_if(
                                     entity->task_inventory.begin(), entity->task_inventory.end(),
                                     [&](const auto& item) { return item.item_id == task_item_id; });
-                                if (found != entity->task_inventory.end() && found->owner_id == agent_id &&
-                                    (found->current_permissions &
-                                        homeworldz::scene::permission_copy) != 0)
-                                    task_item = &*found;
+                                if (found != entity->task_inventory.end() && found->owner_id == agent_id)
+                                    task_item = *found;
                             }
                             const auto personal_item_id = homeworldz::viewer::random_uuid();
                             bool created = false;
+                            bool removed_from_task = false;
                             if (task_item && viewer_grid) {
                                 try {
-                                    created = viewer_grid->create_inventory_item(
-                                        agent_id, homeworldz::grid::InventoryItem{
-                                            personal_item_id, task_item->creator_id, agent_id,
-                                            folder_id, task_item->asset_id, task_item->asset_type,
-                                            task_item->inventory_type, task_item->name,
-                                            task_item->description, task_item->flags,
-                                            task_item->base_permissions,
-                                            task_item->current_permissions, 0,
-                                            task_item->next_permissions, task_item->sale_type,
-                                            task_item->sale_price});
+                                    const homeworldz::grid::InventoryItem personal{
+                                        personal_item_id, task_item->creator_id, agent_id,
+                                        folder_id, task_item->asset_id, task_item->asset_type,
+                                        task_item->inventory_type, task_item->name,
+                                        task_item->description, task_item->flags,
+                                        task_item->base_permissions,
+                                        task_item->current_permissions,
+                                        task_item->everyone_permissions,
+                                        task_item->next_permissions, task_item->sale_type,
+                                        task_item->sale_price};
+                                    if ((task_item->current_permissions &
+                                            homeworldz::scene::permission_copy) != 0) {
+                                        created = viewer_grid->create_inventory_item(agent_id, personal);
+                                    } else {
+                                        const auto prepared = viewer_grid->prepare_task_inventory_extraction({
+                                            homeworldz::viewer::random_uuid(), agent_id,
+                                            provisioned_region_id, entity->object_id, task_item_id,
+                                            folder_id, personal_item_id, personal});
+                                        const auto finalized = prepared
+                                            ? apply_task_inventory_extraction(*prepared)
+                                            : std::nullopt;
+                                        created = finalized.has_value();
+                                        removed_from_task = created;
+                                    }
                                 } catch (const std::exception& error) {
-                                    std::cout << "{\"level\":\"error\",\"message\":\"task inventory personal copy failed\",\"error\":"
+                                    std::cout << "{\"level\":\"error\",\"message\":\"task inventory personal move failed\",\"error\":"
                                               << homeworldz::api::json_string(error.what()) << "}"
                                               << std::endl;
                                 }
@@ -2401,7 +2469,7 @@ int main(int argc, char* argv[]) {
                                     response_item.flags = task_item->flags;
                                     response_item.base_permissions = task_item->base_permissions;
                                     response_item.current_permissions = task_item->current_permissions;
-                                    response_item.everyone_permissions = 0;
+                                    response_item.everyone_permissions = task_item->everyone_permissions;
                                     response_item.next_permissions = task_item->next_permissions;
                                     response_item.sale_type = task_item->sale_type;
                                     response_item.sale_price = task_item->sale_price;
@@ -2418,12 +2486,36 @@ int main(int argc, char* argv[]) {
                                         sent = send_udp(viewer_server, endpoint, *outgoing);
                                 }
                             }
+                            bool task_refresh_sent = false;
+                            if (removed_from_task) {
+                                const auto* updated = scene.find(task_inventory_move->local_id);
+                                const auto task_id = updated
+                                    ? homeworldz::viewer::parse_uuid(updated->object_id)
+                                    : std::nullopt;
+                                if (updated && task_id) {
+                                    const auto content = task_inventory_file(*updated);
+                                    const auto filename = "inventory_" +
+                                        homeworldz::viewer::random_uuid() + ".tmp";
+                                    pending_task_inventory_files.insert_or_assign(
+                                        endpoint + '|' + filename, content);
+                                    auto wire_filename = filename;
+                                    wire_filename.push_back('\0');
+                                    const auto payload = homeworldz::viewer::encode_reply_task_inventory({
+                                        *task_id, static_cast<std::int16_t>(updated->task_inventory_serial),
+                                        wire_filename});
+                                    if (const auto outgoing = circuits.send(
+                                            endpoint, payload, true, now, true))
+                                        task_refresh_sent = send_udp(viewer_server, endpoint, *outgoing);
+                                }
+                            }
                             std::cout << "{\"level\":" << (created ? "\"info\"" : "\"warn\"")
-                                      << ",\"message\":\"copyable task inventory move "
+                                      << ",\"message\":\"task inventory personal move "
                                       << (created ? "completed" : "rejected") << "\",\"localId\":"
                                       << task_inventory_move->local_id << ",\"taskItemId\":"
                                       << homeworldz::api::json_string(task_item_id)
                                       << ",\"viewerUpdateSent\":" << (sent ? "true" : "false")
+                                      << ",\"removedFromTask\":" << (removed_from_task ? "true" : "false")
+                                      << ",\"taskRefreshSent\":" << (task_refresh_sent ? "true" : "false")
                                       << "}" << std::endl;
                         }
                         const auto task_inventory_xfer =

@@ -33,6 +33,22 @@ func (s *memoryTaskTransferStore) Finalize(_ context.Context, id, regionID strin
 	return s.value, nil
 }
 
+func (s *memoryTaskTransferStore) PrepareExtraction(_ context.Context, input tasktransfer.PrepareExtraction) (tasktransfer.Extraction, error) {
+	return tasktransfer.Extraction{ID: input.ID, UserID: input.UserID, RegionID: input.RegionID,
+		ObjectID: input.ObjectID, SourceTaskItemID: input.SourceTaskItemID,
+		DestinationFolderID: input.DestinationFolderID, PersonalItemID: input.PersonalItemID,
+		Item: input.Item, State: tasktransfer.Prepared}, nil
+}
+
+func (s *memoryTaskTransferStore) PendingExtractions(_ context.Context, regionID string) ([]tasktransfer.Extraction, error) {
+	return []tasktransfer.Extraction{{ID: "70000000-0000-4000-8000-000000000007",
+		RegionID: regionID, State: tasktransfer.Prepared}}, nil
+}
+
+func (s *memoryTaskTransferStore) FinalizeExtraction(_ context.Context, id, regionID string) (tasktransfer.Extraction, error) {
+	return tasktransfer.Extraction{ID: id, RegionID: regionID, State: tasktransfer.Finalized}, nil
+}
+
 func TestTaskTransferAPI(t *testing.T) {
 	store := &memoryTaskTransferStore{}
 	handler := New(nil, "test", Options{ServiceToken: "secret", TaskTransfers: store})
@@ -60,5 +76,41 @@ func TestTaskTransferAPI(t *testing.T) {
 		`{"regionId":"`+regionID+`"}`, 200)
 	if finalized.State != tasktransfer.Finalized {
 		t.Fatalf("finalized = %#v", finalized)
+	}
+}
+
+func TestTaskExtractionAPI(t *testing.T) {
+	store := &memoryTaskTransferStore{}
+	handler := New(nil, "test", Options{ServiceToken: "secret", TaskTransfers: store})
+	const extractionID = "70000000-0000-4000-8000-000000000007"
+	const userID = "20000000-0000-4000-8000-000000000002"
+	const regionID = "40000000-0000-4000-8000-000000000004"
+	const objectID = "50000000-0000-4000-8000-000000000005"
+	const taskID = "60000000-0000-4000-8000-000000000006"
+	const folderID = "80000000-0000-4000-8000-000000000008"
+	const personalID = "90000000-0000-4000-8000-000000000009"
+	body := `{"id":"` + extractionID + `","userId":"` + userID +
+		`","regionId":"` + regionID + `","objectId":"` + objectID +
+		`","sourceTaskItemId":"` + taskID + `","destinationFolderId":"` + folderID +
+		`","personalItemId":"` + personalID + `","item":{"creatorUserId":"` + userID +
+		`","ownerUserId":"` + userID + `","assetId":"30000000-0000-4000-8000-000000000003",` +
+		`"assetType":0,"inventoryType":0,"name":"No Copy","description":"",` +
+		`"flags":0,"basePermissions":647168,"currentPermissions":614400,` +
+		`"everyonePermissions":0,"nextPermissions":565248,"saleType":0,"salePrice":0}}`
+	prepared := requestRegion[tasktransfer.Extraction](t, handler, "POST",
+		"/api/v1/task-extractions", body, 200)
+	if prepared.State != tasktransfer.Prepared || prepared.Item.Name != "No Copy" {
+		t.Fatalf("prepared extraction = %#v", prepared)
+	}
+	pending := requestRegion[[]tasktransfer.Extraction](t, handler, "GET",
+		"/api/v1/task-extractions?regionId="+regionID, "", 200)
+	if len(pending) != 1 || pending[0].ID != extractionID {
+		t.Fatalf("pending extractions = %#v", pending)
+	}
+	finalized := requestRegion[tasktransfer.Extraction](t, handler, "POST",
+		"/api/v1/task-extractions/"+extractionID+"/finalize",
+		`{"regionId":"`+regionID+`"}`, 200)
+	if finalized.State != tasktransfer.Finalized {
+		t.Fatalf("finalized extraction = %#v", finalized)
 	}
 }

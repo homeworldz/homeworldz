@@ -338,6 +338,62 @@ std::optional<std::vector<TaskInventoryTransfer>> task_transfer_list_from_json(
     return std::nullopt;
 }
 
+std::optional<TaskInventoryExtraction> task_extraction_from_json(std::string_view body) {
+    TaskInventoryExtraction value;
+    value.id = json_field(body, "id");
+    value.user_id = json_field(body, "userId");
+    value.region_id = json_field(body, "regionId");
+    value.object_id = json_field(body, "objectId");
+    value.source_task_item_id = json_field(body, "sourceTaskItemId");
+    value.destination_folder_id = json_field(body, "destinationFolderId");
+    value.personal_item_id = json_field(body, "personalItemId");
+    value.state = json_field(body, "state");
+    const auto item = json_object(body, "item");
+    if (!item) return std::nullopt;
+    const auto parsed_item = inventory_item_from_json(*item, value.user_id);
+    if (value.id.empty() || value.user_id.empty() || value.region_id.empty() ||
+        value.object_id.empty() || value.source_task_item_id.empty() ||
+        value.destination_folder_id.empty() || value.personal_item_id.empty() ||
+        value.state.empty() || !parsed_item)
+        return std::nullopt;
+    value.item = *parsed_item;
+    return value;
+}
+
+std::optional<std::vector<TaskInventoryExtraction>> task_extraction_list_from_json(
+    std::string_view body) {
+    std::vector<TaskInventoryExtraction> result;
+    std::size_t position = body.find('[');
+    if (position == std::string_view::npos) return std::nullopt;
+    ++position;
+    while (position < body.size()) {
+        while (position < body.size() && (body[position] == ' ' || body[position] == ',')) ++position;
+        if (position < body.size() && body[position] == ']') return result;
+        if (position >= body.size() || body[position] != '{') return std::nullopt;
+        const auto start = position;
+        std::size_t depth = 0;
+        bool quoted = false;
+        bool escaped = false;
+        for (; position < body.size(); ++position) {
+            const auto character = body[position];
+            if (quoted) {
+                if (escaped) escaped = false;
+                else if (character == '\\') escaped = true;
+                else if (character == '"') quoted = false;
+                continue;
+            }
+            if (character == '"') quoted = true;
+            else if (character == '{') ++depth;
+            else if (character == '}' && --depth == 0) { ++position; break; }
+        }
+        if (depth != 0) return std::nullopt;
+        const auto parsed = task_extraction_from_json(body.substr(start, position - start));
+        if (!parsed) return std::nullopt;
+        result.push_back(*parsed);
+    }
+    return std::nullopt;
+}
+
 } // namespace
 
 std::shared_ptr<Transport> socket_transport(std::string grid_url, std::string service_token) {
@@ -648,6 +704,49 @@ bool Client::finalize_task_inventory_transfer(
     const auto body = "{\"regionId\":" + api::json_string(region_id) + '}';
     return transport_->send("POST", "/api/v1/task-transfers/" +
         std::string(transfer_id) + "/finalize", body).status_code == 200;
+}
+
+std::optional<TaskInventoryExtraction> Client::prepare_task_inventory_extraction(
+    const TaskInventoryExtractionRequest& request) {
+    const auto& item = request.item;
+    const auto body = "{\"id\":" + api::json_string(request.id) +
+        ",\"userId\":" + api::json_string(request.user_id) +
+        ",\"regionId\":" + api::json_string(request.region_id) +
+        ",\"objectId\":" + api::json_string(request.object_id) +
+        ",\"sourceTaskItemId\":" + api::json_string(request.source_task_item_id) +
+        ",\"destinationFolderId\":" + api::json_string(request.destination_folder_id) +
+        ",\"personalItemId\":" + api::json_string(request.personal_item_id) +
+        ",\"item\":{\"creatorUserId\":" + api::json_string(item.creator_id) +
+        ",\"ownerUserId\":" + api::json_string(item.owner_id) +
+        ",\"assetId\":" + api::json_string(item.asset_id) +
+        ",\"assetType\":" + std::to_string(item.asset_type) +
+        ",\"inventoryType\":" + std::to_string(item.inventory_type) +
+        ",\"name\":" + api::json_string(item.name) +
+        ",\"description\":" + api::json_string(item.description) +
+        ",\"flags\":" + std::to_string(item.flags) +
+        ",\"basePermissions\":" + std::to_string(item.base_permissions) +
+        ",\"currentPermissions\":" + std::to_string(item.current_permissions) +
+        ",\"everyonePermissions\":" + std::to_string(item.everyone_permissions) +
+        ",\"nextPermissions\":" + std::to_string(item.next_permissions) +
+        ",\"saleType\":" + std::to_string(item.sale_type) +
+        ",\"salePrice\":" + std::to_string(item.sale_price) + "}}";
+    const auto response = transport_->send("POST", "/api/v1/task-extractions", body);
+    return response.status_code == 200 ? task_extraction_from_json(response.body) : std::nullopt;
+}
+
+std::optional<std::vector<TaskInventoryExtraction>> Client::pending_task_inventory_extractions(
+    std::string_view region_id) {
+    const auto response = transport_->send(
+        "GET", "/api/v1/task-extractions?regionId=" + std::string(region_id), {});
+    return response.status_code == 200 ? task_extraction_list_from_json(response.body) : std::nullopt;
+}
+
+std::optional<TaskInventoryExtraction> Client::finalize_task_inventory_extraction(
+    std::string_view extraction_id, std::string_view region_id) {
+    const auto body = "{\"regionId\":" + api::json_string(region_id) + '}';
+    const auto response = transport_->send("POST", "/api/v1/task-extractions/" +
+        std::string(extraction_id) + "/finalize", body);
+    return response.status_code == 200 ? task_extraction_from_json(response.body) : std::nullopt;
 }
 
 bool Client::register_asset(std::string_view asset_id, std::string_view creator_id,
