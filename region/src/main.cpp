@@ -2111,11 +2111,33 @@ int main(int argc, char* argv[]) {
                                 std::cout << "{\"level\":\"error\",\"message\":\"task inventory copy failed\",\"error\":"
                                           << homeworldz::api::json_string(error.what()) << "}" << std::endl;
                             }
+                            bool refresh_sent = false;
+                            if (copied && entity) {
+                                const auto task_id = homeworldz::viewer::parse_uuid(entity->object_id);
+                                const auto content = task_inventory_file(*entity);
+                                if (task_id && content.size() <= 1000) {
+                                    const auto filename =
+                                        "inventory_" + homeworldz::viewer::random_uuid() + ".tmp";
+                                    pending_task_inventory_files.insert_or_assign(
+                                        endpoint + '|' + filename, content);
+                                    auto wire_filename = filename;
+                                    wire_filename.push_back('\0');
+                                    const auto payload = homeworldz::viewer::encode_reply_task_inventory({
+                                        *task_id,
+                                        static_cast<std::int16_t>(entity->task_inventory_serial),
+                                        wire_filename});
+                                    if (const auto outgoing = circuits.send(
+                                            endpoint, payload, true, now, true))
+                                        refresh_sent = send_udp(viewer_server, endpoint, *outgoing);
+                                }
+                            }
                             std::cout << "{\"level\":" << (copied ? "\"info\"" : "\"warn\"")
                                       << ",\"message\":\"task inventory item copy "
                                       << (copied ? "completed" : "rejected") << "\",\"localId\":"
                                       << task_inventory_update->local_id << ",\"sourceItemId\":"
-                                      << homeworldz::api::json_string(source_id) << "}" << std::endl;
+                                      << homeworldz::api::json_string(source_id)
+                                      << ",\"refreshSent\":" << (refresh_sent ? "true" : "false")
+                                      << "}" << std::endl;
                         }
                         const auto task_inventory_xfer =
                             homeworldz::viewer::decode_request_xfer(packet->payload);
