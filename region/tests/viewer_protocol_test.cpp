@@ -23,6 +23,11 @@ void write_f32(std::vector<std::byte>& output, std::size_t offset, float value) 
         output[offset + index] = static_cast<std::byte>(bits >> (index * 8));
 }
 
+void write_u32(std::vector<std::byte>& output, std::size_t offset, std::uint32_t value) {
+    for (std::size_t index = 0; index < 4; ++index)
+        output[offset + index] = static_cast<std::byte>(value >> (index * 8));
+}
+
 bool packet_round_trip() {
     Packet packet;
     packet.flags = flag_zero_coded | flag_reliable;
@@ -91,15 +96,43 @@ bool task_inventory_codecs() {
     update[36] = std::byte{42};
     update[40] = std::byte{1};
     std::copy(task.begin(), task.end(), update.begin() + 41);
+    std::copy(session.begin(), session.end(), update.begin() + 57);
+    std::copy(agent.begin(), agent.end(), update.begin() + 73);
+    std::copy(agent.begin(), agent.end(), update.begin() + 89);
+    std::copy(session.begin(), session.end(), update.begin() + 105);
+    write_u32(update, 121, 0x0008e000);
+    write_u32(update, 125, 0x0008a000);
+    write_u32(update, 129, 0x00008000);
+    write_u32(update, 133, 0x00002000);
+    write_u32(update, 137, 0x0000a000);
     std::copy(session.begin(), session.end(), update.begin() + 142);
+    update[158] = std::byte{0};
+    update[159] = std::byte{0};
+    write_u32(update, 160, 0x01020304);
+    update[164] = std::byte{1};
+    write_u32(update, 165, 25);
     update[169] = std::byte{8};
     std::copy_n(reinterpret_cast<const std::byte*>("Texture\0"), 8, update.begin() + 170);
     update[178] = std::byte{1};
+    write_u32(update, 180, 1234567890);
+    write_u32(update, 184, 0x10203040);
     const auto decoded_update = decode_update_task_inventory(update);
     if (!decoded_update || decoded_update->agent_id != agent ||
         decoded_update->session_id != session || decoded_update->local_id != 42 ||
         decoded_update->key != 1 || decoded_update->item_id != task ||
-        decoded_update->transaction_id != session) return false;
+        decoded_update->folder_id != session || decoded_update->creator_id != agent ||
+        decoded_update->owner_id != agent || decoded_update->group_id != session ||
+        decoded_update->base_permissions != 0x0008e000 ||
+        decoded_update->owner_permissions != 0x0008a000 ||
+        decoded_update->group_permissions != 0x00008000 ||
+        decoded_update->everyone_permissions != 0x00002000 ||
+        decoded_update->next_owner_permissions != 0x0000a000 ||
+        decoded_update->transaction_id != session || decoded_update->asset_type != 0 ||
+        decoded_update->inventory_type != 0 || decoded_update->flags != 0x01020304 ||
+        decoded_update->sale_type != 1 || decoded_update->sale_price != 25 ||
+        decoded_update->name != "Texture" || !decoded_update->description.empty() ||
+        decoded_update->creation_date != 1234567890 || decoded_update->crc != 0x10203040)
+        return false;
     update.pop_back();
     if (decode_update_task_inventory(update)) return false;
 

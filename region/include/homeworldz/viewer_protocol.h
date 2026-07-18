@@ -123,7 +123,26 @@ struct UpdateTaskInventory : AgentMessage {
     std::uint32_t local_id{};
     std::uint8_t key{};
     Uuid item_id{};
+    Uuid folder_id{};
+    Uuid creator_id{};
+    Uuid owner_id{};
+    Uuid group_id{};
+    std::uint32_t base_permissions{};
+    std::uint32_t owner_permissions{};
+    std::uint32_t group_permissions{};
+    std::uint32_t everyone_permissions{};
+    std::uint32_t next_owner_permissions{};
+    bool group_owned{};
     Uuid transaction_id{};
+    std::int8_t asset_type{-1};
+    std::int8_t inventory_type{-1};
+    std::uint32_t flags{};
+    std::uint8_t sale_type{};
+    std::int32_t sale_price{};
+    std::string name;
+    std::string description;
+    std::int32_t creation_date{};
+    std::uint32_t crc{};
 };
 
 struct RemoveTaskInventory : AgentMessage {

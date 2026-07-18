@@ -873,16 +873,42 @@ std::optional<UpdateTaskInventory> decode_update_task_inventory(
     auto position = name_length_offset;
     const auto name_size = std::to_integer<std::size_t>(payload[position++]);
     if (position + name_size + 1 > payload.size()) return std::nullopt;
+    const auto name_position = position;
     position += name_size;
     const auto description_size = std::to_integer<std::size_t>(payload[position++]);
     if (position + description_size + 8 != payload.size()) return std::nullopt;
+    const auto description_position = position;
     UpdateTaskInventory result;
     std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
     std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
     result.local_id = read_le_u32(payload, 36);
     result.key = std::to_integer<std::uint8_t>(payload[40]);
     std::copy_n(payload.begin() + 41, 16, result.item_id.begin());
+    std::copy_n(payload.begin() + 57, 16, result.folder_id.begin());
+    std::copy_n(payload.begin() + 73, 16, result.creator_id.begin());
+    std::copy_n(payload.begin() + 89, 16, result.owner_id.begin());
+    std::copy_n(payload.begin() + 105, 16, result.group_id.begin());
+    result.base_permissions = read_le_u32(payload, 121);
+    result.owner_permissions = read_le_u32(payload, 125);
+    result.group_permissions = read_le_u32(payload, 129);
+    result.everyone_permissions = read_le_u32(payload, 133);
+    result.next_owner_permissions = read_le_u32(payload, 137);
+    result.group_owned = payload[141] != std::byte{};
     std::copy_n(payload.begin() + 142, 16, result.transaction_id.begin());
+    result.asset_type = static_cast<std::int8_t>(std::to_integer<std::uint8_t>(payload[158]));
+    result.inventory_type = static_cast<std::int8_t>(std::to_integer<std::uint8_t>(payload[159]));
+    result.flags = read_le_u32(payload, 160);
+    result.sale_type = std::to_integer<std::uint8_t>(payload[164]);
+    result.sale_price = static_cast<std::int32_t>(read_le_u32(payload, 165));
+    result.name.assign(reinterpret_cast<const char*>(payload.data() + name_position), name_size);
+    if (!result.name.empty() && result.name.back() == '\0') result.name.pop_back();
+    result.description.assign(
+        reinterpret_cast<const char*>(payload.data() + description_position), description_size);
+    if (!result.description.empty() && result.description.back() == '\0')
+        result.description.pop_back();
+    const auto trailing_position = description_position + description_size;
+    result.creation_date = static_cast<std::int32_t>(read_le_u32(payload, trailing_position));
+    result.crc = read_le_u32(payload, trailing_position + 4);
     return result;
 }
 
