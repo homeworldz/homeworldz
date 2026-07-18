@@ -793,7 +793,6 @@ int main(int argc, char* argv[]) {
     int region_grid_y{};
 	int region_size_x{256};
 	int region_size_y{256};
-	int region_maturity{};
     auto region_public_endpoint = configured_value(
         "region.public_endpoint", "http://localhost:" + std::to_string(configured_port()));
     auto grid_public_endpoint = configured_value(
@@ -910,7 +909,6 @@ int main(int argc, char* argv[]) {
             region_grid_y = provisioned->grid_y;
 			region_size_x = provisioned->size_x;
 			region_size_y = provisioned->size_y;
-			region_maturity = provisioned->maturity;
 			region_public_endpoint = provisioned->public_endpoint;
 			region_viewer_port = provisioned->viewer_port;
 			grid_public_endpoint = provisioned->grid_public_url;
