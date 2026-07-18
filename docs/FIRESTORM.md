@@ -893,3 +893,11 @@ closing and reopening the item Properties, closing and reopening object Edit,
 and restarting the Welcome Region. Creator, owner, base, and asset identity
 remained server-authoritative while mutable masks stayed bounded by base and
 current permissions.
+
+Copyable task-to-personal inventory movement passed live acceptance on
+2026-07-18. Dragging `Contents Texture Renamed` from `Contents1` into Jim
+Tarber's personal Textures folder created exactly one new personal item,
+opened its texture asset, and retained the original task item. PostgreSQL
+stored matching texture types, provenance, `0x0009e000` base/current masks,
+zero everyone permissions, and the edited `0x0008a000` copyable Next Owner
+mask. Both copies remained after a fresh Firestorm login.
