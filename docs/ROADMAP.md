@@ -27,8 +27,8 @@ when scope or implementation evidence changes.
 | Phase | Progress | Estimate |
 | --- | --- | ---: |
 | 1. Functional Single-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="98" aria-label="Phase 1 progress: 98%">98%</progress> | 98% |
-| 2. Interactive Physical World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="39" aria-label="Phase 2 progress: 39%">39%</progress> | 39% |
-| 3. Connected Multi-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="66" aria-label="Phase 3 progress: 66%">66%</progress> | 66% |
+| 2. Connected Multi-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="66" aria-label="Phase 2 progress: 66%">66%</progress> | 66% |
+| 3. Interactive Physical World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="39" aria-label="Phase 3 progress: 39%">39%</progress> | 39% |
 | 4. LSL Scripting | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="2" aria-label="Phase 4 progress: 2%">2%</progress> | 2% |
 | 5. Social and Creator Platform | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="7" aria-label="Phase 5 progress: 7%">7%</progress> | 7% |
 | 6. Reliable Operations and Distribution | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="10" aria-label="Phase 6 progress: 10%">10%</progress> | 10% |
@@ -38,6 +38,10 @@ The overall estimate is weighted by expected effort and therefore is not the
 arithmetic mean of the phase percentages. The binary checkboxes below remain
 the acceptance record; partially implemented work contributes to these bars
 but stays unchecked until its complete wording is satisfied.
+
+Current implementation focus is Phase 2, Connected Multi-region World. Phase 3
+work should advance concurrently only when it is a dependency for crossings,
+attachments, vehicles, authority transfer, or another active Phase 2 item.
 
 ## Phase 1: Functional Single-region World
 
@@ -115,67 +119,7 @@ but stays unchecked until its complete wording is satisfied.
 - [ ] Complete Firestorm creation, editing, playback, object-contents,
   restart, and relog acceptance for those fundamental content types.
 
-## Phase 2: Interactive Physical World
-
-### Production physics integration
-
-- [x] Make Jolt the default production physics world while retaining the
-  engine-independent plugin boundary.
-- [x] Create, update, sleep, wake, remove, and restore physical bodies from
-  authoritative scene changes.
-- [x] Synchronize physical transforms and velocities to viewers at suitable
-  rates with interest-aware throttling.
-- [x] Exclude phantom objects from collision and implement an authoritative,
-  nonpersistent 60-second temporary-on-rez lifecycle with viewer kill updates.
-- [ ] Complete collision filtering, material behavior, volume detection, and
-  collision events.
-- [x] Represent physical linksets as compound Jolt bodies with correct child
-  shapes, mass properties, collision behavior, transforms, and persistence.
-- [ ] Complete live Firestorm acceptance for compound collision, falling and
-  rotation, editing, delinking, and restart persistence.
-- [x] Verify deterministic-enough restart and handoff behavior through shared
-  physics acceptance scenarios.
-
-### Attachments and sitting
-
-- [ ] Attach inventory objects to named avatar attachment points with stable
-  local transforms, permissions, ownership, and persistence.
-- [ ] Represent worn attachments as part of the authoritative avatar bundle and
-  restore them on login.
-- [ ] Implement sit targets, avatar seating, unsit, camera placement, and seated
-  animation state.
-- [ ] Support avatars as seated attachments to object linksets so their world
-  transforms follow the root object correctly.
-- [ ] Define lifecycle ordering for attachment, seated-avatar, physics, viewer,
-  and later script events.
-
-### Vehicles and physical objects
-
-- [x] Implement stable dynamic-object movement, editing, taking, and restoration
-  without losing physics state.
-- [ ] Add the Second Life vehicle parameter model required by LSL vehicles.
-- [ ] Make a single `llSetVehicleType(VEHICLE_TYPE_*)` call activate a usable
-  SL/Halcyon-compatible car, sled, boat, airplane, balloon, sailboat, or motorcycle
-  preset; map presets and later parameter overrides to each physics plugin's
-  native vehicle, motor, and constraint facilities.
-- [ ] Synchronize driver controls, vehicle motion, cameras, passengers, and
-  seated-avatar transforms.
-- [ ] Preserve object, linkset, inventory, permission, passenger, and physical
-  state as one transferable vehicle bundle.
-- [ ] Add load, tunneling, stacking, recovery, and abusive-object safeguards.
-
-### Parcels and local authority
-
-- [ ] Implement parcel geometry, ownership, access, landing points, media,
-  environment, and object accounting.
-- [ ] Enforce build, rez, entry, script, damage, push, and object-return policy
-  at authoritative boundaries.
-- [ ] Implement estate and region settings needed for terrain, access, maturity,
-  restart, and emergency administration.
-- [ ] Apply permissions recursively and consistently to linksets, object
-  contents, attachments, and inventory transfers.
-
-## Phase 3: Connected Multi-region World
+## Phase 2: Connected Multi-region World
 
 ### Region topology and variable size
 
@@ -270,6 +214,66 @@ but stays unchecked until its complete wording is satisfied.
 - [ ] Add region and parcel search sufficient to find and reach destinations.
 - [ ] Show friends and authorized users useful presence and location without
   leaking restricted information.
+
+## Phase 3: Interactive Physical World
+
+### Production physics integration
+
+- [x] Make Jolt the default production physics world while retaining the
+  engine-independent plugin boundary.
+- [x] Create, update, sleep, wake, remove, and restore physical bodies from
+  authoritative scene changes.
+- [x] Synchronize physical transforms and velocities to viewers at suitable
+  rates with interest-aware throttling.
+- [x] Exclude phantom objects from collision and implement an authoritative,
+  nonpersistent 60-second temporary-on-rez lifecycle with viewer kill updates.
+- [ ] Complete collision filtering, material behavior, volume detection, and
+  collision events.
+- [x] Represent physical linksets as compound Jolt bodies with correct child
+  shapes, mass properties, collision behavior, transforms, and persistence.
+- [ ] Complete live Firestorm acceptance for compound collision, falling and
+  rotation, editing, delinking, and restart persistence.
+- [x] Verify deterministic-enough restart and handoff behavior through shared
+  physics acceptance scenarios.
+
+### Attachments and sitting
+
+- [ ] Attach inventory objects to named avatar attachment points with stable
+  local transforms, permissions, ownership, and persistence.
+- [ ] Represent worn attachments as part of the authoritative avatar bundle and
+  restore them on login.
+- [ ] Implement sit targets, avatar seating, unsit, camera placement, and seated
+  animation state.
+- [ ] Support avatars as seated attachments to object linksets so their world
+  transforms follow the root object correctly.
+- [ ] Define lifecycle ordering for attachment, seated-avatar, physics, viewer,
+  and later script events.
+
+### Vehicles and physical objects
+
+- [x] Implement stable dynamic-object movement, editing, taking, and restoration
+  without losing physics state.
+- [ ] Add the Second Life vehicle parameter model required by LSL vehicles.
+- [ ] Make a single `llSetVehicleType(VEHICLE_TYPE_*)` call activate a usable
+  SL/Halcyon-compatible car, sled, boat, airplane, balloon, sailboat, or motorcycle
+  preset; map presets and later parameter overrides to each physics plugin's
+  native vehicle, motor, and constraint facilities.
+- [ ] Synchronize driver controls, vehicle motion, cameras, passengers, and
+  seated-avatar transforms.
+- [ ] Preserve object, linkset, inventory, permission, passenger, and physical
+  state as one transferable vehicle bundle.
+- [ ] Add load, tunneling, stacking, recovery, and abusive-object safeguards.
+
+### Parcels and local authority
+
+- [ ] Implement parcel geometry, ownership, access, landing points, media,
+  environment, and object accounting.
+- [ ] Enforce build, rez, entry, script, damage, push, and object-return policy
+  at authoritative boundaries.
+- [ ] Implement estate and region settings needed for terrain, access, maturity,
+  restart, and emergency administration.
+- [ ] Apply permissions recursively and consistently to linksets, object
+  contents, attachments, and inventory transfers.
 
 ## Phase 4: LSL Scripting
 
