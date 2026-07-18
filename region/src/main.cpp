@@ -953,6 +953,64 @@ int main(int argc, char* argv[]) {
 #endif
         return 1;
     }
+    const auto apply_task_inventory_transfer = [&](const homeworldz::grid::TaskInventoryTransfer& transfer) {
+        homeworldz::scene::Entity* target = nullptr;
+        for (const auto& [entity_id, entity] : scene.entities()) {
+            if (entity.object_id == transfer.object_id) {
+                target = scene.find(entity_id);
+                break;
+            }
+        }
+        if (!target || target->owner_id != transfer.user_id) return false;
+        const auto existing = std::find_if(
+            target->task_inventory.begin(), target->task_inventory.end(),
+            [&](const auto& item) { return item.item_id == transfer.task_item_id; });
+        if (existing == target->task_inventory.end()) {
+            const auto previous_serial = target->task_inventory_serial;
+            const auto created = static_cast<std::uint64_t>(
+                std::chrono::duration_cast<std::chrono::seconds>(
+                    std::chrono::system_clock::now().time_since_epoch()).count());
+            const auto& item = transfer.item;
+            target->task_inventory.push_back({
+                transfer.task_item_id, item.asset_id, item.creator_id, transfer.user_id,
+                item.owner_id, "00000000-0000-0000-0000-000000000000", item.name,
+                item.description, static_cast<std::int8_t>(item.asset_type),
+                static_cast<std::int8_t>(item.inventory_type), item.flags,
+                item.base_permissions, item.current_permissions, 0,
+                item.everyone_permissions, item.next_permissions,
+                static_cast<std::uint8_t>(item.sale_type), item.sale_price, created});
+            target->task_inventory_serial = previous_serial == 65535
+                ? 1 : static_cast<std::uint16_t>(previous_serial + 1);
+            try {
+                storage->save_snapshot(scene);
+            } catch (...) {
+                target->task_inventory.pop_back();
+                target->task_inventory_serial = previous_serial;
+                throw;
+            }
+        }
+        return viewer_grid && viewer_grid->finalize_task_inventory_transfer(
+            transfer.id, provisioned_region_id);
+    };
+    if (viewer_grid) {
+        try {
+            const auto pending = viewer_grid->pending_task_inventory_transfers(provisioned_region_id);
+            if (!pending) throw std::runtime_error("load pending task inventory transfers");
+            std::size_t reconciled = 0;
+            for (const auto& transfer : *pending)
+                if (apply_task_inventory_transfer(transfer)) ++reconciled;
+            if (!pending->empty()) {
+                std::cout << "{\"level\":"
+                          << (reconciled == pending->size() ? "\"info\"" : "\"warning\"")
+                          << ",\"message\":\"pending task inventory transfers reconciled\",\"completed\":"
+                          << reconciled << ",\"pending\":" << pending->size() << "}"
+                          << std::endl;
+            }
+        } catch (const std::exception& error) {
+            std::cerr << "{\"level\":\"warning\",\"message\":\"pending task inventory transfer reconciliation failed\",\"error\":"
+                      << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+        }
+    }
     const auto read_federated_asset = [&](std::string_view asset_id) -> std::vector<std::byte> {
         try {
             return storage->read_asset(asset_id);
@@ -2160,6 +2218,25 @@ int main(int argc, char* argv[]) {
                                                 entity->task_inventory.pop_back();
                                                 entity->task_inventory_serial = previous_serial;
                                                 throw;
+                                            }
+                                        } else if (source && viewer_grid) {
+                                            operation = "transfer";
+                                            const auto task_item_id = homeworldz::viewer::random_uuid();
+                                            const auto transfer = viewer_grid->prepare_task_inventory_transfer({
+                                                homeworldz::viewer::random_uuid(), agent_id, source_id,
+                                                provisioned_region_id, entity->object_id, task_item_id});
+                                            if (transfer && transfer->state == "prepared") {
+                                                const auto finalized = apply_task_inventory_transfer(*transfer);
+                                                changed = std::any_of(
+                                                    entity->task_inventory.begin(),
+                                                    entity->task_inventory.end(),
+                                                    [&](const auto& item) {
+                                                        return item.item_id == transfer->task_item_id;
+                                                    });
+                                                if (changed && !finalized)
+                                                    std::cerr << "{\"level\":\"warning\",\"message\":\"task inventory transfer awaits reconciliation\",\"transferId\":"
+                                                              << homeworldz::api::json_string(transfer->id)
+                                                              << "}" << std::endl;
                                             }
                                         }
                                     }
