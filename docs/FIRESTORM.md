@@ -924,3 +924,17 @@ update and refreshed task-inventory file without warnings. Prepared
 extractions are reconciled at Region startup: the Region snapshots removal
 before the Grid atomically creates the personal item, so stopping either
 service at the boundary cannot duplicate or lose the no-copy asset.
+
+Recursive effective permissions and the no-copy object rez round trip passed
+live acceptance on 2026-07-18. With `No Copy Transfer Test` inside `Contents1`,
+Firestorm disabled Take Copy and rejected Shift-drag duplication. Ordinary Take
+created one `Contents1 (no copy)` inventory object whose folded current mask was
+`0x00086000` and folded Next Owner mask was `0x00082000`. Rezzing it removed the
+no-copy inventory object and created one in-world object which retained
+`No Copy Transfer Test` in Contents, still disabled Take Copy, and still
+rejected Shift-drag duplication. PostgreSQL recorded the object-rez transaction
+as finalized, removed the source inventory UUID exactly once, and the Welcome
+Region logged exactly one completed rez with the transaction's object UUID.
+Prepared object rezzes are durable: Region startup finalizes one whose object is
+already in its scene snapshot or rolls it back to the original inventory folder
+when no object was persisted.
