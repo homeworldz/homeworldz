@@ -912,3 +912,15 @@ record, the source personal UUID no longer existed, and no transfer warning or
 error was logged. Prepared transfers survive either service stopping between
 those steps and are reconciled from the Grid when the destination Region
 starts, preventing a no-copy item from being lost between inventory stores.
+
+No-copy task-to-personal extraction passed live acceptance on 2026-07-18.
+Dragging `No Copy Transfer Test` from `Contents1` back into Jim Tarber's
+Textures folder removed it from the prim immediately and created exactly one
+personal item. The Grid retained a finalized extraction record while
+PostgreSQL stored the new personal UUID, original asset UUID, creator and owner,
+`0x0009e000` base mask, `0x00096000` no-copy current mask, and literal
+`0x0008a000` Next Owner mask. The Region sent both the personal-inventory
+update and refreshed task-inventory file without warnings. Prepared
+extractions are reconciled at Region startup: the Region snapshots removal
+before the Grid atomically creates the personal item, so stopping either
+service at the boundary cannot duplicate or lose the no-copy asset.
