@@ -28,7 +28,7 @@ when scope or implementation evidence changes.
 | --- | --- | ---: |
 | 1. Functional Single-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="98" aria-label="Phase 1 progress: 98%">98%</progress> | 98% |
 | 2. Interactive Physical World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="39" aria-label="Phase 2 progress: 39%">39%</progress> | 39% |
-| 3. Connected Multi-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="63" aria-label="Phase 3 progress: 63%">63%</progress> | 63% |
+| 3. Connected Multi-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="64" aria-label="Phase 3 progress: 64%">64%</progress> | 64% |
 | 4. LSL Scripting | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="2" aria-label="Phase 4 progress: 2%">2%</progress> | 2% |
 | 5. Social and Creator Platform | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="7" aria-label="Phase 5 progress: 7%">7%</progress> | 7% |
 | 6. Reliable Operations and Distribution | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="10" aria-label="Phase 6 progress: 10%">10%</progress> | 10% |
@@ -217,6 +217,10 @@ but stays unchecked until its complete wording is satisfied.
   mixed-size border coordinate, translate destination-local position, prepare
   the authenticated transit, emit Firestorm's crossing event, contain failed
   exits, and roll back an unactivated crossing after 30 seconds.
+- [x] Complete initial live Firestorm acceptance for a two-way 1x1 border
+  handoff between Welcome and Sandbox with one continuous viewer session,
+  correct edge placement, facing and flight-state transfer, destination
+  activation, and source retirement.
 - [ ] Complete remote-host failure recovery and reconciliation for interrupted
   teleports.
 - [ ] Cross a walking or flying avatar between adjacent regions while preserving

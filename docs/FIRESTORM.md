@@ -1008,3 +1008,17 @@ acceptance ray-casts against an offset, rotated child and verifies that the
 complete linkset falls as one body. A viewer test covering collision on both
 root and child, rotation while falling, editing, delink, and restart remains
 pending before the Roadmap checkbox is closed.
+
+Initial live Region-border crossing acceptance passed on 2026-07-18. Jim
+Tarber crossed east from Welcome into Sandbox without invoking a teleport UI.
+The Grid prepared, accepted, and activated transit
+`f263cb50-b394-4d81-b470-a03738fef7d5`; Sandbox authorized the existing viewer
+session and placed the avatar at local `(0.3, 127.21, 23.37)`, retaining the
+recorded facing and flying state, and Welcome then retired its authority. The
+same viewer immediately crossed west again. Reverse transit
+`829b7629-8083-40c5-bd3b-882f95df35e7` activated in Welcome at local
+`(255.7, 126.69, 23.37)` facing west and still flying, after which Sandbox
+retired its authority. Both transitions retained the original session and
+completed without a rollback or duplicate active Region. Broader acceptance
+for appearance, held controls, velocity, camera continuity, repeated crossings,
+mixed-size borders, attachments, sitting, and failure recovery remains open.
