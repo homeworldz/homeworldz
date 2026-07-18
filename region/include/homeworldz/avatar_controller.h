@@ -68,6 +68,8 @@ public:
     void expire_transient_controls();
     void set_avatar_geometry(double height, double hip_offset);
     void set_ground_height(double height);
+    void set_border_crossing_enabled(bool enabled) { border_crossing_enabled_ = enabled; }
+    void contain_horizontal();
     void restore_motion(scene::Vector3 velocity, std::array<float, 3> rotation, bool flying);
     void synchronize_physics(scene::Vector3 position, scene::Vector3 velocity, bool grounded);
     void step(double seconds);
@@ -86,6 +88,7 @@ private:
     std::array<float, 3> body_rotation_{};
     double landing_animation_remaining_{};
     bool physics_grounding_{};
+    bool border_crossing_enabled_{};
 };
 
 } // namespace homeworldz::viewer

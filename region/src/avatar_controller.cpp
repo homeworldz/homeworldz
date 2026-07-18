@@ -101,6 +101,18 @@ void AvatarController::set_ground_height(double height) {
     if (std::isfinite(height)) ground_height_ = height;
 }
 
+void AvatarController::contain_horizontal() {
+    constexpr double capsule_radius = 0.3;
+    const auto bounded_x = std::clamp(
+        state_.position.x, capsule_radius, region_width_ - capsule_radius);
+    const auto bounded_y = std::clamp(
+        state_.position.y, capsule_radius, region_height_ - capsule_radius);
+    if (bounded_x != state_.position.x) state_.velocity.x = 0.0;
+    if (bounded_y != state_.position.y) state_.velocity.y = 0.0;
+    state_.position.x = bounded_x;
+    state_.position.y = bounded_y;
+}
+
 void AvatarController::restore_motion(
     scene::Vector3 velocity, std::array<float, 3> rotation, bool flying) {
     if (std::isfinite(velocity.x) && std::isfinite(velocity.y) && std::isfinite(velocity.z))
@@ -194,15 +206,7 @@ void AvatarController::step(double seconds) {
     state_.position.x += state_.velocity.x * seconds;
     state_.position.y += state_.velocity.y * seconds;
     state_.position.z += state_.velocity.z * seconds;
-    // Region crossing is not implemented yet. Keep the full horizontal
-    // capsule in this region rather than persisting an invalid local position.
-    constexpr double capsule_radius = 0.3;
-    const auto bounded_x = std::clamp(state_.position.x, capsule_radius, region_width_ - capsule_radius);
-    const auto bounded_y = std::clamp(state_.position.y, capsule_radius, region_height_ - capsule_radius);
-    if (bounded_x != state_.position.x) state_.velocity.x = 0.0;
-    if (bounded_y != state_.position.y) state_.velocity.y = 0.0;
-    state_.position.x = bounded_x;
-    state_.position.y = bounded_y;
+    if (!border_crossing_enabled_) contain_horizontal();
     if (!physics_grounding_ && !state_.flying && state_.position.z <= support_height) {
         if (!state_.grounded) landing_animation_remaining_ = 0.4;
         state_.position.z = support_height;

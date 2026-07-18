@@ -102,6 +102,16 @@ int main() {
     if (std::abs(edge_avatar.state().position.x - 255.7) > 1e-9 ||
         edge_avatar.state().velocity.x != 0.0)
         return 10;
+    homeworldz::viewer::AvatarController crossing_avatar{{255.7, 128.0, 25.0}, 25.0};
+    crossing_avatar.set_border_crossing_enabled(true);
+    crossing_avatar.apply(update);
+    crossing_avatar.step(0.25);
+    if (crossing_avatar.state().position.x <= 256.0 || crossing_avatar.state().velocity.x <= 0.0)
+        return 21;
+    crossing_avatar.contain_horizontal();
+    if (std::abs(crossing_avatar.state().position.x - 255.7) > 1e-9 ||
+        crossing_avatar.state().velocity.x != 0.0)
+        return 22;
     edge_avatar.synchronize_physics({12, 13, 30}, {1, 2, 3}, false);
     if (edge_avatar.state().position.x != 12 || edge_avatar.state().position.y != 13 ||
         edge_avatar.state().position.z != 30 || edge_avatar.state().velocity.z != 3 ||
