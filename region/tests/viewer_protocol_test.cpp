@@ -146,6 +146,20 @@ bool task_inventory_codecs() {
         decoded_remove->session_id != session || decoded_remove->local_id != 42 ||
         decoded_remove->item_id != task) return false;
 
+    auto move = bytes({0xff, 0xff, 0x01, 0x20});
+    move.insert(move.end(), agent.begin(), agent.end());
+    move.insert(move.end(), session.begin(), session.end());
+    move.insert(move.end(), task.begin(), task.end());
+    move.insert(move.end(), {std::byte{42}, std::byte{}, std::byte{}, std::byte{}});
+    move.insert(move.end(), session.begin(), session.end());
+    const auto decoded_move = decode_move_task_inventory(move);
+    if (!decoded_move || decoded_move->agent_id != agent ||
+        decoded_move->session_id != session || decoded_move->folder_id != task ||
+        decoded_move->local_id != 42 || decoded_move->item_id != session)
+        return false;
+    move.pop_back();
+    if (decode_move_task_inventory(move)) return false;
+
     auto request_xfer = bytes({0xff, 0xff, 0x00, 0x9c,
                                0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01,
                                16});

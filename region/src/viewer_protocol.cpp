@@ -64,6 +64,8 @@ constexpr std::array<std::byte, 4> update_task_inventory_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x1e}};
 constexpr std::array<std::byte, 4> remove_task_inventory_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x1f}};
+constexpr std::array<std::byte, 4> move_task_inventory_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x20}};
 constexpr std::array<std::byte, 4> request_xfer_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x9c}};
 constexpr std::array<std::byte, 2> object_add_id{std::byte{0xff}, std::byte{0x01}};
@@ -923,6 +925,21 @@ std::optional<RemoveTaskInventory> decode_remove_task_inventory(
     std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
     result.local_id = read_le_u32(payload, 36);
     std::copy_n(payload.begin() + 40, 16, result.item_id.begin());
+    return result;
+}
+
+std::optional<MoveTaskInventory> decode_move_task_inventory(
+    std::span<const std::byte> payload) {
+    constexpr std::size_t message_size = 72;
+    if (payload.size() != message_size ||
+        !std::equal(move_task_inventory_id.begin(), move_task_inventory_id.end(), payload.begin()))
+        return std::nullopt;
+    MoveTaskInventory result;
+    std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
+    std::copy_n(payload.begin() + 36, 16, result.folder_id.begin());
+    result.local_id = read_le_u32(payload, 52);
+    std::copy_n(payload.begin() + 56, 16, result.item_id.begin());
     return result;
 }
 
