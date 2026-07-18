@@ -716,13 +716,16 @@ bool map_codecs() {
 
     const auto map_image = *parse_uuid("00000000-0000-1111-9999-000000000100");
     const std::array<MapBlock, 2> regions{{
-        {1000, 1000, "Welcome", 13, 0, 20, 1, map_image},
+        {1000, 1000, "Welcome", 13, 0, 20, 1, map_image, 512, 512},
         {1001, 1000, "Sandbox", 13, 0, 20, 0, map_image}}};
     const auto reply = encode_map_block_reply(agent, 4, regions);
-    return reply.size() == 97 && reply[3] == std::byte{0x99} && reply[24] == std::byte{2} &&
+    return reply.size() == 106 && reply[3] == std::byte{0x99} && reply[24] == std::byte{2} &&
            reply[25] == std::byte{0xe8} && reply[26] == std::byte{0x03} &&
            reply[29] == std::byte{8} && reply[30] == std::byte{'W'} &&
-           std::equal(map_image.begin(), map_image.end(), reply.begin() + 45);
+           std::equal(map_image.begin(), map_image.end(), reply.begin() + 45) &&
+           reply[97] == std::byte{2} && reply[98] == std::byte{} && reply[99] == std::byte{2} &&
+           reply[100] == std::byte{} && reply[101] == std::byte{2} &&
+           reply[102] == std::byte{} && reply[103] == std::byte{1};
 }
 
 bool resend_throttle_and_timeout() {

@@ -1558,6 +1558,16 @@ std::vector<std::byte> encode_map_block_reply(const Uuid& agent_id, std::uint32_
         output.push_back(static_cast<std::byte>(region.agents));
         append_uuid(output, region.map_image_id);
     }
+    const bool include_sizes = std::any_of(regions.begin(), regions.end(), [](const MapBlock& region) {
+        return region.size_x > 256 || region.size_y > 256;
+    });
+    output.push_back(static_cast<std::byte>(include_sizes ? regions.size() : 0));
+    if (include_sizes) {
+        for (const auto& region : regions) {
+            append_le_u16(output, region.size_x);
+            append_le_u16(output, region.size_y);
+        }
+    }
     return output;
 }
 

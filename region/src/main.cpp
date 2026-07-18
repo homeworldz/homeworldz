@@ -2240,7 +2240,8 @@ int main(int argc, char* argv[]) {
                                     static_cast<std::uint16_t>(region_grid_x),
                                     static_cast<std::uint16_t>(region_grid_y), region_name,
                                     13, 0, 20, static_cast<std::uint8_t>((std::min)(avatars.size(), std::size_t{255})),
-                                    map_image_id});
+                                    map_image_id, static_cast<std::uint16_t>(region_size_x),
+                                    static_cast<std::uint16_t>(region_size_y)});
                             }
                             for (const auto& neighbor : region_neighbors) {
 								if (!neighbor.online) continue;
@@ -2249,7 +2250,9 @@ int main(int argc, char* argv[]) {
                                 regions.push_back(homeworldz::viewer::MapBlock{
                                     static_cast<std::uint16_t>(neighbor.grid_x),
                                     static_cast<std::uint16_t>(neighbor.grid_y), neighbor.name,
-                                    13, 0, 20, 0, map_image_id});
+                                    13, 0, 20, 0, map_image_id,
+                                    static_cast<std::uint16_t>(neighbor.size_x),
+                                    static_cast<std::uint16_t>(neighbor.size_y)});
                             }
                             return regions;
                         };

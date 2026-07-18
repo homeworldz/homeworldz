@@ -342,6 +342,8 @@ struct MapBlock {
     std::uint8_t water_height{20};
     std::uint8_t agents{};
     Uuid map_image_id{};
+    std::uint16_t size_x{256};
+    std::uint16_t size_y{256};
 };
 
 struct ObjectProperties {
