@@ -956,3 +956,15 @@ that returned object consumed the inventory item exactly once, retained
 `No Copy Transfer Test` in Contents, disabled Take Copy, and rejected
 Shift-drag duplication. The Region recorded derez destination `9`, followed by
 one finalized durable object-rez transaction and one new scene object UUID.
+
+The remaining Phase 1 inventory-content protocol is ready for live Firestorm
+acceptance as of 2026-07-18. The Region accepts creator-attributed sound and
+animation uploads, and it can create, fetch, and update personal notecards,
+LSL source, and gestures. Direct viewer creation now supplies valid empty
+notecard and gesture assets plus the conventional starter LSL source when no
+separate asset transaction precedes `CreateInventoryItem`. New landmarks are
+generated from the authoritative Region UUID and the avatar's current local
+position. These server-created assets use fresh UUIDs, record the creating
+avatar as creator, and are registered with the Grid for cross-region
+replication. Firestorm visual creation, editing, playback, and relog tests are
+still required before the corresponding Roadmap item is marked complete.

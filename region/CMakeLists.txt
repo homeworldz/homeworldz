@@ -3,6 +3,7 @@ add_library(homeworldz-region-core
   src/api_models.cpp
   src/grid_client.cpp
   src/http_response.cpp
+  src/inventory_asset.cpp
   src/object_asset.cpp
   src/physics_scene.cpp
   src/physics_scenarios.cpp
@@ -45,6 +46,10 @@ target_link_libraries(homeworldz-region-tests PRIVATE homeworldz-region-core)
 target_compile_definitions(homeworldz-region-tests PRIVATE
   HOMEWORLDZ_OPERATIONAL_CONTRACT_PATH="${CMAKE_SOURCE_DIR}/api/contracts/operational.tsv")
 add_test(NAME region-http-response COMMAND homeworldz-region-tests)
+
+add_executable(homeworldz-inventory-asset-tests tests/inventory_asset_test.cpp)
+target_link_libraries(homeworldz-inventory-asset-tests PRIVATE homeworldz-region-core)
+add_test(NAME region-inventory-asset COMMAND homeworldz-inventory-asset-tests)
 
 add_executable(homeworldz-scene-tests tests/scene_test.cpp)
 target_link_libraries(homeworldz-scene-tests PRIVATE homeworldz-region-core)

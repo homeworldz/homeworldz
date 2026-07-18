@@ -30,6 +30,7 @@
 #include "homeworldz/avatar_controller.h"
 #include "homeworldz/grid_client.h"
 #include "homeworldz/http_response.h"
+#include "homeworldz/inventory_asset.h"
 #include "homeworldz/object_asset.h"
 #include "homeworldz/physics_adapters.h"
 #include "homeworldz/physics_scene.h"
@@ -2889,31 +2890,62 @@ int main(int argc, char* argv[]) {
                             const bool wearable = create_item->inventory_type == 18 &&
                                 (create_item->asset_type == 5 || create_item->asset_type == 13);
                             bool created = false;
+                            bool consumed_pending_upload = false;
                             homeworldz::grid::InventoryItem item;
                             const bool editable_asset = wearable ||
                                 (create_item->asset_type == 7 && create_item->inventory_type == 7) ||
                                 (create_item->asset_type == 10 && create_item->inventory_type == 10) ||
                                 (create_item->asset_type == 21 && create_item->inventory_type == 20);
+                            std::string asset_id;
                             if (editable_asset && pending != pending_inventory_asset_uploads.end() &&
-                                pending->second.asset_type == create_item->asset_type && viewer_grid) {
+                                pending->second.asset_type == create_item->asset_type) {
+                                asset_id = pending->second.asset_id;
+                                consumed_pending_upload = true;
+                            } else if (pending == pending_inventory_asset_uploads.end()) {
+                                const auto avatar = avatars.find(endpoint);
+                                const auto position = avatar == avatars.end() ?
+                                    homeworldz::scene::Vector3{128.0, 128.0, 25.0} :
+                                    avatar->second.controller.state().position;
+                                const auto initial_content = homeworldz::inventory::default_asset_content(
+                                    create_item->asset_type, create_item->inventory_type,
+                                    registration->region_id(), position);
+                                if (initial_content && viewer_grid) {
+                                    try {
+                                        asset_id = homeworldz::viewer::random_uuid();
+                                        const auto content = std::span(
+                                            reinterpret_cast<const std::byte*>(initial_content->data()),
+                                            initial_content->size());
+                                        const auto metadata = storage->store_asset(asset_id, user_id, content);
+                                        if (!viewer_grid->register_asset(
+                                                metadata.viewer_id, metadata.creator_id, metadata.sha256,
+                                                metadata.size, region_public_endpoint, true))
+                                            asset_id.clear();
+                                    } catch (const std::exception& error) {
+                                        asset_id.clear();
+                                        std::cout << "{\"level\":\"error\",\"message\":\"default inventory asset creation failed\",\"error\":"
+                                                  << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+                                    }
+                                }
+                            }
+                            if (!asset_id.empty() && viewer_grid) {
                                 item.item_id = homeworldz::viewer::random_uuid();
                                 item.creator_id = user_id;
                                 item.owner_id = user_id;
                                 item.folder_id = homeworldz::viewer::format_uuid(create_item->folder_id);
-                                item.asset_id = pending->second.asset_id;
+                                item.asset_id = asset_id;
                                 item.asset_type = create_item->asset_type;
                                 item.inventory_type = create_item->inventory_type;
                                 item.name = create_item->name;
                                 item.description = create_item->description;
-                                item.flags = create_item->wearable_type;
-                                item.base_permissions = 0x7fffffffU;
-                                item.current_permissions = 0x7fffffffU;
+                                item.flags = wearable ? create_item->wearable_type : 0;
+                                item.base_permissions = homeworldz::scene::permission_creator;
+                                item.current_permissions = homeworldz::scene::permission_creator;
                                 item.everyone_permissions = 0x00000000U;
                                 item.next_permissions = create_item->next_owner_permissions;
                                 try {
                                     created = viewer_grid->create_inventory_item(user_id, item);
                                 } catch (const std::exception& error) {
-                                    std::cout << "{\"level\":\"error\",\"message\":\"wearable inventory creation failed\",\"error\":"
+                                    std::cout << "{\"level\":\"error\",\"message\":\"inventory asset item creation failed\",\"error\":"
                                               << homeworldz::api::json_string(error.what()) << "}" << std::endl;
                                 }
                             }
@@ -2923,14 +2955,14 @@ int main(int argc, char* argv[]) {
                                 const auto creator_id = homeworldz::viewer::parse_uuid(item.creator_id);
                                 const auto owner_id = homeworldz::viewer::parse_uuid(item.owner_id);
                                 const auto folder_id = homeworldz::viewer::parse_uuid(item.folder_id);
-                                const auto asset_id = homeworldz::viewer::parse_uuid(item.asset_id);
-                                if (item_id && creator_id && owner_id && folder_id && asset_id) {
+                                const auto parsed_asset_id = homeworldz::viewer::parse_uuid(item.asset_id);
+                                if (item_id && creator_id && owner_id && folder_id && parsed_asset_id) {
                                     homeworldz::viewer::InventoryItem response_item;
                                     response_item.item_id = *item_id;
                                     response_item.creator_id = *creator_id;
                                     response_item.owner_id = *owner_id;
                                     response_item.folder_id = *folder_id;
-                                    response_item.asset_id = *asset_id;
+                                    response_item.asset_id = *parsed_asset_id;
                                     response_item.asset_type = static_cast<std::int8_t>(item.asset_type);
                                     response_item.inventory_type = static_cast<std::int8_t>(item.inventory_type);
                                     response_item.name = item.name;
@@ -2951,7 +2983,8 @@ int main(int argc, char* argv[]) {
                                             true, now, true))
                                         sent = send_udp(viewer_server, endpoint, *outgoing);
                                 }
-                                pending_inventory_asset_uploads.erase(pending);
+                                if (consumed_pending_upload)
+                                    pending_inventory_asset_uploads.erase(pending);
                             }
                             std::cout << "{\"level\":" << (created && sent ? "\"info\"" : "\"warn\"")
                                       << ",\"message\":\"inventory asset item "
