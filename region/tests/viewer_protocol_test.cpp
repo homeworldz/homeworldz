@@ -122,10 +122,14 @@ bool task_inventory_codecs() {
     const auto decoded_xfer = decode_request_xfer(request_xfer);
     const auto xfer_payload = encode_send_xfer_packet(
         0x0102030405060708ULL, 0x80000000U, bytes({1, 2, 3}));
+    const auto confirmation_payload = encode_confirm_xfer_packet(0x0102030405060708ULL, 3);
+    const auto decoded_confirmation = decode_confirm_xfer_packet(confirmation_payload);
     return decoded_xfer && decoded_xfer->id == 0x0102030405060708ULL &&
         decoded_xfer->filename == "inventory_1.tmp" && xfer_payload.size() == 18 &&
         xfer_payload[0] == std::byte{18} && xfer_payload[9] == std::byte{} &&
-        xfer_payload[12] == std::byte{0x80} && xfer_payload[13] == std::byte{3};
+        xfer_payload[12] == std::byte{0x80} && xfer_payload[13] == std::byte{3} &&
+        decoded_confirmation && decoded_confirmation->id == 0x0102030405060708ULL &&
+        decoded_confirmation->packet == 3;
 }
 
 bool message_codecs() {

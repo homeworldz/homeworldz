@@ -121,6 +121,13 @@ struct PendingWearableXfer {
     std::unordered_set<std::uint32_t> received_packets;
 };
 
+struct PendingTaskInventoryXfer {
+    std::vector<std::byte> data;
+    std::size_t offset{};
+    std::uint32_t next_packet{1};
+    std::uint32_t awaiting_confirmation{};
+};
+
 std::string task_inventory_type_name(std::int8_t type) {
     switch (type) {
     case 0: return "texture";
@@ -1230,6 +1237,7 @@ int main(int argc, char* argv[]) {
     std::unordered_map<std::string, PendingWearableUpload> pending_wearable_uploads;
     std::unordered_map<std::string, PendingWearableXfer> pending_wearable_xfers;
     std::unordered_map<std::string, std::vector<std::byte>> pending_task_inventory_files;
+    std::unordered_map<std::string, PendingTaskInventoryXfer> pending_task_inventory_xfers;
     std::unordered_map<std::string, std::deque<std::string>> queued_viewer_events;
     std::vector<PendingEventResponse> pending_event_responses;
     std::uint64_t event_id{};
@@ -1270,6 +1278,9 @@ int main(int argc, char* argv[]) {
             return entry.first.starts_with(endpoint + '|');
         });
         std::erase_if(pending_task_inventory_files, [&](const auto& entry) {
+            return entry.first.starts_with(endpoint + '|');
+        });
+        std::erase_if(pending_task_inventory_xfers, [&](const auto& entry) {
             return entry.first.starts_with(endpoint + '|');
         });
         std::erase_if(pending_event_responses, [&](const PendingEventResponse& pending) {
@@ -2047,11 +2058,8 @@ int main(int argc, char* argv[]) {
                                     if (!entity->task_inventory.empty()) {
                                         filename = "inventory_" + homeworldz::viewer::random_uuid() + ".tmp";
                                         const auto content = task_inventory_file(*entity);
-                                        if (content.size() <= 1000)
-                                            pending_task_inventory_files.insert_or_assign(
-                                                endpoint + '|' + filename, content);
-                                        else
-                                            filename.clear();
+                                        pending_task_inventory_files.insert_or_assign(
+                                            endpoint + '|' + filename, content);
                                         serial = static_cast<std::int16_t>(entity->task_inventory_serial);
                                     }
                                     auto wire_filename = filename;
@@ -2126,7 +2134,7 @@ int main(int argc, char* argv[]) {
                             if (copied && entity) {
                                 const auto task_id = homeworldz::viewer::parse_uuid(entity->object_id);
                                 const auto content = task_inventory_file(*entity);
-                                if (task_id && content.size() <= 1000) {
+                                if (task_id) {
                                     const auto filename =
                                         "inventory_" + homeworldz::viewer::random_uuid() + ".tmp";
                                     pending_task_inventory_files.insert_or_assign(
@@ -2194,12 +2202,10 @@ int main(int argc, char* argv[]) {
                                     std::string filename;
                                     if (!entity->task_inventory.empty()) {
                                         const auto content = task_inventory_file(*entity);
-                                        if (content.size() <= 1000) {
-                                            filename = "inventory_" +
-                                                homeworldz::viewer::random_uuid() + ".tmp";
-                                            pending_task_inventory_files.insert_or_assign(
-                                                endpoint + '|' + filename, content);
-                                        }
+                                        filename = "inventory_" +
+                                            homeworldz::viewer::random_uuid() + ".tmp";
+                                        pending_task_inventory_files.insert_or_assign(
+                                            endpoint + '|' + filename, content);
                                     }
                                     auto wire_filename = filename;
                                     if (!wire_filename.empty()) wire_filename.push_back('\0');
@@ -2227,24 +2233,78 @@ int main(int argc, char* argv[]) {
                                 endpoint + '|' + task_inventory_xfer->filename);
                             bool sent = false;
                             if (pending != pending_task_inventory_files.end()) {
+                                constexpr std::size_t xfer_chunk_size = 1000;
+                                const auto chunk_size = (std::min)(
+                                    xfer_chunk_size, pending->second.size());
                                 std::vector<std::byte> xfer_data(4);
                                 const auto size = static_cast<std::uint32_t>(pending->second.size());
                                 for (unsigned index = 0; index < 4; ++index)
                                     xfer_data[index] = static_cast<std::byte>(size >> (index * 8));
                                 xfer_data.insert(
-                                    xfer_data.end(), pending->second.begin(), pending->second.end());
+                                    xfer_data.end(), pending->second.begin(),
+                                    pending->second.begin() + chunk_size);
+                                const bool final = chunk_size == pending->second.size();
                                 const auto payload = homeworldz::viewer::encode_send_xfer_packet(
-                                    task_inventory_xfer->id, 0x80000000U, xfer_data);
+                                    task_inventory_xfer->id, final ? 0x80000000U : 0U, xfer_data);
                                 if (const auto outgoing = circuits.send(
                                         endpoint, payload, true, now, true))
                                     sent = send_udp(viewer_server, endpoint, *outgoing);
-                                pending_task_inventory_files.erase(pending);
+                                if (sent && !final) {
+                                    pending_task_inventory_xfers.insert_or_assign(
+                                        endpoint + '|' + std::to_string(task_inventory_xfer->id),
+                                        PendingTaskInventoryXfer{
+                                            std::move(pending->second), chunk_size, 1, 0});
+                                }
+                                if (sent) pending_task_inventory_files.erase(pending);
                             }
                             std::cout << "{\"level\":" << (sent ? "\"info\"" : "\"warn\"")
                                       << ",\"message\":\"task inventory xfer "
                                       << (sent ? "sent" : "rejected") << "\",\"filename\":"
                                       << homeworldz::api::json_string(task_inventory_xfer->filename)
                                       << "}" << std::endl;
+                        }
+                        const auto task_inventory_confirmation =
+                            homeworldz::viewer::decode_confirm_xfer_packet(packet->payload);
+                        if (task_inventory_confirmation) {
+                            const auto key = endpoint + '|' +
+                                std::to_string(task_inventory_confirmation->id);
+                            const auto pending = pending_task_inventory_xfers.find(key);
+                            bool sent = false;
+                            bool final = false;
+                            std::uint32_t packet_number{};
+                            if (pending != pending_task_inventory_xfers.end() &&
+                                task_inventory_confirmation->packet ==
+                                    pending->second.awaiting_confirmation &&
+                                pending->second.offset < pending->second.data.size()) {
+                                constexpr std::size_t xfer_chunk_size = 1000;
+                                const auto remaining =
+                                    pending->second.data.size() - pending->second.offset;
+                                const auto chunk_size = (std::min)(xfer_chunk_size, remaining);
+                                packet_number = pending->second.next_packet;
+                                final = chunk_size == remaining;
+                                const auto packet_field = final
+                                    ? packet_number | 0x80000000U
+                                    : packet_number;
+                                const auto begin =
+                                    pending->second.data.begin() + pending->second.offset;
+                                const auto payload = homeworldz::viewer::encode_send_xfer_packet(
+                                    task_inventory_confirmation->id, packet_field,
+                                    std::span<const std::byte>(&*begin, chunk_size));
+                                if (const auto outgoing = circuits.send(
+                                        endpoint, payload, true, now, true))
+                                    sent = send_udp(viewer_server, endpoint, *outgoing);
+                                if (sent && !final) {
+                                    pending->second.offset += chunk_size;
+                                    pending->second.awaiting_confirmation = packet_number;
+                                    ++pending->second.next_packet;
+                                }
+                                if (sent && final) pending_task_inventory_xfers.erase(pending);
+                            }
+                            std::cout << "{\"level\":" << (sent ? "\"info\"" : "\"warn\"")
+                                      << ",\"message\":\"task inventory xfer continuation "
+                                      << (sent ? "sent" : "rejected") << "\",\"packet\":"
+                                      << packet_number << ",\"final\":"
+                                      << (final ? "true" : "false") << "}" << std::endl;
                         }
                         const auto create_folder =
                             homeworldz::viewer::decode_create_inventory_folder(packet->payload);

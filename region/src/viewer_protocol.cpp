@@ -1815,6 +1815,15 @@ std::vector<std::byte> encode_confirm_xfer_packet(std::uint64_t id, std::uint32_
     return output;
 }
 
+std::optional<XferPacket> decode_confirm_xfer_packet(std::span<const std::byte> payload) {
+    if (payload.size() != 13 || payload[0] != std::byte{19}) return std::nullopt;
+    XferPacket result;
+    result.id = read_le_u32(payload, 1) |
+                (static_cast<std::uint64_t>(read_le_u32(payload, 5)) << 32);
+    result.packet = read_le_u32(payload, 9);
+    return result;
+}
+
 std::optional<RequestImage> decode_request_image(std::span<const std::byte> payload) {
     constexpr std::size_t header_size = 34;
     constexpr std::size_t block_size = 26;

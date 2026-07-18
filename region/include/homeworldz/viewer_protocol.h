@@ -624,6 +624,7 @@ std::vector<std::byte> encode_request_xfer(std::uint64_t id, const Uuid& asset_i
                                            std::int16_t asset_type);
 std::optional<XferPacket> decode_send_xfer_packet(std::span<const std::byte> payload);
 std::vector<std::byte> encode_confirm_xfer_packet(std::uint64_t id, std::uint32_t packet);
+std::optional<XferPacket> decode_confirm_xfer_packet(std::span<const std::byte> payload);
 std::optional<RequestImage> decode_request_image(std::span<const std::byte> payload);
 std::vector<std::vector<std::byte>> encode_image_transfer(
     const Uuid& image_id, std::span<const std::byte> content, std::uint32_t start_packet = 0);
