@@ -30,6 +30,12 @@ public:
             return {200, R"({"id":"33333333-3333-4333-8333-333333333333","generation":1,"agentId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","sessionId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","sourceRegionId":"11111111-1111-4111-8111-111111111111","destinationRegionId":"22222222-2222-4222-8222-222222222222","position":{"x":128,"y":64,"z":30},"lookAt":{"x":1,"y":0,"z":0},"flying":true,"state":"activated"})"};
         if (method == "POST" && path.ends_with("/rollback"))
             return {200, R"({"id":"33333333-3333-4333-8333-333333333333","generation":1,"agentId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","sessionId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","sourceRegionId":"11111111-1111-4111-8111-111111111111","destinationRegionId":"22222222-2222-4222-8222-222222222222","position":{"x":128,"y":64,"z":30},"lookAt":{"x":1,"y":0,"z":0},"flying":true,"state":"rolled_back"})"};
+        if (method == "POST" && path == "/api/v1/task-transfers")
+            return {200, R"({"id":"99999999-9999-4999-8999-999999999999","userId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","sourceItemId":"44444444-4444-4444-8444-444444444444","regionId":"22222222-2222-4222-8222-222222222222","objectId":"55555555-5555-4555-8555-555555555555","taskItemId":"66666666-6666-4666-8666-666666666666","item":{"id":"44444444-4444-4444-8444-444444444444","ownerUserId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","creatorUserId":"77777777-7777-4777-8777-777777777777","folderId":"88888888-8888-4888-8888-888888888888","assetId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","assetType":0,"inventoryType":0,"name":"No Copy Texture","description":"","flags":0,"basePermissions":647168,"currentPermissions":614400,"everyonePermissions":0,"nextPermissions":532480,"saleType":0,"salePrice":0,"createdAt":"2026-07-18T00:00:00Z"},"state":"prepared","createdAt":"2026-07-18T00:00:00Z","updatedAt":"2026-07-18T00:00:00Z"})"};
+        if (method == "GET" && path.starts_with("/api/v1/task-transfers?"))
+            return {200, R"([{"id":"99999999-9999-4999-8999-999999999999","userId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","sourceItemId":"44444444-4444-4444-8444-444444444444","regionId":"22222222-2222-4222-8222-222222222222","objectId":"55555555-5555-4555-8555-555555555555","taskItemId":"66666666-6666-4666-8666-666666666666","item":{"id":"44444444-4444-4444-8444-444444444444","ownerUserId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","creatorUserId":"77777777-7777-4777-8777-777777777777","folderId":"88888888-8888-4888-8888-888888888888","assetId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","assetType":0,"inventoryType":0,"name":"No Copy Texture","description":"","flags":0,"basePermissions":647168,"currentPermissions":614400,"everyonePermissions":0,"nextPermissions":532480,"saleType":0,"salePrice":0,"createdAt":"2026-07-18T00:00:00Z"},"state":"prepared","createdAt":"2026-07-18T00:00:00Z","updatedAt":"2026-07-18T00:00:00Z"}])"};
+        if (method == "POST" && path.ends_with("/finalize"))
+            return {200, R"({"id":"99999999-9999-4999-8999-999999999999","state":"finalized"})"};
         if (method == "POST" && path.ends_with("/prepare-arrival"))
             return {200, R"({"status":"accepted"})"};
         if (method == "GET" && path.starts_with("/api/v1/transits/"))
@@ -124,6 +130,25 @@ int main() {
     if (!homeworldz::grid::prepare_avatar_arrival(*transport, transit_request.id) ||
         transport->requests.back().path !=
             "/api/v1/transits/" + transit_request.id + "/prepare-arrival") return 1;
+    const homeworldz::grid::TaskInventoryTransferRequest task_transfer_request{
+        "99999999-9999-4999-8999-999999999999", transit_request.agent_id,
+        "44444444-4444-4444-8444-444444444444", transit_request.destination_region_id,
+        "55555555-5555-4555-8555-555555555555",
+        "66666666-6666-4666-8666-666666666666"};
+    const auto task_transfer = client.prepare_task_inventory_transfer(task_transfer_request);
+    if (!task_transfer || task_transfer->state != "prepared" ||
+        task_transfer->item.name != "No Copy Texture" ||
+        task_transfer->item.current_permissions != 0x00096000 ||
+        transport->requests.back().body.find(R"("sourceItemId":"44444444-4444-4444-8444-444444444444")") == std::string::npos)
+        return 1;
+    const auto pending_task_transfers = client.pending_task_inventory_transfers(
+        transit_request.destination_region_id);
+    if (!pending_task_transfers || pending_task_transfers->size() != 1 ||
+        pending_task_transfers->front().id != task_transfer->id) return 1;
+    if (!client.finalize_task_inventory_transfer(
+            task_transfer->id, transit_request.destination_region_id) ||
+        transport->requests.back().path !=
+            "/api/v1/task-transfers/" + task_transfer->id + "/finalize") return 1;
     homeworldz::grid::RegistrationLifecycle provisioned_lifecycle(
         client, provisioned_settings, provisioned->id);
     if (!provisioned_lifecycle.start(started) ||

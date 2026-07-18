@@ -148,6 +148,26 @@ struct InventoryItem {
     int sale_price{};
 };
 
+struct TaskInventoryTransferRequest {
+    std::string id;
+    std::string user_id;
+    std::string source_item_id;
+    std::string region_id;
+    std::string object_id;
+    std::string task_item_id;
+};
+
+struct TaskInventoryTransfer {
+    std::string id;
+    std::string user_id;
+    std::string source_item_id;
+    std::string region_id;
+    std::string object_id;
+    std::string task_item_id;
+    InventoryItem item;
+    std::string state;
+};
+
 class Client {
 public:
     explicit Client(std::shared_ptr<Transport> transport) : transport_(std::move(transport)) {}
@@ -186,6 +206,12 @@ public:
     bool create_texture_inventory_item(std::string_view user_id, const TextureInventoryItem& item);
     bool create_object_inventory_item(std::string_view user_id, const ObjectInventoryItem& item);
     bool create_inventory_item(std::string_view user_id, const InventoryItem& item);
+    std::optional<TaskInventoryTransfer> prepare_task_inventory_transfer(
+        const TaskInventoryTransferRequest& request);
+    std::optional<std::vector<TaskInventoryTransfer>> pending_task_inventory_transfers(
+        std::string_view region_id);
+    bool finalize_task_inventory_transfer(
+        std::string_view transfer_id, std::string_view region_id);
     bool register_asset(std::string_view asset_id, std::string_view creator_id,
                         std::string_view sha256, std::uint64_t size,
                         std::string_view endpoint, bool origin);
