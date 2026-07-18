@@ -34,6 +34,16 @@ struct TeleportFinish {
     std::uint32_t region_size_y{256};
 };
 
+struct CrossedRegion {
+    std::string agent_id;
+    std::string session_id;
+    std::uint64_t region_handle{};
+    SimulatorEventEndpoint simulator;
+    std::string seed_capability;
+    std::array<float, 3> position{};
+    std::array<float, 3> look_at{};
+};
+
 struct NewFileInventoryUpload {
     std::string folder_id;
     std::int8_t asset_type{-1};
@@ -60,6 +70,7 @@ std::string enable_simulator_event_xml(std::uint64_t region_handle,
                                        std::uint32_t region_size_x = 256,
                                        std::uint32_t region_size_y = 256);
 std::string teleport_finish_event_xml(const TeleportFinish& event);
+std::string crossed_region_event_xml(const CrossedRegion& event);
 std::string event_queue_xml(std::uint64_t id, const std::vector<std::string>& events = {});
 std::string simulator_features_xml(std::string_view currency = "C$",
                                    std::string_view map_server_url = {});

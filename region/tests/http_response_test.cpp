@@ -191,6 +191,21 @@ int main() {
         homeworldz::viewer::teleport_flags_via_location |
             homeworldz::viewer::teleport_flags_is_flying});
     passed &= contains(flying_finish, "<key>TeleportFlags</key><integer>8208</integer>");
+    const auto crossed = homeworldz::viewer::crossed_region_event_xml({
+        "11111111-2222-4333-8444-555555555555",
+        "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+        0x0102030405060708ULL, event_endpoint,
+        "https://region.example/caps/seed/session&amp;id",
+        {1.25F, 255.5F, 30.0F}, {0.5F, -0.25F, 0.0F}});
+    passed &= contains(crossed, "<string>CrossedRegion</string>");
+    passed &= contains(crossed, "<key>AgentID</key><uuid>11111111-2222-4333-8444-555555555555</uuid>");
+    passed &= contains(crossed, "<key>SessionID</key><uuid>aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee</uuid>");
+    passed &= contains(crossed, "<key>RegionHandle</key><binary>AQIDBAUGBwg=</binary>");
+    passed &= contains(crossed, "<key>SeedCapability</key><string>https://region.example/caps/seed/session&amp;amp;id</string>");
+    passed &= contains(crossed, "<key>SimIP</key><binary>wAACCg==</binary>");
+    passed &= contains(crossed, "<key>SimPort</key><integer>42002</integer>");
+    passed &= contains(crossed, "<key>Position</key><array><real>1.250000</real><real>255.500000</real><real>30.000000</real></array>");
+    passed &= contains(crossed, "<key>LookAt</key><array><real>0.500000</real><real>-0.250000</real><real>0.000000</real></array>");
     const auto simulator_features = homeworldz::viewer::simulator_features_xml(
         "C$", "https://grid.example/map/");
     passed &= contains(simulator_features,

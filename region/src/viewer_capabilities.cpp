@@ -193,6 +193,26 @@ std::string teleport_finish_event_xml(const TeleportFinish& event) {
            "</integer></map></array></map></map>";
 }
 
+std::string crossed_region_event_xml(const CrossedRegion& event) {
+    const auto vector_xml = [](const std::array<float, 3>& value) {
+        return "<array><real>" + std::to_string(value[0]) + "</real><real>" +
+               std::to_string(value[1]) + "</real><real>" + std::to_string(value[2]) +
+               "</real></array>";
+    };
+    return "<map><key>message</key><string>CrossedRegion</string><key>body</key><map>"
+           "<key>Info</key><array><map><key>Position</key>" + vector_xml(event.position) +
+           "<key>LookAt</key>" + vector_xml(event.look_at) + "</map></array>"
+           "<key>AgentData</key><array><map><key>AgentID</key><uuid>" +
+           xml_escape(event.agent_id) + "</uuid><key>SessionID</key><uuid>" +
+           xml_escape(event.session_id) + "</uuid></map></array>"
+           "<key>RegionData</key><array><map><key>RegionHandle</key><binary>" +
+           region_handle_binary(event.region_handle) +
+           "</binary><key>SeedCapability</key><string>" + xml_escape(event.seed_capability) +
+           "</string><key>SimIP</key><binary>" + ip_binary(event.simulator) +
+           "</binary><key>SimPort</key><integer>" + std::to_string(event.simulator.port) +
+           "</integer></map></array></map></map>";
+}
+
 std::string event_queue_xml(std::uint64_t id, const std::vector<std::string>& events) {
     std::string encoded_events = events.empty() ? "<array/>" : "<array>";
     for (const auto& event : events) encoded_events += event;
