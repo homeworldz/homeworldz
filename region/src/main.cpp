@@ -267,15 +267,17 @@ std::string encode_heightmap(const homeworldz::terrain::Heightmap& heightmap) {
 }
 
 homeworldz::scene::Vector3 default_spawn(const homeworldz::terrain::Heightmap& heightmap) {
-    std::size_t selected_x = 128;
-    std::size_t selected_y = 128;
+    const auto width = heightmap.width();
+    const auto center = width / 2;
+    std::size_t selected_x = center;
+    std::size_t selected_y = center;
     std::size_t selected_distance = (std::numeric_limits<std::size_t>::max)();
-    for (std::size_t y = 16; y < 240; ++y) {
-        for (std::size_t x = 16; x < 240; ++x) {
-            const auto height = heightmap[y * 256 + x];
+    for (std::size_t y = 16; y < width - 16; ++y) {
+        for (std::size_t x = 16; x < width - 16; ++x) {
+            const auto height = heightmap[y * width + x];
             if (height < 24.0F) continue;
-            const auto dx = static_cast<std::int64_t>(x) - 128;
-            const auto dy = static_cast<std::int64_t>(y) - 128;
+            const auto dx = static_cast<std::int64_t>(x) - static_cast<std::int64_t>(center);
+            const auto dy = static_cast<std::int64_t>(y) - static_cast<std::int64_t>(center);
             const auto distance = static_cast<std::size_t>(dx * dx + dy * dy);
             if (distance < selected_distance) {
                 selected_x = x;
@@ -284,15 +286,16 @@ homeworldz::scene::Vector3 default_spawn(const homeworldz::terrain::Heightmap& h
             }
         }
     }
-    const auto height = heightmap[selected_y * 256 + selected_x];
+    const auto height = heightmap[selected_y * width + selected_x];
     return {static_cast<double>(selected_x), static_cast<double>(selected_y), height + 1.0};
 }
 
 double ground_height(const homeworldz::terrain::Heightmap& heightmap,
                       const homeworldz::scene::Vector3& position) {
-    const auto x = std::clamp(static_cast<int>(position.x), 0, 255);
-    const auto y = std::clamp(static_cast<int>(position.y), 0, 255);
-    return heightmap[static_cast<std::size_t>(y) * 256 + x];
+    const auto maximum = static_cast<int>(heightmap.width() - 1);
+    const auto x = std::clamp(static_cast<int>(position.x), 0, maximum);
+    const auto y = std::clamp(static_cast<int>(position.y), 0, maximum);
+    return heightmap[static_cast<std::size_t>(y) * heightmap.width() + x];
 }
 
 int configured_int(std::string_view name, int fallback, int minimum, int maximum) {
@@ -1208,12 +1211,13 @@ int main(int argc, char* argv[]) {
         try {
             homeworldz::physics::HeightFieldDefinition definition;
             definition.samples.assign(terrain_heightmap->begin(), terrain_heightmap->end());
-            definition.sample_count = static_cast<std::uint32_t>(homeworldz::terrain::width);
+            definition.sample_count = static_cast<std::uint32_t>(terrain_heightmap->width());
             // Terrain samples describe the complete 256 m region. There are
             // sample_count - 1 intervals between the first sample at 0 and the
             // far region border at 256; unit spacing would incorrectly end the
             // collision surface at 255 and let edge-bound bodies fall off.
-            definition.spacing = 256.0 / static_cast<double>(definition.sample_count - 1);
+            definition.spacing = static_cast<double>(terrain_heightmap->width()) /
+                static_cast<double>(definition.sample_count - 1);
             const auto replacement = physics_world->create_heightfield(definition);
             if (replacement == 0) return false;
             if (physics_terrain != 0) physics_world->remove_body(physics_terrain);

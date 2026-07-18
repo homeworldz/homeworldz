@@ -3,6 +3,7 @@
 #include <cmath>
 #include <filesystem>
 #include <memory>
+#include <stdexcept>
 
 int main() {
     auto terrain = std::make_unique<homeworldz::terrain::Heightmap>();
@@ -40,5 +41,32 @@ int main() {
     std::error_code ignored;
     std::filesystem::remove(path, ignored);
     if (!loaded || *loaded != *terrain) return 5;
+
+    homeworldz::terrain::Heightmap large(512);
+    large.fill(20.0F);
+    const auto large_revert = large;
+    auto large_raise = raise;
+    large_raise.areas.clear();
+    large_raise.areas.push_back({-1, 400.0F, 300.0F, 400.0F, 300.0F});
+    if (homeworldz::terrain::apply(large, large_revert, large_raise).empty() ||
+        large[300 * 512 + 400] <= 20.9F || large[128 * 512 + 128] != 20.0F)
+        return 6;
+
+    const auto large_path = std::filesystem::temp_directory_path() /
+        "homeworldz-terrain-edit-large-test.f32";
+    if (!homeworldz::terrain::save_state(large_path, large)) return 7;
+    const auto loaded_large = homeworldz::terrain::load_state(large_path, 512);
+    const auto wrong_size = homeworldz::terrain::load_state(large_path, 256);
+    std::filesystem::remove(large_path, ignored);
+    if (!loaded_large || *loaded_large != large || wrong_size) return 8;
+
+    homeworldz::terrain::Heightmap maximum(1024);
+    if (maximum.width() != 1024 || maximum.size() != 1024 * 1024) return 9;
+    if (!homeworldz::terrain::apply(maximum, large_revert, large_raise).empty()) return 10;
+    try {
+        homeworldz::terrain::Heightmap unsupported(768);
+        return 11;
+    } catch (const std::invalid_argument&) {
+    }
     return 0;
 }
