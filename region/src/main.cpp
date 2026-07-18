@@ -2262,6 +2262,93 @@ int main(int argc, char* argv[]) {
                                       << ",\"refreshSent\":" << (refresh_sent ? "true" : "false")
                                       << "}" << std::endl;
                         }
+                        const auto task_inventory_move =
+                            homeworldz::viewer::decode_move_task_inventory(packet->payload);
+                        if (task_inventory_move &&
+                            task_inventory_move->agent_id == identity->agent_id &&
+                            task_inventory_move->session_id == identity->session_id) {
+                            const auto agent_id = homeworldz::viewer::format_uuid(identity->agent_id);
+                            const auto folder_id = homeworldz::viewer::format_uuid(
+                                task_inventory_move->folder_id);
+                            const auto task_item_id = homeworldz::viewer::format_uuid(
+                                task_inventory_move->item_id);
+                            const auto* entity = scene.find(task_inventory_move->local_id);
+                            const homeworldz::scene::TaskInventoryItem* task_item = nullptr;
+                            if (entity && entity->owner_id == agent_id) {
+                                const auto found = std::find_if(
+                                    entity->task_inventory.begin(), entity->task_inventory.end(),
+                                    [&](const auto& item) { return item.item_id == task_item_id; });
+                                if (found != entity->task_inventory.end() && found->owner_id == agent_id &&
+                                    (found->current_permissions &
+                                        homeworldz::scene::permission_copy) != 0)
+                                    task_item = &*found;
+                            }
+                            const auto personal_item_id = homeworldz::viewer::random_uuid();
+                            bool created = false;
+                            if (task_item && viewer_grid) {
+                                try {
+                                    created = viewer_grid->create_inventory_item(
+                                        agent_id, homeworldz::grid::InventoryItem{
+                                            personal_item_id, task_item->creator_id, agent_id,
+                                            folder_id, task_item->asset_id, task_item->asset_type,
+                                            task_item->inventory_type, task_item->name,
+                                            task_item->description, task_item->flags,
+                                            task_item->base_permissions,
+                                            task_item->current_permissions, 0,
+                                            task_item->next_permissions, task_item->sale_type,
+                                            task_item->sale_price});
+                                } catch (const std::exception& error) {
+                                    std::cout << "{\"level\":\"error\",\"message\":\"task inventory personal copy failed\",\"error\":"
+                                              << homeworldz::api::json_string(error.what()) << "}"
+                                              << std::endl;
+                                }
+                            }
+                            bool sent = false;
+                            if (created && task_item) {
+                                const auto item_id = homeworldz::viewer::parse_uuid(personal_item_id);
+                                const auto creator_id = homeworldz::viewer::parse_uuid(task_item->creator_id);
+                                const auto owner_id = homeworldz::viewer::parse_uuid(agent_id);
+                                const auto destination_id = homeworldz::viewer::parse_uuid(folder_id);
+                                const auto asset_id = homeworldz::viewer::parse_uuid(task_item->asset_id);
+                                if (item_id && creator_id && owner_id && destination_id && asset_id) {
+                                    homeworldz::viewer::InventoryItem response_item;
+                                    response_item.item_id = *item_id;
+                                    response_item.creator_id = *creator_id;
+                                    response_item.owner_id = *owner_id;
+                                    response_item.folder_id = *destination_id;
+                                    response_item.asset_id = *asset_id;
+                                    response_item.asset_type = task_item->asset_type;
+                                    response_item.inventory_type = task_item->inventory_type;
+                                    response_item.name = task_item->name;
+                                    response_item.description = task_item->description;
+                                    response_item.flags = task_item->flags;
+                                    response_item.base_permissions = task_item->base_permissions;
+                                    response_item.current_permissions = task_item->current_permissions;
+                                    response_item.everyone_permissions = 0;
+                                    response_item.next_permissions = task_item->next_permissions;
+                                    response_item.sale_type = task_item->sale_type;
+                                    response_item.sale_price = task_item->sale_price;
+                                    response_item.creation_date = static_cast<std::int32_t>(
+                                        std::chrono::duration_cast<std::chrono::seconds>(
+                                            std::chrono::system_clock::now().time_since_epoch()).count());
+                                    const homeworldz::viewer::AgentMessage reply{
+                                        identity->agent_id, identity->session_id};
+                                    if (const auto outgoing = circuits.send(
+                                            endpoint,
+                                            homeworldz::viewer::encode_update_create_inventory_item(
+                                                reply, 0, response_item),
+                                            true, now, true))
+                                        sent = send_udp(viewer_server, endpoint, *outgoing);
+                                }
+                            }
+                            std::cout << "{\"level\":" << (created ? "\"info\"" : "\"warn\"")
+                                      << ",\"message\":\"copyable task inventory move "
+                                      << (created ? "completed" : "rejected") << "\",\"localId\":"
+                                      << task_inventory_move->local_id << ",\"taskItemId\":"
+                                      << homeworldz::api::json_string(task_item_id)
+                                      << ",\"viewerUpdateSent\":" << (sent ? "true" : "false")
+                                      << "}" << std::endl;
+                        }
                         const auto task_inventory_xfer =
                             homeworldz::viewer::decode_request_xfer(packet->payload);
                         if (task_inventory_xfer) {
