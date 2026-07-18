@@ -901,3 +901,14 @@ opened its texture asset, and retained the original task item. PostgreSQL
 stored matching texture types, provenance, `0x0009e000` base/current masks,
 zero everyone permissions, and the edited `0x0008a000` copyable Next Owner
 mask. Both copies remained after a fresh Firestorm login.
+
+No-copy personal-to-task inventory movement passed live acceptance on
+2026-07-18. Dragging `No Copy Transfer Test` from Jim Tarber's Textures folder
+into `Contents1` removed the personal item and created a task item with a new
+UUID. The Grid transaction durably reserved the complete item before the
+Region mutated its scene snapshot, and the Region finalized that reservation
+only after the task item was stored. PostgreSQL retained the finalized custody
+record, the source personal UUID no longer existed, and no transfer warning or
+error was logged. Prepared transfers survive either service stopping between
+those steps and are reconciled from the Grid when the destination Region
+starts, preventing a no-copy item from being lost between inventory stores.
