@@ -1052,3 +1052,13 @@ The initial self-appearance completion echo passed in the same session. On a
 clean last-location login, Firestorm received five wearable-cache hits and the
 Region echoed the viewer's first complete nonempty `AvatarAppearance`; the
 avatar resolved immediately with all six COF links worn.
+
+Restored-platform avatar placement passed live Beta acceptance on 2026-07-18.
+Jim Tarber logged out while standing on the persisted `Beta Quadrant Object`
+and returned with his feet correctly supported by its top rather than falling
+through and being displaced onto nearby terrain. Character creation now follows
+Halcyon's mature physics-layer behavior: a capsule that genuinely overlaps
+scene geometry is searched upward through progressively larger offsets until a
+clear position is found, while exact surface contact and already-clear restored
+positions remain unchanged. A brief viewer landing animation accompanied the
+successful contact settlement and was considered appropriate.
