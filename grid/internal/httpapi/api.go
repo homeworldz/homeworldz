@@ -18,6 +18,7 @@ import (
 	"github.com/homeworldz/homeworldz/grid/internal/presence"
 	"github.com/homeworldz/homeworldz/grid/internal/provisioning"
 	"github.com/homeworldz/homeworldz/grid/internal/regions"
+	"github.com/homeworldz/homeworldz/grid/internal/tasktransfer"
 	"github.com/homeworldz/homeworldz/grid/internal/transit"
 )
 
@@ -26,21 +27,22 @@ type ReadinessChecker interface {
 }
 
 type API struct {
-	ready        ReadinessChecker
-	version      string
-	publicURL    string
-	gridName     string
-	regions      regions.Store
-	identity     identity.Store
-	presence     presence.Store
-	inventory    inventory.Store
-	assets       assetmeta.Store
-	serviceToken string
-	provisioned  *provisioning.Registry
-	terrainHTTP  *http.Client
-	terrainCache terrainTileCache
-	transits     transit.Store
-	locations    locations.Store
+	ready         ReadinessChecker
+	version       string
+	publicURL     string
+	gridName      string
+	regions       regions.Store
+	identity      identity.Store
+	presence      presence.Store
+	inventory     inventory.Store
+	assets        assetmeta.Store
+	serviceToken  string
+	provisioned   *provisioning.Registry
+	terrainHTTP   *http.Client
+	terrainCache  terrainTileCache
+	transits      transit.Store
+	taskTransfers tasktransfer.Store
+	locations     locations.Store
 }
 
 type Options struct {
@@ -56,6 +58,7 @@ type Options struct {
 	Provisioned       *provisioning.Registry
 	TerrainHTTPClient *http.Client
 	Transits          transit.Store
+	TaskTransfers     tasktransfer.Store
 	Locations         locations.Store
 }
 
@@ -65,7 +68,8 @@ func New(ready ReadinessChecker, version string, options Options) http.Handler {
 		regions:  options.Regions, identity: options.Identity, presence: options.Presence,
 		inventory: options.Inventory, assets: options.Assets, serviceToken: options.ServiceToken,
 		provisioned: options.Provisioned, terrainHTTP: options.TerrainHTTPClient,
-		terrainCache: newTerrainTileCache(), transits: options.Transits, locations: options.Locations}
+		terrainCache: newTerrainTileCache(), transits: options.Transits,
+		taskTransfers: options.TaskTransfers, locations: options.Locations}
 	if a.publicURL == "" {
 		a.publicURL = "http://127.0.0.1:42000"
 	}
@@ -101,6 +105,8 @@ func New(ready ReadinessChecker, version string, options Options) http.Handler {
 	mux.HandleFunc("/api/v1/assets/", a.assetByID)
 	mux.HandleFunc("/api/v1/transits", a.transitsRoot)
 	mux.HandleFunc("/api/v1/transits/", a.transitByID)
+	mux.HandleFunc("/api/v1/task-transfers", a.taskTransfersRoot)
+	mux.HandleFunc("/api/v1/task-transfers/", a.taskTransferByID)
 	mux.HandleFunc("/", a.notFound)
 	return withRequestID(withRequestLogging(
 		authenticateInternal(mux, options.ServiceToken), options.Logger,

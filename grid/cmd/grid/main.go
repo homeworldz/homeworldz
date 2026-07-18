@@ -22,6 +22,7 @@ import (
 	"github.com/homeworldz/homeworldz/grid/internal/presence"
 	"github.com/homeworldz/homeworldz/grid/internal/provisioning"
 	"github.com/homeworldz/homeworldz/grid/internal/regions"
+	"github.com/homeworldz/homeworldz/grid/internal/tasktransfer"
 	"github.com/homeworldz/homeworldz/grid/internal/transit"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -68,6 +69,7 @@ func main() {
 			Provisioned:       provisionedRegions,
 			TerrainHTTPClient: &http.Client{Timeout: 2 * time.Second},
 			Transits:          transitStore(db),
+			TaskTransfers:     taskTransferStore(db),
 			Locations:         locationStore(db),
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
@@ -138,4 +140,11 @@ func transitStore(db *sql.DB) transit.Store {
 		return nil
 	}
 	return transit.NewPostgresStore(db)
+}
+
+func taskTransferStore(db *sql.DB) tasktransfer.Store {
+	if db == nil {
+		return nil
+	}
+	return tasktransfer.NewPostgresStore(db)
 }
