@@ -9,12 +9,15 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/homeworldz/homeworldz/grid/internal/inventory"
 	"github.com/homeworldz/homeworldz/grid/internal/locations"
+	"github.com/homeworldz/homeworldz/grid/internal/provisioning"
 	"github.com/homeworldz/homeworldz/grid/internal/regions"
 )
 
@@ -86,8 +89,18 @@ func TestViewerLoginResolvesNamedRegion(t *testing.T) {
 		PublicEndpoint: "http://fallback.example:42001", LeaseDuration: time.Minute})
 	target, _ := regionStore.Register(context.Background(), regions.Registration{Name: "Welcome", GridX: 1001, GridY: 1002,
 		PublicEndpoint: startState.URL, ViewerPort: 43002, LeaseDuration: time.Minute})
+	provisionedPath := filepath.Join(t.TempDir(), "regions.json")
+	provisionedJSON := fmt.Sprintf(`[{"id":%q,"name":"Welcome","mapX":1001,"mapY":1002,"size":2,"accessKey":"welcome-key"}]`, target.ID)
+	if err := os.WriteFile(provisionedPath, []byte(provisionedJSON), 0600); err != nil {
+		t.Fatal(err)
+	}
+	provisioned, err := provisioning.Load(provisionedPath)
+	if err != nil {
+		t.Fatal(err)
+	}
 	inventories := &memoryInventoryStore{folders: make(map[string][]inventory.Folder)}
-	handler := New(checker{}, "test", Options{ServiceToken: "region-secret", Identity: identities, Regions: regionStore, Inventory: inventories})
+	handler := New(checker{}, "test", Options{ServiceToken: "region-secret", Identity: identities,
+		Regions: regionStore, Provisioned: provisioned, Inventory: inventories})
 	fields := viewerResponse(t, handler, viewerRequest("Test", "User", "development-password", "uri:Welcome&128&128&25"))
 	if fields["login"].text() != "true" {
 		t.Fatalf("login = %q, reason = %q, message = %q", fields["login"].text(), fields["reason"].text(), fields["message"].text())
@@ -96,7 +109,8 @@ func TestViewerLoginResolvesNamedRegion(t *testing.T) {
 		t.Fatalf("missing session identity: %#v", fields)
 	}
 	if fields["sim_ip"].text() != "127.0.0.1" || fields["sim_port"].text() != "43002" ||
-		fields["region_x"].text() != "256256" || fields["region_y"].text() != "256512" {
+		fields["region_x"].text() != "256256" || fields["region_y"].text() != "256512" ||
+		fields["region_size_x"].text() != "512" || fields["region_size_y"].text() != "512" {
 		t.Fatalf("unexpected destination: %#v", fields)
 	}
 	wantSeed := strings.TrimRight(target.PublicEndpoint, "/") + "/caps/seed/" + fields["session_id"].text()

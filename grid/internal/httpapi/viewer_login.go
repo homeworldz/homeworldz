@@ -258,6 +258,13 @@ func (a *API) viewerLogin(w http.ResponseWriter, r *http.Request) {
 		lookAt = fmt.Sprintf("[r%.9g,r%.9g,r%.9g]", state.LookAt[0], state.LookAt[1], state.LookAt[2])
 	}
 	root := rpcStructValue(rpcField("folder_id", rpcString(rootID)))
+	regionSizeX, regionSizeY := 256, 256
+	if a.provisioned != nil {
+		if provisioned, provisionErr := a.provisioned.Get(r.Context(), region.ID); provisionErr == nil {
+			regionSizeX = provisioned.Size * 256
+			regionSizeY = provisioned.Size * 256
+		}
+	}
 	libraryRoot := rpcStructValue(rpcField("folder_id", rpcString(inventory.LibraryRootID)))
 	libraryOwner := rpcStructValue(rpcField("agent_id", rpcString(inventory.LibraryOwnerID)))
 	_, librarySkeleton := inventorySkeleton(inventory.LibraryFolders())
@@ -268,7 +275,7 @@ func (a *API) viewerLogin(w http.ResponseWriter, r *http.Request) {
 		rpcField("last_name", rpcString(last)), rpcField("circuit_code", rpcInt(int(circuit))),
 		rpcField("sim_ip", rpcString(endpoint.Hostname())), rpcField("sim_port", rpcInt(region.ViewerPort)),
 		rpcField("region_x", rpcInt(region.GridX*256)), rpcField("region_y", rpcInt(region.GridY*256)),
-		rpcField("region_size_x", rpcInt(256)), rpcField("region_size_y", rpcInt(256)),
+		rpcField("region_size_x", rpcInt(regionSizeX)), rpcField("region_size_y", rpcInt(regionSizeY)),
 		rpcField("start_location", rpcString(normalizeStart(fields["start"].text()))),
 		rpcField("look_at", rpcString(lookAt)),
 		rpcField("seed_capability", rpcString(strings.TrimRight(region.PublicEndpoint, "/")+"/caps/seed/"+session.ID)),
