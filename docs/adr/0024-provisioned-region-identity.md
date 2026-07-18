@@ -56,5 +56,7 @@ are returned only by create and rotate responses. The region supplies
 `--region-id` and `--access-key`, while its local INI keeps host-specific paths
 and the grid URL. The persistent record also carries optional operator-assigned
 `publicEndpoint` and `viewerPort` values independently of its online lease;
-applying those as fetched effective startup configuration remains a later
-bootstrap step.
+the bootstrap response applies those along with the canonical UUID, name,
+coordinates, Grid display name, and public Grid URL. Regions may authenticate
+by UUID or case-insensitive unique name. Host-local bind addresses and storage
+paths deliberately remain local configuration.

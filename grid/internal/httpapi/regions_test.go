@@ -269,7 +269,7 @@ func TestProvisionedRegionRegistrationUsesPerRegionCredentials(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "regions.json")
 	if err := os.WriteFile(path, []byte(`[
   {"id":"11111111-1111-4111-8111-111111111111","name":"Welcome","mapX":1000,"mapY":1000,"accessKey":"welcome-key"},
-  {"id":"22222222-2222-4222-8222-222222222222","name":"Sandbox","mapX":1001,"mapY":1000,"accessKey":"sandbox-key"}
+  {"id":"22222222-2222-4222-8222-222222222222","name":"Sandbox","mapX":1001,"mapY":1000,"publicEndpoint":"https://sandbox.example/region","viewerPort":43002,"accessKey":"sandbox-key"}
 ]`), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -278,10 +278,11 @@ func TestProvisionedRegionRegistrationUsesPerRegionCredentials(t *testing.T) {
 		t.Fatal(err)
 	}
 	store := newMemoryRegionStore()
-	handler := New(checker{}, "test", Options{ServiceToken: "grid-secret", Regions: store, Provisioned: registry})
+	handler := New(checker{}, "test", Options{ServiceToken: "grid-secret", GridName: "HomeWorldz Test",
+		GridPublicURL: "https://grid.example", Regions: store, Provisioned: registry})
 
 	request := httptest.NewRequest(http.MethodPost,
-		"/api/v1/region-runtime/22222222-2222-4222-8222-222222222222",
+		"/api/v1/region-runtime/Sandbox",
 		bytes.NewBufferString(`{"publicEndpoint":"http://127.0.0.1:42011","viewerPort":42012,"leaseSeconds":60}`))
 	request.Header.Set("Authorization", "Bearer sandbox-key")
 	request.Header.Set("Content-Type", "application/json")
@@ -290,12 +291,14 @@ func TestProvisionedRegionRegistrationUsesPerRegionCredentials(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("registration status = %d: %s", response.Code, response.Body.String())
 	}
-	var registered regions.Region
+	var registered ProvisionedRegionRuntimeResult
 	if err := json.NewDecoder(response.Body).Decode(&registered); err != nil {
 		t.Fatal(err)
 	}
 	if registered.ID != "22222222-2222-4222-8222-222222222222" || registered.Name != "Sandbox" ||
-		registered.GridX != 1001 || registered.GridY != 1000 || registered.ViewerPort != 42012 {
+		registered.GridX != 1001 || registered.GridY != 1000 ||
+		registered.PublicEndpoint != "https://sandbox.example/region" || registered.ViewerPort != 43002 ||
+		registered.GridName != "HomeWorldz Test" || registered.GridPublicURL != "https://grid.example" {
 		t.Fatalf("unexpected registered region: %#v", registered)
 	}
 

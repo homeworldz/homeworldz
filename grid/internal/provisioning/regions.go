@@ -119,6 +119,14 @@ func (r *Registry) Authenticate(_ context.Context, id, accessKey string) (Region
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	region, found := r.byID[id]
+	if !found {
+		for _, candidate := range r.byID {
+			if strings.EqualFold(candidate.Name, id) {
+				region, found = candidate, true
+				break
+			}
+		}
+	}
 	if !found || !region.Enabled || subtle.ConstantTimeCompare([]byte(region.AccessKey), []byte(accessKey)) != 1 {
 		return Region{}, false
 	}

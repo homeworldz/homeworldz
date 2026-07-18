@@ -125,7 +125,7 @@ func (a *API) provisionedRegionRuntime(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	parts := strings.Split(strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/region-runtime/"), "/"), "/")
-	if len(parts) == 0 || !validUUID(parts[0]) {
+	if len(parts) == 0 || strings.TrimSpace(parts[0]) == "" || len(parts[0]) > 128 {
 		a.notFound(w, r)
 		return
 	}
@@ -143,21 +143,30 @@ func (a *API) provisionedRegionRuntime(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		lease, ok := validateLease(w, request.LeaseSeconds)
+		publicEndpoint := request.PublicEndpoint
+		if provisioned.PublicEndpoint != "" {
+			publicEndpoint = provisioned.PublicEndpoint
+		}
+		viewerPort := request.ViewerPort
+		if provisioned.ViewerPort != 0 {
+			viewerPort = provisioned.ViewerPort
+		}
 		validation := RegisterRegionRequest{Name: provisioned.Name, GridX: provisioned.MapX, GridY: provisioned.MapY,
-			PublicEndpoint: request.PublicEndpoint, ViewerPort: request.ViewerPort}
+			PublicEndpoint: publicEndpoint, ViewerPort: viewerPort}
 		if !ok || !validateRegistration(w, validation) {
 			return
 		}
 		region, err := a.regions.RegisterProvisioned(r.Context(), id, regions.Registration{
 			Name: provisioned.Name, GridX: provisioned.MapX, GridY: provisioned.MapY,
-			PublicEndpoint: request.PublicEndpoint, ViewerPort: request.ViewerPort, LeaseDuration: lease,
+			PublicEndpoint: publicEndpoint, ViewerPort: viewerPort, LeaseDuration: lease,
 		})
 		if errors.Is(err, regions.ErrConflict) {
 			writeJSON(w, http.StatusConflict, Error{Code: "region_coordinates_in_use", Message: "region coordinates are already leased"})
 		} else if err != nil {
 			writeJSON(w, http.StatusInternalServerError, Error{Code: "region_store_error", Message: "region registration failed"})
 		} else {
-			writeJSON(w, http.StatusOK, region)
+			writeJSON(w, http.StatusOK, ProvisionedRegionRuntimeResult{
+				Region: region, GridName: a.gridName, GridPublicURL: a.publicURL})
 		}
 		return
 	}

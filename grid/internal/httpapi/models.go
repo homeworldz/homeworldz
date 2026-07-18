@@ -47,6 +47,12 @@ type StartProvisionedRegionRequest struct {
 	LeaseSeconds   int    `json:"leaseSeconds"`
 }
 
+type ProvisionedRegionRuntimeResult struct {
+	regions.Region
+	GridName      string `json:"gridName"`
+	GridPublicURL string `json:"gridPublicUrl"`
+}
+
 type RegionList struct {
 	Regions []regions.Region `json:"regions"`
 }

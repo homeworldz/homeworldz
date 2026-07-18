@@ -738,6 +738,7 @@ std::string runtime_version() {
 int main(int argc, char* argv[]) {
     std::filesystem::path config_path = "config/region.ini";
     std::string provisioned_region_id;
+	std::string provisioned_region_name;
     std::string region_access_key;
     for (int index = 1; index < argc; ++index) {
         const std::string_view argument = argv[index];
@@ -745,21 +746,24 @@ int main(int argc, char* argv[]) {
             config_path = argv[++index];
         } else if (argument == "--region-id" && index + 1 < argc) {
             provisioned_region_id = argv[++index];
+		} else if (argument == "--region-name" && index + 1 < argc) {
+			provisioned_region_name = argv[++index];
         } else if (argument == "--access-key" && index + 1 < argc) {
             region_access_key = argv[++index];
         } else if (argument == "--help") {
             std::cout << "Usage: homeworldz-region [--config path-to-region.ini] "
-                         "--region-id uuid --access-key key" << std::endl;
+						 "(--region-id uuid | --region-name name) --access-key key" << std::endl;
             return 0;
         } else {
             std::cerr << "Unknown or incomplete argument: " << argument << std::endl;
             return 2;
         }
     }
-    if (provisioned_region_id.empty() || region_access_key.empty()) {
-        std::cerr << "Both --region-id and --access-key are required." << std::endl;
+	if (provisioned_region_id.empty() == provisioned_region_name.empty() || region_access_key.empty()) {
+		std::cerr << "Exactly one of --region-id or --region-name, plus --access-key, is required." << std::endl;
         return 2;
     }
+	if (provisioned_region_id.empty()) provisioned_region_id = provisioned_region_name;
 #ifdef _WIN32
     WSADATA data{};
     if (WSAStartup(MAKEWORD(2, 2), &data) != 0) return 1;
@@ -787,10 +791,11 @@ int main(int argc, char* argv[]) {
     std::string region_name;
     int region_grid_x{};
     int region_grid_y{};
-    const auto region_public_endpoint = configured_value(
+    auto region_public_endpoint = configured_value(
         "region.public_endpoint", "http://localhost:" + std::to_string(configured_port()));
-    const auto grid_public_endpoint = configured_value(
+    auto grid_public_endpoint = configured_value(
         "grid.public_url", configured_value("grid.url", "http://localhost:42000"));
+	auto region_viewer_port = configured_viewer_port();
     const auto region_data_path = std::filesystem::path(
         configured_value("region.data_path", "var/region"));
     const auto terrain_state_path = region_data_path / "terrain.f32";
@@ -871,7 +876,7 @@ int main(int argc, char* argv[]) {
             homeworldz::grid::RegionSettings settings{
                 {}, 0, 0,
                 region_public_endpoint,
-                configured_viewer_port(),
+                region_viewer_port,
                 configured_int("region.lease_seconds", 60, 10, 300)};
             const auto grid_url = configured_value("grid.url", "http://localhost:42000");
             auto registration_transport = homeworldz::grid::socket_transport(grid_url, region_access_key);
@@ -888,6 +893,12 @@ int main(int argc, char* argv[]) {
             region_name = provisioned->name;
             region_grid_x = provisioned->grid_x;
             region_grid_y = provisioned->grid_y;
+			region_public_endpoint = provisioned->public_endpoint;
+			region_viewer_port = provisioned->viewer_port;
+			grid_public_endpoint = provisioned->grid_public_url;
+			settings.public_endpoint = region_public_endpoint;
+			settings.viewer_port = region_viewer_port;
+			provisioned_region_id = provisioned->id;
             auto viewer_transport = homeworldz::grid::socket_transport(grid_url, service_token);
             viewer_grid = std::make_unique<homeworldz::grid::Client>(std::move(viewer_transport));
             if (!refresh_region_neighbors(true)) {
@@ -1336,7 +1347,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     sockaddr_in viewer_address{};
-    if (!configured_bind_address(viewer_address, "region.viewer_bind_address", configured_viewer_port()) ||
+    if (!configured_bind_address(viewer_address, "region.viewer_bind_address", region_viewer_port) ||
         bind(viewer_server, reinterpret_cast<sockaddr*>(&viewer_address), sizeof(viewer_address)) != 0) {
         close_socket(viewer_server);
         close_socket(server);
@@ -1495,7 +1506,7 @@ int main(int argc, char* argv[]) {
     };
 
     std::cout << "{\"level\":\"info\",\"message\":\"region service listening\",\"httpPort\":"
-              << configured_port() << ",\"viewerPort\":" << configured_viewer_port() << "}" << std::endl;
+              << configured_port() << ",\"viewerPort\":" << region_viewer_port << "}" << std::endl;
     while (running) {
         const auto http_now = std::chrono::steady_clock::now();
         std::erase_if(pending_event_responses, [&](const PendingEventResponse& pending) {
@@ -1780,7 +1791,7 @@ int main(int argc, char* argv[]) {
                                     enqueue_viewer_event(session_id,
                                         homeworldz::viewer::establish_agent_communication_event_xml({
                                             authorized_session->agent_id,
-                                            simulator_endpoint(region_public_endpoint, configured_viewer_port()),
+                                            simulator_endpoint(region_public_endpoint, region_viewer_port),
                                             region_public_endpoint + "/caps/seed/" + session_id +
                                                 (capability_visit_id.empty() ? std::string{} :
                                                     "/" + capability_visit_id)}));

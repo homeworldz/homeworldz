@@ -158,13 +158,13 @@ visible:
 Windows:
 
 ```cmd
-homeworldz-region.exe --config config\region.ini --region-id REGION-UUID --access-key REGION-ACCESS-KEY
+homeworldz-region.exe --config config\region.ini --region-name "REGION NAME" --access-key REGION-ACCESS-KEY
 ```
 
 Linux:
 
 ```sh
-./homeworldz-region --config config/region.ini --region-id REGION-UUID --access-key REGION-ACCESS-KEY
+./homeworldz-region --config config/region.ini --region-name "REGION NAME" --access-key REGION-ACCESS-KEY
 ```
 
 Run it from the extracted package directory so relative asset and terrain paths
@@ -174,6 +174,13 @@ Windows-service and systemd integration, but neither is implemented yet.
 The startup log should report terrain loading, local storage initialization,
 successful grid registration, and both listening ports. When a service token
 is configured, the process exits if registration fails.
+
+`--region-id REGION-UUID` may be used instead of `--region-name`; exactly one
+identifier is required. Names are matched case-insensitively and the Grid
+returns the canonical UUID, name, coordinates, assigned public endpoint and
+viewer port, Grid display name, and public Grid URL. Operator-assigned endpoint
+values override their transitional local INI counterparts before the viewer
+socket opens. Host-local bind addresses and storage paths remain local.
 
 Default endpoints:
 

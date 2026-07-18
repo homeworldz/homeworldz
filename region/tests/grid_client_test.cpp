@@ -19,7 +19,7 @@ public:
                                         std::string_view body) override {
         requests.push_back({std::string(method), std::string(path), std::string(body)});
         if (method == "POST" && path.starts_with("/api/v1/region-runtime/"))
-            return {200, R"({"id":"22222222-2222-4222-8222-222222222222","name":"Sandbox","gridX":1001,"gridY":1000})"};
+            return {200, R"({"id":"22222222-2222-4222-8222-222222222222","name":"Sandbox Region","gridX":1001,"gridY":1000,"publicEndpoint":"https://sandbox.example/region","viewerPort":43002,"gridName":"HomeWorldz Test","gridPublicUrl":"https://grid.example"})"};
         if (method == "GET" && path.ends_with("/neighbors"))
             return {200, R"({"neighbors":[{"direction":"west","region":{"id":"11111111-1111-4111-8111-111111111111","name":"Welcome","gridX":1000,"gridY":1000,"publicEndpoint":"http://grid.example:42011","viewerPort":42012,"leaseExpiresAt":"2026-07-16T12:00:00Z"}}]})"};
         if (method == "POST" && path == "/api/v1/transits")
@@ -103,9 +103,14 @@ int main() {
     homeworldz::grid::RegionSettings provisioned_settings{
         {}, 0, 0, "http://localhost:42011", 42012, 60};
     const auto provisioned = client.register_provisioned_region(
-        "22222222-2222-4222-8222-222222222222", provisioned_settings);
-    if (!provisioned || provisioned->name != "Sandbox" || provisioned->grid_x != 1001 ||
-        provisioned->grid_y != 1000 || transport->requests.back().body.find(
+        "Sandbox Region", provisioned_settings);
+    if (!provisioned || provisioned->id != "22222222-2222-4222-8222-222222222222" ||
+        provisioned->name != "Sandbox Region" || provisioned->grid_x != 1001 ||
+        provisioned->grid_y != 1000 || provisioned->public_endpoint != "https://sandbox.example/region" ||
+        provisioned->viewer_port != 43002 || provisioned->grid_name != "HomeWorldz Test" ||
+        provisioned->grid_public_url != "https://grid.example" ||
+        transport->requests.back().path != "/api/v1/region-runtime/Sandbox%20Region" ||
+        transport->requests.back().body.find(
             R"("viewerPort":42012)") == std::string::npos) return 1;
     const auto neighbors = client.find_region_neighbors(provisioned->id);
     if (!neighbors || neighbors->size() != 1 || neighbors->front().direction != "west" ||

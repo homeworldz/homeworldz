@@ -28,6 +28,10 @@ func TestLoadAndAuthenticate(t *testing.T) {
 	if _, ok := registry.Authenticate(context.Background(), region.ID, "wrong"); ok {
 		t.Fatal("wrong access key authenticated")
 	}
+	byName, ok := registry.Authenticate(context.Background(), "sandbox", "sandbox-key")
+	if !ok || byName.ID != region.ID {
+		t.Fatalf("case-insensitive name authentication = %#v, %v", byName, ok)
+	}
 }
 
 func TestManagementMutationsPersistAtomically(t *testing.T) {

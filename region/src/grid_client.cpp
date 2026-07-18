@@ -26,6 +26,24 @@ static void close_grid_socket(grid_socket socket) { close(socket); }
 namespace homeworldz::grid {
 namespace {
 
+std::string path_segment(std::string_view value) {
+    constexpr char hexadecimal[] = "0123456789ABCDEF";
+    std::string result;
+    result.reserve(value.size());
+    for (const auto character : value) {
+        const auto byte = static_cast<unsigned char>(character);
+        if ((byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') ||
+            (byte >= '0' && byte <= '9') || byte == '-' || byte == '_' || byte == '.' || byte == '~') {
+            result.push_back(static_cast<char>(byte));
+        } else {
+            result.push_back('%');
+            result.push_back(hexadecimal[byte >> 4]);
+            result.push_back(hexadecimal[byte & 0x0f]);
+        }
+    }
+    return result;
+}
+
 class SocketTransport final : public Transport {
 public:
     SocketTransport(std::string grid_url, std::string service_token)
@@ -469,14 +487,21 @@ std::optional<RegisteredRegion> Client::register_provisioned_region(
                       ",\"viewerPort\":" + std::to_string(settings.viewer_port) +
                       ",\"leaseSeconds\":" + std::to_string(settings.lease_seconds) + '}';
     const auto response = transport_->send(
-        "POST", "/api/v1/region-runtime/" + std::string(region_id), body);
+        "POST", "/api/v1/region-runtime/" + path_segment(region_id), body);
     if (response.status_code != 200) return std::nullopt;
     RegisteredRegion region{json_field(response.body, "id"), json_field(response.body, "name")};
     const auto grid_x = json_int(response.body, "gridX");
     const auto grid_y = json_int(response.body, "gridY");
-    if (region.id != region_id || region.name.empty() || !grid_x || !grid_y) return std::nullopt;
+    const auto viewer_port = json_int(response.body, "viewerPort");
+    region.public_endpoint = json_field(response.body, "publicEndpoint");
+    region.grid_name = json_field(response.body, "gridName");
+    region.grid_public_url = json_field(response.body, "gridPublicUrl");
+    if (region.id.empty() || region.name.empty() || !grid_x || !grid_y ||
+        region.public_endpoint.empty() || !viewer_port || *viewer_port < 1 || *viewer_port > 65535 ||
+        region.grid_name.empty() || region.grid_public_url.empty()) return std::nullopt;
     region.grid_x = *grid_x;
     region.grid_y = *grid_y;
+	region.viewer_port = *viewer_port;
     return region;
 }
 

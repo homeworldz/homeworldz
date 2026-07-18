@@ -35,7 +35,8 @@ func (s *PostgresStore) Import(ctx context.Context, items []Region) error {
 
 func (s *PostgresStore) Authenticate(ctx context.Context, id, accessKey string) (Region, bool) {
 	hash := sha256.Sum256([]byte(accessKey))
-	region, err := s.get(ctx, `id = $1 AND enabled AND access_key_hash = $2`, id, hash[:])
+	region, err := s.get(ctx, `(id::text = $1 OR lower(name) = lower($1))
+		AND enabled AND access_key_hash = $2`, id, hash[:])
 	return region, err == nil
 }
 
