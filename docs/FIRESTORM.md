@@ -130,20 +130,21 @@ legacy viewer mutations are not a second source of inventory truth. AIS batch
 link creation is atomic and supports viewer-managed Current Outfit replacement
 without having the grid reapply the default outfit to established avatars.
 
-## Ordinary Texture Upload
+## Ordinary Asset Upload
 
 The region advertises `NewFileAgentInventory` for the initial ordinary-upload
-slice. Firestorm sends texture metadata as LLSD, receives a one-shot uploader
-URL, converts the selected source image to JPEG2000, and posts the binary asset.
-HomeWorldz validates the active viewer session and JPEG2000 signature, records
-the authenticated uploader UUID as asset creator provenance, and asks the Grid
-to create a texture inventory item in the requested folder owned by that same
-user. The completion response contains distinct new asset and inventory-item
-UUIDs. Texture upload cost is always zero. The UDP economy response advertises
-that zero price, while `SimulatorFeatures.OpenSimExtras.currency` identifies
-the grid's viewer-facing currency as credits (`C$`). Sounds, animations,
-snapshots, mesh, objects, and bulk or variable-price uploads remain outside
-this first slice.
+slice. Firestorm sends metadata as LLSD, receives a one-shot uploader URL,
+converts the selected source, and posts the binary asset. HomeWorldz accepts
+the exact texture, snapshot, sound, and animation type pairs used by Firestorm;
+it validates JPEG2000 image signatures, Ogg Vorbis sound framing, and the
+version-one animation header. The active viewer session is authoritative for
+the uploader and creator UUID. The Region stores and registers the asset, then
+asks the Grid to create a correctly typed inventory item in the requested
+folder owned by that user. The completion response contains distinct new asset
+and inventory-item UUIDs. These uploads cost zero. The UDP economy response
+advertises that zero price, while `SimulatorFeatures.OpenSimExtras.currency`
+identifies the grid's viewer-facing currency as credits (`C$`). Mesh, object,
+bulk, and variable-price uploads remain outside this slice.
 
 Each region registers its viewer UDP port with the grid. Login advertises that
 stored port, while `region.viewer_port` controls the matching region listener

@@ -379,6 +379,34 @@ func TestCreateTextureInventoryItemEndpoint(t *testing.T) {
 	}
 }
 
+func TestCreateUploadedAssetTypePairs(t *testing.T) {
+	const userID = "20000000-0000-4000-8000-000000000001"
+	store := &memoryInventoryStore{folders: make(map[string][]inventory.Folder)}
+	_, _ = store.EnsureSystemFolders(context.Background(), userID)
+	handler := New(checker{}, "test", Options{ServiceToken: "secret", Inventory: store})
+	tests := []struct {
+		id, assetID, assetType, inventoryType string
+		folderType                            int
+	}{
+		{"40000000-0000-4000-8000-000000000021", "50000000-0000-4000-8000-000000000021", "0", "15", 15},
+		{"40000000-0000-4000-8000-000000000022", "50000000-0000-4000-8000-000000000022", "1", "1", 1},
+		{"40000000-0000-4000-8000-000000000023", "50000000-0000-4000-8000-000000000023", "20", "19", 20},
+	}
+	for _, test := range tests {
+		body := `{"id":"` + test.id + `","creatorUserId":"` + userID +
+			`","folderId":"` + inventory.SystemFolderID(userID, test.folderType) +
+			`","assetId":"` + test.assetID + `","assetType":` + test.assetType +
+			`,"inventoryType":` + test.inventoryType + `,"name":"Upload","description":"",` +
+			`"basePermissions":647168,"currentPermissions":647168,` +
+			`"everyonePermissions":0,"nextPermissions":581632}`
+		created := requestRegion[inventory.Item](t, handler, http.MethodPost,
+			"/api/v1/inventory/"+userID+"/items", body, http.StatusCreated)
+		if created.AssetID != test.assetID || created.FolderID != inventory.SystemFolderID(userID, test.folderType) {
+			t.Fatalf("created uploaded item = %#v", created)
+		}
+	}
+}
+
 func TestCreateObjectInventoryItemEndpoint(t *testing.T) {
 	const userID = "20000000-0000-4000-8000-000000000001"
 	const creatorID = "30000000-0000-4000-8000-000000000001"

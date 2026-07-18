@@ -219,10 +219,27 @@ std::optional<NewFileInventoryUpload> parse_new_file_inventory_upload(std::strin
     const auto inventory_type = llsd_value(xml, "inventory_type");
     const auto name = llsd_value(xml, "name");
     const auto description = llsd_value(xml, "description");
-    if (!folder || !parse_uuid(*folder) || asset_type != "texture" ||
-        inventory_type != "texture" || !name || name->empty() || name->size() > 255 ||
+    std::int8_t encoded_asset_type{-1};
+    std::int8_t encoded_inventory_type{-1};
+    if (asset_type == "texture" && inventory_type == "texture") {
+        encoded_asset_type = 0;
+        encoded_inventory_type = 0;
+    } else if ((asset_type == "texture" || asset_type == "snapshot") &&
+               inventory_type == "snapshot") {
+        encoded_asset_type = 0;
+        encoded_inventory_type = 15;
+    } else if (asset_type == "sound" && inventory_type == "sound") {
+        encoded_asset_type = 1;
+        encoded_inventory_type = 1;
+    } else if (asset_type == "animation" && inventory_type == "animation") {
+        encoded_asset_type = 20;
+        encoded_inventory_type = 19;
+    }
+    if (!folder || !parse_uuid(*folder) || encoded_asset_type < 0 ||
+        !name || name->empty() || name->size() > 255 ||
         !description || description->size() > 1024) return std::nullopt;
-    NewFileInventoryUpload result{*folder, *name, *description};
+    NewFileInventoryUpload result{*folder, encoded_asset_type, encoded_inventory_type,
+                                  *name, *description};
     if (const auto permissions = llsd_u32(xml, "everyone_mask"))
         result.everyone_permissions = *permissions;
     if (const auto permissions = llsd_u32(xml, "group_mask"))
@@ -230,6 +247,33 @@ std::optional<NewFileInventoryUpload> parse_new_file_inventory_upload(std::strin
     if (const auto permissions = llsd_u32(xml, "next_owner_mask"))
         result.next_permissions = *permissions;
     return result;
+}
+
+bool valid_new_file_inventory_upload_content(const NewFileInventoryUpload& upload,
+                                             std::string_view content) {
+    if (content.empty() || content.size() > 1024 * 1024) return false;
+    if (upload.asset_type == 0) {
+        const auto byte = [&](std::size_t index) {
+            return static_cast<unsigned char>(content[index]);
+        };
+        const bool codestream = content.size() >= 4 &&
+                                byte(0) == 0xff && byte(1) == 0x4f &&
+                                byte(2) == 0xff && byte(3) == 0x51;
+        const bool jp2 = content.size() >= 12 &&
+                         byte(0) == 0 && byte(1) == 0 && byte(2) == 0 && byte(3) == 12 &&
+                         content.substr(4, 4) == "jP  " && byte(8) == 0x0d &&
+                         byte(9) == 0x0a && byte(10) == 0x87 && byte(11) == 0x0a;
+        return codestream || jp2;
+    }
+    if (upload.asset_type == 1)
+        return content.size() >= 4 && content.substr(0, 4) == "OggS";
+    if (upload.asset_type == 20)
+        return content.size() >= 4 &&
+               static_cast<unsigned char>(content[0]) == 0x01 &&
+               static_cast<unsigned char>(content[1]) == 0x00 &&
+               static_cast<unsigned char>(content[2]) == 0x00 &&
+               static_cast<unsigned char>(content[3]) == 0x00;
+    return false;
 }
 
 std::string new_file_inventory_upload_xml(std::string_view uploader) {

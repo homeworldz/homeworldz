@@ -470,16 +470,6 @@ std::optional<std::pair<std::string, std::string>> file_upload_data_request(std:
     return std::pair{std::string(session), std::string(token)};
 }
 
-bool jpeg2000_content(std::string_view body) {
-    const auto byte = [&body](std::size_t index) { return static_cast<unsigned char>(body[index]); };
-    const bool codestream = body.size() >= 4 && byte(0) == 0xff && byte(1) == 0x4f &&
-                            byte(2) == 0xff && byte(3) == 0x51;
-    const bool jp2 = body.size() >= 12 && byte(0) == 0 && byte(1) == 0 && byte(2) == 0 && byte(3) == 12 &&
-                     body.substr(4, 4) == "jP  " && byte(8) == 0x0d && byte(9) == 0x0a &&
-                     byte(10) == 0x87 && byte(11) == 0x0a;
-    return codestream || jp2;
-}
-
 std::string_view http_request_body(std::string_view request) {
     const auto separator = request.find("\r\n\r\n");
     return separator == std::string_view::npos ? std::string_view{} : request.substr(separator + 4);
@@ -1852,7 +1842,8 @@ int main(int argc, char* argv[]) {
                                 pending->second.agent_id != authorized_agent_id) {
                                 response = homeworldz::http::response_for_content(
                                     request, 404, "application/llsd+xml", "<llsd><undef/></llsd>");
-                            } else if (!jpeg2000_content(body)) {
+                            } else if (!homeworldz::viewer::valid_new_file_inventory_upload_content(
+                                           pending->second.request, body)) {
                                 response = homeworldz::http::response_for_content(
                                     request, 400, "application/llsd+xml", "<llsd><undef/></llsd>");
                             } else {
@@ -1865,11 +1856,16 @@ int main(int argc, char* argv[]) {
                                     metadata.viewer_id, metadata.creator_id, metadata.sha256,
                                     metadata.size, region_public_endpoint, true);
                                 const bool item_created = asset_registered &&
-                                    viewer_grid->create_texture_inventory_item(
-                                    authorized_agent_id, homeworldz::grid::TextureInventoryItem{
-                                        upload.item_id, authorized_agent_id, upload.request.folder_id,
-                                        upload.asset_id, upload.request.name, upload.request.description,
-                                        upload.request.everyone_permissions, upload.request.next_permissions});
+                                    viewer_grid->create_inventory_item(
+                                        authorized_agent_id, homeworldz::grid::InventoryItem{
+                                            upload.item_id, authorized_agent_id, authorized_agent_id,
+                                            upload.request.folder_id, upload.asset_id,
+                                            upload.request.asset_type, upload.request.inventory_type,
+                                            upload.request.name, upload.request.description, 0,
+                                            homeworldz::scene::permission_creator,
+                                            homeworldz::scene::permission_creator,
+                                            upload.request.everyone_permissions,
+                                            upload.request.next_permissions, 0, 0});
                                 if (!item_created) {
                                     response = homeworldz::http::response_for_content(
                                         request, 500, "application/llsd+xml", "<llsd><undef/></llsd>");
@@ -1879,10 +1875,12 @@ int main(int argc, char* argv[]) {
                                         homeworldz::viewer::new_file_inventory_complete_xml(
                                             upload.item_id, upload.asset_id,
                                             upload.request.everyone_permissions, upload.request.next_permissions));
-                                    std::cout << "{\"level\":\"info\",\"message\":\"texture upload stored\","
+                                    std::cout << "{\"level\":\"info\",\"message\":\"inventory asset upload stored\","
                                                  "\"assetId\":" << homeworldz::api::json_string(upload.asset_id)
                                               << ",\"itemId\":" << homeworldz::api::json_string(upload.item_id)
                                               << ",\"creatorId\":" << homeworldz::api::json_string(authorized_agent_id)
+                                              << ",\"assetType\":" << static_cast<int>(upload.request.asset_type)
+                                              << ",\"inventoryType\":" << static_cast<int>(upload.request.inventory_type)
                                               << ",\"bytes\":" << body.size() << "}" << std::endl;
                                     pending_inventory_uploads.erase(pending);
                                 }

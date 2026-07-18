@@ -34,6 +34,8 @@ struct TeleportFinish {
 
 struct NewFileInventoryUpload {
     std::string folder_id;
+    std::int8_t asset_type{-1};
+    std::int8_t inventory_type{-1};
     std::string name;
     std::string description;
     std::uint32_t everyone_permissions{};
@@ -54,6 +56,8 @@ std::string environment_settings_xml(std::string_view region_id);
 std::string baked_texture_upload_xml(std::string_view uploader);
 std::string baked_texture_complete_xml(std::string_view asset_id);
 std::optional<NewFileInventoryUpload> parse_new_file_inventory_upload(std::string_view xml);
+bool valid_new_file_inventory_upload_content(const NewFileInventoryUpload& upload,
+                                             std::string_view content);
 std::string new_file_inventory_upload_xml(std::string_view uploader);
 std::string new_file_inventory_complete_xml(std::string_view item_id, std::string_view asset_id,
                                             std::uint32_t everyone_permissions,

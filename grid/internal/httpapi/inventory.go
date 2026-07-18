@@ -430,6 +430,9 @@ func (a *API) inventoryItemsByUser(w http.ResponseWriter, r *http.Request, userI
 		return
 	}
 	validType := (request.AssetType == 0 && request.InventoryType == 0) ||
+		(request.AssetType == 0 && request.InventoryType == 15) ||
+		(request.AssetType == 1 && request.InventoryType == 1) ||
+		(request.AssetType == 20 && request.InventoryType == 19) ||
 		(request.AssetType == 6 && request.InventoryType == 6) ||
 		((request.AssetType == 5 || request.AssetType == 13) && request.InventoryType == 18)
 	if !validUUID(request.ID) || !validUUID(request.CreatorUserID) ||

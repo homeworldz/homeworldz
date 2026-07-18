@@ -213,11 +213,26 @@ int main() {
         "<key>group_mask</key><integer>16</integer>"
         "<key>next_owner_mask</key><integer>2147483647</integer></map></llsd>");
     passed &= file_request && file_request->folder_id == "11111111-1111-4111-8111-111111111111" &&
+              file_request->asset_type == 0 && file_request->inventory_type == 0 &&
               file_request->name == "Terrain & Sky" && file_request->description == "Library <source>" &&
               file_request->everyone_permissions == 8 && file_request->group_permissions == 16 &&
               file_request->next_permissions == 0x7fffffff;
+    const auto sound_request = homeworldz::viewer::parse_new_file_inventory_upload(
+        "<llsd><map><key>folder_id</key><uuid>11111111-1111-4111-8111-111111111111</uuid>"
+        "<key>asset_type</key><string>sound</string><key>inventory_type</key><string>sound</string>"
+        "<key>name</key><string>Bell</string><key>description</key><string></string></map></llsd>");
+    const auto animation_request = homeworldz::viewer::parse_new_file_inventory_upload(
+        "<llsd><map><key>folder_id</key><uuid>11111111-1111-4111-8111-111111111111</uuid>"
+        "<key>asset_type</key><string>animation</string><key>inventory_type</key><string>animation</string>"
+        "<key>name</key><string>Wave</string><key>description</key><string></string></map></llsd>");
+    passed &= sound_request && sound_request->asset_type == 1 && sound_request->inventory_type == 1 &&
+              homeworldz::viewer::valid_new_file_inventory_upload_content(*sound_request, "OggSdata") &&
+              !homeworldz::viewer::valid_new_file_inventory_upload_content(*sound_request, "RIFFdata");
+    const std::string animation_data{"\x01\x00\x00\x00payload", 11};
+    passed &= animation_request && animation_request->asset_type == 20 && animation_request->inventory_type == 19 &&
+              homeworldz::viewer::valid_new_file_inventory_upload_content(*animation_request, animation_data);
     passed &= !homeworldz::viewer::parse_new_file_inventory_upload(
-        "<llsd><map><key>asset_type</key><string>sound</string></map></llsd>");
+        "<llsd><map><key>asset_type</key><string>mesh</string></map></llsd>");
     const auto file_upload = homeworldz::viewer::new_file_inventory_upload_xml(
         "http://region.example/upload?a=1&amp;b=2");
     passed &= contains(file_upload, "<key>state</key><string>upload</string>") &&
