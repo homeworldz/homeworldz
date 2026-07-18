@@ -861,3 +861,11 @@ Halcyon's distinction between a never-populated inventory and a mutated empty
 inventory—incrementing the serial and transferring an actual empty file—made
 the final-row removal display immediately. Task-item deletion remained durable
 across a Region restart and did not remove the copyable personal source item.
+
+Task inventory also passed the object-asset round trip on 2026-07-17. A texture
+was added to `Contents1`, the prim was taken into Jim Tarber's Objects folder,
+and the inventory object was rezzed again. The rezzed prim retained the
+texture in Contents and Firestorm could open its asset. Each rez assigns fresh
+task-item UUIDs while preserving the content asset, provenance, permissions,
+and per-prim inventory serial, so copyable object instances do not share task
+inventory identities.
