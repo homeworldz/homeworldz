@@ -869,3 +869,10 @@ texture in Contents and Firestorm could open its asset. Each rez assigns fresh
 task-item UUIDs while preserving the content asset, provenance, permissions,
 and per-prim inventory serial, so copyable object instances do not share task
 inventory identities.
+
+Task inventory remained independent across in-world object duplication on
+2026-07-18. Shift-copying `Contents1` produced `Contents2` with the same
+texture asset in its Contents. Deleting that task item from `Contents2` did
+not affect the item in `Contents1`, where it remained present and openable.
+This verifies that object duplication preserves content while assigning new
+task-item UUIDs to every duplicated prim.
