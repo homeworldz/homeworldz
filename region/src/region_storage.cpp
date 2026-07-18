@@ -12,6 +12,7 @@
 #include <cstdio>
 #include <fstream>
 #include <iterator>
+#include <limits>
 #include <stdexcept>
 #include <string_view>
 #include <utility>
@@ -251,6 +252,51 @@ private:
         return {x, y, z};
     }
 
+    scene::TaskInventoryItem task_inventory_item() {
+        scene::TaskInventoryItem item;
+        expect("{");
+        expect_string("itemId"); expect(":"); item.item_id = string(); expect(",");
+        expect_string("assetId"); expect(":"); item.asset_id = string(); expect(",");
+        expect_string("creatorId"); expect(":"); item.creator_id = string(); expect(",");
+        expect_string("ownerId"); expect(":"); item.owner_id = string(); expect(",");
+        expect_string("lastOwnerId"); expect(":"); item.last_owner_id = string(); expect(",");
+        expect_string("groupId"); expect(":"); item.group_id = string(); expect(",");
+        expect_string("name"); expect(":"); item.name = string(); expect(",");
+        expect_string("description"); expect(":"); item.description = string(); expect(",");
+        expect_string("assetType"); expect(":");
+        const auto asset_type = unsigned_integer();
+        if (asset_type > 127) fail("task inventory asset type is outside the supported range");
+        item.asset_type = static_cast<std::int8_t>(asset_type); expect(",");
+        expect_string("inventoryType"); expect(":");
+        const auto inventory_type = unsigned_integer();
+        if (inventory_type > 127) fail("task inventory type is outside the supported range");
+        item.inventory_type = static_cast<std::int8_t>(inventory_type); expect(",");
+        expect_string("flags"); expect(":");
+        item.flags = static_cast<std::uint32_t>(unsigned_integer()); expect(",");
+        expect_string("basePermissions"); expect(":");
+        item.base_permissions = static_cast<std::uint32_t>(unsigned_integer()); expect(",");
+        expect_string("currentPermissions"); expect(":");
+        item.current_permissions = static_cast<std::uint32_t>(unsigned_integer()); expect(",");
+        expect_string("groupPermissions"); expect(":");
+        item.group_permissions = static_cast<std::uint32_t>(unsigned_integer()); expect(",");
+        expect_string("everyonePermissions"); expect(":");
+        item.everyone_permissions = static_cast<std::uint32_t>(unsigned_integer()); expect(",");
+        expect_string("nextPermissions"); expect(":");
+        item.next_permissions = static_cast<std::uint32_t>(unsigned_integer()); expect(",");
+        expect_string("saleType"); expect(":");
+        const auto sale_type = unsigned_integer();
+        if (sale_type > 255) fail("task inventory sale type is outside the supported range");
+        item.sale_type = static_cast<std::uint8_t>(sale_type); expect(",");
+        expect_string("salePrice"); expect(":");
+        const auto sale_price = unsigned_integer();
+        if (sale_price > static_cast<std::uint64_t>((std::numeric_limits<std::int32_t>::max)()))
+            fail("task inventory sale price is outside the supported range");
+        item.sale_price = static_cast<std::int32_t>(sale_price); expect(",");
+        expect_string("creationDate"); expect(":"); item.creation_date = unsigned_integer();
+        expect("}");
+        return item;
+    }
+
     scene::Entity entity() {
         expect("{");
         expect_string("id");
@@ -433,6 +479,21 @@ private:
         expect_string("localRotation");
         expect(":");
         result.local_rotation = vector();
+        if (consume("}")) return result;
+        expect(",");
+        expect_string("taskInventorySerial");
+        expect(":");
+        const auto task_inventory_serial = unsigned_integer();
+        if (task_inventory_serial > 65535) fail("task inventory serial is outside the supported range");
+        result.task_inventory_serial = static_cast<std::uint16_t>(task_inventory_serial);
+        expect(",");
+        expect_string("taskInventory");
+        expect(":");
+        expect("[");
+        if (!consume("]")) {
+            do result.task_inventory.push_back(task_inventory_item()); while (consume(","));
+            expect("]");
+        }
         expect("}");
         return result;
     }
@@ -510,7 +571,34 @@ std::string snapshot_json(const scene::Scene& scene) {
                 std::to_string(entity->local_position.z) +
                 "],\"localRotation\":[" + std::to_string(entity->local_rotation.x) + ',' +
                 std::to_string(entity->local_rotation.y) + ',' +
-                std::to_string(entity->local_rotation.z) + "]}";
+                std::to_string(entity->local_rotation.z) +
+                "],\"taskInventorySerial\":" + std::to_string(entity->task_inventory_serial) +
+                ",\"taskInventory\":[";
+        bool first_task_item = true;
+        for (const auto& item : entity->task_inventory) {
+            if (!first_task_item) json += ',';
+            first_task_item = false;
+            json += "{\"itemId\":" + api::json_string(item.item_id) +
+                ",\"assetId\":" + api::json_string(item.asset_id) +
+                ",\"creatorId\":" + api::json_string(item.creator_id) +
+                ",\"ownerId\":" + api::json_string(item.owner_id) +
+                ",\"lastOwnerId\":" + api::json_string(item.last_owner_id) +
+                ",\"groupId\":" + api::json_string(item.group_id) +
+                ",\"name\":" + api::json_string(item.name) +
+                ",\"description\":" + api::json_string(item.description) +
+                ",\"assetType\":" + std::to_string(item.asset_type) +
+                ",\"inventoryType\":" + std::to_string(item.inventory_type) +
+                ",\"flags\":" + std::to_string(item.flags) +
+                ",\"basePermissions\":" + std::to_string(item.base_permissions) +
+                ",\"currentPermissions\":" + std::to_string(item.current_permissions) +
+                ",\"groupPermissions\":" + std::to_string(item.group_permissions) +
+                ",\"everyonePermissions\":" + std::to_string(item.everyone_permissions) +
+                ",\"nextPermissions\":" + std::to_string(item.next_permissions) +
+                ",\"saleType\":" + std::to_string(item.sale_type) +
+                ",\"salePrice\":" + std::to_string(item.sale_price) +
+                ",\"creationDate\":" + std::to_string(item.creation_date) + '}';
+        }
+        json += "]}";
     }
     return json + "]}";
 }

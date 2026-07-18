@@ -50,6 +50,17 @@ int main() {
         primitive->parent_id = first;
         primitive->local_position = {1.25, -2.5, 3.75};
         primitive->local_rotation = {0.125, -0.25, 0.5};
+        primitive->task_inventory_serial = 7;
+        primitive->task_inventory.push_back({
+            "11111111-2222-4333-8444-555555555555",
+            "66666666-7777-4888-8999-aaaaaaaaaaaa",
+            "bbbbbbbb-cccc-4ddd-8eee-ffffffffffff",
+            primitive->owner_id,
+            "12121212-3434-4567-8787-909090909090",
+            "00000000-0000-0000-0000-000000000000",
+            "Stored Texture", "task inventory persistence",
+            0, 0, 0x00000001, 0x0009e000, 0x0008e000, 0x00000000,
+            0x00000000, 0x0008e000, 0, 0, 123456789});
         std::filesystem::create_directories(path);
         sqlite3* legacy_database = nullptr;
         if (sqlite3_open((path / "region.db").string().c_str(), &legacy_database) != SQLITE_OK) return 1;
@@ -74,7 +85,9 @@ int main() {
                 std::ifstream input(path / metadata.path, std::ios::binary);
                 const std::string snapshot((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
                 if (snapshot.find(R"("name":"first")") == std::string::npos ||
-                    snapshot.find(R"("name":"second \"line\"\n")") == std::string::npos) return 1;
+                    snapshot.find(R"("name":"second \"line\"\n")") == std::string::npos ||
+                    snapshot.find(R"("taskInventorySerial":7)") == std::string::npos ||
+                    snapshot.find(R"("name":"Stored Texture")") == std::string::npos) return 1;
             }
             auto* entity = scene.find(first);
             if (entity == nullptr) return 1;
@@ -115,6 +128,17 @@ int main() {
                 restored_second->local_position.y != -2.5 || restored_second->local_position.z != 3.75 ||
                 restored_second->local_rotation.x != 0.125 || restored_second->local_rotation.y != -0.25 ||
                 restored_second->local_rotation.z != 0.5 ||
+                restored_second->task_inventory_serial != 7 ||
+                restored_second->task_inventory.size() != 1 ||
+                restored_second->task_inventory[0].item_id !=
+                    "11111111-2222-4333-8444-555555555555" ||
+                restored_second->task_inventory[0].asset_id !=
+                    "66666666-7777-4888-8999-aaaaaaaaaaaa" ||
+                restored_second->task_inventory[0].creator_id !=
+                    "bbbbbbbb-cccc-4ddd-8eee-ffffffffffff" ||
+                restored_second->task_inventory[0].name != "Stored Texture" ||
+                restored_second->task_inventory[0].current_permissions != 0x0008e000 ||
+                restored_second->task_inventory[0].creation_date != 123456789 ||
                 restored.create("next") != 3) return 1;
 
             const std::array content{std::byte{0x00}, std::byte{0x7f}, std::byte{0xff}, std::byte{0x42}};

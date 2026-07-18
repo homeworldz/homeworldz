@@ -2091,6 +2091,7 @@ int main(int argc, char* argv[]) {
                                     const auto created = static_cast<std::uint64_t>(
                                         std::chrono::duration_cast<std::chrono::seconds>(
                                             std::chrono::system_clock::now().time_since_epoch()).count());
+                                    const auto previous_serial = entity->task_inventory_serial;
                                     entity->task_inventory.push_back({
                                         homeworldz::viewer::random_uuid(), source->asset_id,
                                         source->creator_id, agent_id, source->owner_id,
@@ -2103,9 +2104,19 @@ int main(int argc, char* argv[]) {
                                         source->everyone_permissions, source->next_permissions,
                                         static_cast<std::uint8_t>(source->sale_type),
                                         source->sale_price, created});
-                                    entity->task_inventory_serial = static_cast<std::uint16_t>(
-                                        std::max<unsigned>(1, entity->task_inventory_serial + 1));
-                                    copied = true;
+                                    entity->task_inventory_serial = previous_serial == 65535
+                                        ? 1
+                                        : static_cast<std::uint16_t>(previous_serial + 1);
+                                    if (storage) {
+                                        try {
+                                            storage->save_snapshot(scene);
+                                            copied = true;
+                                        } catch (...) {
+                                            entity->task_inventory.pop_back();
+                                            entity->task_inventory_serial = previous_serial;
+                                            throw;
+                                        }
+                                    }
                                 }
                             } catch (const std::exception& error) {
                                 std::cout << "{\"level\":\"error\",\"message\":\"task inventory copy failed\",\"error\":"
