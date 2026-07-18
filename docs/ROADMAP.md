@@ -145,8 +145,9 @@ attachments, vehicles, authority transfer, or another active Phase 2 item.
   continuous 512 by 512 metre simulator. Movement, terrain, and minimap
   position remained correct through all four quadrants and across both
   internal 256 metre lines.
-- [ ] Complete the remaining 2x2 editing, object, map-idle, and restart tests,
-  then repeat the full acceptance suite in a 4x4 Region.
+- [x] Complete 2x2 terrain editing, object persistence, map-idle, and restart
+  acceptance in the live Beta Region.
+- [ ] Repeat the full variable-size acceptance suite in a 4x4 Region.
 - [x] Prevent overlaps and invalid neighbor layouts and define behavior beside
   offline or differently sized regions.
 

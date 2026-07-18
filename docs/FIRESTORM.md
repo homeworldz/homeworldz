@@ -1033,6 +1033,13 @@ flew a clockwise loop around the four-quadrant centre and returned to the
 northwest quadrant at `(223, 273, 23)`. Terrain, movement, and minimap position
 remained continuous across both internal 256 metre lines.
 
+The remaining 2x2 acceptance also passed on 2026-07-18. Terrain edits appeared
+on the live world map immediately; map tiles remained correct at every zoom and
+through idle time; persisted objects retained name, position, scale, rotation,
+tint, and physics properties across a Beta Region restart and a clean viewer
+relogin. The 2x2 acceptance scope is therefore complete; equivalent 4x4 live
+acceptance remains open.
+
 Same-region location teleport also passed on 2026-07-18. The Region recognizes
 its own handle, updates the avatar controller and Jolt character in place, and
 returns reliable UDP `TeleportLocal` without creating a Grid transit. A local
