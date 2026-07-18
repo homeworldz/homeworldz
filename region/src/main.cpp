@@ -3221,9 +3221,11 @@ int main(int argc, char* argv[]) {
                                 appearance->visual_params});
                             std::size_t recipients = 0;
                             if (!remote_appearance.empty()) {
+                                // Echo the completed appearance to the originating viewer as well.
+                                // This closes its initial legacy-bake state after the uploaded baked
+                                // texture IDs have reached AgentSetAppearance.
                                 for (const auto& [recipient_endpoint, recipient] : avatars) {
                                     static_cast<void>(recipient);
-                                    if (recipient_endpoint == endpoint) continue;
                                     if (const auto outgoing = circuits.send(
                                             recipient_endpoint, remote_appearance, true, now, true)) {
                                         if (send_udp(viewer_server, recipient_endpoint, *outgoing))
