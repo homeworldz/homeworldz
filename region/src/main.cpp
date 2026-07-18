@@ -614,6 +614,11 @@ std::optional<homeworldz::viewer::StaticObject> static_object_from_entity(
     return object;
 }
 
+void regenerate_task_inventory_item_ids(homeworldz::scene::Entity& entity) {
+    for (auto& item : entity.task_inventory)
+        item.item_id = homeworldz::viewer::random_uuid();
+}
+
 void apply_object_asset(
     homeworldz::scene::Entity& entity, const homeworldz::asset::ObjectAsset& asset) {
     entity.scale = asset.scale;
@@ -647,8 +652,7 @@ void apply_object_asset(
     entity.phantom = asset.phantom;
     entity.task_inventory_serial = asset.task_inventory_serial;
     entity.task_inventory = asset.task_inventory;
-    for (auto& item : entity.task_inventory)
-        item.item_id = homeworldz::viewer::random_uuid();
+    regenerate_task_inventory_item_ids(entity);
 }
 
 std::optional<homeworldz::viewer::ObjectProperties> object_properties_from_entity(
@@ -3756,6 +3760,7 @@ int main(int argc, char* argv[]) {
                                     duplicate->position = position;
                                     duplicate->velocity = {};
                                     duplicate->object_id = homeworldz::viewer::random_uuid();
+                                    regenerate_task_inventory_item_ids(*duplicate);
                                     duplicate->creation_date = static_cast<std::uint64_t>(
                                         std::chrono::duration_cast<std::chrono::seconds>(
                                             std::chrono::system_clock::now().time_since_epoch()).count());
@@ -3769,6 +3774,7 @@ int main(int argc, char* argv[]) {
                                         child->parent_id = duplicate_root_id;
                                         child->velocity = {};
                                         child->object_id = homeworldz::viewer::random_uuid();
+                                        regenerate_task_inventory_item_ids(*child);
                                         child->creation_date = duplicate->creation_date;
                                         homeworldz::scene::update_linked_world_transform(*child, *duplicate);
                                         created_entities.push_back(child_id);
