@@ -125,6 +125,24 @@ void AvatarController::restore_motion(
     if (flying) state_.grounded = false;
 }
 
+void AvatarController::teleport(scene::Vector3 position, bool flying) {
+    if (!std::isfinite(position.x) || !std::isfinite(position.y) || !std::isfinite(position.z))
+        return;
+    constexpr double capsule_radius = 0.3;
+    position.x = std::clamp(position.x, capsule_radius, region_width_ - capsule_radius);
+    position.y = std::clamp(position.y, capsule_radius, region_height_ - capsule_radius);
+    state_.position = position;
+    state_.velocity = {};
+    state_.flying = flying;
+    state_.grounded = false;
+    flight_lift_velocity_ = 0.0;
+    const auto support_height = ground_height_ + state_.height * 0.5;
+    if (!flying && state_.position.z <= support_height) {
+        state_.position.z = support_height;
+        state_.grounded = true;
+    }
+}
+
 void AvatarController::synchronize_physics(
     scene::Vector3 position, scene::Vector3 velocity, bool grounded) {
     const auto was_grounded = state_.grounded;

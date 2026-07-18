@@ -56,6 +56,14 @@ struct TeleportStart {
     std::uint32_t flags{};
 };
 
+struct TeleportLocal {
+    Uuid agent_id{};
+    std::uint32_t location_id{2};
+    std::array<float, 3> position{};
+    std::array<float, 3> look_at{};
+    std::uint32_t teleport_flags{};
+};
+
 struct TeleportFailed {
     Uuid agent_id{};
     std::string reason;
@@ -581,6 +589,7 @@ std::optional<UseCircuitCode> decode_use_circuit_code(std::span<const std::byte>
 std::optional<TeleportLocationRequest> decode_teleport_location_request(
     std::span<const std::byte> payload);
 std::vector<std::byte> encode_teleport_start(const TeleportStart& message);
+std::vector<std::byte> encode_teleport_local(const TeleportLocal& message);
 std::vector<std::byte> encode_teleport_failed(const TeleportFailed& message);
 std::vector<std::byte> encode_region_handshake(const RegionHandshake& message);
 std::optional<AgentMessage> decode_region_handshake_reply(std::span<const std::byte> payload);

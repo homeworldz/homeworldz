@@ -71,6 +71,7 @@ public:
     void set_border_crossing_enabled(bool enabled) { border_crossing_enabled_ = enabled; }
     void contain_horizontal();
     void restore_motion(scene::Vector3 velocity, std::array<float, 3> rotation, bool flying);
+    void teleport(scene::Vector3 position, bool flying);
     void synchronize_physics(scene::Vector3 position, scene::Vector3 velocity, bool grounded);
     void step(double seconds);
     const AvatarState& state() const { return state_; }

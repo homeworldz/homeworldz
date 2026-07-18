@@ -682,6 +682,12 @@ bool teleport_codecs() {
 
     const auto start = encode_teleport_start(TeleportStart{0x00000010});
     if (start != bytes({0xff, 0xff, 0x00, 0x49, 0x10, 0x00, 0x00, 0x00})) return false;
+    const auto local = encode_teleport_local(
+        {agent, 2, {128.0F, 64.0F, 30.0F}, {1.0F, 0.0F, 0.0F}, 0x00002010});
+    if (local.size() != 52 || local[3] != std::byte{0x40} ||
+        !std::equal(agent.begin(), agent.end(), local.begin() + 4) ||
+        local[20] != std::byte{2} || local[48] != std::byte{0x10} ||
+        local[49] != std::byte{0x20}) return false;
     const auto failed = encode_teleport_failed(TeleportFailed{agent, "Destination unavailable"});
     return failed.size() == 4 + 16 + 1 + 24 + 1 && failed[3] == std::byte{0x4a} &&
            std::equal(agent.begin(), agent.end(), failed.begin() + 4) &&

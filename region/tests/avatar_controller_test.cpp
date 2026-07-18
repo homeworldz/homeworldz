@@ -121,5 +121,16 @@ int main() {
     if (!edge_avatar.state().flying || edge_avatar.state().grounded ||
         edge_avatar.state().velocity.x != 4 || edge_avatar.state().rotation[2] != 0.5F)
         return 18;
+    edge_avatar.teleport({100, 110, 20}, false);
+    if (edge_avatar.state().position.x != 100 || edge_avatar.state().position.y != 110 ||
+        std::abs(edge_avatar.state().position.z - 25.78) > 1e-9 ||
+        !edge_avatar.state().grounded || edge_avatar.state().flying ||
+        edge_avatar.state().velocity.x != 0)
+        return 23;
+    edge_avatar.teleport({200, 210, 40}, true);
+    if (edge_avatar.state().position.x != 200 || edge_avatar.state().position.y != 210 ||
+        edge_avatar.state().position.z != 40 || edge_avatar.state().grounded ||
+        !edge_avatar.state().flying)
+        return 24;
     return 0;
 }

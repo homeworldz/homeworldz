@@ -2356,7 +2356,51 @@ int main(int argc, char* argv[]) {
                                             {identity->agent_id, std::move(reason)}), true, now, true))
                                     static_cast<void>(send_udp(viewer_server, endpoint, *failed));
                             };
-                            if (target == region_neighbors.end() || !target->online ||
+                            const auto current_handle =
+                                (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
+                                static_cast<std::uint32_t>(region_grid_y * 256);
+                            if (teleport->region_handle == current_handle) {
+                                const auto avatar = avatars.find(endpoint);
+                                const homeworldz::scene::Vector3 requested_position{
+                                    teleport->position[0], teleport->position[1], teleport->position[2]};
+                                if (avatar == avatars.end() || requested_position.x < 0.0 ||
+                                    requested_position.x > region_size_x || requested_position.y < 0.0 ||
+                                    requested_position.y > region_size_y) {
+                                    fail_teleport("Destination position is unavailable");
+                                } else {
+                                    const auto flying = avatar->second.controller.state().flying;
+                                    avatar->second.controller.set_ground_height(
+                                        collision_ground_height(requested_position));
+                                    avatar->second.controller.teleport(requested_position, flying);
+                                    if (physics_world && avatar->second.physics_character != 0) {
+                                        if (auto state = physics_world->character_state(
+                                                avatar->second.physics_character)) {
+                                            state->position = avatar->second.controller.state().position;
+                                            state->linear_velocity = {};
+                                            state->grounded = avatar->second.controller.state().grounded;
+                                            physics_world->set_character_state(
+                                                avatar->second.physics_character, *state);
+                                            physics_world->set_character_flying(
+                                                avatar->second.physics_character, flying);
+                                        }
+                                    }
+                                    const auto position = avatar->second.controller.viewer_position();
+                                    const auto look_direction = avatar->second.controller.look_direction();
+                                    const auto flags = homeworldz::viewer::teleport_flags_via_location |
+                                        (flying ? homeworldz::viewer::teleport_flags_is_flying : 0U);
+                                    if (const auto local = circuits.send(endpoint,
+                                            homeworldz::viewer::encode_teleport_local({
+                                                identity->agent_id, 2,
+                                                {static_cast<float>(position.x),
+                                                 static_cast<float>(position.y),
+                                                 static_cast<float>(position.z)},
+                                                look_direction, flags}), true, now, true))
+                                        static_cast<void>(send_udp(viewer_server, endpoint, *local));
+                                    std::cout << "{\"level\":\"info\",\"message\":\"avatar local teleport completed\","
+                                                 "\"position\":[" << position.x << ',' << position.y << ','
+                                              << position.z << "]}" << std::endl;
+                                }
+                            } else if (target == region_neighbors.end() || !target->online ||
 								!viewer_grid || !registration) {
                                 fail_teleport("Destination region is unavailable");
                             } else if (const auto simulator = simulator_event_endpoint(

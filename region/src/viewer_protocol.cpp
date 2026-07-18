@@ -14,6 +14,8 @@ constexpr std::array<std::byte, 4> use_circuit_code_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x03}};
 constexpr std::array<std::byte, 4> teleport_location_request_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x3f}};
+constexpr std::array<std::byte, 4> teleport_local_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x40}};
 constexpr std::array<std::byte, 4> teleport_start_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x49}};
 constexpr std::array<std::byte, 4> teleport_failed_id{
@@ -596,6 +598,16 @@ std::optional<TeleportLocationRequest> decode_teleport_location_request(
 std::vector<std::byte> encode_teleport_start(const TeleportStart& message) {
     std::vector<std::byte> output(teleport_start_id.begin(), teleport_start_id.end());
     append_le_u32(output, message.flags);
+    return output;
+}
+
+std::vector<std::byte> encode_teleport_local(const TeleportLocal& message) {
+    std::vector<std::byte> output(teleport_local_id.begin(), teleport_local_id.end());
+    append_uuid(output, message.agent_id);
+    append_le_u32(output, message.location_id);
+    for (const auto value : message.position) append_f32(output, value);
+    for (const auto value : message.look_at) append_f32(output, value);
+    append_le_u32(output, message.teleport_flags);
     return output;
 }
 
