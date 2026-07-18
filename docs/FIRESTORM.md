@@ -1039,7 +1039,14 @@ returns reliable UDP `TeleportLocal` without creating a Grid transit. A local
 teleport in Beta completed immediately at `(240, 140, 23.56)`. The preceding
 rapid Beta-to-Sandbox-to-Beta sequence also exposed a separate EEP follow-up:
 Firestorm requested an environment `settings_id` that was not present in the
-asset service and briefly displayed a UUID load error.
+asset service and briefly displayed a UUID load error. HomeWorldz now packages
+the standard default-day settings asset under its canonical UUID. A subsequent
+trace showed that Firestorm could still process `AgentMovementComplete` before
+the destination seed-capability response, selecting the default day instead of
+the Region's legacy environment. The destination now gates movement completion
+on that visit's seed response, with a bounded fallback if the viewer never
+requests it. Two consecutive Beta-to-Sandbox-to-Beta round trips passed without
+warnings or environment divergence on 2026-07-18.
 
 The initial self-appearance completion echo passed in the same session. On a
 clean last-location login, Firestorm received five wearable-cache hits and the
