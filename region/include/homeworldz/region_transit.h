@@ -3,13 +3,25 @@
 #include "homeworldz/grid_client.h"
 
 #include <chrono>
+#include <array>
 #include <cstddef>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 
 namespace homeworldz::region {
+
+struct AvatarBorderCrossing {
+    grid::RegionNeighbor destination;
+    std::array<float, 3> position{};
+};
+
+std::optional<AvatarBorderCrossing> plan_avatar_border_crossing(
+    int source_grid_x, int source_grid_y, int source_size_x, int source_size_y,
+    std::array<double, 3> source_position,
+    std::span<const grid::RegionNeighbor> neighbors, double destination_inset = 0.3);
 
 class InboundTransitRegistry {
 public:

@@ -1,6 +1,7 @@
 #include "homeworldz/region_transit.h"
 
 #include <chrono>
+#include <vector>
 
 int main() {
     using namespace std::chrono_literals;
@@ -31,5 +32,30 @@ int main() {
     if (!registry.stage(transit, destination, now, 10s)) return 1;
     if (registry.authorize(transit.agent_id, transit.session_id, now + 10s) ||
         registry.size(now + 10s) != 0) return 1;
+
+    const homeworldz::grid::RegionNeighbor beta{
+        "east", "beta", "Beta", 1002, 1000, 512, 512, 13,
+        "http://region.example:42021", 42022, true};
+    const std::vector sandbox_neighbors{beta};
+    const auto into_beta = homeworldz::region::plan_avatar_border_crossing(
+        1001, 1000, 256, 256, {256.2, 200.0, 30.0}, sandbox_neighbors);
+    if (!into_beta || into_beta->destination.id != "beta" ||
+        into_beta->position != std::array<float, 3>{0.3F, 200.0F, 30.0F}) return 1;
+
+    const homeworldz::grid::RegionNeighbor sandbox{
+        "west", "sandbox", "Sandbox", 1001, 1000, 256, 256, 13,
+        "http://region.example:42001", 42002, true};
+    const std::vector beta_neighbors{sandbox};
+    const auto into_sandbox = homeworldz::region::plan_avatar_border_crossing(
+        1002, 1000, 512, 512, {-0.2, 200.0, 31.0}, beta_neighbors);
+    if (!into_sandbox || into_sandbox->destination.id != "sandbox" ||
+        into_sandbox->position != std::array<float, 3>{255.7F, 200.0F, 31.0F}) return 1;
+    if (homeworldz::region::plan_avatar_border_crossing(
+            1002, 1000, 512, 512, {-0.2, 400.0, 31.0}, beta_neighbors)) return 1;
+    auto offline_sandbox = sandbox;
+    offline_sandbox.online = false;
+    const std::vector offline_neighbors{offline_sandbox};
+    if (homeworldz::region::plan_avatar_border_crossing(
+            1002, 1000, 512, 512, {-0.2, 200.0, 31.0}, offline_neighbors)) return 1;
     return 0;
 }

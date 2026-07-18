@@ -1,9 +1,69 @@
 #include "homeworldz/region_transit.h"
 
 #include <algorithm>
+#include <array>
+#include <cmath>
+#include <string_view>
 #include <utility>
 
 namespace homeworldz::region {
+
+std::optional<AvatarBorderCrossing> plan_avatar_border_crossing(
+    int source_grid_x, int source_grid_y, int source_size_x, int source_size_y,
+    std::array<double, 3> source_position,
+    std::span<const grid::RegionNeighbor> neighbors, double destination_inset) {
+    if (source_size_x <= 0 || source_size_y <= 0 || destination_inset < 0.0 ||
+        !std::isfinite(source_position[0]) || !std::isfinite(source_position[1]) ||
+        !std::isfinite(source_position[2]))
+        return std::nullopt;
+    struct CrossedBorder {
+        std::string_view direction;
+        double overflow;
+    };
+    std::array<CrossedBorder, 4> crossed{};
+    std::size_t crossed_count{};
+    if (source_position[0] < 0.0)
+        crossed[crossed_count++] = {"west", -source_position[0]};
+    if (source_position[0] > source_size_x)
+        crossed[crossed_count++] = {"east", source_position[0] - source_size_x};
+    if (source_position[1] < 0.0)
+        crossed[crossed_count++] = {"south", -source_position[1]};
+    if (source_position[1] > source_size_y)
+        crossed[crossed_count++] = {"north", source_position[1] - source_size_y};
+    std::sort(crossed.begin(), crossed.begin() + crossed_count,
+              [](const CrossedBorder& first, const CrossedBorder& second) {
+                  return first.overflow > second.overflow;
+              });
+    constexpr double map_cell_metres = 256.0;
+    const auto global_x = source_grid_x * map_cell_metres + source_position[0];
+    const auto global_y = source_grid_y * map_cell_metres + source_position[1];
+    for (std::size_t border_index = 0; border_index < crossed_count; ++border_index) {
+        for (const auto& neighbor : neighbors) {
+            if (!neighbor.online || neighbor.direction != crossed[border_index].direction ||
+                neighbor.size_x <= 0 || neighbor.size_y <= 0)
+                continue;
+            const auto neighbor_x = neighbor.grid_x * map_cell_metres;
+            const auto neighbor_y = neighbor.grid_y * map_cell_metres;
+            const auto neighbor_max_x = neighbor_x + neighbor.size_x;
+            const auto neighbor_max_y = neighbor_y + neighbor.size_y;
+            const bool orthogonal_match =
+                (neighbor.direction == "east" || neighbor.direction == "west")
+                    ? global_y >= neighbor_y && global_y <= neighbor_max_y
+                    : global_x >= neighbor_x && global_x <= neighbor_max_x;
+            if (!orthogonal_match) continue;
+            const auto maximum_x = std::max(destination_inset, neighbor.size_x - destination_inset);
+            const auto maximum_y = std::max(destination_inset, neighbor.size_y - destination_inset);
+            return AvatarBorderCrossing{
+                neighbor,
+                {static_cast<float>(std::clamp(global_x - neighbor_x,
+                                               destination_inset, maximum_x)),
+                 static_cast<float>(std::clamp(global_y - neighbor_y,
+                                               destination_inset, maximum_y)),
+                 static_cast<float>(source_position[2])}};
+        }
+    }
+    return std::nullopt;
+}
 
 bool InboundTransitRegistry::stage(const grid::AvatarTransit& transit,
                                    std::string_view local_region_id,
