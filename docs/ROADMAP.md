@@ -20,15 +20,15 @@ when scope or implementation evidence changes.
 
 <label class="roadmap-overall-progress">
   <span>Overall progress</span>
-  <progress data-color="primary" max="100" value="24">24%</progress>
-  <strong>24%</strong>
+  <progress data-color="primary" max="100" value="25">25%</progress>
+  <strong>25%</strong>
 </label>
 
 | Phase | Progress | Estimate |
 | --- | --- | ---: |
-| 1. Functional Single-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="97" aria-label="Phase 1 progress: 97%">97%</progress> | 97% |
-| 2. Interactive Physical World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="34" aria-label="Phase 2 progress: 34%">34%</progress> | 34% |
-| 3. Connected Multi-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="57" aria-label="Phase 3 progress: 57%">57%</progress> | 57% |
+| 1. Functional Single-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="98" aria-label="Phase 1 progress: 98%">98%</progress> | 98% |
+| 2. Interactive Physical World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="39" aria-label="Phase 2 progress: 39%">39%</progress> | 39% |
+| 3. Connected Multi-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="63" aria-label="Phase 3 progress: 63%">63%</progress> | 63% |
 | 4. LSL Scripting | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="2" aria-label="Phase 4 progress: 2%">2%</progress> | 2% |
 | 5. Social and Creator Platform | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="7" aria-label="Phase 5 progress: 7%">7%</progress> | 7% |
 | 6. Reliable Operations and Distribution | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="10" aria-label="Phase 6 progress: 10%">10%</progress> | 10% |
@@ -108,9 +108,12 @@ but stays unchecked until its complete wording is satisfied.
   derez, inventory round trips, and static child collision.
 - [x] Implement task inventory (object contents) and complete its permissions,
   mutation, copy, derez, return, and inventory round-trip lifecycle.
-- [ ] Add the remaining fundamental content types needed by appearance,
-  building, attachments, and scripts, including animations, sounds, gestures,
-  notecards, landmarks, and LSL source.
+- [x] Implement creator-attributed sound and animation uploads; personal
+  landmark, notecard, gesture, and LSL-source creation and updates; and task
+  notecard and script updates. LSL source remains intentionally uncompiled
+  until Phase 4.
+- [ ] Complete Firestorm creation, editing, playback, object-contents,
+  restart, and relog acceptance for those fundamental content types.
 
 ## Phase 2: Interactive Physical World
 
@@ -122,10 +125,14 @@ but stays unchecked until its complete wording is satisfied.
   authoritative scene changes.
 - [x] Synchronize physical transforms and velocities to viewers at suitable
   rates with interest-aware throttling.
-- [ ] Implement collision filtering, material behavior, phantom and temporary
-  objects, volume detection, and collision events.
-- [ ] Represent physical linksets as compound Jolt bodies with correct child
+- [x] Exclude phantom objects from collision and implement an authoritative,
+  nonpersistent 60-second temporary-on-rez lifecycle with viewer kill updates.
+- [ ] Complete collision filtering, material behavior, volume detection, and
+  collision events.
+- [x] Represent physical linksets as compound Jolt bodies with correct child
   shapes, mass properties, collision behavior, transforms, and persistence.
+- [ ] Complete live Firestorm acceptance for compound collision, falling and
+  rotation, editing, delinking, and restart persistence.
 - [x] Verify deterministic-enough restart and handoff behavior through shared
   physics acceptance scenarios.
 
@@ -175,7 +182,6 @@ but stays unchecked until its complete wording is satisfied.
 - [x] Load an operator-owned JSON registry of provisioned regions and
   authenticate region startup by UUID plus per-region access key, returning the
   authoritative name and map coordinates.
-
 - [x] Add authenticated grid-management endpoints to create, inspect, update,
   enable, disable, relocate, remove, and rotate credentials for provisioned
   regions.
@@ -186,9 +192,14 @@ but stays unchecked until its complete wording is satisfied.
   fetch effective grid-wide and region-specific startup configuration.
 - [x] Represent neighboring regions, coordinates, extents, public endpoints,
   maturity, and online state in grid discovery.
-- [ ] Support exactly 1x1 (256 m), 2x2 (512 m), and 4x4 (1024 m) regions.
-- [ ] Generalize terrain, physics bounds, viewer coordinates, storage, map
+- [x] Support exactly 1x1 (256 m), 2x2 (512 m), and 4x4 (1024 m) provisioned
+  Regions in runtime configuration, automated terrain/protocol/map tests, and
+  disposable 512 m and 1024 m process-start checks.
+- [x] Generalize terrain, physics bounds, viewer coordinates, storage, map
   tiles, and interest management to the three supported sizes.
+- [ ] Complete live Firestorm acceptance for continuous movement, terrain,
+  editing, objects, map display, and restart persistence in 2x2 and 4x4
+  Regions. A deployed 2x2 Beta Region is ready for this test.
 - [x] Prevent overlaps and invalid neighbor layouts and define behavior beside
   offline or differently sized regions.
 
@@ -202,6 +213,10 @@ but stays unchecked until its complete wording is satisfied.
 - [x] Teleport between registered regions with destination validation, viewer
   circuit establishment, arrival placement, source retirement, and durable
   last-location login.
+- [x] Detect avatar border exits, select the online neighbor covering the exact
+  mixed-size border coordinate, translate destination-local position, prepare
+  the authenticated transit, emit Firestorm's crossing event, contain failed
+  exits, and roll back an unactivated crossing after 30 seconds.
 - [ ] Complete remote-host failure recovery and reconciliation for interrupted
   teleports.
 - [ ] Cross a walking or flying avatar between adjacent regions while preserving
@@ -218,10 +233,10 @@ but stays unchecked until its complete wording is satisfied.
   otherwise bounce/contain it within the source region or return an owned
   object to inventory. No entity may continue silently outside all region
   authority.
-- [x] In the single-region phase, assume every border has no neighbor and
-  constrain avatar and physical-object origins to `0..256`, cancelling outward
+- [x] At a border with no eligible online neighbor, constrain avatar and
+  physical-object origins to the configured Region extent and cancel outward
   velocity at the crossed edge.
-- [ ] Resolve border neighbors from persistent grid region records plus their
+- [x] Resolve border neighbors from persistent grid region records plus their
   current online leases before choosing crossing versus containment.
 
 - [ ] Cross individual objects and complete linksets without changing creator,
@@ -238,7 +253,7 @@ but stays unchecked until its complete wording is satisfied.
 
 - [x] Generate live terrain-derived region tiles and compose world-map zoom
   levels for 1x1 regions.
-- [ ] Extend region and world-map tile composition to the planned 2x2 and 4x4
+- [x] Extend region and world-map tile composition to the planned 2x2 and 4x4
   region sizes.
 - [x] Implement viewer map-block and prefix-name discovery for registered live
   regions.
