@@ -18,7 +18,11 @@ func (a *API) provisionedRegionsRoot(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.Method {
 	case http.MethodGet:
-		writeJSON(w, http.StatusOK, ProvisionedRegionList{Regions: a.provisioned.List()})
+		items, err := a.provisioned.List(r.Context())
+		if writeProvisioningError(w, err) {
+			return
+		}
+		writeJSON(w, http.StatusOK, ProvisionedRegionList{Regions: items})
 	case http.MethodPost:
 		var request CreateProvisionedRegionRequest
 		if !decodeJSON(w, r, &request) {
@@ -42,7 +46,7 @@ func (a *API) provisionedRegionsRoot(w http.ResponseWriter, r *http.Request) {
 		if request.Enabled != nil {
 			enabled = *request.Enabled
 		}
-		region, err := a.provisioned.Create(provisioning.Region{ID: id, Name: request.Name,
+		region, err := a.provisioned.Create(r.Context(), provisioning.Region{ID: id, Name: request.Name,
 			OwnerUserID: request.OwnerUserID, MapX: request.MapX, MapY: request.MapY,
 			Enabled: enabled, AccessKey: accessKey})
 		if !writeProvisioningError(w, err) {
@@ -76,7 +80,7 @@ func (a *API) provisionedRegionByID(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusInternalServerError, Error{Code: "credential_generation_failed", Message: "region access-key generation failed"})
 			return
 		}
-		region, err := a.provisioned.RotateAccessKey(id, accessKey)
+		region, err := a.provisioned.RotateAccessKey(r.Context(), id, accessKey)
 		if !writeProvisioningError(w, err) {
 			writeJSON(w, http.StatusOK, ProvisionedRegionResult{Region: region, AccessKey: accessKey})
 		}
@@ -88,7 +92,7 @@ func (a *API) provisionedRegionByID(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.Method {
 	case http.MethodGet:
-		region, err := a.provisioned.Get(id)
+		region, err := a.provisioned.Get(r.Context(), id)
 		if !writeProvisioningError(w, err) {
 			writeJSON(w, http.StatusOK, ProvisionedRegionResult{Region: region})
 		}
@@ -97,13 +101,13 @@ func (a *API) provisionedRegionByID(w http.ResponseWriter, r *http.Request) {
 		if !decodeJSON(w, r, &request) {
 			return
 		}
-		region, err := a.provisioned.Update(id, provisioning.Update{Name: request.Name,
+		region, err := a.provisioned.Update(r.Context(), id, provisioning.Update{Name: request.Name,
 			OwnerUserID: request.OwnerUserID, MapX: request.MapX, MapY: request.MapY, Enabled: request.Enabled})
 		if !writeProvisioningError(w, err) {
 			writeJSON(w, http.StatusOK, ProvisionedRegionResult{Region: region})
 		}
 	case http.MethodDelete:
-		if !writeProvisioningError(w, a.provisioned.Delete(id)) {
+		if !writeProvisioningError(w, a.provisioned.Delete(r.Context(), id)) {
 			w.WriteHeader(http.StatusNoContent)
 		}
 	default:

@@ -53,6 +53,20 @@ func main() {
 		}
 		defer db.Close()
 	}
+	var provisionedStore provisioning.Store = provisionedRegions
+	if db != nil {
+		items, listErr := provisionedRegions.List(context.Background())
+		if listErr != nil {
+			logger.Error("list provisioned region seeds", "error", listErr)
+			os.Exit(1)
+		}
+		persistent := provisioning.NewPostgresStore(db)
+		if err := persistent.Import(context.Background(), items); err != nil {
+			logger.Error("import provisioned region seeds", "error", err)
+			os.Exit(1)
+		}
+		provisionedStore = persistent
+	}
 
 	server := &http.Server{
 		Addr: settings.Address,
@@ -66,7 +80,7 @@ func main() {
 			Presence:          presenceStore(db),
 			Inventory:         inventoryStore(db),
 			Assets:            assetStore(db),
-			Provisioned:       provisionedRegions,
+			Provisioned:       provisionedStore,
 			TerrainHTTPClient: &http.Client{Timeout: 2 * time.Second},
 			Transits:          transitStore(db),
 			TaskTransfers:     taskTransferStore(db),

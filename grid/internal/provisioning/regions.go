@@ -2,6 +2,7 @@ package provisioning
 
 import (
 	"bytes"
+	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
@@ -57,6 +58,16 @@ type Registry struct {
 	byID map[string]Region
 }
 
+type Store interface {
+	Authenticate(context.Context, string, string) (Region, bool)
+	List(context.Context) ([]Region, error)
+	Get(context.Context, string) (Region, error)
+	Create(context.Context, Region) (Region, error)
+	Update(context.Context, string, Update) (Region, error)
+	RotateAccessKey(context.Context, string, string) (Region, error)
+	Delete(context.Context, string) error
+}
+
 func Load(path string) (*Registry, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {
@@ -93,7 +104,7 @@ func Load(path string) (*Registry, error) {
 	return &Registry{path: path, byID: items}, nil
 }
 
-func (r *Registry) Authenticate(id, accessKey string) (Region, bool) {
+func (r *Registry) Authenticate(_ context.Context, id, accessKey string) (Region, bool) {
 	if r == nil {
 		return Region{}, false
 	}
@@ -106,9 +117,9 @@ func (r *Registry) Authenticate(id, accessKey string) (Region, bool) {
 	return region, true
 }
 
-func (r *Registry) List() []Region {
+func (r *Registry) List(_ context.Context) ([]Region, error) {
 	if r == nil {
-		return nil
+		return nil, nil
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -125,10 +136,10 @@ func (r *Registry) List() []Region {
 		}
 		return items[i].ID < items[j].ID
 	})
-	return items
+	return items, nil
 }
 
-func (r *Registry) Get(id string) (Region, error) {
+func (r *Registry) Get(_ context.Context, id string) (Region, error) {
 	if r == nil {
 		return Region{}, ErrNotFound
 	}
@@ -141,7 +152,7 @@ func (r *Registry) Get(id string) (Region, error) {
 	return item, nil
 }
 
-func (r *Registry) Create(item Region) (Region, error) {
+func (r *Registry) Create(_ context.Context, item Region) (Region, error) {
 	if r == nil {
 		return Region{}, ErrNotFound
 	}
@@ -167,7 +178,7 @@ func (r *Registry) Create(item Region) (Region, error) {
 	return item, nil
 }
 
-func (r *Registry) Update(id string, update Update) (Region, error) {
+func (r *Registry) Update(_ context.Context, id string, update Update) (Region, error) {
 	if r == nil {
 		return Region{}, ErrNotFound
 	}
@@ -207,7 +218,7 @@ func (r *Registry) Update(id string, update Update) (Region, error) {
 	return item, nil
 }
 
-func (r *Registry) RotateAccessKey(id, accessKey string) (Region, error) {
+func (r *Registry) RotateAccessKey(_ context.Context, id, accessKey string) (Region, error) {
 	if r == nil {
 		return Region{}, ErrNotFound
 	}
@@ -230,7 +241,7 @@ func (r *Registry) RotateAccessKey(id, accessKey string) (Region, error) {
 	return item, nil
 }
 
-func (r *Registry) Delete(id string) error {
+func (r *Registry) Delete(_ context.Context, id string) error {
 	if r == nil {
 		return ErrNotFound
 	}

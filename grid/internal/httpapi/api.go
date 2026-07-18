@@ -37,7 +37,7 @@ type API struct {
 	inventory     inventory.Store
 	assets        assetmeta.Store
 	serviceToken  string
-	provisioned   *provisioning.Registry
+	provisioned   provisioning.Store
 	terrainHTTP   *http.Client
 	terrainCache  terrainTileCache
 	transits      transit.Store
@@ -55,7 +55,7 @@ type Options struct {
 	Presence          presence.Store
 	Inventory         inventory.Store
 	Assets            assetmeta.Store
-	Provisioned       *provisioning.Registry
+	Provisioned       provisioning.Store
 	TerrainHTTPClient *http.Client
 	Transits          transit.Store
 	TaskTransfers     tasktransfer.Store
@@ -130,7 +130,7 @@ func (a *API) provisionedRegionRuntime(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	scheme, accessKey, found := strings.Cut(r.Header.Get("Authorization"), " ")
-	provisioned, authenticated := a.provisioned.Authenticate(parts[0], accessKey)
+	provisioned, authenticated := a.provisioned.Authenticate(r.Context(), parts[0], accessKey)
 	if !found || !strings.EqualFold(scheme, "Bearer") || !authenticated {
 		w.Header().Set("WWW-Authenticate", "Bearer")
 		writeJSON(w, http.StatusUnauthorized, Error{Code: "unauthorized_region", Message: "the region UUID or access key is invalid"})

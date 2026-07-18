@@ -371,7 +371,7 @@ func TestProvisionedRegionManagementLifecycle(t *testing.T) {
 	if len(rotated.AccessKey) != 64 || rotated.AccessKey == created.AccessKey {
 		t.Fatalf("rotated access key was not returned exactly once: %#v", rotated)
 	}
-	if _, ok := registry.Authenticate(id, rotated.AccessKey); ok {
+	if _, ok := registry.Authenticate(context.Background(), id, rotated.AccessKey); ok {
 		t.Fatal("disabled region authenticated with its rotated key")
 	}
 
@@ -383,8 +383,9 @@ func TestProvisionedRegionManagementLifecycle(t *testing.T) {
 		t.Fatalf("missing response = %#v", missing)
 	}
 	reloaded, err := provisioning.Load(path)
-	if err != nil || len(reloaded.List()) != 0 {
-		t.Fatalf("deleted configuration was not persisted: %#v, %v", reloaded.List(), err)
+	items, listErr := reloaded.List(context.Background())
+	if err != nil || listErr != nil || len(items) != 0 {
+		t.Fatalf("deleted configuration was not persisted: %#v, %v, %v", items, err, listErr)
 	}
 }
 

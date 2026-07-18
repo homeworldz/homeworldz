@@ -41,16 +41,18 @@ replaced by per-region credentials and bootstrap configuration. This decision
 supersedes the identity and deletion aspects of ADR 0008 and ADR 0012 while
 retaining renewable leases as the online-liveness mechanism.
 
-The current implementation uses a private grid-side `regions.json` array as
-the provisioning authority. Each row contains `id`, `name`, optional
-`ownerUserId`, `mapX`, `mapY`, `enabled`, and a plaintext `accessKey`; startup
-rejects duplicate UUIDs, case-insensitive names, or coordinates. Authenticated
-operator endpoints create, inspect, edit, enable, disable, relocate, rotate the
-access key for, and remove these rows. Mutations replace the file atomically,
-and access keys are returned only by create and rotate responses. The region
-supplies `--region-id` and `--access-key`, while its local INI keeps host-specific
-ports, endpoints, paths, and the grid URL.
+The Grid imports a private `regions.json` array as an insert-only bootstrap
+seed. Each row contains `id`, `name`, optional `ownerUserId`, `mapX`, `mapY`,
+`enabled`, and a plaintext `accessKey`; startup rejects duplicate UUIDs,
+case-insensitive names, or coordinates. With PostgreSQL configured, imported
+records become authoritative `provisioned_regions` rows and retain only the
+SHA-256 digest of each independently generated high-entropy access key. A
+later restart never overwrites a managed record or rotated credential from the
+stale seed file. File-backed operation remains available for development.
 
-This remains the deliberately small file-backed stage. Moving the records and
-access-key hashes into PostgreSQL remains required before the Grid can claim
-the final persistence and secret-storage model described above.
+Authenticated operator endpoints create, inspect, edit, enable, disable,
+relocate, rotate the access key for, and remove provisioned records. Access keys
+are returned only by create and rotate responses. The region supplies
+`--region-id` and `--access-key`, while its local INI keeps host-specific ports,
+endpoints, paths, and the grid URL. Moving effective endpoint configuration
+into the provisioned record remains before the complete model above is closed.

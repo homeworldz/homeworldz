@@ -245,10 +245,13 @@ Stop a foreground process with Ctrl+C or the Ubuntu service with
 
 ## Manage provisioned regions
 
-After initial startup, Grid operators may update `regions.json` through the
-authenticated management API instead of editing it by hand. Use the Grid
-service token from `grid.ini` as a Bearer token. For example, create an enabled
-region with an automatically generated UUID and access key:
+At startup, rows in `regions.json` are inserted into PostgreSQL when their UUID
+does not already exist. They are bootstrap seeds, not a recurring source of
+truth: API changes and rotated keys are not overwritten by a later restart.
+After initial startup, use the authenticated management API instead of editing
+seed rows. Use the Grid service token from `grid.ini` as a Bearer token. For
+example, create an enabled region with an automatically generated UUID and
+access key:
 
 ```text
 POST /api/v1/provisioned-regions
@@ -266,11 +269,13 @@ or an individual record never returns a key. `PATCH
 lease-renewal authentication without deleting the identity. `POST
 /api/v1/provisioned-regions/<uuid>/rotate-access-key` invalidates the old key
 and returns its replacement once. `DELETE` permanently removes the provisioned
-record. All successful mutations are written atomically to `regions.json`.
+record. All successful mutations are committed to PostgreSQL.
 
-The current file-backed stage necessarily retains plaintext keys in that
-operator-private file. Restrict it to the Grid service account and include it
-in protected configuration backups.
+PostgreSQL retains only the SHA-256 digest of generated 256-bit access keys. A
+plaintext key still exists in the operator-private bootstrap file for its seed
+rows, so restrict that file to the Grid service account and include it in
+protected configuration backups. Development without PostgreSQL uses the same
+API against an atomically replaced `regions.json` file.
 
 ## Operational endpoints
 

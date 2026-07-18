@@ -1,6 +1,7 @@
 package provisioning
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -20,11 +21,11 @@ func TestLoadAndAuthenticate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	region, ok := registry.Authenticate("22222222-2222-4222-8222-222222222222", "sandbox-key")
+	region, ok := registry.Authenticate(context.Background(), "22222222-2222-4222-8222-222222222222", "sandbox-key")
 	if !ok || region.Name != "Sandbox" || region.MapX != 1001 {
 		t.Fatalf("unexpected provisioned region: %#v, %v", region, ok)
 	}
-	if _, ok := registry.Authenticate(region.ID, "wrong"); ok {
+	if _, ok := registry.Authenticate(context.Background(), region.ID, "wrong"); ok {
 		t.Fatal("wrong access key authenticated")
 	}
 }
@@ -39,30 +40,30 @@ func TestManagementMutationsPersistAtomically(t *testing.T) {
 		t.Fatal(err)
 	}
 	id := "11111111-1111-4111-8111-111111111111"
-	created, err := registry.Create(Region{ID: id, Name: "Welcome", MapX: 1000, MapY: 1000,
+	created, err := registry.Create(context.Background(), Region{ID: id, Name: "Welcome", MapX: 1000, MapY: 1000,
 		Enabled: true, AccessKey: "initial-key"})
 	if err != nil || created.Name != "Welcome" {
 		t.Fatalf("create = %#v, %v", created, err)
 	}
 	name, x, enabled := "Welcome Region", 1002, false
-	updated, err := registry.Update(id, Update{Name: &name, MapX: &x, Enabled: &enabled})
+	updated, err := registry.Update(context.Background(), id, Update{Name: &name, MapX: &x, Enabled: &enabled})
 	if err != nil || updated.Name != name || updated.MapX != x || updated.Enabled {
 		t.Fatalf("update = %#v, %v", updated, err)
 	}
-	if _, ok := registry.Authenticate(id, "initial-key"); ok {
+	if _, ok := registry.Authenticate(context.Background(), id, "initial-key"); ok {
 		t.Fatal("disabled region authenticated")
 	}
-	if _, err := registry.RotateAccessKey(id, "rotated-key"); err != nil {
+	if _, err := registry.RotateAccessKey(context.Background(), id, "rotated-key"); err != nil {
 		t.Fatal(err)
 	}
 	enabled = true
-	if _, err := registry.Update(id, Update{Enabled: &enabled}); err != nil {
+	if _, err := registry.Update(context.Background(), id, Update{Enabled: &enabled}); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := registry.Authenticate(id, "initial-key"); ok {
+	if _, ok := registry.Authenticate(context.Background(), id, "initial-key"); ok {
 		t.Fatal("old access key authenticated after rotation")
 	}
-	if _, ok := registry.Authenticate(id, "rotated-key"); !ok {
+	if _, ok := registry.Authenticate(context.Background(), id, "rotated-key"); !ok {
 		t.Fatal("rotated access key did not authenticate")
 	}
 
@@ -70,22 +71,23 @@ func TestManagementMutationsPersistAtomically(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	retained, err := reloaded.Get(id)
+	retained, err := reloaded.Get(context.Background(), id)
 	if err != nil || retained.Name != name || retained.MapX != x || !retained.Enabled {
 		t.Fatalf("reloaded = %#v, %v", retained, err)
 	}
-	if _, ok := reloaded.Authenticate(id, "rotated-key"); !ok {
+	if _, ok := reloaded.Authenticate(context.Background(), id, "rotated-key"); !ok {
 		t.Fatal("persisted rotated key did not authenticate")
 	}
-	if err := reloaded.Delete(id); err != nil {
+	if err := reloaded.Delete(context.Background(), id); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := reloaded.Get(id); !errors.Is(err, ErrNotFound) {
+	if _, err := reloaded.Get(context.Background(), id); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("get deleted region error = %v", err)
 	}
 	empty, err := Load(path)
-	if err != nil || len(empty.List()) != 0 {
-		t.Fatalf("deleted registry reload = %#v, %v", empty.List(), err)
+	items, listErr := empty.List(context.Background())
+	if err != nil || listErr != nil || len(items) != 0 {
+		t.Fatalf("deleted registry reload = %#v, %v, %v", items, err, listErr)
 	}
 }
 
