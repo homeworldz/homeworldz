@@ -43,8 +43,9 @@ retaining renewable leases as the online-liveness mechanism.
 
 The Grid imports a private `regions.json` array as an insert-only bootstrap
 seed. Each row contains `id`, `name`, optional `ownerUserId`, `mapX`, `mapY`,
-`enabled`, and a plaintext `accessKey`; startup rejects duplicate UUIDs,
-case-insensitive names, or coordinates. With PostgreSQL configured, imported
+square `size` (`1`, `2`, or `4` grid cells), `maturity`, `enabled`, and a
+plaintext `accessKey`; startup rejects duplicate UUIDs, case-insensitive names,
+or overlapping covered cells. With PostgreSQL configured, imported
 records become authoritative `provisioned_regions` rows and retain only the
 SHA-256 digest of each independently generated high-entropy access key. A
 later restart never overwrites a managed record or rotated credential from the

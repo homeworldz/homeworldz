@@ -108,3 +108,17 @@ func TestRejectsDuplicateCoordinates(t *testing.T) {
 		t.Fatal("duplicate coordinates were accepted")
 	}
 }
+
+func TestRejectsOverlappingSupportedExtents(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "regions.json")
+	content := `[
+  {"id":"11111111-1111-4111-8111-111111111111","name":"Large","mapX":5,"mapY":6,"size":2,"accessKey":"one"},
+  {"id":"22222222-2222-4222-8222-222222222222","name":"Inside","mapX":6,"mapY":7,"size":1,"accessKey":"two"}
+]`
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(path); !errors.Is(err, ErrConflict) {
+		t.Fatalf("overlapping extents error = %v", err)
+	}
+}

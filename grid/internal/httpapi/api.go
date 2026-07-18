@@ -328,7 +328,7 @@ func (a *API) regionNeighbors(w http.ResponseWriter, r *http.Request, id string)
 		}
 		for _, item := range provisioned {
 			entry := RegionTopology{ID: item.ID, Name: item.Name, GridX: item.MapX, GridY: item.MapY,
-				SizeX: 256, SizeY: 256, Maturity: 0, PublicEndpoint: item.PublicEndpoint,
+				SizeX: item.Size * 256, SizeY: item.Size * 256, Maturity: item.Maturity, PublicEndpoint: item.PublicEndpoint,
 				ViewerPort: item.ViewerPort}
 			if live, online := liveByID[item.ID]; online {
 				entry.PublicEndpoint, entry.ViewerPort, entry.Online = live.PublicEndpoint, live.ViewerPort, true

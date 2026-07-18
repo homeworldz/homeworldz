@@ -265,7 +265,10 @@ The create response is the only response that contains the new plaintext
 `accessKey`; give that UUID and key to the Region owner. `GET` on the collection
 or an individual record never returns a key. `PATCH
 /api/v1/provisioned-regions/<uuid>` changes `name`, `ownerUserId`, `mapX`,
-`mapY`, `publicEndpoint`, `viewerPort`, or `enabled`. The endpoint fields are an
+`mapY`, `size`, `maturity`, `publicEndpoint`, `viewerPort`, or `enabled`. `size`
+is exactly `1`, `2`, or `4`, representing a square 256 m, 512 m, or 1024 m
+allocation. The Grid rejects any allocation whose covered cells overlap an
+existing provisioned Region. The endpoint fields are an
 operator-owned assignment and remain independent of the Region's current live
 lease. Set `enabled` to `false` to reject subsequent startup and lease-renewal
 authentication without deleting the identity. `POST

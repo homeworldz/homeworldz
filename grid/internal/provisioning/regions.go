@@ -31,6 +31,8 @@ type Region struct {
 	OwnerUserID    string `json:"ownerUserId,omitempty"`
 	MapX           int    `json:"mapX"`
 	MapY           int    `json:"mapY"`
+	Size           int    `json:"size"`
+	Maturity       int    `json:"maturity"`
 	PublicEndpoint string `json:"publicEndpoint,omitempty"`
 	ViewerPort     int    `json:"viewerPort,omitempty"`
 	Enabled        bool   `json:"enabled"`
@@ -42,6 +44,8 @@ type Update struct {
 	OwnerUserID    *string
 	MapX           *int
 	MapY           *int
+	Size           *int
+	Maturity       *int
 	PublicEndpoint *string
 	ViewerPort     *int
 	Enabled        *bool
@@ -53,6 +57,8 @@ type fileRegion struct {
 	OwnerUserID    string `json:"ownerUserId,omitempty"`
 	MapX           int    `json:"mapX"`
 	MapY           int    `json:"mapY"`
+	Size           *int   `json:"size,omitempty"`
+	Maturity       int    `json:"maturity,omitempty"`
 	PublicEndpoint string `json:"publicEndpoint,omitempty"`
 	ViewerPort     int    `json:"viewerPort,omitempty"`
 	Enabled        *bool  `json:"enabled,omitempty"`
@@ -92,12 +98,17 @@ func Load(path string) (*Registry, error) {
 	items := make(map[string]Region, len(stored))
 	for index, item := range stored {
 		enabled := true
+		size := 1
 		if item.Enabled != nil {
 			enabled = *item.Enabled
 		}
+		if item.Size != nil {
+			size = *item.Size
+		}
 		region := Region{ID: item.ID, Name: item.Name, OwnerUserID: item.OwnerUserID,
-			MapX: item.MapX, MapY: item.MapY, PublicEndpoint: item.PublicEndpoint,
-			ViewerPort: item.ViewerPort, Enabled: enabled, AccessKey: item.AccessKey}
+			MapX: item.MapX, MapY: item.MapY, Size: size, Maturity: item.Maturity,
+			PublicEndpoint: item.PublicEndpoint,
+			ViewerPort:     item.ViewerPort, Enabled: enabled, AccessKey: item.AccessKey}
 		if err := validate(region); err != nil {
 			return nil, fmt.Errorf("invalid provisioned region at index %d: %w", index, err)
 		}
@@ -175,6 +186,9 @@ func (r *Registry) Create(_ context.Context, item Region) (Region, error) {
 	item.Name = strings.TrimSpace(item.Name)
 	item.OwnerUserID = strings.TrimSpace(item.OwnerUserID)
 	item.PublicEndpoint = strings.TrimSpace(item.PublicEndpoint)
+	if item.Size == 0 {
+		item.Size = 1
+	}
 	if err := validate(item); err != nil {
 		return Region{}, err
 	}
@@ -216,6 +230,12 @@ func (r *Registry) Update(_ context.Context, id string, update Update) (Region, 
 	}
 	if update.MapY != nil {
 		item.MapY = *update.MapY
+	}
+	if update.Size != nil {
+		item.Size = *update.Size
+	}
+	if update.Maturity != nil {
+		item.Maturity = *update.Maturity
 	}
 	if update.PublicEndpoint != nil {
 		item.PublicEndpoint = strings.TrimSpace(*update.PublicEndpoint)
@@ -286,9 +306,11 @@ func (r *Registry) persist(items map[string]Region) error {
 	stored := make([]fileRegion, 0, len(items))
 	for _, item := range items {
 		enabled := item.Enabled
+		size := item.Size
 		stored = append(stored, fileRegion{ID: item.ID, Name: item.Name, OwnerUserID: item.OwnerUserID,
-			MapX: item.MapX, MapY: item.MapY, PublicEndpoint: item.PublicEndpoint,
-			ViewerPort: item.ViewerPort, Enabled: &enabled, AccessKey: item.AccessKey})
+			MapX: item.MapX, MapY: item.MapY, Size: &size, Maturity: item.Maturity,
+			PublicEndpoint: item.PublicEndpoint,
+			ViewerPort:     item.ViewerPort, Enabled: &enabled, AccessKey: item.AccessKey})
 	}
 	sort.Slice(stored, func(i, j int) bool {
 		if stored[i].MapY != stored[j].MapY {
@@ -333,7 +355,8 @@ func (r *Registry) persist(items map[string]Region) error {
 
 func validate(item Region) error {
 	if !uuidPattern.MatchString(item.ID) || strings.TrimSpace(item.Name) == "" || len(item.Name) > 128 ||
-		item.MapX < 0 || item.MapY < 0 || item.ViewerPort < 0 || item.ViewerPort > 65535 ||
+		item.MapX < 0 || item.MapY < 0 || (item.Size != 1 && item.Size != 2 && item.Size != 4) ||
+		item.Maturity < 0 || item.Maturity > 2 || item.ViewerPort < 0 || item.ViewerPort > 65535 ||
 		strings.TrimSpace(item.AccessKey) == "" {
 		return fmt.Errorf("%w: UUID, name, coordinates, or access key is invalid", ErrInvalid)
 	}
@@ -350,19 +373,22 @@ func validate(item Region) error {
 }
 
 func validateUnique(items map[string]Region, changedID string) error {
-	coordinates := make(map[[2]int]string, len(items))
 	names := make(map[string]string, len(items))
 	for id, item := range items {
 		name := strings.ToLower(item.Name)
 		if other, exists := names[name]; exists && other != id {
 			return fmt.Errorf("%w: region %q shares a name with %q", ErrConflict, id, other)
 		}
-		coordinate := [2]int{item.MapX, item.MapY}
-		if other, exists := coordinates[coordinate]; exists && other != id {
-			return fmt.Errorf("%w: region %q shares map coordinates with %q", ErrConflict, id, other)
+		for otherID, other := range items {
+			if otherID == id {
+				continue
+			}
+			if item.MapX < other.MapX+other.Size && other.MapX < item.MapX+item.Size &&
+				item.MapY < other.MapY+other.Size && other.MapY < item.MapY+item.Size {
+				return fmt.Errorf("%w: region %q overlaps %q", ErrConflict, id, otherID)
+			}
 		}
 		names[name] = id
-		coordinates[coordinate] = id
 	}
 	_ = changedID
 	return nil

@@ -22,10 +22,10 @@ func (s *PostgresStore) Import(ctx context.Context, items []Region) error {
 		}
 		hash := sha256.Sum256([]byte(item.AccessKey))
 		_, err := s.db.ExecContext(ctx, `INSERT INTO provisioned_regions
-			(id,name,owner_user_id,grid_x,grid_y,public_endpoint,viewer_port,enabled,access_key_hash)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (id) DO NOTHING`,
+			(id,name,owner_user_id,grid_x,grid_y,size,maturity,public_endpoint,viewer_port,enabled,access_key_hash)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT (id) DO NOTHING`,
 			item.ID, item.Name, nullableOwner(item.OwnerUserID), item.MapX, item.MapY,
-			item.PublicEndpoint, item.ViewerPort, item.Enabled, hash[:])
+			item.Size, item.Maturity, item.PublicEndpoint, item.ViewerPort, item.Enabled, hash[:])
 		if err != nil {
 			return classify("import provisioned region", err)
 		}
@@ -41,7 +41,7 @@ func (s *PostgresStore) Authenticate(ctx context.Context, id, accessKey string) 
 }
 
 func (s *PostgresStore) List(ctx context.Context) ([]Region, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id,name,owner_user_id,grid_x,grid_y,public_endpoint,viewer_port,enabled
+	rows, err := s.db.QueryContext(ctx, `SELECT id,name,owner_user_id,grid_x,grid_y,size,maturity,public_endpoint,viewer_port,enabled
         FROM provisioned_regions ORDER BY grid_y,grid_x,id`)
 	if err != nil {
 		return nil, fmt.Errorf("list provisioned regions: %w", err)
@@ -69,16 +69,19 @@ func (s *PostgresStore) Create(ctx context.Context, item Region) (Region, error)
 	item.Name = normalize(item.Name)
 	item.OwnerUserID = normalize(item.OwnerUserID)
 	item.PublicEndpoint = normalize(item.PublicEndpoint)
+	if item.Size == 0 {
+		item.Size = 1
+	}
 	if err := validate(item); err != nil {
 		return Region{}, err
 	}
 	hash := sha256.Sum256([]byte(item.AccessKey))
 	row := s.db.QueryRowContext(ctx, `INSERT INTO provisioned_regions
-		(id,name,owner_user_id,grid_x,grid_y,public_endpoint,viewer_port,enabled,access_key_hash)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-		RETURNING id,name,owner_user_id,grid_x,grid_y,public_endpoint,viewer_port,enabled`,
+		(id,name,owner_user_id,grid_x,grid_y,size,maturity,public_endpoint,viewer_port,enabled,access_key_hash)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+		RETURNING id,name,owner_user_id,grid_x,grid_y,size,maturity,public_endpoint,viewer_port,enabled`,
 		item.ID, item.Name, nullableOwner(item.OwnerUserID), item.MapX, item.MapY,
-		item.PublicEndpoint, item.ViewerPort, item.Enabled, hash[:])
+		item.Size, item.Maturity, item.PublicEndpoint, item.ViewerPort, item.Enabled, hash[:])
 	created, err := scanRegion(row)
 	if err != nil {
 		return Region{}, classify("create provisioned region", err)
@@ -103,6 +106,12 @@ func (s *PostgresStore) Update(ctx context.Context, id string, update Update) (R
 	if update.MapY != nil {
 		current.MapY = *update.MapY
 	}
+	if update.Size != nil {
+		current.Size = *update.Size
+	}
+	if update.Maturity != nil {
+		current.Maturity = *update.Maturity
+	}
 	if update.PublicEndpoint != nil {
 		current.PublicEndpoint = normalize(*update.PublicEndpoint)
 	}
@@ -117,11 +126,11 @@ func (s *PostgresStore) Update(ctx context.Context, id string, update Update) (R
 		return Region{}, err
 	}
 	row := s.db.QueryRowContext(ctx, `UPDATE provisioned_regions SET
-		name=$2,owner_user_id=$3,grid_x=$4,grid_y=$5,public_endpoint=$6,viewer_port=$7,
-		enabled=$8,updated_at=now()
-		WHERE id=$1 RETURNING id,name,owner_user_id,grid_x,grid_y,public_endpoint,viewer_port,enabled`,
+		name=$2,owner_user_id=$3,grid_x=$4,grid_y=$5,size=$6,maturity=$7,
+		public_endpoint=$8,viewer_port=$9,enabled=$10,updated_at=now()
+		WHERE id=$1 RETURNING id,name,owner_user_id,grid_x,grid_y,size,maturity,public_endpoint,viewer_port,enabled`,
 		id, current.Name, nullableOwner(current.OwnerUserID), current.MapX, current.MapY,
-		current.PublicEndpoint, current.ViewerPort, current.Enabled)
+		current.Size, current.Maturity, current.PublicEndpoint, current.ViewerPort, current.Enabled)
 	item, err := scanRegion(row)
 	if err != nil {
 		return Region{}, classify("update provisioned region", err)
@@ -136,7 +145,7 @@ func (s *PostgresStore) RotateAccessKey(ctx context.Context, id, accessKey strin
 	hash := sha256.Sum256([]byte(accessKey))
 	row := s.db.QueryRowContext(ctx, `UPDATE provisioned_regions
 		SET access_key_hash=$2,updated_at=now() WHERE id=$1
-		RETURNING id,name,owner_user_id,grid_x,grid_y,public_endpoint,viewer_port,enabled`, id, hash[:])
+		RETURNING id,name,owner_user_id,grid_x,grid_y,size,maturity,public_endpoint,viewer_port,enabled`, id, hash[:])
 	item, err := scanRegion(row)
 	if err != nil {
 		return Region{}, classify("rotate provisioned region access key", err)
@@ -160,7 +169,7 @@ func (s *PostgresStore) Delete(ctx context.Context, id string) error {
 }
 
 func (s *PostgresStore) get(ctx context.Context, predicate string, arguments ...any) (Region, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT id,name,owner_user_id,grid_x,grid_y,public_endpoint,viewer_port,enabled
+	row := s.db.QueryRowContext(ctx, `SELECT id,name,owner_user_id,grid_x,grid_y,size,maturity,public_endpoint,viewer_port,enabled
         FROM provisioned_regions WHERE `+predicate, arguments...)
 	item, err := scanRegion(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -177,7 +186,7 @@ type rowScanner interface{ Scan(...any) error }
 func scanRegion(row rowScanner) (Region, error) {
 	var item Region
 	var owner sql.NullString
-	err := row.Scan(&item.ID, &item.Name, &owner, &item.MapX, &item.MapY,
+	err := row.Scan(&item.ID, &item.Name, &owner, &item.MapX, &item.MapY, &item.Size, &item.Maturity,
 		&item.PublicEndpoint, &item.ViewerPort, &item.Enabled)
 	if owner.Valid {
 		item.OwnerUserID = owner.String
@@ -190,7 +199,7 @@ func classify(operation string, err error) error {
 		return ErrNotFound
 	}
 	var databaseError *pgconn.PgError
-	if errors.As(err, &databaseError) && databaseError.Code == "23505" {
+	if errors.As(err, &databaseError) && (databaseError.Code == "23505" || databaseError.Code == "23P01") {
 		return fmt.Errorf("%w: %s", ErrConflict, operation)
 	}
 	if errors.As(err, &databaseError) && (databaseError.Code == "23503" || databaseError.Code == "23514") {

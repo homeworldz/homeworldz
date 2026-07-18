@@ -85,6 +85,8 @@ type CreateProvisionedRegionRequest struct {
 	OwnerUserID    string `json:"ownerUserId,omitempty"`
 	MapX           int    `json:"mapX"`
 	MapY           int    `json:"mapY"`
+	Size           int    `json:"size,omitempty"`
+	Maturity       int    `json:"maturity,omitempty"`
 	PublicEndpoint string `json:"publicEndpoint,omitempty"`
 	ViewerPort     int    `json:"viewerPort,omitempty"`
 	Enabled        *bool  `json:"enabled,omitempty"`
@@ -95,6 +97,8 @@ type UpdateProvisionedRegionRequest struct {
 	OwnerUserID    *string `json:"ownerUserId,omitempty"`
 	MapX           *int    `json:"mapX,omitempty"`
 	MapY           *int    `json:"mapY,omitempty"`
+	Size           *int    `json:"size,omitempty"`
+	Maturity       *int    `json:"maturity,omitempty"`
 	PublicEndpoint *string `json:"publicEndpoint,omitempty"`
 	ViewerPort     *int    `json:"viewerPort,omitempty"`
 	Enabled        *bool   `json:"enabled,omitempty"`

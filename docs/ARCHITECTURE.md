@@ -103,8 +103,8 @@ the provisioned record.
 An authenticated Region can discover its provisioned cardinal neighbors
 of any online region with `GET /api/v1/regions/{uuid}/neighbors`. The Grid
 derives north, east, south, and west adjacency from persistent coordinates,
-excludes diagonals, and returns canonical UUID, name, coordinates, 256-metre
-extents, maturity, assigned or live endpoints, and explicit online state in
+excludes diagonals, and returns canonical UUID, name, coordinates, persisted
+256-, 512-, or 1024-metre square extents, maturity, assigned or live endpoints, and explicit online state in
 that deterministic order. A Region fetches and validates this topology at
 startup, retains the snapshot in runtime state, and refreshes it every five
 seconds so independently started or restarted neighbors converge without a
