@@ -79,6 +79,45 @@ func TestMapTileSlicesLargeRegionAcrossGridCells(t *testing.T) {
 	}
 }
 
+func TestMapTileSlicesFourByFourRegionAtOppositeCorners(t *testing.T) {
+	terrain := image.NewRGBA(image.Rect(0, 0, 1024, 1024))
+	for y := 0; y < 1024; y++ {
+		for x := 0; x < 1024; x++ {
+			pixel := color.RGBA{G: 240, A: 255}
+			if x < 256 && y >= 768 {
+				pixel = color.RGBA{R: 240, A: 255}
+			} else if x >= 768 && y < 256 {
+				pixel = color.RGBA{B: 240, A: 255}
+			}
+			terrain.SetRGBA(x, y, pixel)
+		}
+	}
+	region := regions.Region{ID: "large", GridX: 1000, GridY: 1000}
+	mapped := []mapRegion{{region: region, size: 4}}
+	tiles := map[string]image.Image{"large": terrain}
+	southwestBytes, southwestFound, southwestErr := renderMapTile(1, 1000, 1000, mapped, tiles)
+	northeastBytes, northeastFound, northeastErr := renderMapTile(1, 1003, 1003, mapped, tiles)
+	if southwestErr != nil || northeastErr != nil || !southwestFound || !northeastFound {
+		t.Fatalf("4x4 map slices failed: southwest=%v/%v northeast=%v/%v",
+			southwestFound, southwestErr, northeastFound, northeastErr)
+	}
+	southwest, err := jpeg.Decode(bytes.NewReader(southwestBytes))
+	if err != nil {
+		t.Fatal(err)
+	}
+	northeast, err := jpeg.Decode(bytes.NewReader(northeastBytes))
+	if err != nil {
+		t.Fatal(err)
+	}
+	southwestRed, southwestGreen, southwestBlue, _ := southwest.At(128, 128).RGBA()
+	northeastRed, northeastGreen, northeastBlue, _ := northeast.At(128, 128).RGBA()
+	if southwestRed <= southwestGreen || southwestRed <= southwestBlue ||
+		northeastBlue <= northeastRed || northeastBlue <= northeastGreen {
+		t.Fatalf("4x4 map corners lost orientation: southwest=(%d,%d,%d) northeast=(%d,%d,%d)",
+			southwestRed, southwestGreen, southwestBlue, northeastRed, northeastGreen, northeastBlue)
+	}
+}
+
 func TestMapTileFetchesAndCachesLiveRegionTerrain(t *testing.T) {
 	var requests atomic.Int32
 	heightmap := encodedHeightmap(90)
