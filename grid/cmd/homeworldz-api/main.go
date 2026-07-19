@@ -113,11 +113,12 @@ func buildMailer(settings config.Grid, logger *slog.Logger) (mailer.Mailer, erro
 	switch settings.MailTransport {
 	case "smtp":
 		return mailer.NewSMTPMailer(mailer.SMTPConfig{
-			Host:     settings.SMTPHost,
-			Port:     settings.SMTPPort,
-			Username: settings.SMTPUsername,
-			Password: settings.SMTPPassword,
-			From:     settings.MailFrom,
+			Host:        settings.SMTPHost,
+			Port:        settings.SMTPPort,
+			Username:    settings.SMTPUsername,
+			Password:    settings.SMTPPassword,
+			From:        settings.MailFrom,
+			ImplicitTLS: settings.SMTPImplicitTLS,
 		})
 	case "log", "":
 		return mailer.NewLogMailer(logger, settings.MailFrom), nil

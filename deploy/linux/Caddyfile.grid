@@ -1,3 +1,7 @@
 grid.homeworldz.com {
 	reverse_proxy 127.0.0.1:8002
 }
+
+api.homeworldz.com {
+	reverse_proxy 127.0.0.1:8003
+}

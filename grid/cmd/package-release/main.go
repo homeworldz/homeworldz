@@ -98,6 +98,7 @@ func run(ctx context.Context, opts options) error {
 
 	gridBins := []struct{ command, name string }{
 		{"./grid/cmd/grid", "homeworldz-grid" + binarySuffix},
+		{"./grid/cmd/homeworldz-api", "homeworldz-api" + binarySuffix},
 		{"./grid/cmd/bootstrap-grid", "bootstrap-grid" + binarySuffix},
 		{"./grid/cmd/configure-library", "configure-library" + binarySuffix},
 	}
@@ -121,6 +122,7 @@ func run(ctx context.Context, opts options) error {
 		archiveEntry{filepath.Join(root, "docs", "ROADMAP.md"), "docs/ROADMAP.md"},
 		archiveEntry{filepath.Join(root, "deploy", "linux", "Caddyfile.grid"), "deploy/linux/Caddyfile.grid"},
 		archiveEntry{filepath.Join(root, "deploy", "linux", "homeworldz-grid.service"), "deploy/linux/homeworldz-grid.service"},
+		archiveEntry{filepath.Join(root, "deploy", "linux", "homeworldz-api.service"), "deploy/linux/homeworldz-api.service"},
 	)
 	gridEntries, err = appendTree(gridEntries, filepath.Join(root, "db", "migrations"), "db/migrations", func(path string) bool {
 		return strings.HasSuffix(path, ".up.sql")
@@ -236,7 +238,7 @@ func repositoryRoot() (string, error) {
 
 func buildGoCommand(ctx context.Context, root, commandPath, destination, version, targetOS string) error {
 	args := []string{"build", "-trimpath", "-o", destination}
-	if commandPath == "./grid/cmd/grid" {
+	if commandPath == "./grid/cmd/grid" || commandPath == "./grid/cmd/homeworldz-api" {
 		args = append(args, "-ldflags", "-s -w -X main.version="+version)
 	} else {
 		args = append(args, "-ldflags", "-s -w")
@@ -431,7 +433,7 @@ func addTarFile(archive *tar.Writer, source, name string) error {
 	}
 	mode := int64(0o644)
 	base := filepath.Base(name)
-	if base == "homeworldz-grid" || base == "bootstrap-grid" || base == "configure-library" || base == "homeworldz-region" {
+	if base == "homeworldz-grid" || base == "homeworldz-api" || base == "bootstrap-grid" || base == "configure-library" || base == "homeworldz-region" {
 		mode = 0o755
 	}
 	header := &tar.Header{Name: filepath.ToSlash(name), Mode: mode, Size: info.Size(), ModTime: time.Unix(0, 0).UTC(), Typeflag: tar.TypeReg}

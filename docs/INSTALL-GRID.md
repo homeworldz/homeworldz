@@ -182,6 +182,9 @@ sudo install -o root -g root -m 0644 \
   /opt/homeworldz/grid/deploy/linux/homeworldz-grid.service \
   /etc/systemd/system/homeworldz-grid.service
 sudo install -o root -g root -m 0644 \
+  /opt/homeworldz/grid/deploy/linux/homeworldz-api.service \
+  /etc/systemd/system/homeworldz-api.service
+sudo install -o root -g root -m 0644 \
   /opt/homeworldz/grid/deploy/linux/Caddyfile.grid /etc/caddy/Caddyfile
 sudo systemctl daemon-reload
 ```
@@ -189,6 +192,16 @@ sudo systemctl daemon-reload
 The DNS-only A record for `grid.homeworldz.com` must point at the host, and its
 firewall must allow inbound TCP 80 and 443 before Caddy can obtain its
 certificate. Keep PostgreSQL and port 8002 off the public Internet.
+
+`Caddyfile.grid` serves two sites: `grid.homeworldz.com` (grid discovery and
+login, proxied to `127.0.0.1:8002`) and `api.homeworldz.com` (the browser-facing
+website API `homeworldz-api`, proxied to `127.0.0.1:8003`). Both need a DNS-only
+record pointing at this host so Caddy can obtain each certificate over ACME; a
+proxying CDN in front of `api.homeworldz.com` intercepts the challenge and must
+be bypassed (DNS-only) or issued its own origin certificate. The website API
+shares this host's PostgreSQL database and reads the `[website]` and `[mail]`
+sections of `grid.ini` (see `grid-cloud.ini`); it will not start until
+`[website] jwt_secret` is set. Keep port 8003 off the public Internet.
 
 ## Create the database
 
@@ -240,11 +253,11 @@ homeworldz-grid.exe
 Linux:
 
 ```sh
-sudo systemctl enable --now homeworldz-grid caddy
+sudo systemctl enable --now homeworldz-grid homeworldz-api caddy
 ```
 
-The service reads `grid.ini`, `db.ini`, and `regions.json` from the directory
-passed with `-config`; the packaged systemd unit uses `/etc/homeworldz/grid`.
+The services read `grid.ini`, `db.ini`, and `regions.json` from the directory
+passed with `-config`; the packaged systemd units use `/etc/homeworldz/grid`.
 Stop a foreground process with Ctrl+C or the Ubuntu service with
 `sudo systemctl stop homeworldz-grid`; both perform a graceful HTTP shutdown.
 

@@ -5,6 +5,7 @@ package mailer
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -65,12 +66,13 @@ func (l *LogMailer) Send(_ context.Context, message Message) error {
 
 // SMTPMailer delivers mail through an SMTP relay.
 type SMTPMailer struct {
-	Addr     string // host:port
-	From     string
-	auth     smtp.Auth
-	host     string
-	dialer   *net.Dialer
-	sendMail func(addr string, a smtp.Auth, from string, to []string, msg []byte) error
+	Addr        string // host:port
+	From        string
+	auth        smtp.Auth
+	host        string
+	implicitTLS bool
+	dialer      *net.Dialer
+	sendMail    func(addr string, a smtp.Auth, from string, to []string, msg []byte) error
 }
 
 // SMTPConfig configures an SMTPMailer.
@@ -80,6 +82,10 @@ type SMTPConfig struct {
 	Username string
 	Password string
 	From     string
+	// ImplicitTLS negotiates TLS on connect (SMTPS, typically port 465) instead
+	// of upgrading a plaintext connection with STARTTLS (typically port 587).
+	// Cloudflare Email Sending, for example, only offers implicit TLS on 465.
+	ImplicitTLS bool
 }
 
 // NewSMTPMailer validates config and returns an SMTPMailer. When a username is
@@ -95,10 +101,11 @@ func NewSMTPMailer(config SMTPConfig) (*SMTPMailer, error) {
 		return nil, errors.New("mailer: smtp from address is required")
 	}
 	mailer := &SMTPMailer{
-		Addr:     net.JoinHostPort(config.Host, fmt.Sprintf("%d", config.Port)),
-		From:     config.From,
-		host:     config.Host,
-		sendMail: smtp.SendMail,
+		Addr:        net.JoinHostPort(config.Host, fmt.Sprintf("%d", config.Port)),
+		From:        config.From,
+		host:        config.Host,
+		implicitTLS: config.ImplicitTLS,
+		sendMail:    smtp.SendMail,
 	}
 	if config.Username != "" {
 		mailer.auth = smtp.PlainAuth("", config.Username, config.Password, config.Host)
@@ -112,10 +119,54 @@ func (s *SMTPMailer) Send(_ context.Context, message Message) error {
 		return err
 	}
 	raw := buildMessage(s.From, message)
+	if s.implicitTLS {
+		if err := s.sendImplicitTLS(message.To, raw); err != nil {
+			return fmt.Errorf("mailer: send: %w", err)
+		}
+		return nil
+	}
 	if err := s.sendMail(s.Addr, s.auth, s.From, []string{message.To}, raw); err != nil {
 		return fmt.Errorf("mailer: send: %w", err)
 	}
 	return nil
+}
+
+// sendImplicitTLS delivers a message over a connection that is TLS from the
+// first byte (SMTPS), which net/smtp.SendMail cannot do — it only upgrades a
+// plaintext connection via STARTTLS.
+func (s *SMTPMailer) sendImplicitTLS(to string, raw []byte) error {
+	conn, err := tls.Dial("tcp", s.Addr, &tls.Config{ServerName: s.host})
+	if err != nil {
+		return fmt.Errorf("tls dial: %w", err)
+	}
+	client, err := smtp.NewClient(conn, s.host)
+	if err != nil {
+		conn.Close()
+		return fmt.Errorf("smtp client: %w", err)
+	}
+	defer client.Close()
+	if s.auth != nil {
+		if err := client.Auth(s.auth); err != nil {
+			return fmt.Errorf("auth: %w", err)
+		}
+	}
+	if err := client.Mail(s.From); err != nil {
+		return fmt.Errorf("mail from: %w", err)
+	}
+	if err := client.Rcpt(to); err != nil {
+		return fmt.Errorf("rcpt to: %w", err)
+	}
+	writer, err := client.Data()
+	if err != nil {
+		return fmt.Errorf("data: %w", err)
+	}
+	if _, err := writer.Write(raw); err != nil {
+		return fmt.Errorf("write body: %w", err)
+	}
+	if err := writer.Close(); err != nil {
+		return fmt.Errorf("close body: %w", err)
+	}
+	return client.Quit()
 }
 
 func buildMessage(from string, message Message) []byte {

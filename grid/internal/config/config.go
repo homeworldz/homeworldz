@@ -35,6 +35,7 @@ type Grid struct {
 	SMTPPort              int
 	SMTPUsername          string
 	SMTPPassword          string
+	SMTPImplicitTLS       bool
 }
 
 func LoadGrid(directory string) (Grid, error) {
@@ -89,6 +90,9 @@ func LoadGrid(directory string) (Grid, error) {
 	result.SMTPPort = mail.Key("smtp_port").MustInt(587)
 	result.SMTPUsername = mail.Key("smtp_username").String()
 	result.SMTPPassword = mail.Key("smtp_password").String()
+	// Implicit TLS (SMTPS) defaults on for the conventional port 465; a relay on
+	// another port can force it with smtp_implicit_tls = true.
+	result.SMTPImplicitTLS = mail.Key("smtp_implicit_tls").MustBool(result.SMTPPort == 465)
 
 	return result, nil
 }
