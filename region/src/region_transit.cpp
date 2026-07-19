@@ -8,6 +8,37 @@
 
 namespace homeworldz::region {
 
+std::optional<std::array<float, 3>> resolve_region_teleport_position(
+    int region_grid_x, int region_grid_y, int region_size_x, int region_size_y,
+    std::uint64_t requested_handle, std::array<float, 3> requested_position) {
+    constexpr std::uint64_t map_cell_metres = 256;
+    if (region_grid_x < 0 || region_grid_y < 0 || region_size_x <= 0 || region_size_y <= 0 ||
+        region_size_x % map_cell_metres != 0 || region_size_y % map_cell_metres != 0 ||
+        !std::isfinite(requested_position[0]) || !std::isfinite(requested_position[1]) ||
+        !std::isfinite(requested_position[2]))
+        return std::nullopt;
+    const auto handle_x = requested_handle >> 32;
+    const auto handle_y = requested_handle & 0xffffffffULL;
+    if (handle_x % map_cell_metres != 0 || handle_y % map_cell_metres != 0) return std::nullopt;
+    const auto origin_x = static_cast<std::uint64_t>(region_grid_x) * map_cell_metres;
+    const auto origin_y = static_cast<std::uint64_t>(region_grid_y) * map_cell_metres;
+    if (handle_x < origin_x || handle_x >= origin_x + static_cast<std::uint64_t>(region_size_x) ||
+        handle_y < origin_y || handle_y >= origin_y + static_cast<std::uint64_t>(region_size_y))
+        return std::nullopt;
+
+    // Firestorm normally uses the Region's southwest handle and full variable-
+    // Region coordinates. Some map and SLURL paths instead quantize the handle
+    // to an internal 256 m tile and send coordinates relative to that tile.
+    if (handle_x != origin_x || handle_y != origin_y) {
+        requested_position[0] += static_cast<float>(handle_x - origin_x);
+        requested_position[1] += static_cast<float>(handle_y - origin_y);
+    }
+    if (requested_position[0] < 0.0F || requested_position[0] > region_size_x ||
+        requested_position[1] < 0.0F || requested_position[1] > region_size_y)
+        return std::nullopt;
+    return requested_position;
+}
+
 std::optional<AvatarBorderCrossing> plan_avatar_border_crossing(
     int source_grid_x, int source_grid_y, int source_size_x, int source_size_y,
     std::array<double, 3> source_position,

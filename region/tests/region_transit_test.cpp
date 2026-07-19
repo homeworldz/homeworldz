@@ -7,6 +7,23 @@ int main() {
     using namespace std::chrono_literals;
     const auto now = std::chrono::steady_clock::time_point{};
     constexpr std::string_view destination = "22222222-2222-4222-8222-222222222222";
+    const auto gamma_origin =
+        (static_cast<std::uint64_t>(1004 * 256) << 32) | static_cast<std::uint32_t>(1000 * 256);
+    const auto gamma_internal =
+        (static_cast<std::uint64_t>(1006 * 256) << 32) | static_cast<std::uint32_t>(1002 * 256);
+    const auto origin_teleport = homeworldz::region::resolve_region_teleport_position(
+        1004, 1000, 1024, 1024, gamma_origin, {512.0F, 512.0F, 30.0F});
+    if (!origin_teleport || *origin_teleport != std::array<float, 3>{512.0F, 512.0F, 30.0F})
+        return 1;
+    const auto tiled_teleport = homeworldz::region::resolve_region_teleport_position(
+        1004, 1000, 1024, 1024, gamma_internal, {0.0F, 0.0F, 30.0F});
+    if (!tiled_teleport || *tiled_teleport != std::array<float, 3>{512.0F, 512.0F, 30.0F})
+        return 1;
+    if (homeworldz::region::resolve_region_teleport_position(
+            1004, 1000, 1024, 1024, gamma_internal, {700.0F, 0.0F, 30.0F}) ||
+        homeworldz::region::resolve_region_teleport_position(
+            1004, 1000, 512, 512, gamma_internal, {0.0F, 0.0F, 30.0F}))
+        return 1;
     homeworldz::grid::AvatarTransit transit{
         "33333333-3333-4333-8333-333333333333", 1,
         "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",

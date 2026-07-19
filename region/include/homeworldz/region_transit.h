@@ -5,6 +5,7 @@
 #include <chrono>
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <span>
 #include <string>
@@ -23,6 +24,10 @@ std::optional<AvatarBorderCrossing> plan_avatar_border_crossing(
     int source_grid_x, int source_grid_y, int source_size_x, int source_size_y,
     std::array<double, 3> source_position,
     std::span<const grid::RegionNeighbor> neighbors, double destination_inset = 0.3);
+
+std::optional<std::array<float, 3>> resolve_region_teleport_position(
+    int region_grid_x, int region_grid_y, int region_size_x, int region_size_y,
+    std::uint64_t requested_handle, std::array<float, 3> requested_position);
 
 class InboundTransitRegistry {
 public:

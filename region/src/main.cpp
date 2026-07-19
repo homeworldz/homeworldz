@@ -2378,26 +2378,31 @@ int main(int argc, char* argv[]) {
                                 homeworldz::viewer::decode_teleport_location_request(packet->payload);
                             teleport && teleport->agent_id == identity->agent_id &&
                             teleport->session_id == identity->session_id) {
-                            const auto target = std::find_if(region_neighbors.begin(), region_neighbors.end(),
-                                [&](const homeworldz::grid::RegionNeighbor& neighbor) {
-                                    const auto handle =
-                                        (static_cast<std::uint64_t>(neighbor.grid_x * 256) << 32) |
-                                        static_cast<std::uint32_t>(neighbor.grid_y * 256);
-                                    return handle == teleport->region_handle;
-                                });
+                            const auto current_position =
+                                homeworldz::region::resolve_region_teleport_position(
+                                    region_grid_x, region_grid_y, region_size_x, region_size_y,
+                                    teleport->region_handle, teleport->position);
+                            const homeworldz::grid::RegionNeighbor* target = nullptr;
+                            std::optional<std::array<float, 3>> target_position;
+                            for (const auto& neighbor : region_neighbors) {
+                                auto resolved = homeworldz::region::resolve_region_teleport_position(
+                                    neighbor.grid_x, neighbor.grid_y, neighbor.size_x, neighbor.size_y,
+                                    teleport->region_handle, teleport->position);
+                                if (!resolved) continue;
+                                target = &neighbor;
+                                target_position = resolved;
+                                break;
+                            }
                             const auto fail_teleport = [&](std::string reason) {
                                 if (const auto failed = circuits.send(endpoint,
                                         homeworldz::viewer::encode_teleport_failed(
                                             {identity->agent_id, std::move(reason)}), true, now, true))
                                     static_cast<void>(send_udp(viewer_server, endpoint, *failed));
                             };
-                            const auto current_handle =
-                                (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
-                                static_cast<std::uint32_t>(region_grid_y * 256);
-                            if (teleport->region_handle == current_handle) {
+                            if (current_position) {
                                 const auto avatar = avatars.find(endpoint);
                                 const homeworldz::scene::Vector3 requested_position{
-                                    teleport->position[0], teleport->position[1], teleport->position[2]};
+                                    (*current_position)[0], (*current_position)[1], (*current_position)[2]};
                                 if (avatar == avatars.end() || requested_position.x < 0.0 ||
                                     requested_position.x > region_size_x || requested_position.y < 0.0 ||
                                     requested_position.y > region_size_y) {
@@ -2435,7 +2440,7 @@ int main(int argc, char* argv[]) {
                                                  "\"position\":[" << position.x << ',' << position.y << ','
                                               << position.z << "]}" << std::endl;
                                 }
-                            } else if (target == region_neighbors.end() || !target->online ||
+                            } else if (!target || !target_position || !target->online ||
 								!viewer_grid || !registration) {
                                 fail_teleport("Destination region is unavailable");
                             } else if (const auto simulator = simulator_event_endpoint(
@@ -2464,7 +2469,7 @@ int main(int argc, char* argv[]) {
                                         std::array<float, 3>{1.0F, 0.0F, 0.0F};
                                     const homeworldz::grid::AvatarTransitRequest transit_request{
                                         transit_id, agent_id, session_id, registration->region_id(),
-                                        target->id, teleport->position, look_direction, flying, 30};
+                                        target->id, *target_position, look_direction, flying, 30};
                                     const auto transit = viewer_grid->prepare_avatar_transit(transit_request);
                                     prepared = transit && transit->state == "prepared";
                                     if (!prepared) throw std::runtime_error("grid rejected transit preparation");
