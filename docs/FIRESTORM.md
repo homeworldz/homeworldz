@@ -1040,6 +1040,17 @@ tint, and physics properties across a Beta Region restart and a clean viewer
 relogin. The 2x2 acceptance scope is therefore complete; equivalent 4x4 live
 acceptance remains open.
 
+Initial 4x4 Gamma teleport acceptance passed on 2026-07-18. Firestorm displayed
+Gamma as one 1024 by 1024 metre Region and successfully teleported Jim Tarber
+into its southwest quadrant. A same-Region map teleport to the centre initially
+failed because Firestorm quantized the requested destination handle to the
+internal 256 m map tile and expected the simulator to map that tile back to the
+containing variable Region. HomeWorldz now accepts either the Region's
+southwest-origin handle with full Region-local coordinates or any covered tile
+handle with tile-local coordinates. After all cloud Regions received the fix,
+the same map action completed normally at approximately `(514, 514)` without a
+cross-Region transit.
+
 Same-region location teleport also passed on 2026-07-18. The Region recognizes
 its own handle, updates the avatar controller and Jolt character in place, and
 returns reliable UDP `TeleportLocal` without creating a Grid transit. A local
