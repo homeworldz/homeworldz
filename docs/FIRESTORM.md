@@ -1051,6 +1051,13 @@ handle with tile-local coordinates. After all cloud Regions received the fix,
 the same map action completed normally at approximately `(514, 514)` without a
 cross-Region transit.
 
+Continuous 4x4 movement acceptance passed immediately afterward. Starting near
+Gamma's centre, Jim flew east beyond local `x=768`, west across `x=512` and
+`x=256`, north beyond `y=768`, and south across `y=512` and `y=256`. Movement,
+terrain following, minimap position, and appearance remained stable across all
+six internal tile lines, and Firestorm continued treating Gamma as one Region
+without initiating a border crossing.
+
 Same-region location teleport also passed on 2026-07-18. The Region recognizes
 its own handle, updates the avatar controller and Jolt character in place, and
 returns reliable UDP `TeleportLocal` without creating a Grid transit. A local
