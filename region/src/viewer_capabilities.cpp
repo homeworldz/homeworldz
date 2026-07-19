@@ -101,6 +101,15 @@ std::string region_handle_binary(std::uint64_t handle) {
     return base64(bytes);
 }
 
+std::string u32_binary(std::uint32_t value) {
+    const std::array<std::uint8_t, 4> bytes{
+        static_cast<std::uint8_t>(value >> 24),
+        static_cast<std::uint8_t>(value >> 16),
+        static_cast<std::uint8_t>(value >> 8),
+        static_cast<std::uint8_t>(value)};
+    return base64(bytes);
+}
+
 std::string ip_binary(const SimulatorEventEndpoint& simulator) {
     return base64(simulator.address);
 }
@@ -173,24 +182,25 @@ std::string enable_simulator_event_xml(std::uint64_t region_handle,
            "<key>SimulatorInfo</key><array><map><key>Handle</key><binary>" +
            region_handle_binary(region_handle) + "</binary><key>IP</key><binary>" +
            ip_binary(simulator) + "</binary><key>Port</key><integer>" +
-           std::to_string(simulator.port) + "</integer><key>RegionSizeX</key><integer>" +
-           std::to_string(region_size_x) + "</integer><key>RegionSizeY</key><integer>" +
-           std::to_string(region_size_y) + "</integer></map></array></map></map>";
+           std::to_string(simulator.port) + "</integer><key>RegionSizeX</key><binary>" +
+           u32_binary(region_size_x) + "</binary><key>RegionSizeY</key><binary>" +
+           u32_binary(region_size_y) + "</binary></map></array></map></map>";
 }
 
 std::string teleport_finish_event_xml(const TeleportFinish& event) {
     return "<map><key>message</key><string>TeleportFinish</string><key>body</key><map>"
            "<key>Info</key><array><map><key>AgentID</key><uuid>" + xml_escape(event.agent_id) +
-           "</uuid><key>LocationID</key><integer>4</integer><key>RegionHandle</key><binary>" +
+           "</uuid><key>LocationID</key><binary>" + u32_binary(4) +
+           "</binary><key>RegionHandle</key><binary>" +
            region_handle_binary(event.region_handle) +
            "</binary><key>SeedCapability</key><string>" + xml_escape(event.seed_capability) +
            "</string><key>SimAccess</key><integer>" + std::to_string(event.simulator_access) +
            "</integer><key>SimIP</key><binary>" + ip_binary(event.simulator) +
            "</binary><key>SimPort</key><integer>" + std::to_string(event.simulator.port) +
-           "</integer><key>TeleportFlags</key><integer>" + std::to_string(event.teleport_flags) +
-           "</integer><key>RegionSizeX</key><integer>" + std::to_string(event.region_size_x) +
-           "</integer><key>RegionSizeY</key><integer>" + std::to_string(event.region_size_y) +
-           "</integer></map></array></map></map>";
+           "</integer><key>TeleportFlags</key><binary>" + u32_binary(event.teleport_flags) +
+           "</binary><key>RegionSizeX</key><binary>" + u32_binary(event.region_size_x) +
+           "</binary><key>RegionSizeY</key><binary>" + u32_binary(event.region_size_y) +
+           "</binary></map></array></map></map>";
 }
 
 std::string crossed_region_event_xml(const CrossedRegion& event) {
@@ -210,11 +220,9 @@ std::string crossed_region_event_xml(const CrossedRegion& event) {
            "</binary><key>SeedCapability</key><string>" + xml_escape(event.seed_capability) +
            "</string><key>SimIP</key><binary>" + ip_binary(event.simulator) +
            "</binary><key>SimPort</key><integer>" + std::to_string(event.simulator.port) +
-           "</integer><key>RegionSizeX</key><integer>" +
-           std::to_string(event.region_size_x) +
-           "</integer><key>RegionSizeY</key><integer>" +
-           std::to_string(event.region_size_y) +
-           "</integer></map></array></map></map>";
+           "</integer><key>RegionSizeX</key><binary>" + u32_binary(event.region_size_x) +
+           "</binary><key>RegionSizeY</key><binary>" + u32_binary(event.region_size_y) +
+           "</binary></map></array></map></map>";
 }
 
 std::string event_queue_xml(std::uint64_t id, const std::vector<std::string>& events) {

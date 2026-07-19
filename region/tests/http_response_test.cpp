@@ -172,8 +172,8 @@ int main() {
     passed &= contains(enable, "<key>Handle</key><binary>AQIDBAUGBwg=</binary>");
     passed &= contains(enable, "<key>IP</key><binary>wAACCg==</binary>");
     passed &= contains(enable, "<key>Port</key><integer>42002</integer>");
-    passed &= contains(enable, "<key>RegionSizeX</key><integer>512</integer>");
-    passed &= contains(enable, "<key>RegionSizeY</key><integer>512</integer>");
+    passed &= contains(enable, "<key>RegionSizeX</key><binary>AAACAA==</binary>");
+    passed &= contains(enable, "<key>RegionSizeY</key><binary>AAACAA==</binary>");
     const auto teleport_finish = homeworldz::viewer::teleport_finish_event_xml({
         "11111111-2222-4333-8444-555555555555", 0x0102030405060708ULL, event_endpoint,
         "https://region.example/caps/seed/session&amp;id", 13,
@@ -182,15 +182,16 @@ int main() {
     passed &= contains(teleport_finish, "<key>RegionHandle</key><binary>AQIDBAUGBwg=</binary>");
     passed &= contains(teleport_finish, "<key>SeedCapability</key><string>https://region.example/caps/seed/session&amp;amp;id</string>");
     passed &= contains(teleport_finish, "<key>SimAccess</key><integer>13</integer>");
-    passed &= contains(teleport_finish, "<key>TeleportFlags</key><integer>16</integer>");
-    passed &= contains(teleport_finish, "<key>RegionSizeX</key><integer>1024</integer>");
-    passed &= contains(teleport_finish, "<key>RegionSizeY</key><integer>1024</integer>");
+    passed &= contains(teleport_finish, "<key>LocationID</key><binary>AAAABA==</binary>");
+    passed &= contains(teleport_finish, "<key>TeleportFlags</key><binary>AAAAEA==</binary>");
+    passed &= contains(teleport_finish, "<key>RegionSizeX</key><binary>AAAEAA==</binary>");
+    passed &= contains(teleport_finish, "<key>RegionSizeY</key><binary>AAAEAA==</binary>");
     const auto flying_finish = homeworldz::viewer::teleport_finish_event_xml({
         "11111111-2222-4333-8444-555555555555", 0x0102030405060708ULL, event_endpoint,
         "https://region.example/caps/seed/session", 13,
         homeworldz::viewer::teleport_flags_via_location |
             homeworldz::viewer::teleport_flags_is_flying});
-    passed &= contains(flying_finish, "<key>TeleportFlags</key><integer>8208</integer>");
+    passed &= contains(flying_finish, "<key>TeleportFlags</key><binary>AAAgEA==</binary>");
     const auto crossed = homeworldz::viewer::crossed_region_event_xml({
         "11111111-2222-4333-8444-555555555555",
         "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
@@ -204,8 +205,8 @@ int main() {
     passed &= contains(crossed, "<key>SeedCapability</key><string>https://region.example/caps/seed/session&amp;amp;id</string>");
     passed &= contains(crossed, "<key>SimIP</key><binary>wAACCg==</binary>");
     passed &= contains(crossed, "<key>SimPort</key><integer>42002</integer>");
-    passed &= contains(crossed, "<key>RegionSizeX</key><integer>512</integer>");
-    passed &= contains(crossed, "<key>RegionSizeY</key><integer>768</integer>");
+    passed &= contains(crossed, "<key>RegionSizeX</key><binary>AAACAA==</binary>");
+    passed &= contains(crossed, "<key>RegionSizeY</key><binary>AAADAA==</binary>");
     passed &= contains(crossed, "<key>Position</key><array><real>1.250000</real><real>255.500000</real><real>30.000000</real></array>");
     passed &= contains(crossed, "<key>LookAt</key><array><real>0.500000</real><real>-0.250000</real><real>0.000000</real></array>");
     const auto simulator_features = homeworldz::viewer::simulator_features_xml(
