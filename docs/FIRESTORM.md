@@ -1058,6 +1058,16 @@ terrain following, minimap position, and appearance remained stable across all
 six internal tile lines, and Firestorm continued treating Gamma as one Region
 without initiating a border crossing.
 
+The remaining Gamma 4x4 acceptance passed after a clean Region restart and
+viewer relog. In the far northeast quadrant, Jim made a visible terrain edit
+and created the nonphysical `Gamma Persistence` prim at approximately
+`(826, 786, 24)` with size `2 x 3 x 1`, Z rotation `30` degrees, and a
+distinctive tint. The world map updated while the Region was live. After the
+restart, the terrain data was byte-for-byte unchanged and the prim retained its
+name, transform, tint, and physical state; Firestorm confirmed the terrain,
+object properties, avatar appearance, Current Outfit, minimap, and world map.
+Live acceptance of all three supported Region sizes is therefore complete.
+
 Same-region location teleport also passed on 2026-07-18. The Region recognizes
 its own handle, updates the avatar controller and Jolt character in place, and
 returns reliable UDP `TeleportLocal` without creating a Grid transit. A local

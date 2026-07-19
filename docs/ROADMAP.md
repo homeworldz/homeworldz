@@ -27,7 +27,7 @@ when scope or implementation evidence changes.
 | Phase | Progress | Estimate |
 | --- | --- | ---: |
 | 1. Functional Single-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="98" aria-label="Phase 1 progress: 98%">98%</progress> | 98% |
-| 2. Connected Multi-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="66" aria-label="Phase 2 progress: 66%">66%</progress> | 66% |
+| 2. Connected Multi-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="70" aria-label="Phase 2 progress: 70%">70%</progress> | 70% |
 | 3. Interactive Physical World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="39" aria-label="Phase 3 progress: 39%">39%</progress> | 39% |
 | 4. LSL Scripting | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="2" aria-label="Phase 4 progress: 2%">2%</progress> | 2% |
 | 5. Social and Creator Platform | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="7" aria-label="Phase 5 progress: 7%">7%</progress> | 7% |
@@ -147,7 +147,7 @@ attachments, vehicles, authority transfer, or another active Phase 2 item.
   internal 256 metre lines.
 - [x] Complete 2x2 terrain editing, object persistence, map-idle, and restart
   acceptance in the live Beta Region.
-- [ ] Repeat the full variable-size acceptance suite in a 4x4 Region.
+- [x] Repeat the full variable-size acceptance suite in a 4x4 Region.
 - [x] Prevent overlaps and invalid neighbor layouts and define behavior beside
   offline or differently sized regions.
 
