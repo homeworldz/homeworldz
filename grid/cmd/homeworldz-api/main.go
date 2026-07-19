@@ -1,4 +1,4 @@
-// Command website-api serves the browser-facing HomeWorldz website API
+// Command homeworldz-api serves the browser-facing HomeWorldz website API
 // (homeworldz.com/api/openapi.yaml): email-verified avatar registration,
 // stateless website authentication, self-service account management, and
 // privileged administration. It runs as its own binary on its own port,
@@ -23,7 +23,7 @@ import (
 	"github.com/homeworldz/homeworldz/grid/internal/provisioning"
 	"github.com/homeworldz/homeworldz/grid/internal/regions"
 	"github.com/homeworldz/homeworldz/grid/internal/webaccount"
-	"github.com/homeworldz/homeworldz/grid/internal/webapi"
+	"github.com/homeworldz/homeworldz/grid/internal/api"
 	"github.com/homeworldz/homeworldz/grid/internal/webtoken"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -65,7 +65,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	handler, err := webapi.New(webapi.Options{
+	handler, err := api.New(api.Options{
 		Accounts:        webaccount.NewPostgresStore(db),
 		Regions:         provisioning.NewPostgresStore(db),
 		Leases:          regions.NewPostgresStore(db),

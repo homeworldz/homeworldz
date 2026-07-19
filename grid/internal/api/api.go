@@ -1,4 +1,4 @@
-// Package webapi implements the browser-facing HomeWorldz website API described
+// Package api implements the browser-facing HomeWorldz website API described
 // by homeworldz.com/api/openapi.yaml: email-verified avatar registration,
 // stateless website authentication, self-service account management, and
 // privileged user/ban/region administration.
@@ -7,7 +7,7 @@
 // from viewer login: it runs as its own binary on its own port, applies a
 // browser-oriented middleware chain (CORS, rate limiting), and authenticates
 // with short-lived website JWTs that carry no in-world meaning.
-package webapi
+package api
 
 import (
 	"context"
@@ -92,10 +92,10 @@ type API struct {
 // New validates options and returns the composed website API handler.
 func New(options Options) (http.Handler, error) {
 	if options.Signer == nil {
-		return nil, errors.New("webapi: signer is required")
+		return nil, errors.New("api: signer is required")
 	}
 	if options.Mailer == nil {
-		return nil, errors.New("webapi: mailer is required")
+		return nil, errors.New("api: mailer is required")
 	}
 	origins := map[string]bool{}
 	for _, origin := range options.AllowedOrigins {

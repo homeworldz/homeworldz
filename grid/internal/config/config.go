@@ -19,7 +19,7 @@ type Grid struct {
 	Directory    string
 
 	// Website API ([website] and [mail] sections). These configure the
-	// separate browser-facing website-api binary; the grid binary ignores them.
+	// separate browser-facing homeworldz-api binary; the grid binary ignores them.
 	WebsiteAddress        string
 	WebsiteAllowedOrigins []string
 	WebsiteJWTSecret      string
