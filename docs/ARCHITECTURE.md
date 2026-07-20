@@ -267,6 +267,10 @@ adapter boundary as an evaluated alternative. See [PHYSICS.md](PHYSICS.md) and
 
 ## Asset Architecture
 
+See [ASSETS.md](ASSETS.md) for the full asset design: region storage, inventory
+asset references, federation, teleport/crossing behavior, and cross-border
+observation.
+
 Assets should be primarily region-local.
 
 Each region server should be able to store and serve the assets needed by its
