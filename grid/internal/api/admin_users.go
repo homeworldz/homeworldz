@@ -100,7 +100,10 @@ func (a *API) adminUpdateUser(w http.ResponseWriter, r *http.Request, id string)
 	_, err := a.accounts.UpdateProfile(r.Context(), id, *request.DisplayName)
 	switch {
 	case errors.Is(err, webaccount.ErrInvalidDisplayName):
-		writeError(w, http.StatusBadRequest, Error{Code: "invalid_display_name", Message: "display name must be 1-64 characters", Field: "displayName"})
+		writeError(w, http.StatusBadRequest, Error{Code: "invalid_display_name", Message: "display name must be two words that form a 3-32 character userid", Field: "displayName"})
+		return
+	case errors.Is(err, webaccount.ErrDisplayNameTaken):
+		writeError(w, http.StatusConflict, Error{Code: "display_name_taken", Message: "that display name is already in use", Field: "displayName"})
 		return
 	case errors.Is(err, webaccount.ErrNotFound):
 		a.writeNotFound(w)

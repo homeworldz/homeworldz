@@ -27,6 +27,9 @@ import (
 var (
 	// ErrConflict indicates the derived userid is already registered.
 	ErrConflict = errors.New("userid is already registered")
+	// ErrDisplayNameTaken indicates a display name whose normalized form already
+	// matches another account's display name or userid.
+	ErrDisplayNameTaken = errors.New("display name is already in use")
 	// ErrNotFound indicates no such account.
 	ErrNotFound = errors.New("account not found")
 	// ErrInvalidCredentials indicates a failed login or an unverified account.
@@ -296,12 +299,22 @@ func (s *PostgresStore) ResendVerification(ctx context.Context, userid string) (
 
 // Authenticate verifies a password for a verified account and returns it. An
 // unverified account or a wrong password both yield ErrInvalidCredentials.
-func (s *PostgresStore) Authenticate(ctx context.Context, userid, password string) (Account, error) {
+func (s *PostgresStore) Authenticate(ctx context.Context, ident, password string) (Account, error) {
+	// Accept either the userid or the display name: normalize the supplied
+	// identifier and match it against the userid or the normalized display name.
+	// Uniqueness (username unique + display_name_key unique, and the cross-check
+	// in registration/UpdateProfile) guarantees at most one match.
+	key := DeriveUserid(ident)
+	if key == "" {
+		return Account{}, ErrInvalidCredentials
+	}
 	var passwordHash sql.NullString
 	var id string
 	err := s.db.QueryRowContext(ctx,
-		"SELECT id, password_hash FROM users WHERE username = $1 AND verified_at IS NOT NULL",
-		userid).Scan(&id, &passwordHash)
+		`SELECT id, password_hash FROM users
+		   WHERE (username = $1 OR display_name_key = $1) AND verified_at IS NOT NULL
+		   LIMIT 1`,
+		key).Scan(&id, &passwordHash)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Account{}, ErrInvalidCredentials
 	}
@@ -341,17 +354,40 @@ func (s *PostgresStore) GetManaged(ctx context.Context, id string) (ManagedAccou
 }
 
 // UpdateProfile updates the display name of an account and returns it. It does
-// not change the userid, which is fixed at registration.
+// not change the userid, which is fixed at registration. The new display name
+// must be two words yielding a valid userid form, and its normalized key must
+// not collide with any other account's userid or normalized display name.
 func (s *PostgresStore) UpdateProfile(ctx context.Context, id, displayName string) (Account, error) {
-	name := strings.TrimSpace(displayName)
-	if name == "" || len(name) > 64 {
-		return Account{}, ErrInvalidDisplayName
+	key, err := ValidateDisplayName(displayName)
+	if err != nil {
+		return Account{}, err
 	}
+	name := strings.TrimSpace(displayName)
+
+	// Reject a normalized display name that matches another account's userid or
+	// normalized display name. The unique index on display_name_key is the
+	// backstop against a concurrent writer racing between this check and the
+	// UPDATE; it surfaces as a 23505 handled below.
+	var taken bool
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT EXISTS(SELECT 1 FROM users
+		   WHERE id <> $1 AND (username = $2 OR display_name_key = $2))`,
+		id, key).Scan(&taken); err != nil {
+		return Account{}, fmt.Errorf("check display name: %w", err)
+	}
+	if taken {
+		return Account{}, ErrDisplayNameTaken
+	}
+
 	row := s.db.QueryRowContext(ctx,
 		"UPDATE users SET display_name = $2 WHERE id = $1 RETURNING "+accountColumns, id, name)
 	account, err := scanAccount(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Account{}, ErrNotFound
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		return Account{}, ErrDisplayNameTaken
 	}
 	if err != nil {
 		return Account{}, fmt.Errorf("update profile: %w", err)
