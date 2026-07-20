@@ -5,6 +5,7 @@
 #include <vector>
 
 int main() {
+    using namespace std::string_literals;
     using homeworldz::script::FalconHostMessage;
     using homeworldz::script::FalconRuntime;
     using homeworldz::script::Identity;
@@ -26,10 +27,21 @@ int main() {
            messages[0].identity.inventory_item_id == "item");
 
     messages.clear();
+    const std::string firestorm_source =
+        "default { state_entry() { llOwnerSay(\"saved\"); } }\0"s;
+    const auto firestorm_upload = runtime.rez(
+        {"firestorm-asset", "firestorm-item", "firestorm-object", "owner"},
+        firestorm_source, true);
+    assert(firestorm_upload.compiled && firestorm_upload.running);
+    runtime.run_tick();
+    assert(messages.size() == 1 && messages[0].owner_only &&
+           messages[0].text == "saved");
+
+    messages.clear();
     const auto stopped = runtime.rez(
         {"asset2", "item2", "object", "owner"},
         "default { state_entry() { llOwnerSay(\"not yet\"); } }", false);
-    assert(stopped.compiled && !stopped.running && runtime.size() == 2);
+    assert(stopped.compiled && !stopped.running && runtime.size() == 3);
     runtime.run_tick();
     assert(messages.empty());
     assert(runtime.set_enabled("object", "item2", true));
@@ -39,8 +51,8 @@ int main() {
     const auto invalid = runtime.rez(
         {"bad", "bad", "object", "owner"},
         "default { state_entry() { integer value = \"bad\"; } }", true);
-    assert(!invalid.compiled && !invalid.diagnostic.empty() && runtime.size() == 2);
+    assert(!invalid.compiled && !invalid.diagnostic.empty() && runtime.size() == 3);
 
-    assert(runtime.erase("object", "item") && runtime.size() == 1);
+    assert(runtime.erase("object", "item") && runtime.size() == 2);
     return 0;
 }

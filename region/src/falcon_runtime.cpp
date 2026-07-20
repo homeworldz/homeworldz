@@ -63,6 +63,9 @@ FalconRuntime::~FalconRuntime() = default;
 FalconRezResult FalconRuntime::rez(Identity identity, std::string_view source,
                                    bool enabled) {
     try {
+        // Firestorm terminates script-editor uploads with a wire-format NUL.
+        // It is not part of the LSL source and must not reach the lexer.
+        while (!source.empty() && source.back() == '\0') source.remove_suffix(1);
         auto program = compile_source(std::string(source));
         auto live = std::make_unique<Impl::LiveScript>(
             identity, std::move(program), enabled, impl_->sink);
