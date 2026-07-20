@@ -353,10 +353,13 @@ std::string inventory_asset_update_upload_xml(std::string_view uploader) {
            "<key>uploader</key><uri>" + xml_escape(uploader) + "</uri></map></llsd>";
 }
 
-std::string inventory_asset_update_complete_xml(std::string_view asset_id, bool script) {
+std::string inventory_asset_update_complete_xml(
+    std::string_view asset_id, bool script, bool compiled) {
     return "<?xml version=\"1.0\"?><llsd><map><key>state</key><string>complete</string>"
            "<key>new_asset</key><uuid>" + xml_escape(asset_id) + "</uuid>" +
-           (script ? "<key>compiled</key><boolean>false</boolean>" : "") +
+           (script ? std::string("<key>compiled</key><boolean>") +
+                         (compiled ? "true" : "false") + "</boolean>"
+                   : "") +
            "</map></llsd>";
 }
 

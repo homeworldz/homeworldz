@@ -292,6 +292,9 @@ int main() {
         "33333333-3333-4333-8333-333333333333", true);
     passed &= contains(update_complete, "<key>new_asset</key><uuid>33333333-3333-4333-8333-333333333333</uuid>") &&
               contains(update_complete, "<key>compiled</key><boolean>false</boolean>");
+    const auto compiled_update = homeworldz::viewer::inventory_asset_update_complete_xml(
+        "33333333-3333-4333-8333-333333333333", true, true);
+    passed &= contains(compiled_update, "<key>compiled</key><boolean>true</boolean>");
     const auto random_id = homeworldz::viewer::random_uuid();
     passed &= random_id.size() == 36 && random_id[14] == '4' && random_id[19] >= '8' && random_id[19] <= 'b';
 

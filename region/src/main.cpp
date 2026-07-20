@@ -28,6 +28,7 @@
 
 #include "homeworldz/api_models.h"
 #include "homeworldz/avatar_controller.h"
+#include "homeworldz/falcon_runtime.h"
 #include "homeworldz/grid_client.h"
 #include "homeworldz/http_response.h"
 #include "homeworldz/inventory_asset.h"
@@ -1478,6 +1479,64 @@ int main(int argc, char* argv[]) {
     std::vector<PendingAgentMovementComplete> pending_agent_movement_completes;
     std::uint64_t event_id{};
     std::uint64_t next_inventory_asset_xfer{1};
+    homeworldz::script::FalconRuntime falcon([&](homeworldz::script::FalconHostMessage message) {
+        if (message.text.empty() || message.text.size() > 1023) return;
+        const auto object_id = homeworldz::viewer::parse_uuid(message.identity.object_id);
+        const auto owner_id = homeworldz::viewer::parse_uuid(message.identity.owner_id);
+        if (!object_id || !owner_id) return;
+        const homeworldz::scene::Entity* speaker = nullptr;
+        for (const auto& [entity_id, candidate] : scene.entities()) {
+            static_cast<void>(entity_id);
+            if (candidate.object_id == message.identity.object_id) {
+                speaker = &candidate;
+                break;
+            }
+        }
+        if (!speaker) return;
+        if (!message.owner_only && message.channel != 0) return;
+
+        homeworldz::viewer::ChatFromSimulator chat;
+        chat.from_name = speaker->name.empty() ? "Object" : speaker->name;
+        chat.source_id = *object_id;
+        chat.owner_id = *owner_id;
+        chat.source_type = 0x02;
+        chat.chat_type = message.owner_only ? 0x08 : 0x01;
+        chat.audible = 0x01;
+        chat.position = {static_cast<float>(speaker->position.x),
+                         static_cast<float>(speaker->position.y),
+                         static_cast<float>(speaker->position.z)};
+        chat.message = std::move(message.text);
+        const auto payload = homeworldz::viewer::encode_chat_from_simulator(chat);
+        const auto sent_at = std::chrono::steady_clock::now();
+        for (const auto& [recipient_endpoint, recipient] : avatars) {
+            if (message.owner_only) {
+                if (recipient.user_id != message.identity.owner_id) continue;
+            } else {
+                const auto& target = recipient.controller.state().position;
+                const auto dx = target.x - speaker->position.x;
+                const auto dy = target.y - speaker->position.y;
+                const auto dz = target.z - speaker->position.z;
+                if (dx * dx + dy * dy + dz * dz > 20.0 * 20.0) continue;
+            }
+            if (const auto outgoing = circuits.send(
+                    recipient_endpoint, payload, true, sent_at))
+                static_cast<void>(send_udp(viewer_server, recipient_endpoint, *outgoing));
+        }
+    });
+    const auto rez_task_script = [&](const homeworldz::scene::Entity& entity,
+                                     const homeworldz::scene::TaskInventoryItem& item,
+                                     bool enabled) {
+        try {
+            const auto asset = read_federated_asset(item.asset_id);
+            const auto source = std::string(
+                reinterpret_cast<const char*>(asset.data()), asset.size());
+            return falcon.rez(
+                {item.asset_id, item.item_id, entity.object_id, entity.owner_id},
+                source, enabled);
+        } catch (const std::exception& error) {
+            return homeworldz::script::FalconRezResult{false, false, error.what()};
+        }
+    };
     const auto clear_viewer_endpoint = [&](const std::string& endpoint, const std::string& session_id) {
         if (const auto live = avatars.find(endpoint); live != avatars.end() &&
             physics_world && live->second.physics_character != 0)
@@ -2112,6 +2171,7 @@ int main(int argc, char* argv[]) {
                             } else {
                                 const auto update = pending->second;
                                 bool stored = false;
+                                std::optional<homeworldz::script::FalconRezResult> compiled;
                                 try {
                                     const auto content = std::span(
                                         reinterpret_cast<const std::byte*>(body.data()), body.size());
@@ -2166,11 +2226,28 @@ int main(int argc, char* argv[]) {
                                     std::cerr << "{\"level\":\"error\",\"message\":\"inventory asset update failed\",\"error\":"
                                               << homeworldz::api::json_string(error.what()) << "}" << std::endl;
                                 }
+                                if (stored && update.asset_type == 10 &&
+                                    !update.task_id.empty()) {
+                                    homeworldz::scene::Entity* task_entity = nullptr;
+                                    for (const auto& [id, candidate] : scene.entities()) {
+                                        if (candidate.object_id == update.task_id) {
+                                            task_entity = scene.find(id);
+                                            break;
+                                        }
+                                    }
+                                    if (task_entity) {
+                                        compiled = falcon.rez(
+                                            {update.asset_id, update.item_id,
+                                             task_entity->object_id, task_entity->owner_id},
+                                            body, update.script_running);
+                                    }
+                                }
                                 response = stored
                                     ? homeworldz::http::response_for_content(
                                           request, 200, "application/llsd+xml",
                                           homeworldz::viewer::inventory_asset_update_complete_xml(
-                                              update.asset_id, update.asset_type == 10))
+                                              update.asset_id, update.asset_type == 10,
+                                              compiled && compiled->compiled))
                                     : homeworldz::http::response_for_content(
                                           request, 500, "application/llsd+xml", "<llsd><undef/></llsd>");
                                 std::cout << "{\"level\":" << (stored ? "\"info\"" : "\"warn\"")
@@ -2180,6 +2257,13 @@ int main(int argc, char* argv[]) {
                                           << ",\"assetId\":" << homeworldz::api::json_string(update.asset_id)
                                           << ",\"assetType\":" << static_cast<int>(update.asset_type)
                                           << ",\"taskId\":" << homeworldz::api::json_string(update.task_id)
+                                          << ",\"compiled\":"
+                                          << (compiled ? (compiled->compiled ? "true" : "false") : "null")
+                                          << ",\"running\":"
+                                          << (compiled ? (compiled->running ? "true" : "false") : "null")
+                                          << ",\"diagnostic\":"
+                                          << homeworldz::api::json_string(
+                                                 compiled ? compiled->diagnostic : std::string{})
                                           << ",\"bytes\":" << body.size() << "}" << std::endl;
                                 pending_inventory_asset_updates.erase(pending);
                             }
@@ -2592,6 +2676,7 @@ int main(int argc, char* argv[]) {
                             bool changed = false;
                             std::string operation{"copy"};
                             std::string task_item_id;
+                            std::optional<homeworldz::script::FalconRezResult> compiled;
                             try {
                                 if (entity && entity->owner_id == agent_id &&
                                     (entity->owner_permissions &
@@ -2719,6 +2804,17 @@ int main(int argc, char* argv[]) {
                                           << homeworldz::api::json_string(error.what()) << "}"
                                           << std::endl;
                             }
+                            if (changed && entity) {
+                                const auto item = std::find_if(
+                                    entity->task_inventory.begin(),
+                                    entity->task_inventory.end(),
+                                    [&](const auto& candidate) {
+                                        return candidate.item_id == task_item_id;
+                                    });
+                                if (item != entity->task_inventory.end())
+                                    compiled = rez_task_script(
+                                        *entity, *item, rez_script->enabled);
+                            }
                             bool refresh_sent = false;
                             if (changed && entity) {
                                 const auto task_id =
@@ -2752,6 +2848,13 @@ int main(int argc, char* argv[]) {
                                       << homeworldz::api::json_string(task_item_id)
                                       << ",\"enabled\":"
                                       << (rez_script->enabled ? "true" : "false")
+                                      << ",\"compiled\":"
+                                      << (compiled ? (compiled->compiled ? "true" : "false") : "null")
+                                      << ",\"running\":"
+                                      << (compiled ? (compiled->running ? "true" : "false") : "null")
+                                      << ",\"diagnostic\":"
+                                      << homeworldz::api::json_string(
+                                             compiled ? compiled->diagnostic : std::string{})
                                       << ",\"refreshSent\":"
                                       << (refresh_sent ? "true" : "false") << "}"
                                       << std::endl;
@@ -2977,6 +3080,7 @@ int main(int argc, char* argv[]) {
                                     try {
                                         if (storage) storage->save_snapshot(scene);
                                         removed = true;
+                                        static_cast<void>(falcon.erase(entity->object_id, item_id));
                                     } catch (const std::exception& error) {
                                         entity->task_inventory.insert(
                                             entity->task_inventory.begin() + index, original);
@@ -5676,6 +5780,14 @@ int main(int argc, char* argv[]) {
             }
             if (queue.empty()) iterator = texture_packets.erase(iterator);
             else ++iterator;
+        }
+        const auto script_tick = falcon.run_tick();
+        if (script_tick.trapped != 0) {
+            std::cerr << "{\"level\":\"warning\",\"message\":\"Falcon script runtime trapped\","
+                         "\"scriptsVisited\":"
+                      << script_tick.scripts_visited << ",\"instructions\":"
+                      << script_tick.instructions << ",\"trapped\":"
+                      << script_tick.trapped << "}" << std::endl;
         }
         const auto elapsed = std::chrono::duration<double>(now - previous_tick).count();
         const auto fixed_steps = simulation.advance(elapsed);

@@ -33,6 +33,5 @@ else()
 endif()
 
 enable_testing()
-add_subdirectory(region)
 add_subdirectory(script)
-
+add_subdirectory(region)

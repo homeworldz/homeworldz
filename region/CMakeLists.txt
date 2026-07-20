@@ -1,6 +1,7 @@
 add_library(homeworldz-region-core
   src/avatar_controller.cpp
   src/api_models.cpp
+  src/falcon_runtime.cpp
   src/grid_client.cpp
   src/http_response.cpp
   src/inventory_asset.cpp
@@ -20,7 +21,7 @@ target_include_directories(homeworldz-region-core PUBLIC include)
 target_compile_features(homeworldz-region-core PUBLIC cxx_std_20)
 target_compile_definitions(homeworldz-region-core PUBLIC
   HOMEWORLDZ_VERSION="${HOMEWORLDZ_VERSION}")
-target_link_libraries(homeworldz-region-core PUBLIC homeworldz-sqlite)
+target_link_libraries(homeworldz-region-core PUBLIC homeworldz-sqlite homeworldz-script)
 if(HOMEWORLDZ_JOLT_AVAILABLE)
   target_sources(homeworldz-region-core PRIVATE src/jolt_world.cpp)
   target_link_libraries(homeworldz-region-core PUBLIC Jolt::Jolt)
@@ -98,6 +99,10 @@ add_test(NAME region-terrain-edit COMMAND homeworldz-terrain-edit-tests)
 add_executable(homeworldz-script-runtime-tests tests/script_runtime_test.cpp)
 target_link_libraries(homeworldz-script-runtime-tests PRIVATE homeworldz-region-core)
 add_test(NAME region-script-runtime COMMAND homeworldz-script-runtime-tests)
+
+add_executable(homeworldz-falcon-runtime-tests tests/falcon_runtime_test.cpp)
+target_link_libraries(homeworldz-falcon-runtime-tests PRIVATE homeworldz-region-core)
+add_test(NAME region-falcon-runtime COMMAND homeworldz-falcon-runtime-tests)
 
 if(HOMEWORLDZ_JOLT_AVAILABLE AND HOMEWORLDZ_PHYSX_AVAILABLE)
   add_executable(homeworldz-physics-adapter-smoke tests/physics_adapters_test.cpp)
