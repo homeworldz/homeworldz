@@ -2247,7 +2247,8 @@ int main(int argc, char* argv[]) {
                                           request, 200, "application/llsd+xml",
                                           homeworldz::viewer::inventory_asset_update_complete_xml(
                                               update.asset_id, update.asset_type == 10,
-                                              compiled && compiled->compiled))
+                                              compiled && compiled->compiled,
+                                              compiled ? compiled->diagnostic : std::string{}))
                                     : homeworldz::http::response_for_content(
                                           request, 500, "application/llsd+xml", "<llsd><undef/></llsd>");
                                 std::cout << "{\"level\":" << (stored ? "\"info\"" : "\"warn\"")

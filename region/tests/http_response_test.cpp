@@ -295,6 +295,12 @@ int main() {
     const auto compiled_update = homeworldz::viewer::inventory_asset_update_complete_xml(
         "33333333-3333-4333-8333-333333333333", true, true);
     passed &= contains(compiled_update, "<key>compiled</key><boolean>true</boolean>");
+    const auto failed_compile = homeworldz::viewer::inventory_asset_update_complete_xml(
+        "33333333-3333-4333-8333-333333333333", true, false,
+        "unexpected token <name> & value");
+    passed &= contains(failed_compile, "<key>compiled</key><boolean>false</boolean>") &&
+              contains(failed_compile,
+                  "<key>errors</key><array><string>unexpected token &lt;name&gt; &amp; value</string></array>");
     const auto random_id = homeworldz::viewer::random_uuid();
     passed &= random_id.size() == 36 && random_id[14] == '4' && random_id[19] >= '8' && random_id[19] <= 'b';
 

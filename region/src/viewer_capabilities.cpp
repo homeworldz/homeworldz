@@ -354,12 +354,17 @@ std::string inventory_asset_update_upload_xml(std::string_view uploader) {
 }
 
 std::string inventory_asset_update_complete_xml(
-    std::string_view asset_id, bool script, bool compiled) {
+    std::string_view asset_id, bool script, bool compiled,
+    std::string_view diagnostic) {
     return "<?xml version=\"1.0\"?><llsd><map><key>state</key><string>complete</string>"
            "<key>new_asset</key><uuid>" + xml_escape(asset_id) + "</uuid>" +
            (script ? std::string("<key>compiled</key><boolean>") +
                          (compiled ? "true" : "false") + "</boolean>"
                    : "") +
+           (script && !diagnostic.empty()
+                ? "<key>errors</key><array><string>" + xml_escape(diagnostic) +
+                      "</string></array>"
+                : "") +
            "</map></llsd>";
 }
 

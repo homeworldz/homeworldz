@@ -85,7 +85,8 @@ bool valid_new_file_inventory_upload_content(const NewFileInventoryUpload& uploa
 std::optional<InventoryAssetUpdate> parse_inventory_asset_update(std::string_view xml);
 std::string inventory_asset_update_upload_xml(std::string_view uploader);
 std::string inventory_asset_update_complete_xml(
-    std::string_view asset_id, bool script, bool compiled = false);
+    std::string_view asset_id, bool script, bool compiled = false,
+    std::string_view diagnostic = {});
 std::string new_file_inventory_upload_xml(std::string_view uploader);
 std::string new_file_inventory_complete_xml(std::string_view item_id, std::string_view asset_id,
                                             std::uint32_t everyone_permissions,
