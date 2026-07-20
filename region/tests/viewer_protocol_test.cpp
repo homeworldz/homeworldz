@@ -1123,6 +1123,65 @@ bool default_primitive_texture() {
         viewer_default[19] != std::byte{0x55}) return false;
     return !normalize_primitive_texture_entry(viewer_default, entry);
 }
+
+bool transfer_codecs() {
+    const auto transfer = parse_uuid("12345678-90ab-4cde-8f01-234567890abc");
+    const auto agent = parse_uuid("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");
+    const auto session = parse_uuid("11111111-2222-4333-8444-555555555555");
+    const auto task = parse_uuid("00000000-0000-0000-0000-000000000000");
+    const auto item = parse_uuid("22222222-3333-4444-8555-666666666666");
+    const auto asset = parse_uuid("33333333-4444-4555-8666-777777777777");
+    if (!transfer || !agent || !session || !task || !item || !asset) return false;
+
+    const auto u32 = [](std::vector<std::byte>& out, std::uint32_t value) {
+        for (int i = 0; i < 4; ++i) out.push_back(static_cast<std::byte>((value >> (i * 8)) & 0xff));
+    };
+
+    std::vector<std::byte> params; // SIM_INV_ITEM: agent, session, owner, task, item, asset, type
+    for (const auto* id : {&*agent, &*session, &*agent, &*task, &*item, &*asset})
+        params.insert(params.end(), id->begin(), id->end());
+    u32(params, 10); // asset type = LSL text
+    if (params.size() != 100) return false;
+
+    auto payload = bytes({0xff, 0xff, 0x00, 0x99});
+    payload.insert(payload.end(), transfer->begin(), transfer->end());
+    u32(payload, static_cast<std::uint32_t>(transfer_channel_asset));
+    u32(payload, static_cast<std::uint32_t>(transfer_source_sim_inv_item));
+    u32(payload, 0); // priority (F32 bits 0.0)
+    payload.push_back(static_cast<std::byte>(params.size() & 0xff));
+    payload.push_back(static_cast<std::byte>((params.size() >> 8) & 0xff));
+    payload.insert(payload.end(), params.begin(), params.end());
+
+    const auto decoded = decode_transfer_request(payload);
+    if (!decoded) return false;
+    if (decoded->transfer_id != *transfer || decoded->channel_type != transfer_channel_asset ||
+        decoded->source_type != transfer_source_sim_inv_item)
+        return false;
+    if (decoded->agent_id != *agent || decoded->session_id != *session ||
+        decoded->item_id != *item || decoded->asset_id != *asset || decoded->asset_type != 10)
+        return false;
+    if (decoded->params.size() != 100) return false;
+
+    // TransferInfo echoes the params and is Low 154.
+    const auto info = encode_transfer_info(*transfer, transfer_channel_asset, transfer_status_ok,
+                                           42, decoded->params);
+    if (info.size() != 4 + 16 + 4 + 4 + 4 + 4 + 2 + 100) return false;
+    if (info[0] != std::byte{0xff} || info[1] != std::byte{0xff} || info[2] != std::byte{0x00} ||
+        info[3] != std::byte{0x9a})
+        return false;
+
+    // TransferPacket is High 17 and carries the (final) chunk.
+    const auto data = bytes({'d', 'e', 'f', 'a', 'u', 'l', 't'});
+    const auto pkt = encode_transfer_packet(*transfer, transfer_channel_asset, 0,
+                                            transfer_status_done, data);
+    if (pkt.empty() || pkt[0] != std::byte{17}) return false;
+    if (pkt.size() != 1 + 16 + 4 + 4 + 4 + 2 + data.size()) return false;
+
+    // A different message id must be rejected.
+    auto wrong = payload;
+    wrong[3] = std::byte{0x9c};
+    return !decode_transfer_request(wrong);
+}
 }
 
 int main() {
@@ -1146,6 +1205,7 @@ int main() {
     if (!object_interaction_codecs()) return 15;
     if (!default_primitive_texture()) return 16;
     if (!task_inventory_codecs()) return 20;
+    if (!transfer_codecs()) return 22;
     if (decode_packet(std::array<std::byte, 2>{})) return 12;
     return 0;
 }

@@ -2900,6 +2900,69 @@ int main(int argc, char* argv[]) {
                                       << ",\"taskRefreshSent\":" << (task_refresh_sent ? "true" : "false")
                                       << "}" << std::endl;
                         }
+                        const auto asset_transfer =
+                            homeworldz::viewer::decode_transfer_request(packet->payload);
+                        if (asset_transfer) {
+                            // Firestorm's script and notecard editors fetch an
+                            // inventory item's body over the asset-transfer channel
+                            // (TransferRequest -> TransferInfo + TransferPacket(s)).
+                            const auto* transfer_identity = circuits.identity(endpoint);
+                            const bool authorized =
+                                asset_transfer->source_type !=
+                                    homeworldz::viewer::transfer_source_sim_inv_item ||
+                                (transfer_identity &&
+                                 asset_transfer->agent_id == transfer_identity->agent_id &&
+                                 asset_transfer->session_id == transfer_identity->session_id);
+                            std::int32_t status = homeworldz::viewer::transfer_status_ok;
+                            std::vector<std::byte> asset_bytes;
+                            if (!authorized) {
+                                status = homeworldz::viewer::transfer_status_unknown_source;
+                            } else {
+                                try {
+                                    asset_bytes = read_federated_asset(
+                                        homeworldz::viewer::format_uuid(asset_transfer->asset_id));
+                                } catch (const std::exception&) {
+                                    status = homeworldz::viewer::transfer_status_unknown_source;
+                                }
+                            }
+                            const auto info = homeworldz::viewer::encode_transfer_info(
+                                asset_transfer->transfer_id, asset_transfer->channel_type, status,
+                                status == homeworldz::viewer::transfer_status_ok
+                                    ? static_cast<std::int32_t>(asset_bytes.size())
+                                    : 0,
+                                asset_transfer->params);
+                            if (const auto outgoing = circuits.send(endpoint, info, true, now))
+                                send_udp(viewer_server, endpoint, *outgoing);
+                            if (status == homeworldz::viewer::transfer_status_ok) {
+                                constexpr std::size_t transfer_chunk_size = 1000;
+                                std::int32_t packet_number = 0;
+                                std::size_t offset = 0;
+                                do {
+                                    const auto chunk_size = (std::min)(
+                                        transfer_chunk_size, asset_bytes.size() - offset);
+                                    const bool final = offset + chunk_size >= asset_bytes.size();
+                                    const auto data = std::span<const std::byte>(
+                                        asset_bytes.data() + offset, chunk_size);
+                                    const auto pkt = homeworldz::viewer::encode_transfer_packet(
+                                        asset_transfer->transfer_id, asset_transfer->channel_type,
+                                        packet_number,
+                                        final ? homeworldz::viewer::transfer_status_done
+                                              : homeworldz::viewer::transfer_status_ok,
+                                        data);
+                                    if (const auto outgoing = circuits.send(endpoint, pkt, true, now))
+                                        send_udp(viewer_server, endpoint, *outgoing);
+                                    offset += chunk_size;
+                                    ++packet_number;
+                                } while (offset < asset_bytes.size());
+                            }
+                            std::cout << "{\"level\":" << (status == 0 ? "\"info\"" : "\"warn\"")
+                                      << ",\"message\":\"asset transfer "
+                                      << (status == 0 ? "served" : "rejected") << "\",\"assetId\":"
+                                      << homeworldz::api::json_string(
+                                             homeworldz::viewer::format_uuid(asset_transfer->asset_id))
+                                      << ",\"sourceType\":" << asset_transfer->source_type
+                                      << ",\"bytes\":" << asset_bytes.size() << "}" << std::endl;
+                        }
                         const auto task_inventory_xfer =
                             homeworldz::viewer::decode_request_xfer(packet->payload);
                         if (task_inventory_xfer) {

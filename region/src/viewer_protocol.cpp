@@ -70,6 +70,11 @@ constexpr std::array<std::byte, 4> move_task_inventory_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x20}};
 constexpr std::array<std::byte, 4> request_xfer_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x9c}};
+constexpr std::array<std::byte, 4> transfer_request_id{ // Low 153
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x99}};
+constexpr std::array<std::byte, 4> transfer_info_id{ // Low 154
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x9a}};
+constexpr std::byte transfer_packet_id{17}; // High 17
 constexpr std::array<std::byte, 2> object_add_id{std::byte{0xff}, std::byte{0x01}};
 constexpr std::array<std::byte, 4> derez_object_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x23}};
@@ -983,6 +988,69 @@ std::vector<std::byte> encode_send_xfer_packet(
     std::vector<std::byte> output{std::byte{18}};
     append_le_u64(output, id);
     append_le_u32(output, packet);
+    append_le_u16(output, static_cast<std::uint16_t>(data.size()));
+    output.insert(output.end(), data.begin(), data.end());
+    return output;
+}
+
+std::optional<AssetTransferRequest> decode_transfer_request(std::span<const std::byte> payload) {
+    // id(4) + TransferID(16) + ChannelType(4) + SourceType(4) + Priority(4) then Params (Variable 2).
+    constexpr std::size_t params_length_offset = 32;
+    if (payload.size() < params_length_offset + 2 ||
+        !std::equal(transfer_request_id.begin(), transfer_request_id.end(), payload.begin()))
+        return std::nullopt;
+    const auto params_length = read_le_u16(payload, params_length_offset);
+    const std::size_t params_offset = params_length_offset + 2;
+    if (payload.size() < params_offset + params_length) return std::nullopt;
+
+    AssetTransferRequest result;
+    std::copy_n(payload.begin() + 4, 16, result.transfer_id.begin());
+    result.channel_type = static_cast<std::int32_t>(read_le_u32(payload, 20));
+    result.source_type = static_cast<std::int32_t>(read_le_u32(payload, 24));
+    result.params.assign(payload.begin() + params_offset,
+                         payload.begin() + params_offset + params_length);
+    const auto params = std::span<const std::byte>(result.params);
+
+    if (result.source_type == transfer_source_sim_inv_item && params.size() >= 100) {
+        std::copy_n(params.begin() + 0, 16, result.agent_id.begin());
+        std::copy_n(params.begin() + 16, 16, result.session_id.begin());
+        // owner id (32..48) and task id (48..64) are not needed for agent inventory.
+        std::copy_n(params.begin() + 64, 16, result.item_id.begin());
+        std::copy_n(params.begin() + 80, 16, result.asset_id.begin());
+        result.asset_type = static_cast<std::int32_t>(read_le_u32(params, 96));
+    } else if (result.source_type == transfer_source_asset && params.size() >= 20) {
+        std::copy_n(params.begin() + 0, 16, result.asset_id.begin());
+        result.asset_type = static_cast<std::int32_t>(read_le_u32(params, 16));
+    } else {
+        return std::nullopt; // unsupported source type or truncated params
+    }
+    return result;
+}
+
+std::vector<std::byte> encode_transfer_info(
+    const Uuid& transfer_id, std::int32_t channel_type, std::int32_t status,
+    std::int32_t size, std::span<const std::byte> params) {
+    if (params.size() > 65535) return {};
+    std::vector<std::byte> output(transfer_info_id.begin(), transfer_info_id.end());
+    append_uuid(output, transfer_id);
+    append_le_u32(output, static_cast<std::uint32_t>(channel_type));
+    append_le_u32(output, 0); // TargetType (unused by the viewer for asset routing)
+    append_le_u32(output, static_cast<std::uint32_t>(status));
+    append_le_u32(output, static_cast<std::uint32_t>(size));
+    append_le_u16(output, static_cast<std::uint16_t>(params.size()));
+    output.insert(output.end(), params.begin(), params.end());
+    return output;
+}
+
+std::vector<std::byte> encode_transfer_packet(
+    const Uuid& transfer_id, std::int32_t channel_type, std::int32_t packet,
+    std::int32_t status, std::span<const std::byte> data) {
+    if (data.size() > 65535) return {};
+    std::vector<std::byte> output{transfer_packet_id};
+    append_uuid(output, transfer_id);
+    append_le_u32(output, static_cast<std::uint32_t>(channel_type));
+    append_le_u32(output, static_cast<std::uint32_t>(packet));
+    append_le_u32(output, static_cast<std::uint32_t>(status));
     append_le_u16(output, static_cast<std::uint16_t>(data.size()));
     output.insert(output.end(), data.begin(), data.end());
     return output;

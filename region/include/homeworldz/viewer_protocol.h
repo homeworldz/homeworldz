@@ -457,6 +457,33 @@ struct XferPacket {
     std::vector<std::byte> data;
 };
 
+// Asset-transfer protocol (TransferRequest/TransferInfo/TransferPacket). The
+// script and notecard editors fetch an inventory item's asset body over this
+// UDP channel rather than a capability.
+inline constexpr std::int32_t transfer_channel_asset = 2;         // LLTCT_ASSET
+inline constexpr std::int32_t transfer_source_asset = 2;          // LLTST_ASSET
+inline constexpr std::int32_t transfer_source_sim_inv_item = 3;   // LLTST_SIM_INV_ITEM
+inline constexpr std::int32_t transfer_status_ok = 0;             // LLTS_OK
+inline constexpr std::int32_t transfer_status_done = 1;           // LLTS_DONE
+inline constexpr std::int32_t transfer_status_unknown_source = -2; // LLTS_UNKNOWN_SOURCE
+
+// A viewer's request to fetch an asset. For a SIM_INV_ITEM source (an inventory
+// script/notecard) the params carry the requesting agent, the item, and the
+// asset; for an ASSET source only the asset id and type. The raw params are
+// retained so the TransferInfo reply can echo them, which the viewer requires
+// to route the incoming data.
+struct AssetTransferRequest {
+    Uuid transfer_id{};
+    std::int32_t channel_type{};
+    std::int32_t source_type{};
+    Uuid agent_id{};   // populated for SIM_INV_ITEM
+    Uuid session_id{}; // populated for SIM_INV_ITEM
+    Uuid item_id{};    // populated for SIM_INV_ITEM
+    Uuid asset_id{};
+    std::int32_t asset_type{};
+    std::vector<std::byte> params;
+};
+
 struct ImageRequestBlock {
     Uuid image_id{};
     std::int8_t discard_level{};
@@ -616,6 +643,13 @@ std::optional<MoveTaskInventory> decode_move_task_inventory(std::span<const std:
 std::optional<RequestXfer> decode_request_xfer(std::span<const std::byte> payload);
 std::vector<std::byte> encode_send_xfer_packet(
     std::uint64_t id, std::uint32_t packet, std::span<const std::byte> data);
+std::optional<AssetTransferRequest> decode_transfer_request(std::span<const std::byte> payload);
+std::vector<std::byte> encode_transfer_info(
+    const Uuid& transfer_id, std::int32_t channel_type, std::int32_t status,
+    std::int32_t size, std::span<const std::byte> params);
+std::vector<std::byte> encode_transfer_packet(
+    const Uuid& transfer_id, std::int32_t channel_type, std::int32_t packet,
+    std::int32_t status, std::span<const std::byte> data);
 std::optional<ObjectAdd> decode_object_add(std::span<const std::byte> payload);
 std::optional<DeRezObject> decode_derez_object(std::span<const std::byte> payload);
 bool valid_derez_batch(std::uint8_t packet_count, std::uint8_t packet_number);
