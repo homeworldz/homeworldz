@@ -193,6 +193,19 @@ int main() {
         require(threw, "ill-typed initializer is rejected at compile time");
     }
 
+    // Lexical diagnostics must identify the exact source location reported to
+    // viewer script editors.
+    {
+        std::string diagnostic;
+        try {
+            compile_source("default\n{\n'\n}");
+        } catch (const ScriptError& error) {
+            diagnostic = error.what();
+        }
+        require(diagnostic == "unexpected character ''' (line 3, column 1)",
+                "lexical diagnostics include line and column");
+    }
+
     // (6) Events: state_entry then repeated touch_start, mutating a global.
     const Program touch = compile_source(kTouchSource);
     {
