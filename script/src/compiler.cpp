@@ -20,7 +20,7 @@ const char* type_name(Type type) {
 }
 
 // A bounded host-function signature. Real HomeWorldz will have a generated
-// table; the PoC hand-lists the two functions the demo needs.
+// table; the PoC hand-lists the functions the demo needs.
 struct HostSignature {
     std::vector<Type> params;
     Type result;
@@ -35,22 +35,81 @@ const HostSignature* lookup_host(const std::string& name) {
     return it == table.end() ? nullptr : &it->second;
 }
 
+// The event handlers the PoC recognizes, with their LSL parameter signatures.
+const std::vector<Type>* lookup_event(const std::string& name) {
+    static const std::unordered_map<std::string, std::vector<Type>> table = {
+        {"state_entry", {}},
+        {"touch_start", {Type::Integer}}, // total_number
+    };
+    const auto it = table.find(name);
+    return it == table.end() ? nullptr : &it->second;
+}
+
+enum class Scope { Local, Global };
+
 class Compiler {
 public:
     Program compile(const ast::Script& script) {
-        if (!script.state_entry) {
-            throw ScriptError("script has no state_entry handler");
+        for (const auto& global : script.globals) {
+            declare_global(global);
         }
-        compile_block(*script.state_entry);
-        emit(Op::Halt);
+        for (const auto& handler : script.events) {
+            compile_event(handler);
+        }
         return std::move(program_);
     }
 
 private:
-    struct Local {
+    struct Symbol {
+        Scope scope;
         std::int32_t slot;
         Type type;
     };
+
+    void declare_global(const ast::GlobalVar& global) {
+        if (globals_.count(global.name) != 0) {
+            throw ScriptError("global '" + global.name + "' already declared");
+        }
+        const std::int32_t slot = static_cast<std::int32_t>(program_.global_defaults.size());
+        Value initial = (global.type == Type::String)
+                            ? Value::make_string(global.has_init ? global.string_init : "")
+                            : Value::make_integer(global.has_init ? global.int_init : 0);
+        program_.global_defaults.push_back(std::move(initial));
+        globals_.emplace(global.name, Symbol{Scope::Global, slot, global.type});
+    }
+
+    void compile_event(const ast::EventHandler& handler) {
+        const std::vector<Type>* signature = lookup_event(handler.name);
+        if (signature == nullptr) {
+            throw ScriptError("unsupported event '" + handler.name + "' in this PoC");
+        }
+        if (program_.find_event(handler.name) != nullptr) {
+            throw ScriptError("duplicate event handler '" + handler.name + "'");
+        }
+        if (handler.params.size() != signature->size()) {
+            throw ScriptError("event '" + handler.name + "' has the wrong parameter count");
+        }
+
+        locals_.clear();
+        local_count_ = 0;
+        EventEntry entry;
+        entry.name = handler.name;
+        entry.entry_ip = here();
+        for (std::size_t i = 0; i < handler.params.size(); ++i) {
+            const ast::Param& param = handler.params[i];
+            if (param.type != (*signature)[i]) {
+                throw ScriptError("parameter " + std::to_string(i + 1) + " of '" +
+                                  handler.name + "' must be " + type_name((*signature)[i]));
+            }
+            const std::int32_t slot = local_count_++;
+            locals_.emplace(param.name, Symbol{Scope::Local, slot, param.type});
+            entry.param_types.push_back(param.type);
+        }
+        compile_block(*handler.body);
+        emit(Op::Halt);
+        entry.local_count = local_count_;
+        program_.events.push_back(std::move(entry));
+    }
 
     std::int32_t emit(Op op, std::int32_t a = 0, std::int32_t b = 0) {
         program_.code.push_back(Instruction{op, a, b});
@@ -85,12 +144,24 @@ private:
         return static_cast<std::int32_t>(program_.host_names.size()) - 1;
     }
 
-    const Local& lookup(const std::string& name) {
-        const auto it = locals_.find(name);
-        if (it == locals_.end()) {
-            throw ScriptError("undeclared variable '" + name + "'");
+    Symbol resolve(const std::string& name) {
+        const auto local = locals_.find(name);
+        if (local != locals_.end()) {
+            return local->second;
         }
-        return it->second;
+        const auto global = globals_.find(name);
+        if (global != globals_.end()) {
+            return global->second;
+        }
+        throw ScriptError("undeclared variable '" + name + "'");
+    }
+
+    void emit_load(const Symbol& symbol) {
+        emit(symbol.scope == Scope::Global ? Op::LoadGlobal : Op::LoadLocal, symbol.slot);
+    }
+
+    void emit_store(const Symbol& symbol) {
+        emit(symbol.scope == Scope::Global ? Op::StoreGlobal : Op::StoreLocal, symbol.slot);
     }
 
     void compile_block(const ast::Block& block) {
@@ -124,7 +195,7 @@ private:
         if (locals_.count(decl.name) != 0) {
             throw ScriptError("variable '" + decl.name + "' already declared");
         }
-        const std::int32_t slot = program_.local_count++;
+        const std::int32_t slot = local_count_++;
         if (decl.init) {
             const Type init_type = compile_expression(*decl.init);
             if (init_type != decl.type) {
@@ -135,17 +206,17 @@ private:
             emit(Op::PushConst, default_constant(decl.type));
         }
         emit(Op::StoreLocal, slot);
-        locals_.emplace(decl.name, Local{slot, decl.type});
+        locals_.emplace(decl.name, Symbol{Scope::Local, slot, decl.type});
     }
 
     void compile_assign(const ast::Assign& assign) {
-        const Local local = lookup(assign.name);
+        const Symbol symbol = resolve(assign.name);
         const Type value_type = compile_expression(*assign.value);
-        if (value_type != local.type) {
-            throw ScriptError("cannot assign " + std::string(type_name(value_type)) +
-                              " to " + type_name(local.type) + " '" + assign.name + "'");
+        if (value_type != symbol.type) {
+            throw ScriptError("cannot assign " + std::string(type_name(value_type)) + " to " +
+                              type_name(symbol.type) + " '" + assign.name + "'");
         }
-        emit(Op::StoreLocal, local.slot);
+        emit_store(symbol);
     }
 
     void compile_while(const ast::While& loop) {
@@ -183,9 +254,9 @@ private:
             return Type::String;
         }
         if (const auto* ref = dynamic_cast<const ast::VarRef*>(&expr)) {
-            const Local local = lookup(ref->name);
-            emit(Op::LoadLocal, local.slot);
-            return local.type;
+            const Symbol symbol = resolve(ref->name);
+            emit_load(symbol);
+            return symbol.type;
         }
         if (const auto* cast = dynamic_cast<const ast::Cast*>(&expr)) {
             return compile_cast(*cast);
@@ -209,7 +280,6 @@ private:
             }
             return Type::String;
         }
-        // (integer) cast: only the identity case is supported in the PoC.
         if (operand != Type::Integer) {
             throw ScriptError("(integer) cast from string is not supported in this PoC");
         }
@@ -266,9 +336,8 @@ private:
         for (std::size_t i = 0; i < call.args.size(); ++i) {
             const Type arg_type = compile_expression(*call.args[i]);
             if (arg_type != signature->params[i]) {
-                throw ScriptError("argument " + std::to_string(i + 1) + " to '" +
-                                  call.callee + "' must be " +
-                                  type_name(signature->params[i]));
+                throw ScriptError("argument " + std::to_string(i + 1) + " to '" + call.callee +
+                                  "' must be " + type_name(signature->params[i]));
             }
         }
         emit(Op::CallHost, add_host(call.callee),
@@ -294,7 +363,9 @@ private:
     }
 
     Program program_;
-    std::unordered_map<std::string, Local> locals_;
+    std::unordered_map<std::string, Symbol> globals_;
+    std::unordered_map<std::string, Symbol> locals_;
+    std::int32_t local_count_ = 0;
 };
 
 } // namespace

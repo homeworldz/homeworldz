@@ -23,7 +23,6 @@ enum class TokenKind : std::uint8_t {
     IntLiteral,
     StringLiteral,
     KwDefault,
-    KwStateEntry,
     KwInteger,
     KwString,
     KwWhile,

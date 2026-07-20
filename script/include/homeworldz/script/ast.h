@@ -1,8 +1,9 @@
 #pragma once
 
-// Abstract syntax tree for the LSL PoC subset, produced by the recursive-descent
-// parser and lowered to bytecode by the compiler. Nodes are owned through
-// unique_ptr; this is a small tree, so clarity is preferred over arena tricks.
+// Abstract syntax tree for the Falcon LSL PoC subset, produced by the
+// recursive-descent parser and lowered to bytecode by the compiler. Nodes are
+// owned through unique_ptr; this is a small tree, so clarity is preferred over
+// arena tricks.
 
 #include <memory>
 #include <string>
@@ -83,9 +84,35 @@ struct If : Stmt {
     std::unique_ptr<Block> else_branch; // may be null
 };
 
-// The single event handler this PoC compiles (default state's state_entry).
+// A named, typed parameter of an event handler (e.g. touch_start's detected
+// count). Parameters become the first locals of the handler.
+struct Param {
+    Type type = Type::Integer;
+    std::string name;
+};
+
+// One event handler in the default state.
+struct EventHandler {
+    std::string name; // "state_entry", "touch_start", ...
+    std::vector<Param> params;
+    std::unique_ptr<Block> body;
+};
+
+// A script-level global variable, persistent across events. The PoC allows a
+// literal initializer only; absent, the global takes its type default.
+struct GlobalVar {
+    Type type = Type::Integer;
+    std::string name;
+    bool has_init = false;
+    std::int32_t int_init = 0;
+    std::string string_init;
+};
+
+// The compiled script: globals plus the default state's event handlers. Named
+// states are future work.
 struct Script {
-    std::unique_ptr<Block> state_entry;
+    std::vector<GlobalVar> globals;
+    std::vector<EventHandler> events;
 };
 
 } // namespace homeworldz::script::ast

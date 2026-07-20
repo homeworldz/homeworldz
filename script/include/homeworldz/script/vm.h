@@ -1,11 +1,16 @@
 #pragma once
 
-// The explicit-stack bytecode VM. Per ADR 0021 / SCRIPTING.md, script state
-// lives entirely in data (instruction pointer, operand stack, locals), never on
-// the native C++ call stack, so execution can be suspended after any single
-// instruction and resumed elsewhere. run() executes a bounded instruction slice
-// and yields, which is how an infinite LSL loop is contained rather than
-// hanging the region thread.
+// The explicit-stack Falcon bytecode VM. Per ADR 0021 / SCRIPTING.md, script
+// state lives entirely in data (instruction pointer, operand stack, locals, and
+// persistent globals), never on the native C++ call stack, so execution can be
+// suspended after any single instruction and resumed elsewhere. run() executes
+// a bounded instruction slice and yields, which is how an infinite LSL loop is
+// contained rather than hanging the region thread.
+//
+// A VM instance represents one script's live state. The region dispatches an
+// event (state_entry on rez, touch_start on a click, ...) which seeds the event
+// parameters and positions execution at that handler; run() then advances it
+// under a budget. Globals persist across dispatches; locals do not.
 
 #include <cstdint>
 #include <functional>
@@ -18,7 +23,7 @@
 namespace homeworldz::script {
 
 enum class RunStatus {
-    Finished, // reached Halt
+    Finished, // the current event reached Halt (or none is active)
     Yielded,  // spent its instruction budget with work remaining
     Error,    // a runtime fault stopped the script
 };
@@ -32,9 +37,16 @@ using HostFunction =
 class VM {
 public:
     // The Program must outlive the VM (bytecode is a shared immutable asset).
+    // Globals are seeded from the program's initial values.
     explicit VM(const Program& program);
 
     void set_host(HostFunction host) { host_ = std::move(host); }
+
+    // Positions the VM at an event handler and seeds its parameters. Throws
+    // ScriptError if the event is unknown or the argument count/types do not
+    // match the handler. Globals are preserved; locals and the operand stack are
+    // reset. Call run() afterward to execute.
+    void dispatch(const std::string& event, const std::vector<Value>& args);
 
     // Executes up to instruction_budget instructions, then returns.
     RunStatus run(std::uint64_t instruction_budget);
@@ -44,8 +56,8 @@ public:
     std::uint64_t total_instructions() const { return total_; }
 
     // Compact, versioned binary capture of the full runtime state (this PoC's
-    // slice of the crossing snapshot in SCRIPTING.md). Bytecode is referenced by
-    // ABI version, not embedded.
+    // slice of the crossing snapshot in SCRIPTING.md): ip, operand stack,
+    // locals, and globals. Bytecode is referenced by ABI version, not embedded.
     std::vector<std::uint8_t> snapshot() const;
 
     // Restores state produced by snapshot() into this VM. Throws ScriptError if
@@ -61,7 +73,8 @@ private:
     std::size_t ip_ = 0;
     std::vector<Value> stack_;
     std::vector<Value> locals_;
-    bool finished_ = false;
+    std::vector<Value> globals_;
+    bool finished_ = true;
     std::string error_;
     std::uint64_t total_ = 0;
 };

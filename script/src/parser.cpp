@@ -35,15 +35,21 @@ public:
     explicit Parser(std::vector<Token> tokens) : tokens_(std::move(tokens)) {}
 
     ast::Script parse_script() {
-        expect(TokenKind::KwDefault, "expected 'default'");
-        expect(TokenKind::LBrace, "expected '{' after 'default'");
-        expect(TokenKind::KwStateEntry, "this PoC supports only a state_entry() handler");
-        expect(TokenKind::LParen, "expected '(' after state_entry");
-        expect(TokenKind::RParen, "state_entry takes no parameters in this PoC");
         ast::Script script;
-        script.state_entry = parse_block();
+        // Global variables precede the state, each starting with a type keyword.
+        while (check(TokenKind::KwInteger) || check(TokenKind::KwString)) {
+            script.globals.push_back(parse_global());
+        }
+        expect(TokenKind::KwDefault, "expected global declarations or 'default'");
+        expect(TokenKind::LBrace, "expected '{' after 'default'");
+        while (!check(TokenKind::RBrace) && !check(TokenKind::End)) {
+            script.events.push_back(parse_event_handler());
+        }
         expect(TokenKind::RBrace, "expected '}' to close default state");
         expect(TokenKind::End, "unexpected trailing tokens after default state");
+        if (script.events.empty()) {
+            throw ScriptError("the default state has no event handlers");
+        }
         return script;
     }
 
@@ -74,6 +80,61 @@ private:
                               std::to_string(peek().line) + ")");
         }
         return advance();
+    }
+
+    Type type_keyword() {
+        if (match(TokenKind::KwInteger)) {
+            return Type::Integer;
+        }
+        if (match(TokenKind::KwString)) {
+            return Type::String;
+        }
+        throw ScriptError("expected a type (line " + std::to_string(peek().line) + ")");
+    }
+
+    ast::GlobalVar parse_global() {
+        ast::GlobalVar global;
+        global.type = type_keyword();
+        global.name = expect(TokenKind::Identifier, "expected global variable name").text;
+        if (match(TokenKind::Assign)) {
+            // The PoC allows a literal initializer only.
+            if (check(TokenKind::IntLiteral)) {
+                if (global.type != Type::Integer) {
+                    throw ScriptError("cannot initialize a string global with an integer literal");
+                }
+                global.int_init = advance().integer;
+            } else if (check(TokenKind::StringLiteral)) {
+                if (global.type != Type::String) {
+                    throw ScriptError("cannot initialize an integer global with a string literal");
+                }
+                global.string_init = advance().text;
+            } else {
+                throw ScriptError("global initializers must be a literal in this PoC");
+            }
+            global.has_init = true;
+        }
+        expect(TokenKind::Semicolon, "expected ';' after global declaration");
+        return global;
+    }
+
+    ast::EventHandler parse_event_handler() {
+        ast::EventHandler handler;
+        handler.name = expect(TokenKind::Identifier, "expected an event name").text;
+        expect(TokenKind::LParen, "expected '(' after event name");
+        if (!check(TokenKind::RParen)) {
+            for (;;) {
+                ast::Param param;
+                param.type = type_keyword();
+                param.name = expect(TokenKind::Identifier, "expected parameter name").text;
+                handler.params.push_back(std::move(param));
+                if (!match(TokenKind::Comma)) {
+                    break;
+                }
+            }
+        }
+        expect(TokenKind::RParen, "expected ')' after event parameters");
+        handler.body = parse_block();
+        return handler;
     }
 
     std::unique_ptr<ast::Block> parse_block() {
@@ -116,8 +177,7 @@ private:
 
     ast::StmtPtr parse_var_decl() {
         auto decl = std::make_unique<ast::VarDecl>();
-        decl->type = check(TokenKind::KwString) ? Type::String : Type::Integer;
-        advance(); // the type keyword
+        decl->type = type_keyword();
         decl->name = expect(TokenKind::Identifier, "expected variable name").text;
         if (match(TokenKind::Assign)) {
             decl->init = parse_expression(0);

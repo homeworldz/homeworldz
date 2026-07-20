@@ -9,9 +9,10 @@
 
 namespace homeworldz::script {
 
-// Compiles a parsed script's state_entry handler into an immutable Program.
-// Throws ScriptError on a semantic error (unknown variable, type mismatch,
-// bad host-call arity, etc.).
+// Compiles a parsed script (globals + default-state event handlers) into an
+// immutable Program with an event dispatch table. Throws ScriptError on a
+// semantic error (unknown variable, type mismatch, bad host-call arity,
+// unsupported event, etc.).
 Program compile(const ast::Script& script);
 
 // Convenience: source -> tokens -> AST -> bytecode.

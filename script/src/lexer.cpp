@@ -17,7 +17,6 @@ bool is_ident_char(char c) {
 TokenKind keyword_kind(const std::string& word) {
     static const std::unordered_map<std::string, TokenKind> keywords = {
         {"default", TokenKind::KwDefault},
-        {"state_entry", TokenKind::KwStateEntry},
         {"integer", TokenKind::KwInteger},
         {"string", TokenKind::KwString},
         {"while", TokenKind::KwWhile},

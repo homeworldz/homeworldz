@@ -34,8 +34,8 @@ particular VM. Falcon sits *behind* the C++ script-runtime boundary:
   turns source into Falcon p-code. Compiled p-code is an immutable derived
   asset, cached by source hash plus compiler and ABI version.
 - **Falcon** owns only explicit execution state: instruction pointer, operand
-  stack, locals, and (as the engine grows) call frames, event queue, timers,
-  listens, permissions, and host-operation continuations.
+  stack, locals, persistent globals, and (as the engine grows) call frames,
+  event queue, timers, listens, permissions, and host-operation continuations.
 - The **grid** locates source and bytecode assets but never executes scripts.
   Regions transfer runtime state directly during an avatar, attachment, vehicle,
   or object handoff.
@@ -59,19 +59,25 @@ always `Integer` or `String`.
 
 ## The compiled unit (p-code container)
 
-A compiled event handler is a `Program`:
+A compiled script is a `Program`. Its event handlers share one instruction
+stream; an event dispatch table records where each begins.
 
 | Field | Meaning |
 | --- | --- |
-| `code` | the instruction stream (`vector<Instruction>`) |
+| `code` | the shared instruction stream (`vector<Instruction>`) |
 | `constants` | the constant pool (`vector<Value>`), referenced by index |
 | `host_names` | names of host functions this program calls, referenced by index (resolved at the boundary, not baked in) |
-| `local_count` | number of local slots the VM must allocate |
+| `global_defaults` | initial value of each persistent global slot (`vector<Value>`) |
+| `events` | the dispatch table (`vector<EventEntry>`) |
 | `compiler_version` | the compiler that produced it |
-| `abi_version` | the bytecode/snapshot ABI (currently `1`) |
+| `abi_version` | the bytecode/snapshot ABI (currently `2`) |
 
-Both `compiler_version` and `abi_version` are `1` in this PoC
-(`kCompilerVersion`, `kBytecodeAbiVersion`).
+Each `EventEntry` carries the handler's `name` (e.g. `state_entry`,
+`touch_start`), its `entry_ip` (first instruction), the `param_types` the region
+must supply when dispatching it, and the `local_count` it needs (parameters
+occupy the first local slots). Both `compiler_version` and `abi_version` are `2`
+in this PoC (`kCompilerVersion`, `kBytecodeAbiVersion`); v2 added persistent
+globals and the event-dispatch model.
 
 ## Instruction format
 
@@ -94,8 +100,10 @@ operand and `a` is beneath it (so `a OP b` matches source order).
 | Opcode | Operands | Stack effect | Description |
 | --- | --- | --- | --- |
 | `PushConst` | `a`=const idx | → `constants[a]` | push a literal |
-| `LoadLocal` | `a`=slot | → `locals[a]` | push a local |
+| `LoadLocal` | `a`=slot | → `locals[a]` | push a local (per-event; includes params) |
 | `StoreLocal` | `a`=slot | `v` → | pop into a local |
+| `LoadGlobal` | `a`=slot | → `globals[a]` | push a persistent global |
+| `StoreGlobal` | `a`=slot | `v` → | pop into a persistent global |
 | `AddInt` | — | `a b` → `a+b` | integer add |
 | `SubInt` | — | `a b` → `a-b` | integer subtract |
 | `MulInt` | — | `a b` → `a*b` | integer multiply |
@@ -116,13 +124,15 @@ example a `while` loop becomes: `<cond>`, `JumpIfZero end`, `<body>`,
 
 ## Execution model
 
-The VM state is entirely data — no script state ever lives on the native C++
-call stack:
+A VM instance holds one script's live state, entirely as data — no script state
+ever lives on the native C++ call stack:
 
 - `ip` — instruction pointer (an index into `code`)
 - `stack` — the operand stack (`vector<Value>`)
-- `locals` — one slot per declared variable (`vector<Value>`, sized to
-  `local_count`)
+- `locals` — the current event's local slots (`vector<Value>`; parameters
+  first), reset on each dispatch
+- `globals` — persistent globals (`vector<Value>`), seeded from
+  `global_defaults` and preserved **across** events
 - `finished`, `error`, and a `total` executed-instruction counter
 
 `step()` executes exactly one instruction. `run(budget)` calls `step()` until
@@ -141,6 +151,25 @@ RunStatus run(uint64 budget):
 - **`Yielded`** — spent its instruction budget with work remaining; call `run`
   again next tick to continue.
 - **`Error`** — a runtime fault stopped the script.
+
+### Events and dispatch
+
+A script does not "start" on its own. The region **dispatches** an event —
+`state_entry` when the script is first loaded, `touch_start` when an avatar
+clicks the prim, and so on. `dispatch(name, args)`:
+
+1. looks the handler up in the event table (unknown event → rejected);
+2. checks the argument count and types against the handler's `param_types`;
+3. sizes `locals` for that handler and seeds the parameters into the first
+   slots (e.g. `touch_start`'s detected count);
+4. clears the operand stack and points `ip` at the handler's `entry_ip`.
+
+Globals are untouched by dispatch, so state accumulates across events — the
+canonical example being a touch counter that increments a global on every
+`touch_start` and reports it with `llSay`. Each handler ends with its own
+`Halt`, so `run()` stops at the end of the dispatched event. A full event queue,
+coalescing, and SL event-ordering/delay semantics (SCRIPTING.md) build on this
+dispatch primitive.
 
 ### Faults
 
@@ -186,23 +215,27 @@ a fresh VM to continue identically. This is what lets a heavily scripted
 attachment or vehicle cross a region border without waiting for a poorly written
 handler to reach an event boundary.
 
-All multi-byte integers are little-endian. Current layout (`abi_version` 1,
-snapshot version 1):
+All multi-byte integers are little-endian. Current layout (`abi_version` 2,
+snapshot version 2):
 
 | Bytes | Field | Notes |
 | --- | --- | --- |
 | 4 | magic | `HWZS` |
-| 2 | snapshot version | `1` |
+| 2 | snapshot version | `2` |
 | 4 | bytecode ABI version | must match the `Program` on restore |
 | 8 | `ip` | instruction pointer |
 | 1 | finished | `0` or `1` |
 | 8 | `total` | instructions executed so far |
 | 4 | stack length `N` | operand-stack depth |
 | … | `N` values | bottom → top |
-| 4 | locals length `M` | must equal `local_count` on restore |
+| 4 | locals length `M` | the active handler's local slots |
 | … | `M` values | slot order |
+| 4 | globals length `G` | must equal the program's global count on restore |
+| … | `G` values | slot order |
 
-Each **value** is length-prefixed and tagged:
+Because the operand stack, locals, and **globals** are all captured, a crossing
+snapshot taken mid-`touch_start` restores with its counter intact. Each
+**value** is length-prefixed and tagged:
 
 | Bytes | Field |
 | --- | --- |
@@ -216,9 +249,11 @@ Bytecode itself is cached separately and transferred only when the destination
 lacks the matching asset and ABI.
 
 **Restore** validates the magic, the snapshot version, that the snapshot's ABI
-matches the target `Program`'s ABI, and that the locals count matches — then
-loads `ip`, `finished`, `total`, the operand stack, and the locals. A mismatch
-is rejected rather than silently reinterpreted.
+matches the target `Program`'s ABI, and that the globals count matches — then
+loads `ip`, `finished`, `total`, the operand stack, the locals, and the globals.
+A mismatch is rejected rather than silently reinterpreted. (Locals vary per
+handler, so their count is taken from the snapshot; globals are fixed per
+program and must match.)
 
 ## Versioning and ABI
 
@@ -233,19 +268,22 @@ safe upgrade, incompatibility, and rollback" item builds on this field.
 Falcon today confirms the pipeline end to end on a representative slice and is
 deliberately narrow:
 
-- **Language:** one `default` state with a single `state_entry` handler;
-  `integer` and `string`; arithmetic, string concatenation, comparisons, a
-  `(string)` cast; `while` and `if`.
+- **Language:** one `default` state; persistent globals; `integer` and
+  `string`; arithmetic, string concatenation, comparisons, a `(string)` cast;
+  `while` and `if`.
+- **Events:** `state_entry` and `touch_start(integer)`, dispatched with typed
+  parameters. Adding more events is a table entry plus a parameter signature.
 - **Host surface:** `llOwnerSay`, `llSay`.
 - **Input:** LSL **source text**, compiled directly. It is not yet wired to
   inventory or a prim's Contents (creating a runnable script in a prim is not
-  implemented yet — only a default-script *asset-text* generator exists).
+  implemented yet — only a default-script *asset-text* generator exists), and
+  `llSay` output goes to a test boundary rather than region chat.
 
 Not yet implemented: user-defined functions and call frames, `state`
-transitions and the full event set, `list` / `vector` / `rotation` / `key` /
-`float` types, timers and the event queue, the full LSL host-function library,
-memory and other resource limits, and region/crossing integration. Each is an
-additive step behind the same boundary and ABI.
+transitions and the broader event set, `list` / `vector` / `rotation` / `key` /
+`float` types, timers and a real event queue, the full LSL host-function
+library, memory and other resource limits, and region/crossing integration.
+Each is an additive step behind the same boundary and ABI.
 
 ## Implementation map
 
