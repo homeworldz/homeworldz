@@ -136,6 +136,51 @@ bool task_inventory_codecs() {
     update.pop_back();
     if (decode_update_task_inventory(update)) return false;
 
+    std::vector<std::byte> rez_script(218);
+    rez_script[0] = std::byte{0xff};
+    rez_script[1] = std::byte{0xff};
+    rez_script[2] = std::byte{0x01};
+    rez_script[3] = std::byte{0x30};
+    std::copy(agent.begin(), agent.end(), rez_script.begin() + 4);
+    std::copy(session.begin(), session.end(), rez_script.begin() + 20);
+    std::copy(session.begin(), session.end(), rez_script.begin() + 36);
+    write_u32(rez_script, 52, 42);
+    rez_script[56] = std::byte{1};
+    std::copy(task.begin(), task.end(), rez_script.begin() + 57);
+    std::copy(agent.begin(), agent.end(), rez_script.begin() + 89);
+    std::copy(agent.begin(), agent.end(), rez_script.begin() + 105);
+    write_u32(rez_script, 137, 0x0008e000);
+    write_u32(rez_script, 141, 0x0008a000);
+    write_u32(rez_script, 145, 0x00008000);
+    write_u32(rez_script, 149, 0x00002000);
+    write_u32(rez_script, 153, 0x0000a000);
+    rez_script[174] = std::byte{10};
+    rez_script[175] = std::byte{10};
+    rez_script[185] = std::byte{11};
+    std::copy_n(reinterpret_cast<const std::byte*>("New Script\0"), 11,
+                rez_script.begin() + 186);
+    rez_script[197] = std::byte{12};
+    std::copy_n(reinterpret_cast<const std::byte*>("lsl2 script\0"), 12,
+                rez_script.begin() + 198);
+    write_u32(rez_script, 210, 1234567890);
+    write_u32(rez_script, 214, 0x10203040);
+    const auto decoded_rez = decode_rez_script(rez_script);
+    if (!decoded_rez || decoded_rez->agent_id != agent ||
+        decoded_rez->session_id != session || decoded_rez->agent_group_id != session ||
+        decoded_rez->local_id != 42 || !decoded_rez->enabled ||
+        decoded_rez->item_id != task || decoded_rez->creator_id != agent ||
+        decoded_rez->owner_id != agent || decoded_rez->base_permissions != 0x0008e000 ||
+        decoded_rez->owner_permissions != 0x0008a000 ||
+        decoded_rez->group_permissions != 0x00008000 ||
+        decoded_rez->everyone_permissions != 0x00002000 ||
+        decoded_rez->next_owner_permissions != 0x0000a000 ||
+        decoded_rez->asset_type != 10 || decoded_rez->inventory_type != 10 ||
+        decoded_rez->name != "New Script" || decoded_rez->description != "lsl2 script" ||
+        decoded_rez->creation_date != 1234567890 || decoded_rez->crc != 0x10203040)
+        return false;
+    rez_script.pop_back();
+    if (decode_rez_script(rez_script)) return false;
+
     auto remove = bytes({0xff, 0xff, 0x01, 0x1f});
     remove.insert(remove.end(), agent.begin(), agent.end());
     remove.insert(remove.end(), session.begin(), session.end());

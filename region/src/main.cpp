@@ -2582,6 +2582,180 @@ int main(int argc, char* argv[]) {
                                       << task_inventory_request->local_id << ",\"items\":"
                                       << (entity ? entity->task_inventory.size() : 0) << "}" << std::endl;
                         }
+                        const auto rez_script =
+                            homeworldz::viewer::decode_rez_script(packet->payload);
+                        if (rez_script && rez_script->agent_id == identity->agent_id &&
+                            rez_script->session_id == identity->session_id) {
+                            auto* entity = scene.find(rez_script->local_id);
+                            const auto agent_id = homeworldz::viewer::format_uuid(identity->agent_id);
+                            const auto source_id = homeworldz::viewer::format_uuid(rez_script->item_id);
+                            bool changed = false;
+                            std::string operation{"copy"};
+                            std::string task_item_id;
+                            try {
+                                if (entity && entity->owner_id == agent_id &&
+                                    (entity->owner_permissions &
+                                     homeworldz::scene::permission_modify) != 0 &&
+                                    rez_script->asset_type == 10 &&
+                                    rez_script->inventory_type == 10) {
+                                    const auto previous_serial = entity->task_inventory_serial;
+                                    const auto source = viewer_grid &&
+                                            rez_script->item_id != homeworldz::viewer::Uuid{}
+                                        ? viewer_grid->find_inventory_item(agent_id, source_id)
+                                        : std::nullopt;
+                                    if (source && source->asset_type == 10 &&
+                                        source->inventory_type == 10 &&
+                                        (source->current_permissions &
+                                         homeworldz::scene::permission_copy) != 0) {
+                                        operation = "copy";
+                                        task_item_id = homeworldz::viewer::random_uuid();
+                                        const auto created = static_cast<std::uint64_t>(
+                                            std::chrono::duration_cast<std::chrono::seconds>(
+                                                std::chrono::system_clock::now()
+                                                    .time_since_epoch())
+                                                .count());
+                                        entity->task_inventory.push_back({
+                                            task_item_id, source->asset_id, source->creator_id,
+                                            agent_id, source->owner_id,
+                                            "00000000-0000-0000-0000-000000000000",
+                                            source->name, source->description,
+                                            static_cast<std::int8_t>(source->asset_type),
+                                            static_cast<std::int8_t>(source->inventory_type),
+                                            source->flags, source->base_permissions,
+                                            source->current_permissions, 0,
+                                            source->everyone_permissions, source->next_permissions,
+                                            static_cast<std::uint8_t>(source->sale_type),
+                                            source->sale_price, created});
+                                        entity->task_inventory_serial = previous_serial == 65535
+                                            ? 1
+                                            : static_cast<std::uint16_t>(previous_serial + 1);
+                                        try {
+                                            if (storage) storage->save_snapshot(scene);
+                                            changed = true;
+                                        } catch (...) {
+                                            entity->task_inventory.pop_back();
+                                            entity->task_inventory_serial = previous_serial;
+                                            throw;
+                                        }
+                                    } else if (source && viewer_grid) {
+                                        operation = "transfer";
+                                        task_item_id = homeworldz::viewer::random_uuid();
+                                        const auto transfer = viewer_grid->prepare_task_inventory_transfer({
+                                            homeworldz::viewer::random_uuid(), agent_id, source_id,
+                                            provisioned_region_id, entity->object_id, task_item_id});
+                                        if (transfer && transfer->state == "prepared") {
+                                            const auto finalized =
+                                                apply_task_inventory_transfer(*transfer);
+                                            changed = std::any_of(
+                                                entity->task_inventory.begin(),
+                                                entity->task_inventory.end(),
+                                                [&](const auto& item) {
+                                                    return item.item_id == task_item_id;
+                                                });
+                                            if (changed && !finalized)
+                                                std::cerr << "{\"level\":\"warning\",\"message\":\"script transfer awaits reconciliation\",\"transferId\":"
+                                                          << homeworldz::api::json_string(transfer->id)
+                                                          << "}" << std::endl;
+                                        }
+                                    } else if (rez_script->item_id == homeworldz::viewer::Uuid{} &&
+                                               rez_script->transaction_id ==
+                                                   homeworldz::viewer::Uuid{} &&
+                                               viewer_grid && storage) {
+                                        operation = "create";
+                                        const auto initial =
+                                            homeworldz::inventory::default_asset_content(
+                                                10, 10, provisioned_region_id, entity->position);
+                                        if (initial) {
+                                            auto asset_id = homeworldz::viewer::random_uuid();
+                                            const auto content = std::span(
+                                                reinterpret_cast<const std::byte*>(initial->data()),
+                                                initial->size());
+                                            const auto metadata =
+                                                storage->store_asset(asset_id, agent_id, content);
+                                            if (!viewer_grid->register_asset(
+                                                    metadata.viewer_id, metadata.creator_id,
+                                                    metadata.sha256, metadata.size,
+                                                    region_public_endpoint, true))
+                                                asset_id.clear();
+                                            if (!asset_id.empty()) {
+                                                task_item_id = homeworldz::viewer::random_uuid();
+                                                const auto created = static_cast<std::uint64_t>(
+                                                    std::chrono::duration_cast<std::chrono::seconds>(
+                                                        std::chrono::system_clock::now()
+                                                            .time_since_epoch())
+                                                        .count());
+                                                entity->task_inventory.push_back({
+                                                    task_item_id, asset_id, agent_id, agent_id,
+                                                    agent_id,
+                                                    "00000000-0000-0000-0000-000000000000",
+                                                    rez_script->name, rez_script->description, 10, 10,
+                                                    rez_script->flags,
+                                                    rez_script->base_permissions,
+                                                    rez_script->owner_permissions,
+                                                    rez_script->group_permissions,
+                                                    rez_script->everyone_permissions,
+                                                    rez_script->next_owner_permissions,
+                                                    rez_script->sale_type,
+                                                    rez_script->sale_price, created});
+                                                entity->task_inventory_serial =
+                                                    previous_serial == 65535
+                                                        ? 1
+                                                        : static_cast<std::uint16_t>(
+                                                              previous_serial + 1);
+                                                try {
+                                                    storage->save_snapshot(scene);
+                                                    changed = true;
+                                                } catch (...) {
+                                                    entity->task_inventory.pop_back();
+                                                    entity->task_inventory_serial = previous_serial;
+                                                    throw;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (const std::exception& error) {
+                                std::cout << "{\"level\":\"error\",\"message\":\"rez script failed\",\"error\":"
+                                          << homeworldz::api::json_string(error.what()) << "}"
+                                          << std::endl;
+                            }
+                            bool refresh_sent = false;
+                            if (changed && entity) {
+                                const auto task_id =
+                                    homeworldz::viewer::parse_uuid(entity->object_id);
+                                if (task_id) {
+                                    const auto filename = "inventory_" +
+                                        homeworldz::viewer::random_uuid() + ".tmp";
+                                    pending_task_inventory_files.insert_or_assign(
+                                        endpoint + '|' + filename,
+                                        task_inventory_file(*entity));
+                                    auto wire_filename = filename;
+                                    wire_filename.push_back('\0');
+                                    const auto payload =
+                                        homeworldz::viewer::encode_reply_task_inventory({
+                                            *task_id,
+                                            static_cast<std::int16_t>(
+                                                entity->task_inventory_serial),
+                                            wire_filename});
+                                    if (const auto outgoing = circuits.send(
+                                            endpoint, payload, true, now, true))
+                                        refresh_sent =
+                                            send_udp(viewer_server, endpoint, *outgoing);
+                                }
+                            }
+                            std::cout << "{\"level\":"
+                                      << (changed ? "\"info\"" : "\"warn\"")
+                                      << ",\"message\":\"rez script " << operation << ' '
+                                      << (changed ? "completed" : "rejected")
+                                      << "\",\"localId\":" << rez_script->local_id
+                                      << ",\"itemId\":"
+                                      << homeworldz::api::json_string(task_item_id)
+                                      << ",\"enabled\":"
+                                      << (rez_script->enabled ? "true" : "false")
+                                      << ",\"refreshSent\":"
+                                      << (refresh_sent ? "true" : "false") << "}"
+                                      << std::endl;
+                        }
                         const auto task_inventory_update =
                             homeworldz::viewer::decode_update_task_inventory(packet->payload);
                         if (task_inventory_update &&

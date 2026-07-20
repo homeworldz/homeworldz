@@ -64,6 +64,8 @@ constexpr std::array<std::byte, 4> reply_task_inventory_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x22}};
 constexpr std::array<std::byte, 4> update_task_inventory_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x1e}};
+constexpr std::array<std::byte, 4> rez_script_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x30}};
 constexpr std::array<std::byte, 4> remove_task_inventory_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x1f}};
 constexpr std::array<std::byte, 4> move_task_inventory_id{
@@ -922,6 +924,54 @@ std::optional<UpdateTaskInventory> decode_update_task_inventory(
     result.flags = read_le_u32(payload, 160);
     result.sale_type = std::to_integer<std::uint8_t>(payload[164]);
     result.sale_price = static_cast<std::int32_t>(read_le_u32(payload, 165));
+    result.name.assign(reinterpret_cast<const char*>(payload.data() + name_position), name_size);
+    if (!result.name.empty() && result.name.back() == '\0') result.name.pop_back();
+    result.description.assign(
+        reinterpret_cast<const char*>(payload.data() + description_position), description_size);
+    if (!result.description.empty() && result.description.back() == '\0')
+        result.description.pop_back();
+    const auto trailing_position = description_position + description_size;
+    result.creation_date = static_cast<std::int32_t>(read_le_u32(payload, trailing_position));
+    result.crc = read_le_u32(payload, trailing_position + 4);
+    return result;
+}
+
+std::optional<RezScript> decode_rez_script(std::span<const std::byte> payload) {
+    constexpr std::size_t name_length_offset = 185;
+    if (payload.size() < name_length_offset + 1 ||
+        !std::equal(rez_script_id.begin(), rez_script_id.end(), payload.begin()))
+        return std::nullopt;
+    auto position = name_length_offset;
+    const auto name_size = std::to_integer<std::size_t>(payload[position++]);
+    if (position + name_size + 1 > payload.size()) return std::nullopt;
+    const auto name_position = position;
+    position += name_size;
+    const auto description_size = std::to_integer<std::size_t>(payload[position++]);
+    if (position + description_size + 8 != payload.size()) return std::nullopt;
+    const auto description_position = position;
+    RezScript result;
+    std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
+    std::copy_n(payload.begin() + 36, 16, result.agent_group_id.begin());
+    result.local_id = read_le_u32(payload, 52);
+    result.enabled = payload[56] != std::byte{};
+    std::copy_n(payload.begin() + 57, 16, result.item_id.begin());
+    std::copy_n(payload.begin() + 73, 16, result.folder_id.begin());
+    std::copy_n(payload.begin() + 89, 16, result.creator_id.begin());
+    std::copy_n(payload.begin() + 105, 16, result.owner_id.begin());
+    std::copy_n(payload.begin() + 121, 16, result.group_id.begin());
+    result.base_permissions = read_le_u32(payload, 137);
+    result.owner_permissions = read_le_u32(payload, 141);
+    result.group_permissions = read_le_u32(payload, 145);
+    result.everyone_permissions = read_le_u32(payload, 149);
+    result.next_owner_permissions = read_le_u32(payload, 153);
+    result.group_owned = payload[157] != std::byte{};
+    std::copy_n(payload.begin() + 158, 16, result.transaction_id.begin());
+    result.asset_type = static_cast<std::int8_t>(std::to_integer<std::uint8_t>(payload[174]));
+    result.inventory_type = static_cast<std::int8_t>(std::to_integer<std::uint8_t>(payload[175]));
+    result.flags = read_le_u32(payload, 176);
+    result.sale_type = std::to_integer<std::uint8_t>(payload[180]);
+    result.sale_price = static_cast<std::int32_t>(read_le_u32(payload, 181));
     result.name.assign(reinterpret_cast<const char*>(payload.data() + name_position), name_size);
     if (!result.name.empty() && result.name.back() == '\0') result.name.pop_back();
     result.description.assign(
