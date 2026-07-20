@@ -2675,6 +2675,73 @@ int main(int argc, char* argv[]) {
                                                               << homeworldz::api::json_string(transfer->id)
                                                               << "}" << std::endl;
                                             }
+                                        } else if (viewer_grid && storage) {
+                                            // "New Script"/"New Note" in the
+                                            // Contents tab: a fresh item that is
+                                            // neither already in the task nor an
+                                            // existing agent-inventory item. Mint
+                                            // the default asset for its type and
+                                            // add it to the task.
+                                            const auto initial =
+                                                homeworldz::inventory::default_asset_content(
+                                                    task_inventory_update->asset_type,
+                                                    task_inventory_update->inventory_type,
+                                                    provisioned_region_id, entity->position);
+                                            if (initial && task_inventory_update->transaction_id ==
+                                                               homeworldz::viewer::Uuid{}) {
+                                                operation = "create";
+                                                std::string new_asset_id;
+                                                try {
+                                                    new_asset_id = homeworldz::viewer::random_uuid();
+                                                    const auto content = std::span(
+                                                        reinterpret_cast<const std::byte*>(initial->data()),
+                                                        initial->size());
+                                                    const auto metadata = storage->store_asset(
+                                                        new_asset_id, agent_id, content);
+                                                    if (!viewer_grid->register_asset(
+                                                            metadata.viewer_id, metadata.creator_id,
+                                                            metadata.sha256, metadata.size,
+                                                            region_public_endpoint, true))
+                                                        new_asset_id.clear();
+                                                } catch (const std::exception&) {
+                                                    new_asset_id.clear();
+                                                }
+                                                if (!new_asset_id.empty()) {
+                                                    const auto created = static_cast<std::uint64_t>(
+                                                        std::chrono::duration_cast<std::chrono::seconds>(
+                                                            std::chrono::system_clock::now()
+                                                                .time_since_epoch())
+                                                            .count());
+                                                    entity->task_inventory.push_back(
+                                                        {homeworldz::viewer::random_uuid(), new_asset_id,
+                                                         agent_id, agent_id, agent_id,
+                                                         "00000000-0000-0000-0000-000000000000",
+                                                         task_inventory_update->name,
+                                                         task_inventory_update->description,
+                                                         task_inventory_update->asset_type,
+                                                         task_inventory_update->inventory_type,
+                                                         task_inventory_update->flags,
+                                                         homeworldz::scene::permission_creator,
+                                                         homeworldz::scene::permission_creator, 0, 0,
+                                                         homeworldz::scene::permission_all,
+                                                         static_cast<std::uint8_t>(
+                                                             task_inventory_update->sale_type),
+                                                         task_inventory_update->sale_price, created});
+                                                    entity->task_inventory_serial =
+                                                        previous_serial == 65535
+                                                            ? 1
+                                                            : static_cast<std::uint16_t>(
+                                                                  previous_serial + 1);
+                                                    try {
+                                                        storage->save_snapshot(scene);
+                                                        changed = true;
+                                                    } catch (...) {
+                                                        entity->task_inventory.pop_back();
+                                                        entity->task_inventory_serial = previous_serial;
+                                                        throw;
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
