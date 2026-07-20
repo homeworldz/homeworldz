@@ -15,6 +15,7 @@ const (
 	PrivMap      = "map"
 	PrivDeploy   = "deploy"
 	PrivUndeploy = "undeploy"
+	PrivSystem   = "system"
 	PrivAdmin    = "admin"
 	PrivSuper    = "super"
 )
@@ -27,7 +28,7 @@ var adminExpansion = []string{PrivUsers, PrivBans, PrivRegions, PrivMap, PrivDep
 // allNamedPrivileges is every privilege `super` grants; it is also the set of
 // privileges an endpoint can require.
 var allNamedPrivileges = []string{
-	PrivUsers, PrivBans, PrivRegions, PrivMap, PrivDeploy, PrivUndeploy, PrivAdmin, PrivSuper,
+	PrivUsers, PrivBans, PrivRegions, PrivMap, PrivDeploy, PrivUndeploy, PrivSystem, PrivAdmin, PrivSuper,
 }
 
 // ErrInvalidPrivileges is returned when a privilege string violates the

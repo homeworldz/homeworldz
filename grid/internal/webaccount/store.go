@@ -63,6 +63,8 @@ type Account struct {
 	Privileges  string
 	AuthVersion int
 	Verified    bool
+	Kind        string
+	Tags        string
 }
 
 // Ban describes an account suspension.
@@ -107,7 +109,7 @@ func (s *PostgresStore) WithInventoryProvisioner(p InventoryProvisioner) *Postgr
 	return s
 }
 
-const accountColumns = "id, username, display_name, created_at, privileges, auth_version, verified_at"
+const accountColumns = "id, username, display_name, created_at, privileges, auth_version, verified_at, kind, tags"
 
 type rowScanner interface {
 	Scan(dest ...any) error
@@ -120,7 +122,7 @@ func scanAccount(row rowScanner) (Account, error) {
 		verifiedAt  sql.NullTime
 	)
 	if err := row.Scan(&account.ID, &account.Userid, &displayName, &account.RezDate,
-		&account.Privileges, &account.AuthVersion, &verifiedAt); err != nil {
+		&account.Privileges, &account.AuthVersion, &verifiedAt, &account.Kind, &account.Tags); err != nil {
 		return Account{}, err
 	}
 	account.DisplayName = displayName.String
@@ -353,6 +355,32 @@ func (s *PostgresStore) GetManaged(ctx context.Context, id string) (ManagedAccou
 	return toManaged(account, ban), nil
 }
 
+// SetClassification sets an account's kind and tags. The kind must be a
+// recognized user kind; tags are normalized. Classification does not affect
+// authorization, so the authorization version is left unchanged.
+func (s *PostgresStore) SetClassification(ctx context.Context, id, kind, tags string) (ManagedAccount, error) {
+	if !ValidUserKind(kind) {
+		return ManagedAccount{}, ErrInvalidKind
+	}
+	normalized, err := NormalizeTags(tags)
+	if err != nil {
+		return ManagedAccount{}, err
+	}
+	result, err := s.db.ExecContext(ctx,
+		"UPDATE users SET kind = $2, tags = $3 WHERE id = $1", id, kind, normalized)
+	if err != nil {
+		return ManagedAccount{}, fmt.Errorf("set classification: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return ManagedAccount{}, fmt.Errorf("set classification: %w", err)
+	}
+	if affected == 0 {
+		return ManagedAccount{}, ErrNotFound
+	}
+	return s.GetManaged(ctx, id)
+}
+
 // UpdateProfile updates the display name of an account and returns it. It does
 // not change the userid, which is fixed at registration. The new display name
 // must be two words yielding a valid userid form, and its normalized key must
@@ -443,7 +471,7 @@ func (s *PostgresStore) List(ctx context.Context, search, cursor string, limit i
 	}
 	pattern := "%" + strings.ReplaceAll(strings.ReplaceAll(search, "%", `\%`), "_", `\_`) + "%"
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT u.id, u.username, u.display_name, u.created_at, u.privileges, u.auth_version, u.verified_at,
+		SELECT u.id, u.username, u.display_name, u.created_at, u.privileges, u.auth_version, u.verified_at, u.kind, u.tags,
 		       b.reason, b.expires_at, b.banned_at, b.banned_by
 		FROM users u
 		LEFT JOIN account_bans b ON b.user_id = u.id
@@ -617,7 +645,7 @@ func scanManagedRow(row rowScanner) (Account, *Ban, error) {
 		bannedBy    sql.NullString
 	)
 	if err := row.Scan(&account.ID, &account.Userid, &displayName, &account.RezDate,
-		&account.Privileges, &account.AuthVersion, &verifiedAt,
+		&account.Privileges, &account.AuthVersion, &verifiedAt, &account.Kind, &account.Tags,
 		&reason, &expiresAt, &bannedAt, &bannedBy); err != nil {
 		return Account{}, nil, fmt.Errorf("scan managed account: %w", err)
 	}

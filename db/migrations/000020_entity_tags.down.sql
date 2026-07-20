@@ -1,0 +1,3 @@
+ALTER TABLE users DROP COLUMN IF EXISTS kind, DROP COLUMN IF EXISTS tags;
+ALTER TABLE provisioned_regions DROP COLUMN IF EXISTS kind, DROP COLUMN IF EXISTS tags;
+DELETE FROM schema_metadata WHERE version = 20;

@@ -22,6 +22,20 @@ const (
 
 const defaultViewerPort = 42002
 
+// Region kinds capture provenance and are mutually exclusive: grid = provided
+// by the grid operator, user = created by a resident. Essential/protected
+// status is expressed with a tag (e.g. "system"), not a kind.
+const (
+	regionKindGrid = "grid"
+	regionKindUser = "user"
+)
+
+var regionKinds = map[string]bool{regionKindGrid: true, regionKindUser: true}
+
+// validRegionSizes are the supported region footprints in grid units (each unit
+// is 256 m): 1 = 256x256, 2 = 512x512, 4 = 1024x1024.
+var validRegionSizes = map[int]bool{1: true, 2: true, 4: true}
+
 // adminRegionsRoot handles GET/POST /v1/admin/regions.
 func (a *API) adminRegionsRoot(w http.ResponseWriter, r *http.Request) {
 	account, ok := a.requireAuth(w, r)
@@ -87,6 +101,27 @@ func (a *API) createRegion(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, Error{Code: "invalid_region", Message: "viewerPort must be between 1 and 65535", Field: "viewerPort"})
 		return
 	}
+	size := 1
+	if request.Size != nil {
+		size = *request.Size
+	}
+	if !validRegionSizes[size] {
+		writeError(w, http.StatusBadRequest, Error{Code: "invalid_region", Message: "size must be 1, 2, or 4", Field: "size"})
+		return
+	}
+	kind := regionKindUser
+	if request.Kind != "" {
+		if !regionKinds[request.Kind] {
+			writeError(w, http.StatusBadRequest, Error{Code: "invalid_kind", Message: "kind must be grid or user", Field: "kind"})
+			return
+		}
+		kind = request.Kind
+	}
+	tags, err := webaccount.NormalizeTags(request.Tags)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, Error{Code: "invalid_tags", Message: "tags must be a comma-separated list of lowercase tokens", Field: "tags"})
+		return
+	}
 	id, err := newRegionID()
 	if err != nil {
 		a.internalError(w, r, "create region id", err)
@@ -99,9 +134,9 @@ func (a *API) createRegion(w http.ResponseWriter, r *http.Request) {
 	}
 	created, err := a.regions.Create(r.Context(), provisioning.Region{
 		ID: id, Name: name, OwnerUserID: request.OwnerUserID,
-		MapX: *request.GridX, MapY: *request.GridY, Size: 1, Maturity: 0,
+		MapX: *request.GridX, MapY: *request.GridY, Size: size, Maturity: 0,
 		PublicEndpoint: strings.TrimSpace(request.PublicEndpoint), ViewerPort: viewerPort,
-		Enabled: true, AccessKey: accessKey,
+		Enabled: true, Kind: kind, Tags: tags, AccessKey: accessKey,
 	})
 	if handled := a.writeRegionStoreError(w, r, err, "create region"); handled {
 		return
@@ -165,9 +200,38 @@ func (a *API) adminRegionByID(w http.ResponseWriter, r *http.Request) {
 		a.undeployRegion(w, r, id)
 	case len(parts) == 2 && parts[1] == "deployment":
 		methodNotAllowed(w, http.MethodPost, http.MethodDelete)
+	case len(parts) == 2 && parts[1] == "tags" && r.Method == http.MethodPut:
+		if !a.requirePrivilege(w, account, webaccount.PrivRegions) {
+			return
+		}
+		a.setRegionTags(w, r, id)
+	case len(parts) == 2 && parts[1] == "tags":
+		methodNotAllowed(w, http.MethodPut)
 	default:
 		a.notFound(w, r)
 	}
+}
+
+func (a *API) setRegionTags(w http.ResponseWriter, r *http.Request, id string) {
+	var request setTagsRequest
+	if !decodeJSON(w, r, &request) {
+		return
+	}
+	if !regionKinds[request.Kind] {
+		writeError(w, http.StatusBadRequest, Error{Code: "invalid_kind", Message: "kind must be grid or user", Field: "kind"})
+		return
+	}
+	tags, err := webaccount.NormalizeTags(request.Tags)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, Error{Code: "invalid_tags", Message: "tags must be a comma-separated list of lowercase tokens", Field: "tags"})
+		return
+	}
+	kind := request.Kind
+	updated, err := a.regions.Update(r.Context(), id, provisioning.Update{Kind: &kind, Tags: &tags})
+	if handled := a.writeRegionStoreError(w, r, err, "set region tags"); handled {
+		return
+	}
+	writeJSON(w, http.StatusOK, a.managedRegionOf(r.Context(), updated))
 }
 
 func (a *API) updateRegion(w http.ResponseWriter, r *http.Request, id string) {
@@ -292,6 +356,7 @@ func (a *API) managedRegionOf(ctx context.Context, region provisioning.Region) M
 		ID: region.ID, Name: region.Name, OwnerUserID: region.OwnerUserID,
 		GridX: &x, GridY: &y, PublicEndpoint: region.PublicEndpoint,
 		ViewerPort: region.ViewerPort, Enabled: region.Enabled,
+		Size: region.Size, Kind: region.Kind, Tags: region.Tags,
 	}
 	if !region.Enabled {
 		managed.State = regionUndeployed

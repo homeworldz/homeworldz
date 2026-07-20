@@ -36,6 +36,8 @@ type Region struct {
 	PublicEndpoint string `json:"publicEndpoint,omitempty"`
 	ViewerPort     int    `json:"viewerPort,omitempty"`
 	Enabled        bool   `json:"enabled"`
+	Kind           string `json:"kind,omitempty"`
+	Tags           string `json:"tags,omitempty"`
 	AccessKey      string `json:"-"`
 }
 
@@ -49,6 +51,8 @@ type Update struct {
 	PublicEndpoint *string
 	ViewerPort     *int
 	Enabled        *bool
+	Kind           *string
+	Tags           *string
 }
 
 type fileRegion struct {
@@ -62,6 +66,8 @@ type fileRegion struct {
 	PublicEndpoint string `json:"publicEndpoint,omitempty"`
 	ViewerPort     int    `json:"viewerPort,omitempty"`
 	Enabled        *bool  `json:"enabled,omitempty"`
+	Kind           string `json:"kind,omitempty"`
+	Tags           string `json:"tags,omitempty"`
 	AccessKey      string `json:"accessKey"`
 }
 
@@ -105,10 +111,15 @@ func Load(path string) (*Registry, error) {
 		if item.Size != nil {
 			size = *item.Size
 		}
+		kind := item.Kind
+		if kind == "" {
+			kind = "user"
+		}
 		region := Region{ID: item.ID, Name: item.Name, OwnerUserID: item.OwnerUserID,
 			MapX: item.MapX, MapY: item.MapY, Size: size, Maturity: item.Maturity,
 			PublicEndpoint: item.PublicEndpoint,
-			ViewerPort:     item.ViewerPort, Enabled: enabled, AccessKey: item.AccessKey}
+			ViewerPort:     item.ViewerPort, Enabled: enabled, Kind: kind, Tags: item.Tags,
+			AccessKey: item.AccessKey}
 		if err := validate(region); err != nil {
 			return nil, fmt.Errorf("invalid provisioned region at index %d: %w", index, err)
 		}
@@ -189,6 +200,9 @@ func (r *Registry) Create(_ context.Context, item Region) (Region, error) {
 	if item.Size == 0 {
 		item.Size = 1
 	}
+	if item.Kind == "" {
+		item.Kind = "user"
+	}
 	if err := validate(item); err != nil {
 		return Region{}, err
 	}
@@ -245,6 +259,12 @@ func (r *Registry) Update(_ context.Context, id string, update Update) (Region, 
 	}
 	if update.Enabled != nil {
 		item.Enabled = *update.Enabled
+	}
+	if update.Kind != nil {
+		item.Kind = *update.Kind
+	}
+	if update.Tags != nil {
+		item.Tags = *update.Tags
 	}
 	if err := validate(item); err != nil {
 		return Region{}, err
@@ -310,7 +330,8 @@ func (r *Registry) persist(items map[string]Region) error {
 		stored = append(stored, fileRegion{ID: item.ID, Name: item.Name, OwnerUserID: item.OwnerUserID,
 			MapX: item.MapX, MapY: item.MapY, Size: &size, Maturity: item.Maturity,
 			PublicEndpoint: item.PublicEndpoint,
-			ViewerPort:     item.ViewerPort, Enabled: &enabled, AccessKey: item.AccessKey})
+			ViewerPort:     item.ViewerPort, Enabled: &enabled, Kind: item.Kind, Tags: item.Tags,
+			AccessKey: item.AccessKey})
 	}
 	sort.Slice(stored, func(i, j int) bool {
 		if stored[i].MapY != stored[j].MapY {

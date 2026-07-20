@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/homeworldz/homeworldz/grid/internal/mailer"
+	"github.com/homeworldz/homeworldz/grid/internal/presence"
 	"github.com/homeworldz/homeworldz/grid/internal/provisioning"
 	"github.com/homeworldz/homeworldz/grid/internal/regions"
 	"github.com/homeworldz/homeworldz/grid/internal/webaccount"
@@ -41,6 +42,7 @@ type AccountStore interface {
 	ReplacePrivileges(ctx context.Context, id, privs string) (webaccount.ManagedAccount, error)
 	Ban(ctx context.Context, id, reason string, expiresAt *time.Time, bannedBy string) (webaccount.ManagedAccount, error)
 	Unban(ctx context.Context, id string) (webaccount.ManagedAccount, error)
+	SetClassification(ctx context.Context, id, kind, tags string) (webaccount.ManagedAccount, error)
 }
 
 // RegionStore is the provisioned-region persistence the API depends on. It is
@@ -62,11 +64,18 @@ type LeaseStore interface {
 	DeregisterProvisioned(ctx context.Context, id string) error
 }
 
+// PresenceStore exposes active viewer presences for system status. It is
+// satisfied by *presence.PostgresStore.
+type PresenceStore interface {
+	List(ctx context.Context) ([]presence.Presence, error)
+}
+
 // Options configures New.
 type Options struct {
 	Accounts        AccountStore
 	Regions         RegionStore
 	Leases          LeaseStore
+	Presence        PresenceStore
 	Signer          *webtoken.Signer
 	Mailer          mailer.Mailer
 	Logger          *slog.Logger
@@ -81,6 +90,7 @@ type API struct {
 	accounts        AccountStore
 	regions         RegionStore
 	leases          LeaseStore
+	presence        PresenceStore
 	signer          *webtoken.Signer
 	mailer          mailer.Mailer
 	logger          *slog.Logger
@@ -116,6 +126,7 @@ func New(options Options) (http.Handler, error) {
 		accounts:        options.Accounts,
 		regions:         options.Regions,
 		leases:          options.Leases,
+		presence:        options.Presence,
 		signer:          options.Signer,
 		mailer:          options.Mailer,
 		logger:          options.Logger,
@@ -136,6 +147,7 @@ func New(options Options) (http.Handler, error) {
 	mux.HandleFunc("/v1/admin/users/", a.adminUserByID)
 	mux.HandleFunc("/v1/admin/regions", a.adminRegionsRoot)
 	mux.HandleFunc("/v1/admin/regions/", a.adminRegionByID)
+	mux.HandleFunc("/v1/admin/system/status", a.systemStatus)
 	mux.HandleFunc("/", a.notFound)
 
 	return withRecovery(withRequestID(withRequestLogging(
@@ -207,7 +219,12 @@ func identityOf(account webaccount.Account) Identity {
 
 // managedUserOf maps a managed account to the ManagedUser DTO.
 func managedUserOf(account webaccount.ManagedAccount) ManagedUser {
-	user := ManagedUser{Identity: identityOf(account.Account), State: account.State}
+	user := ManagedUser{
+		Identity: identityOf(account.Account),
+		State:    account.State,
+		Kind:     account.Kind,
+		Tags:     account.Tags,
+	}
 	if account.Ban != nil {
 		ban := &Ban{Reason: account.Ban.Reason, BannedAt: account.Ban.BannedAt.UTC(), BannedBy: account.Ban.BannedBy}
 		if account.Ban.ExpiresAt != nil {

@@ -31,6 +31,8 @@ type ManagedUser struct {
 	Identity
 	State string `json:"state"`
 	Ban   *Ban   `json:"ban,omitempty"`
+	Kind  string `json:"kind"`
+	Tags  string `json:"tags"`
 }
 
 // UserPage is a page of managed users.
@@ -65,6 +67,9 @@ type ManagedRegion struct {
 	Enabled        bool       `json:"enabled"`
 	State          string     `json:"state"`
 	LeaseExpiresAt *time.Time `json:"leaseExpiresAt,omitempty"`
+	Size           int        `json:"size"`
+	Kind           string     `json:"kind"`
+	Tags           string     `json:"tags"`
 }
 
 // RegionList is a list of provisioned regions.
@@ -124,6 +129,15 @@ type createRegionRequest struct {
 	GridY          *int   `json:"gridY"`
 	PublicEndpoint string `json:"publicEndpoint"`
 	ViewerPort     *int   `json:"viewerPort"`
+	Size           *int   `json:"size"`
+	Kind           string `json:"kind"`
+	Tags           string `json:"tags"`
+}
+
+// setTagsRequest carries a classification update for a user or region.
+type setTagsRequest struct {
+	Kind string `json:"kind"`
+	Tags string `json:"tags"`
 }
 
 type updateRegionRequest struct {

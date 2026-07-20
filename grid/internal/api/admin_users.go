@@ -79,10 +79,17 @@ func (a *API) adminUserByID(w http.ResponseWriter, r *http.Request) {
 		a.adminBanUser(w, r, account, id)
 	case len(parts) == 2 && parts[1] == "ban" && r.Method == http.MethodDelete:
 		a.adminUnbanUser(w, r, account, id)
+	case len(parts) == 2 && parts[1] == "tags" && r.Method == http.MethodPut:
+		if !a.requirePrivilege(w, account, webaccount.PrivUsers) {
+			return
+		}
+		a.adminSetUserTags(w, r, id)
 	case len(parts) == 2 && parts[1] == "privileges":
 		methodNotAllowed(w, http.MethodPut)
 	case len(parts) == 2 && parts[1] == "ban":
 		methodNotAllowed(w, http.MethodPut, http.MethodDelete)
+	case len(parts) == 2 && parts[1] == "tags":
+		methodNotAllowed(w, http.MethodPut)
 	default:
 		a.notFound(w, r)
 	}
@@ -193,6 +200,29 @@ func (a *API) adminUnbanUser(w http.ResponseWriter, r *http.Request, actor webac
 		return
 	case err != nil:
 		a.internalError(w, r, "unban user", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, managedUserOf(managed))
+}
+
+func (a *API) adminSetUserTags(w http.ResponseWriter, r *http.Request, id string) {
+	var request setTagsRequest
+	if !decodeJSON(w, r, &request) {
+		return
+	}
+	managed, err := a.accounts.SetClassification(r.Context(), id, request.Kind, request.Tags)
+	switch {
+	case errors.Is(err, webaccount.ErrInvalidKind):
+		writeError(w, http.StatusBadRequest, Error{Code: "invalid_kind", Message: "kind must be system, testing, or default", Field: "kind"})
+		return
+	case errors.Is(err, webaccount.ErrInvalidTags):
+		writeError(w, http.StatusBadRequest, Error{Code: "invalid_tags", Message: "tags must be a comma-separated list of lowercase tokens", Field: "tags"})
+		return
+	case errors.Is(err, webaccount.ErrNotFound):
+		a.writeNotFound(w)
+		return
+	case err != nil:
+		a.internalError(w, r, "set user tags", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, managedUserOf(managed))

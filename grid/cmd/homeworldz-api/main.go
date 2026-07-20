@@ -20,6 +20,7 @@ import (
 
 	"github.com/homeworldz/homeworldz/grid/internal/config"
 	"github.com/homeworldz/homeworldz/grid/internal/mailer"
+	"github.com/homeworldz/homeworldz/grid/internal/presence"
 	"github.com/homeworldz/homeworldz/grid/internal/provisioning"
 	"github.com/homeworldz/homeworldz/grid/internal/regions"
 	"github.com/homeworldz/homeworldz/grid/internal/webaccount"
@@ -69,6 +70,7 @@ func main() {
 		Accounts:        webaccount.NewPostgresStore(db),
 		Regions:         provisioning.NewPostgresStore(db),
 		Leases:          regions.NewPostgresStore(db),
+		Presence:        presence.NewPostgresStore(db),
 		Signer:          signer,
 		Mailer:          mail,
 		Logger:          logger,
