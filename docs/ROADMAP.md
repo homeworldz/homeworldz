@@ -12,7 +12,7 @@ acceptance tests pass.
 
 ## Progress snapshot
 
-Updated 2026-07-18. These bars are effort-weighted engineering estimates, not
+Updated 2026-07-20. These bars are effort-weighted engineering estimates, not
 simple checkbox ratios. Later scripting, crossings, social systems, security,
 recovery, and scale items are substantially larger than many completed viewer
 protocol tasks. Percentages are deliberately approximate and should be revised
@@ -30,8 +30,8 @@ when scope or implementation evidence changes.
 | 2. Connected Multi-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="70" aria-label="Phase 2 progress: 70%">70%</progress> | 70% |
 | 3. Interactive Physical World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="39" aria-label="Phase 3 progress: 39%">39%</progress> | 39% |
 | 4. LSL Scripting | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="2" aria-label="Phase 4 progress: 2%">2%</progress> | 2% |
-| 5. Social and Creator Platform | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="7" aria-label="Phase 5 progress: 7%">7%</progress> | 7% |
-| 6. Reliable Operations and Distribution | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="10" aria-label="Phase 6 progress: 10%">10%</progress> | 10% |
+| 5. Social and Creator Platform | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="9" aria-label="Phase 5 progress: 9%">9%</progress> | 9% |
+| 6. Reliable Operations and Distribution | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="12" aria-label="Phase 6 progress: 12%">12%</progress> | 12% |
 | 7. Scale, Compatibility, and Ecosystem | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="2" aria-label="Phase 7 progress: 2%">2%</progress> | 2% |
 
 The overall estimate is weighted by expected effort and therefore is not the
