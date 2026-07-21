@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/binary"
@@ -154,8 +155,20 @@ func (a *API) viewerLogin(w http.ResponseWriter, r *http.Request) {
 		writeViewerLogin(w, loginFailure("unavailable", "The HomeWorldz grid is not ready."))
 		return
 	}
+	body, readErr := io.ReadAll(http.MaxBytesReader(w, r.Body, 1024*1024))
+	if readErr != nil {
+		writeViewerLogin(w, loginFailure("key", "The viewer login request is invalid."))
+		return
+	}
+	// Modern viewers and LibreMetaverse use LLSD login; Firestorm 7.2.4 uses
+	// the legacy XML-RPC login_to_simulator. Support both by dispatching on the
+	// document type.
+	if bytes.Contains(body, []byte("<llsd")) {
+		a.viewerLoginLLSD(w, r, body)
+		return
+	}
 	var call rpcMethodCall
-	decoder := xml.NewDecoder(http.MaxBytesReader(w, r.Body, 1024*1024))
+	decoder := xml.NewDecoder(bytes.NewReader(body))
 	if err := decoder.Decode(&call); err != nil || call.Method != "login_to_simulator" || len(call.Params.Items) != 1 {
 		writeViewerLogin(w, loginFailure("key", "The viewer login request is invalid."))
 		return
@@ -164,25 +177,52 @@ func (a *API) viewerLogin(w http.ResponseWriter, r *http.Request) {
 		writeViewerLogin(w, loginFailure("key", "The viewer login request contains trailing data."))
 		return
 	}
-	fields := call.Params.Items[0].Value.fields()
-	first, last := strings.TrimSpace(fields["first"].text()), strings.TrimSpace(fields["last"].text())
+	callFields := call.Params.Items[0].Value.fields()
+	result, reason, message := a.resolveViewerLogin(r,
+		callFields["first"].text(), callFields["last"].text(),
+		callFields["passwd"].text(), callFields["start"].text())
+	if reason != "" {
+		writeViewerLogin(w, loginFailure(reason, message))
+		return
+	}
+	writeViewerLogin(w, a.xmlrpcLoginResponse(result))
+}
+
+// loginFields is the resolved result of a viewer login, independent of the wire
+// format (XML-RPC or LLSD) used to request it.
+type loginFields struct {
+	agentID, sessionID, secureID string
+	first, last                  string
+	circuit                      uint32
+	simIP                        string
+	simPort, regionX, regionY    int
+	regionSizeX, regionSizeY     int
+	startLocation, lookAt        string
+	seedCapability               string
+	folders                      []inventory.Folder
+	libFolders                   []inventory.Folder
+}
+
+// resolveViewerLogin performs authentication, region resolution, circuit
+// allocation, and inventory preparation shared by every login wire format. It
+// returns the resolved fields, or a ("", reason, message) failure triple.
+func (a *API) resolveViewerLogin(r *http.Request, firstRaw, lastRaw, passwd, start string) (*loginFields, string, string) {
+	first := strings.TrimSpace(firstRaw)
+	last := strings.TrimSpace(lastRaw)
 	username := strings.ToLower(first)
 	if last != "" && !strings.EqualFold(last, "Resident") {
 		username += "." + strings.ToLower(last)
 	}
-	passwordHash := strings.TrimPrefix(fields["passwd"].text(), "$1$")
+	passwordHash := strings.TrimPrefix(passwd, "$1$")
 	if first == "" || len(passwordHash) != 32 {
-		writeViewerLogin(w, loginFailure("key", "The username or password is incorrect."))
-		return
+		return nil, "key", "The username or password is incorrect."
 	}
 	session, err := a.identity.CreateViewerSession(r.Context(), username, strings.ToLower(passwordHash), 12*time.Hour)
 	if errors.Is(err, identity.ErrInvalidCredentials) {
-		writeViewerLogin(w, loginFailure("key", "The username or password is incorrect."))
-		return
+		return nil, "key", "The username or password is incorrect."
 	}
 	if err != nil {
-		writeViewerLogin(w, loginFailure("unavailable", "The HomeWorldz grid could not create a session."))
-		return
+		return nil, "unavailable", "The HomeWorldz grid could not create a session."
 	}
 	lastRegionID := ""
 	if a.locations != nil {
@@ -190,74 +230,63 @@ func (a *API) viewerLogin(w http.ResponseWriter, r *http.Request) {
 			lastRegionID = location.RegionID
 		}
 	}
-	region, err := resolveDestination(r.Context(), a.regions, fields["start"].text(), lastRegionID)
+	region, err := resolveDestination(r.Context(), a.regions, start, lastRegionID)
 	if err != nil {
 		_ = a.identity.RevokeSession(r.Context(), session.ID)
-		writeViewerLogin(w, loginFailure("destination", "No online region matches the requested destination."))
-		return
+		return nil, "destination", "No online region matches the requested destination."
 	}
 	endpoint, err := url.Parse(region.PublicEndpoint)
 	if err != nil || endpoint.Hostname() == "" {
 		_ = a.identity.RevokeSession(r.Context(), session.ID)
-		writeViewerLogin(w, loginFailure("unavailable", "The destination region endpoint is invalid."))
-		return
+		return nil, "unavailable", "The destination region endpoint is invalid."
 	}
 	circuit, err := newCircuitCode()
 	if err != nil {
 		_ = a.identity.RevokeSession(r.Context(), session.ID)
-		writeViewerLogin(w, loginFailure("unavailable", "The grid could not allocate a viewer circuit."))
-		return
+		return nil, "unavailable", "The grid could not allocate a viewer circuit."
 	}
 	if err := a.identity.AssignViewerDestination(r.Context(), session.ID, circuit, region.ID); err != nil {
 		_ = a.identity.RevokeSession(r.Context(), session.ID)
-		writeViewerLogin(w, loginFailure("unavailable", "The grid could not assign the viewer circuit."))
-		return
+		return nil, "unavailable", "The grid could not assign the viewer circuit."
 	}
 	folders := inventory.SystemFolders(session.UserID)
 	if a.inventory != nil {
 		folders, err = a.inventory.EnsureSystemFolders(r.Context(), session.UserID)
 		if err != nil {
 			_ = a.identity.RevokeSession(r.Context(), session.ID)
-			writeViewerLogin(w, loginFailure("unavailable", "The grid could not prepare the viewer inventory."))
-			return
+			return nil, "unavailable", "The grid could not prepare the viewer inventory."
 		}
 		existingItems, err := a.inventory.ListItems(r.Context(), session.UserID)
 		if err != nil {
 			_ = a.identity.RevokeSession(r.Context(), session.ID)
-			writeViewerLogin(w, loginFailure("unavailable", "The grid could not inspect the viewer inventory."))
-			return
+			return nil, "unavailable", "The grid could not inspect the viewer inventory."
 		}
 		defaultWearables := inventory.DefaultWearables(session.UserID)
 		if !inventory.DefaultOutfitInitialized(session.UserID, existingItems) {
 			for _, item := range defaultWearables {
 				if _, err := a.inventory.EnsureItem(r.Context(), item); err != nil {
 					_ = a.identity.RevokeSession(r.Context(), session.ID)
-					writeViewerLogin(w, loginFailure("unavailable", "The grid could not prepare the default outfit."))
-					return
+					return nil, "unavailable", "The grid could not prepare the default outfit."
 				}
 			}
 		} else if inventory.DefaultOutfitNeedsRepair(session.UserID, existingItems) {
 			for index := 1; index < len(defaultWearables); index += 2 {
 				if _, err := a.inventory.EnsureItem(r.Context(), defaultWearables[index]); err != nil {
 					_ = a.identity.RevokeSession(r.Context(), session.ID)
-					writeViewerLogin(w, loginFailure("unavailable", "The grid could not repair the default outfit."))
-					return
+					return nil, "unavailable", "The grid could not repair the default outfit."
 				}
 			}
 		}
 		folders, err = a.inventory.ListFolders(r.Context(), session.UserID)
 		if err != nil {
 			_ = a.identity.RevokeSession(r.Context(), session.ID)
-			writeViewerLogin(w, loginFailure("unavailable", "The grid could not refresh the viewer inventory."))
-			return
+			return nil, "unavailable", "The grid could not refresh the viewer inventory."
 		}
 	}
-	rootID, skeleton := inventorySkeleton(folders)
 	lookAt := "[r1,r0,r0]"
 	if state, ok := a.regionStartState(r.Context(), region.PublicEndpoint, session.UserID); ok {
 		lookAt = fmt.Sprintf("[r%.9g,r%.9g,r%.9g]", state.LookAt[0], state.LookAt[1], state.LookAt[2])
 	}
-	root := rpcStructValue(rpcField("folder_id", rpcString(rootID)))
 	regionSizeX, regionSizeY := 256, 256
 	if a.provisioned != nil {
 		if provisioned, provisionErr := a.provisioned.Get(r.Context(), region.ID); provisionErr == nil {
@@ -265,27 +294,44 @@ func (a *API) viewerLogin(w http.ResponseWriter, r *http.Request) {
 			regionSizeY = provisioned.Size * 256
 		}
 	}
+	return &loginFields{
+		agentID: session.UserID, sessionID: session.ID, secureID: session.SecureID,
+		first: first, last: last, circuit: circuit,
+		simIP: endpoint.Hostname(), simPort: region.ViewerPort,
+		regionX: region.GridX * 256, regionY: region.GridY * 256,
+		regionSizeX: regionSizeX, regionSizeY: regionSizeY,
+		startLocation: normalizeStart(start), lookAt: lookAt,
+		seedCapability: strings.TrimRight(region.PublicEndpoint, "/") + "/caps/seed/" + session.ID,
+		folders:        folders,
+		libFolders:     inventory.LibraryFolders(),
+	}, "", ""
+}
+
+// xmlrpcLoginResponse serializes resolved login fields as the legacy XML-RPC
+// login_to_simulator response (Firestorm and older viewers).
+func (a *API) xmlrpcLoginResponse(f *loginFields) rpcOutputValue {
+	rootID, skeleton := inventorySkeleton(f.folders)
+	root := rpcStructValue(rpcField("folder_id", rpcString(rootID)))
 	libraryRoot := rpcStructValue(rpcField("folder_id", rpcString(inventory.LibraryRootID)))
 	libraryOwner := rpcStructValue(rpcField("agent_id", rpcString(inventory.LibraryOwnerID)))
-	_, librarySkeleton := inventorySkeleton(inventory.LibraryFolders())
-	response := rpcStructValue(
+	_, librarySkeleton := inventorySkeleton(f.libFolders)
+	return rpcStructValue(
 		rpcField("login", rpcString("true")), rpcField("message", rpcString("Welcome to "+a.gridName)),
-		rpcField("agent_id", rpcString(session.UserID)), rpcField("session_id", rpcString(session.ID)),
-		rpcField("secure_session_id", rpcString(session.SecureID)), rpcField("first_name", rpcString(first)),
-		rpcField("last_name", rpcString(last)), rpcField("circuit_code", rpcInt(int(circuit))),
-		rpcField("sim_ip", rpcString(endpoint.Hostname())), rpcField("sim_port", rpcInt(region.ViewerPort)),
-		rpcField("region_x", rpcInt(region.GridX*256)), rpcField("region_y", rpcInt(region.GridY*256)),
-		rpcField("region_size_x", rpcInt(regionSizeX)), rpcField("region_size_y", rpcInt(regionSizeY)),
-		rpcField("start_location", rpcString(normalizeStart(fields["start"].text()))),
-		rpcField("look_at", rpcString(lookAt)),
-		rpcField("seed_capability", rpcString(strings.TrimRight(region.PublicEndpoint, "/")+"/caps/seed/"+session.ID)),
+		rpcField("agent_id", rpcString(f.agentID)), rpcField("session_id", rpcString(f.sessionID)),
+		rpcField("secure_session_id", rpcString(f.secureID)), rpcField("first_name", rpcString(f.first)),
+		rpcField("last_name", rpcString(f.last)), rpcField("circuit_code", rpcInt(int(f.circuit))),
+		rpcField("sim_ip", rpcString(f.simIP)), rpcField("sim_port", rpcInt(f.simPort)),
+		rpcField("region_x", rpcInt(f.regionX)), rpcField("region_y", rpcInt(f.regionY)),
+		rpcField("region_size_x", rpcInt(f.regionSizeX)), rpcField("region_size_y", rpcInt(f.regionSizeY)),
+		rpcField("start_location", rpcString(f.startLocation)),
+		rpcField("look_at", rpcString(f.lookAt)),
+		rpcField("seed_capability", rpcString(f.seedCapability)),
 		rpcField("seconds_since_epoch", rpcInt(int(time.Now().Unix()))),
 		rpcField("inventory-root", rpcArrayValue(root)), rpcField("inventory-skeleton", rpcArrayValue(skeleton...)),
 		rpcField("inventory-lib-root", rpcArrayValue(libraryRoot)), rpcField("inventory-lib-owner", rpcArrayValue(libraryOwner)),
 		rpcField("inventory-skel-lib", rpcArrayValue(librarySkeleton...)), rpcField("login-flags", rpcArrayValue()),
 		rpcField("gestures", rpcArrayValue()), rpcField("buddy-list", rpcArrayValue()),
 	)
-	writeViewerLogin(w, response)
 }
 
 type regionStartState struct {
