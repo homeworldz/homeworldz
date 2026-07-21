@@ -34,11 +34,12 @@ minutes. Use local Windows tests and direct Linux build/tests on the OVH host.
 
 ## Repository ownership boundary
 
-This work owns the repository except for `website/`. Another conversation owns
-the `website/` subtree. Ignore changes there, do not edit or revert them, and do
-not include them in commits from this work. Parent code such as the Go Grid,
-website-facing backend APIs outside `website/`, C++ Region, scripts, deployment
-files, and `docs/` remains in scope.
+This work owns the entire current HomeWorldz repository. There is no local
+`website/` subtree. The HomeWorldz website now lives in the separate sibling
+repository `../homeworldz.com` with its own conversation and tooling. Do not
+edit, stage, commit, deploy, or otherwise operate on that sibling repository
+unless the user explicitly requests cross-repository work. The Go Grid and its
+website-facing backend APIs in this repository remain in scope.
 
 The worktree may contain changes made by the user or another agent. Preserve
 unrelated work and stage only the files belonging to the current coherent step.
@@ -119,7 +120,7 @@ Recent scripting checkpoints include:
 - `fff1308` — update roadmap for Falcon scripting progress.
 
 Do not assume these remain the tip of `main`; inspect the current log because
-the website/backend conversation may have added later commits.
+the user or other repository tooling may have added later commits.
 
 ## Product and architecture decisions
 
