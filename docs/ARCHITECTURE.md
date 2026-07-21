@@ -24,7 +24,9 @@ The current preferred split is:
 ## Goals
 
 - Preserve practical Firestorm viewer compatibility.
-- Support distributed region servers operated independently.
+- Let mostly-untrusted users run their own region servers independently — at
+  home or on a cloud VPS — participating in one grid, with the grid as the
+  trust anchor (ADR 0028).
 - Store assets primarily with the region servers that need them.
 - Guarantee that assets referenced by user inventories survive the permanent
   loss of any region.
@@ -43,6 +45,11 @@ The current preferred split is:
 - Using C#/.NET as an implementation constraint.
 - Making the central grid services the primary asset store or placing them in
   the viewer asset fetch path.
+- Trusting region operators to be present, honest, or secure: durability,
+  provenance, and metadata authority stay with the grid (ADR 0028).
+- Claiming to prevent extraction of content served to a viewer or region;
+  permissions enforce intent at grid boundaries, and local obfuscation only
+  raises the attacker's cost.
 - Making gRPC a default before there is a measured need.
 
 ## Region Server
@@ -83,9 +90,10 @@ Grid services should own:
 - Presence and online status.
 - Map and search metadata.
 - Permissions and groups.
-- Asset federation metadata and lookup.
-- The asset vault: durable storage for asset bytes referenced by user
-  inventories (ADR 0026).
+- Authoritative asset, blob, and instance metadata: creator provenance, the
+  asset→blob binding, permissions of record, and federation lookup (ADR 0027).
+- The asset vault: durable storage for the blobs behind assets referenced by
+  user inventories (ADR 0026).
 - Administrative APIs.
 - Background reconciliation jobs.
 
@@ -282,17 +290,41 @@ Assets are primarily region-local: each region server stores and serves the
 assets its scene and connected viewers need, and viewers always fetch from the
 region they are connected to.
 
+Stored content has three layers ([ADR 0027](adr/0027-asset-blob-instance-separation.md)):
+immutable **blobs** of raw bytes named by a grid-assigned `blob_id`; **assets**
+(viewer-facing UUIDs) that reference one blob and carry creator provenance and
+creator options such as grid-export permission; and **instances** (inventory
+items and rezzed scene objects) that reference one asset and carry the owner
+and the standard SL-compatible permission masks. Many instances share an asset;
+many assets may share a blob. Byte identity is the `blob_id`, so no correctness
+property depends on a content hash's strength; the hash is retained only as an
+integrity checksum. Deduplication is blob-only and optional — an asynchronous,
+byte-exact sweep — never a correctness requirement.
+
 Durability is grid-owned for inventory content. A grid-side, replica-only
-**asset vault** durably stores the deduplicated bytes of every asset
-referenced by a user inventory; an inventory item may only be committed once
-the vault holds verified bytes for its asset
+**asset vault** durably stores the blobs behind every asset referenced by a
+user inventory; an inventory item may only be committed once the vault holds
+the verified blob for its asset
 ([ADR 0026](adr/0026-vault-authoritative-inventory-assets.md)). This keeps
 inventories intact when independently operated regions disappear without
-warning. Region copies of vault-held assets are caches; assets referenced only
+warning. Region copies of vault-held blobs are caches; blobs referenced only
 by rezzed scene content are region-owned and share the fate of the region's
-scene. The vault never originates assets, never hosts agents, is never in the
-viewer data path, and may internally tier rarely accessed blobs onto slower
-S3-compatible storage.
+scene, except that a no-copy item rezzed out of inventory stays vault-durable
+because the rezzed instance is the owner's only copy. The vault never
+originates assets, never hosts agents, is never in the viewer data path, and
+may internally tier rarely accessed blobs onto slower S3-compatible storage.
+
+Because HomeWorldz is built for mostly-untrusted users to run their own
+regions, the **grid is the trust anchor and regions are untrusted**
+([ADR 0028](adr/0028-untrusted-region-trust-model.md)). The grid owns
+authoritative metadata, provenance, and durability; a region may vanish, be
+hostile, or serve wrong bytes. Federation authorization is per-owner — one
+token per owner across their regions, contained to those regions, replacing
+the interim shared token — and a fetching region verifies bytes from another
+region against the grid-recorded checksum. Owners keep full local control of
+their regions and content, including local file-based backups and
+permission-aware IAR/OAR export, while the vault provides authoritative
+durability on top.
 
 The asset model supports:
 
@@ -302,18 +334,25 @@ The asset model supports:
   the always-available source for inventory-referenced assets.
 - Authorized asset copy or replication when content moves between regions.
 - Asset metadata lookup through grid services where useful.
+- Per-owner federation authorization and checksum-verified fetch between
+  untrusted regions (ADR 0028).
 
-Local asset bytes are immutable SHA-256-addressed blobs sharded by the first
-hash byte. SQLite maps viewer-facing UUIDs to hashes, sizes, and required
-creator UUID provenance, allowing many UUIDs to share one blob. Creator
-provenance is independent of inventory ownership. A viewer UUID cannot be
-remapped to different content or provenance. Grid metadata locates stable
-region origin and replica endpoints; receiving regions verify size and SHA-256
-before retaining the same UUID and creator. Reads verify the content hash
-before returning bytes; garbage collection is deferred, and region eviction of
-vault-held blobs becomes safe once the vault exists. See
-[ADR 0020](adr/0020-asset-origin-and-replication.md) and
-[ADR 0026](adr/0026-vault-authoritative-inventory-assets.md).
+Today the region store addresses blobs by SHA-256, sharded by the first hash
+byte, and recomputes the hash on read. Under ADR 0027 blob identity becomes the
+grid-assigned `blob_id`, the SHA-256 is retained as an integrity checksum, and
+the on-read recompute relaxes to trust the storage layer — verification
+concentrates at the untrusted cross-region fetch boundary. Creator provenance
+is required and independent of inventory ownership; a viewer-facing UUID cannot
+be remapped to different content or creator, an immutability that rests on the
+`asset → blob` binding and creator rather than on comparing hashes. Grid
+metadata locates stable origin and replica endpoints (per blob under ADR 0027);
+a fetching region verifies bytes against the recorded checksum before retaining
+them. Garbage collection is deferred and driven by reference counting over
+back-links (ADR 0027); region eviction of vault-held blobs becomes safe once
+the vault exists. See
+[ADR 0020](adr/0020-asset-origin-and-replication.md),
+[ADR 0026](adr/0026-vault-authoritative-inventory-assets.md), and
+[ADR 0027](adr/0027-asset-blob-instance-separation.md).
 
 This replaces the assumption that WHIP/Aperture are central platform services.
 They remain useful references for asset behavior and performance expectations.
