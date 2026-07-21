@@ -2,6 +2,14 @@
 
 Status: Accepted
 
+ADR 0027 amends the identity model below: blob identity becomes a grid-assigned
+`blob_id`, not the content hash. The SHA-256 recorded here is retained only as
+an optional **integrity checksum** for verifying bytes fetched across a trust
+boundary; the on-read recompute described below is relaxed to trust the storage
+layer, as everywhere else in the system. It no longer names the blob, so no
+correctness property depends on hash collision-resistance. Immutability,
+sharded blob storage, and required creator provenance are unchanged.
+
 Region asset bytes are immutable blobs addressed by lowercase SHA-256. Blobs
 are sharded under `assets/<first-two-hex>/<remaining-hex>`, while SQLite maps
 viewer-facing UUIDs to content hashes and sizes. Multiple viewer UUIDs may map

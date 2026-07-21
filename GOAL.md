@@ -137,6 +137,12 @@ the user or other repository tooling may have added later commits.
 ## Product and architecture decisions
 
 - Region runtime: native C++20 and CMake.
+- Trust model: mostly-untrusted users run their own regions from home or a
+  cloud VPS. The grid is the trust anchor for identity, inventory, provenance,
+  and durability; regions are untrusted and may vanish or misbehave. Federation
+  uses per-owner tokens, region-served bytes are verified on fetch, and owners
+  keep local control and portable IAR/OAR export of their own content
+  (ADR 0028).
 - Central Grid and management services: Go with PostgreSQL for metadata, plus a
   durable, replica-only asset vault that holds the bytes of every
   inventory-referenced asset so inventory content survives the loss of any

@@ -5,13 +5,14 @@ content: region-local storage, inventory-referenced assets, what happens to an
 avatar's attachments during a teleport or border crossing, and how viewers will
 observe content across a region border. It is the implementation-level
 companion to the asset sections of [ARCHITECTURE.md](ARCHITECTURE.md) and to
-five ADRs:
+six ADRs:
 
 - [ADR 0014: Content-Addressed Region Assets](adr/0014-content-addressed-assets.md)
 - [ADR 0017: Central Inventory Metadata](adr/0017-central-inventory-metadata.md)
 - [ADR 0018: AIS-First Viewer Inventory](adr/0018-ais-first-viewer-inventory.md)
 - [ADR 0020: Asset Origin And Replication](adr/0020-asset-origin-and-replication.md)
 - [ADR 0026: Vault-Authoritative Inventory Assets](adr/0026-vault-authoritative-inventory-assets.md)
+- [ADR 0027: Asset, Blob, and Instance Separation](adr/0027-asset-blob-instance-separation.md)
 
 Sections are labeled **Implemented** (in the tree today), **Partially
 implemented**, or **Planned** (accepted direction, not yet built). Planned
@@ -91,6 +92,12 @@ local blob store — or fetches them on demand via federation (section 3).
 Unreferenced-blob collection is deferred until retention requirements are
 defined (ADR 0014); today the blob set only grows.
 
+Planned (ADR 0027): blob identity moves from the content hash to a
+grid-assigned `blob_id`, and the region keys its store by `blob_id` with the
+SHA-256 retained as an integrity checksum. The on-read hash recompute relaxes
+to trust the storage layer; verification concentrates at the cross-region
+fetch boundary, where a serving region is untrusted (ADR 0028).
+
 ## 2. Inventory assets and the vault — **Partially implemented**
 
 Inventory metadata is defined by ADRs 0017/0018; grid schema in
@@ -122,39 +129,54 @@ without warning, taking such bytes with them.
 
 ADR 0026 closes that gap with a grid-side **asset vault** and one invariant:
 
-> An inventory item row may only be committed when the vault already holds
-> verified bytes for the asset it references.
+> An inventory item row may only be committed when the vault already holds the
+> verified blob for the asset it references.
 
-- The vault is a durable, replica-only blob store: it never originates
-  assets, never hosts agents, and is never in the viewer data path. Viewers
-  keep fetching from regions.
-- Every inventory-creating operation — upload, take-to-inventory, give,
-  purchase — writes the asset through to the vault (verified by SHA-256 and
-  size) before the item commits. Enforcement is grid-side; no durability
-  property depends on region cooperation, replication lag, or orderly
-  shutdown. Vault unavailability fails inventory writes; asset reads are
-  unaffected.
+- The vault is a durable, replica-only **blob** store (ADR 0027): it holds
+  bytes, never originates assets, never hosts agents, and is never in the
+  viewer data path. Viewers keep fetching from regions.
+- The trigger is the creation of an inventory *reference* to an asset — an
+  upload that is kept, take-to-inventory, give, or purchase — each of which
+  writes the referenced blob through to the vault before the item commits.
+  Enforcement is grid-side; no durability property depends on region
+  cooperation, replication lag, or orderly shutdown — essential because
+  independently operated regions may disappear without warning. Vault
+  unavailability fails inventory writes; asset reads are unaffected. Bytes that
+  never become inventory-referenced — content used only by rezzed scene
+  objects, or an upload that never produces an inventory item — are never
+  vaulted.
 - Region blob stores become two tiers: vault-held blobs are a **cache**,
   evictable at will and re-fetchable on demand — which unblocks the
   region-side collection deferred by ADR 0014 — while blobs referenced only
   by rezzed scene content are **region-owned** and live and die with the
   region, like the scene state itself. Region backups, not the vault,
   preserve scenes.
+- **Retention follows ADR 0027 reference counting**: a blob is vault-durable
+  while any live asset — and through it any inventory item or scene instance —
+  references it. Two boundary-crossing transitions matter:
+  - **No-copy items rezzed or embedded into the scene stay vault-durable.**
+    Their inventory row is removed, but the rezzed or embedded instance is the
+    user's *only* copy; treating it as disposable would let region loss
+    permanently destroy an irreplaceable asset. This is a present durability
+    invariant, not a deferred garbage-collection nicety.
+  - **Copy content whose inventory master is deleted while a rezzed copy
+    remains** transitions from vault-cache to region-owned; the vault must
+    never evict bytes out from under a still-live scene reference.
 - Baked appearance textures are regenerable derived data, exempt from vault
   ingest.
-- The vault may internally tier rarely accessed blobs (for example, untouched
-  for six months) onto slower S3-compatible storage. Tier-2 storage is not a
-  registry location, and rehydrated bytes are re-verified against their hash
-  before serving.
-- Vault garbage collection is deferred; when defined it must treat "was ever
-  inventory-referenced" as sticky, because rezzing a no-copy item removes its
-  inventory row while the bytes remain needed for take-back.
-- Adoption requires a one-time backfill of existing inventory-referenced
-  assets from live regions, reporting any that are already unfetchable.
+- The vault may internally tier rarely accessed blobs onto slower
+  S3-compatible storage; tier-2 storage is a vault-internal concern, not a
+  registry location.
+- Vault garbage collection is deferred; when defined it uses ADR 0027
+  reference counting, recomputing from back-links before any destructive delete
+  and never trusting a cached zero.
+- Adoption requires a one-time backfill of existing inventory-referenced blobs
+  from live regions, reporting any that are already unfetchable.
 
-Because vault content is deduplicated by SHA-256 and scoped to
-inventory-referenced assets, it stores far less than "every asset for every
-user, ever" — ten thousand users owning the same item is one blob.
+Deduplication is optional and blob-only (ADR 0027): the vault shares one blob
+across every asset with identical bytes, so it stores far less than "every
+asset for every user, ever" — ten thousand users owning the same item is one
+blob — but correctness never depends on the sharing.
 
 ## 3. Asset federation: lookup, fetch, replicate — **Implemented**
 
@@ -183,6 +205,15 @@ asset_locations(asset_id, endpoint, origin, verified_at)
 - Origin loss does not invalidate verified replicas; any registered location
   can serve future fetches.
 
+Planned (ADR 0027): this registry splits into a blob layer and an asset layer.
+Serving locations attach to a grid-assigned `blob_id` rather than to the asset
+UUID, so identical bytes reachable at an endpoint are recorded once regardless
+of how many assets name them. The SHA-256 becomes the blob's integrity
+checksum — verified on cross-region fetch, a real defense because a serving
+region is untrusted (ADR 0028) — but no longer the blob's identity. Idempotent
+registration keys on the immutable `asset_id → blob_id` binding and creator,
+not on a hash match.
+
 Once the vault exists (ADR 0026), region-to-region fetch is demoted from
 durability mechanism to optimization: the vault is always a valid location
 for inventory-referenced assets, so a fetching region never depends on
@@ -190,10 +221,12 @@ another region being alive or honest — it can always fall back to bytes the
 vault verified at ingest. Peer fetch remains useful for picking a nearer or
 faster source and for scene-only content.
 
-Endpoints are operator-configured stable region URLs. The single service token
-is acceptable for the current single-operator grid; scoped, short-lived fetch
-authorization must replace it before mutually untrusted regions are supported,
-and production federation requires HTTPS (ADR 0020).
+Endpoints are operator-configured stable region URLs. The single shared service
+token is an interim measure for the current single-operator deployment;
+HomeWorldz's goal of mostly-untrusted, user-run regions requires per-owner
+federation tokens — one per owner, scoped to that owner's regions — and
+verified fetch of region-served bytes, over HTTPS in production (ADR 0020,
+ADR 0028).
 
 ## 4. Attachment assets on teleport — **Partially implemented**
 
@@ -313,6 +346,7 @@ HTTP asset capabilities.
 - [FEATURES.md](FEATURES.md) — asset creation provenance; region-local assets
 - [ADR 0014](adr/0014-content-addressed-assets.md), [ADR 0017](adr/0017-central-inventory-metadata.md),
   [ADR 0018](adr/0018-ais-first-viewer-inventory.md), [ADR 0020](adr/0020-asset-origin-and-replication.md),
-  [ADR 0025](adr/0025-idempotent-avatar-transits.md), [ADR 0026](adr/0026-vault-authoritative-inventory-assets.md)
+  [ADR 0025](adr/0025-idempotent-avatar-transits.md), [ADR 0026](adr/0026-vault-authoritative-inventory-assets.md),
+  [ADR 0027](adr/0027-asset-blob-instance-separation.md), [ADR 0028](adr/0028-untrusted-region-trust-model.md)
 - [ROADMAP.md](ROADMAP.md) — Phase 2 crossings and navigation milestones
 - [VM.md](VM.md) — Falcon VM crossing snapshots for scripted attachments

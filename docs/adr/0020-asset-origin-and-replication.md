@@ -7,27 +7,40 @@ the grid vault durably stores all inventory-referenced asset bytes, and
 region-to-region fetch is an optimization. The identity, verification, and
 registration mechanics below remain authoritative.
 
+ADR 0027 relocates the registry from asset-keyed to blob-keyed: serving
+locations and origin/replica registration attach to a grid-assigned `blob_id`.
+The immutability guarantee below — a UUID never remaps to different content or
+creator — is carried by the immutable `asset_id → blob_id` binding, not by
+comparing content hashes at registration. The SHA-256 named below is retained
+only as an integrity checksum for verifying bytes fetched across a trust
+boundary — core to HomeWorldz, where mostly-untrusted users run their own
+regions — never as identity and not on routine local reads. Immutable
+provenance is unchanged. Read the hash references below in that light.
+
 Viewer-facing asset UUIDs are immutable content identities within a HomeWorldz
-grid. Registering an existing UUID is idempotent only when its SHA-256 hash,
-byte size, and creator UUID match. A conflicting registration is rejected; a
-region must allocate a new asset UUID for different bytes or provenance.
+grid. Registering an existing UUID is idempotent only when its content and
+creator are unchanged — under ADR 0027, the same immutable `asset_id → blob_id`
+binding and creator. A conflicting registration is rejected; a region must
+allocate a new asset UUID for different bytes or provenance.
 
 Databases created before creator provenance was recorded may replace the null
 UUID's “unknown creator” value once with a known creator, but only when the
-asset UUID, content hash, and size are unchanged. Known provenance cannot be
-replaced.
+asset UUID, its bound content, and size are unchanged. Known provenance cannot
+be replaced.
 
 Asset blobs remain region-local under ADR 0014. The grid stores federation
-metadata rather than blob bytes: asset UUID, creator UUID, SHA-256, size, and
-one or more stable region asset endpoints. A region registers an origin after
-durably storing an authenticated upload and may register itself as a replica
-after a verified copy.
+metadata rather than blob bytes: asset UUID, creator UUID, the content's
+integrity checksum, size, and one or more stable region asset endpoints (the
+locations relocate to the blob under ADR 0027). A region registers an origin
+after durably storing an authenticated upload and may register itself as a
+replica after a verified copy.
 
 Region-to-region lookup and fetch use authenticated internal HTTP APIs. The
-initial grid service token is acceptable for the single-grid implementation;
-scoped, short-lived fetch authorization must replace it before mutually
-untrusted regions are supported. Public viewer capabilities are not federation
-credentials.
+initial single shared grid service token is an interim measure for the
+single-operator deployment; ADR 0028 replaces it with per-owner federation
+tokens — one per owner, scoped to that owner's regions — as HomeWorldz moves
+toward its goal of mostly-untrusted, user-run regions. Public viewer
+capabilities are not federation credentials.
 
 A receiving region looks up an authorized endpoint, downloads the immutable
 bytes, verifies the advertised size and SHA-256, stores the same viewer UUID
