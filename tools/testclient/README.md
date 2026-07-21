@@ -98,39 +98,35 @@ to completion.
 - The *field set* matches. But the **transport does not** — see the live
   result below.
 
-## Live smoke-test result (2026-07-21)
+## Live smoke-test result (2026-07-21) — PASSING
 
-Built clean with the .NET 10 SDK (generators run), then ran against the local
-grid + online "Welcome" region with account `test.bot`. **Login failed:**
+First run failed at login with `Expected </methodResponse>`: **modern
+LibreMetaverse uses LLSD login** (`LibreMetaverse/Login.cs` builds an LLSD
+`OSDMap` `~:1000`, POSTs it via `PostAsync(loginUri, OSDFormat.Xml, …)` `~:1074`,
+parses the reply with `OSDParser.Deserialize` `~:1167`), while HomeWorldz's
+`/login` implemented only the legacy XML-RPC `login_to_simulator` that Firestorm
+7.2.4 uses.
+
+**Resolved:** HomeWorldz `/login` now supports **both** — it dispatches on the
+request document type (`<methodCall>` → XML-RPC as before; `<llsd>` → LLSD),
+sharing all auth/region/inventory logic (`resolveViewerLogin`) and serializing
+either format (`grid/internal/httpapi/viewer_login.go` +
+`viewer_login_llsd.go`, committed `787bf97`).
+
+With that in place the smoke test **passes end to end**:
 
 ```
-Login Failed: Expected </methodResponse>
+Login Success: Welcome to HomeWorldz Local
+Logged in test bot
+CurrentSim: 'Welcome (127.0.0.1:42002)' Position: <178, 161, 25.031677>
 ```
 
-Root cause — a genuine protocol mismatch the static field analysis could not
-catch:
+TestClient logs in over LLSD, establishes the region UDP circuit (:42002), and
+holds a live in-world avatar position. Verified that the legacy XML-RPC login
+still returns a valid `<methodResponse>` and the httpapi tests pass, so
+Firestorm is unaffected.
 
-- **Modern LibreMetaverse uses LLSD login.** `LibreMetaverse/Login.cs` builds an
-  LLSD `OSDMap` (`~:1000`), POSTs it as LLSD XML
-  (`PerformLoginAsync` → `HttpCapsClient.PostAsync(loginUri, OSDFormat.Xml, …)`,
-  `~:1074`), and parses the reply with `OSDParser.Deserialize` (`~:1167`). The
-  "Expected `</methodResponse>`" error is LMV's LLSD XML reader
-  (`LibreMetaverse.StructuredData/LLSD/XmlLLSD.cs:466`) choking on an XML-RPC
-  document.
-- **HomeWorldz `/login` implements only legacy XML-RPC `login_to_simulator`**
-  (`grid/internal/httpapi/viewer_login.go`) — which is what Firestorm 7.2.4
-  (the pinned target) uses, so Firestorm works. LMV, tracking current SL, has
-  dropped the XML-RPC login path (no toggle for it).
-
-**Fix / decision for HomeWorldz:** add **LLSD login** support to `/login` —
-accept an `application/llsd+xml` `OSDMap` request and return an LLSD `OSDMap`
-response carrying the same fields the XML-RPC path already produces. It can be
-additive (branch on the request root: `<methodCall>` → XML-RPC as today;
-`<llsd>` → LLSD), leaving the Firestorm path untouched. This both unblocks
-LMV-based testing and broadens compatibility to modern LLSD-login viewers. It
-touches the production login endpoint, so it needs a deliberate decision before
-implementing.
-
-Everything else is verified working: TestClient builds, the local grid + region
-come up, the region registers/goes online, account creation works, and the
-harness reaches the login exchange — only the login transport blocks it.
+Remaining polish (not blockers): `moveto` autopilot is dispatched but a
+scripted run `quit`s before it completes — a longer script (or a wait between
+`moveto` and `quit`) would demonstrate full movement; and the multi-bot
+`--file` load path is untested so far.
