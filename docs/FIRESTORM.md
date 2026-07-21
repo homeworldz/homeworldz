@@ -1097,3 +1097,19 @@ scene geometry is searched upward through progressively larger offsets until a
 clear position is found, while exact surface contact and already-clear restored
 positions remain unchanged. A brief viewer landing animation accompanied the
 successful contact settlement and was considered appropriate.
+
+## Falcon touch acceptance
+
+Object touch dispatched into Falcon passed live acceptance on 2026-07-21 in the
+Welcome Region. Firestorm enabled the Touch action on a prim carrying an enabled
+compiled `touch_start` script, and clicking the prim produced the script's
+`Touched!` chat. Getting there required three cooperating changes. The Region
+now advertises the `SCRIPTED` and `HANDLE_TOUCH` object-update flags for prims
+carrying enabled scripts, without which Firestorm greys out Touch and never
+sends `ObjectGrab`. The initial `ObjectGrab` touch packet is decoded separately
+from the physical `ObjectGrabUpdate` drag path; it dispatches `touch_start(1)`
+to each enabled compiled script in the clicked prim and its linkset root through
+a bounded per-script event queue, and grab-update drag motion fires no duplicate
+touch. Finally, enabled task scripts are re-rezzed on Region startup and a script
+rez, recompile, enable, disable, or removal re-broadcasts the object update, so a
+freshly touch-enabled prim becomes touchable after a restart and without a relog.

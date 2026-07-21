@@ -82,7 +82,7 @@ new evidence materially changes the estimates.
 ## Verified Falcon state
 
 The following is implemented, tested, committed, deployed, and accepted in
-Firestorm as of 2026-07-20:
+Firestorm as of 2026-07-21:
 
 - Firestorm `RezScript` creates a default script in prim Contents or copies or
   transfers an Inventory script into Contents.
@@ -105,23 +105,18 @@ Firestorm as of 2026-07-20:
 - VM snapshot tests restore after every completed instruction and preserve
   globals and a handler suspended in the middle of `touch_start`.
 - Removing a task script removes its live VM.
-
-Scripted prims now advertise the `SCRIPTED` and `HANDLE_TOUCH` object-update
-flags so Firestorm enables the Touch action, and `ObjectGrab` touch packets are
-decoded distinctly from the physical `ObjectGrabUpdate` drag path and dispatch
-`touch_start(1)` into each enabled compiled script through a bounded per-script
-event queue.
-
-Two follow-up gaps kept Touch greyed out in Firestorm after the first deploys
-and are now fixed (implemented and tested, awaiting Firestorm acceptance):
-
-- Snapshot load never re-rezzed task scripts, so after every Region restart no
-  script was live and `HANDLE_TOUCH` was never set. Startup now restores enabled
-  task scripts (fresh start re-running `state_entry`; VM-state persistence across
-  restarts remains future work).
-- A script rez, recompile, enable, disable, or removal changed the flags but sent
-  no fresh `ObjectUpdate`, so the viewer kept the stale non-touchable state. Those
-  paths now re-broadcast the object update to nearby viewers.
+- Scripted prims advertise the `SCRIPTED` and `HANDLE_TOUCH` object-update flags
+  so Firestorm enables the Touch action; a script rez, recompile, enable,
+  disable, or removal re-broadcasts the object update so the flag change reaches
+  the viewer without a relog.
+- The initial `ObjectGrab` touch packet is decoded distinctly from the physical
+  `ObjectGrabUpdate` drag path and dispatches `touch_start(1)` to each enabled
+  compiled script in the clicked prim and its linkset root through a bounded
+  per-script event queue; grab-update drag motion fires no duplicate touch.
+  Clicking a `touch_start` prim in Welcome produced its `Touched!` chat.
+- Enabled task scripts are re-rezzed on Region startup so a restart no longer
+  leaves a scripted prim non-touchable (each restart re-runs `state_entry`
+  because VM state is not yet persisted across restarts).
 
 Important limitations: sustained-touch and touch-end are not yet delivered,
 running script instances are not restored after Region restart, the scheduler
