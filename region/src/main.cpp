@@ -1542,6 +1542,54 @@ int main(int argc, char* argv[]) {
             return homeworldz::script::FalconRezResult{false, false, error.what()};
         }
     };
+    // Re-send an entity's ObjectUpdate to every nearby viewer. A script rez,
+    // recompile, enable, disable, or removal changes the SCRIPTED / HANDLE_TOUCH
+    // flags, and the viewer only learns the new flags from a fresh update; without
+    // this it keeps showing Touch as disabled on a freshly touch-enabled prim.
+    const auto broadcast_object_update = [&](const homeworldz::scene::Entity& entity,
+                                             std::chrono::steady_clock::time_point when) {
+        const auto region_handle =
+            (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
+            static_cast<std::uint32_t>(region_grid_y * 256);
+        for (const auto& [recipient_endpoint, recipient] : avatars) {
+            const auto object =
+                static_object_from_entity(scene, entity, recipient.user_id, falcon);
+            if (!object) continue;
+            if (const auto sent = circuits.send(
+                    recipient_endpoint,
+                    homeworldz::viewer::encode_static_object_update(region_handle, *object),
+                    true, when, true))
+                static_cast<void>(send_udp(viewer_server, recipient_endpoint, *sent));
+        }
+    };
+    // Restore enabled task scripts after a Region restart. VM state is not yet
+    // persisted, so each restored script starts fresh and re-runs state_entry;
+    // this is enough to re-establish SCRIPTED / HANDLE_TOUCH advertising and live
+    // event handling so touch works after a restart. Persisting and resuming VM
+    // state across restarts is separate future work.
+    {
+        std::size_t restored_scripts = 0;
+        for (const auto& [entity_id, entity] : scene.entities()) {
+            static_cast<void>(entity_id);
+            for (const auto& item : entity.task_inventory) {
+                if (item.asset_type != 10) continue; // LSL script asset type
+                const auto result = rez_task_script(entity, item, true);
+                if (result.compiled) {
+                    ++restored_scripts;
+                } else {
+                    std::cerr << "{\"level\":\"warning\",\"message\":\"task script restore failed\",\"objectId\":"
+                              << homeworldz::api::json_string(entity.object_id)
+                              << ",\"itemId\":" << homeworldz::api::json_string(item.item_id)
+                              << ",\"diagnostic\":"
+                              << homeworldz::api::json_string(result.diagnostic) << "}"
+                              << std::endl;
+                }
+            }
+        }
+        if (restored_scripts != 0)
+            std::cout << "{\"level\":\"info\",\"message\":\"task scripts restored\",\"count\":"
+                      << restored_scripts << "}" << std::endl;
+    }
     const auto clear_viewer_endpoint = [&](const std::string& endpoint, const std::string& session_id) {
         if (const auto live = avatars.find(endpoint); live != avatars.end() &&
             physics_world && live->second.physics_character != 0)
@@ -2245,6 +2293,8 @@ int main(int argc, char* argv[]) {
                                             {update.asset_id, update.item_id,
                                              task_entity->object_id, task_entity->owner_id},
                                             body, update.script_running);
+                                        broadcast_object_update(
+                                            *task_entity, std::chrono::steady_clock::now());
                                     }
                                 }
                                 response = stored
@@ -2820,6 +2870,8 @@ int main(int argc, char* argv[]) {
                                 if (item != entity->task_inventory.end())
                                     compiled = rez_task_script(
                                         *entity, *item, rez_script->enabled);
+                                broadcast_object_update(
+                                    *entity, std::chrono::steady_clock::now());
                             }
                             bool refresh_sent = false;
                             if (changed && entity) {
@@ -3098,6 +3150,8 @@ int main(int argc, char* argv[]) {
                             }
                             bool refresh_sent = false;
                             if (removed && entity) {
+                                broadcast_object_update(
+                                    *entity, std::chrono::steady_clock::now());
                                 const auto task_id = homeworldz::viewer::parse_uuid(entity->object_id);
                                 if (task_id) {
                                     std::string filename;

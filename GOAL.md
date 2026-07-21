@@ -110,10 +110,18 @@ Scripted prims now advertise the `SCRIPTED` and `HANDLE_TOUCH` object-update
 flags so Firestorm enables the Touch action, and `ObjectGrab` touch packets are
 decoded distinctly from the physical `ObjectGrabUpdate` drag path and dispatch
 `touch_start(1)` into each enabled compiled script through a bounded per-script
-event queue; this is implemented and tested. The first deploy landed the packet
-and dispatch path but Firestorm still greyed out Touch because the flags were
-missing; the flag advertising is the follow-up fix awaiting deploy and
-Firestorm acceptance.
+event queue.
+
+Two follow-up gaps kept Touch greyed out in Firestorm after the first deploys
+and are now fixed (implemented and tested, awaiting Firestorm acceptance):
+
+- Snapshot load never re-rezzed task scripts, so after every Region restart no
+  script was live and `HANDLE_TOUCH` was never set. Startup now restores enabled
+  task scripts (fresh start re-running `state_entry`; VM-state persistence across
+  restarts remains future work).
+- A script rez, recompile, enable, disable, or removal changed the flags but sent
+  no fresh `ObjectUpdate`, so the viewer kept the stale non-touchable state. Those
+  paths now re-broadcast the object update to nearby viewers.
 
 Important limitations: sustained-touch and touch-end are not yet delivered,
 running script instances are not restored after Region restart, the scheduler

@@ -360,6 +360,10 @@ Falcon LSL scripting foundation.
 - [x] Demonstrate automated Falcon snapshots after every completed instruction,
   restoration into a fresh VM, preservation of globals, and continuation from
   the middle of a `touch_start` handler.
+- [ ] Restore enabled task scripts across Region restarts. Startup now re-rezzes
+  enabled task scripts so they run and re-advertise touch, but each restart still
+  re-runs `state_entry` because VM state is not yet persisted; full state-carrying
+  restoration remains outstanding.
 - [ ] Serialize bytecode identity, instruction pointer, stacks, frames, globals,
   current event, event queue, timers, listens, permissions, and pending work in
   a compact versioned binary format.
