@@ -226,18 +226,23 @@ VCPKG_ROOT=$HOME/src/vcpkg HOMEWORLDZ_BUILD_JOBS=2 \
 ```
 
 The deployed Region binary is `/opt/homeworldz/region/homeworldz-region`.
-Install atomically, then restart only the intended services. The normally active
-cloud services at the last check were:
+Install atomically, then restart the Region services. All four Regions should
+normally be online, especially after a code update. The active cloud services
+are:
 
 - `homeworldz-grid.service`
 - `homeworldz-api.service`
 - `homeworldz-region@welcome.service`
 - `homeworldz-region@sandbox.service`
 - `homeworldz-region@gamma.service`
+- `homeworldz-region@beta.service`
 
-Beta has sometimes been intentionally or unexpectedly inactive; replacing the
-shared binary prepares it for its next start, but do not start an inactive
-Region merely as a side effect of deployment without a test reason.
+Beta previously fell out of rotation because it had crashed and was already down
+when a later restart ran, so a restart-only command silently skipped it. Do not
+reproduce that cycle: after installing the shared binary, restart every Region,
+and if one is unexpectedly `inactive`, start it and confirm it comes up rather
+than leaving it down. Derive the Region list from the live `systemctl` state
+instead of a hardcoded subset.
 
 For a Region-only deployment:
 
@@ -247,7 +252,8 @@ sudo install -m 0755 build/linux-falcon/region/homeworldz-region \
 sudo mv /opt/homeworldz/region/homeworldz-region.new \
   /opt/homeworldz/region/homeworldz-region
 sudo systemctl restart homeworldz-region@welcome.service \
-  homeworldz-region@sandbox.service homeworldz-region@gamma.service
+  homeworldz-region@sandbox.service homeworldz-region@gamma.service \
+  homeworldz-region@beta.service
 ```
 
 After deployment, confirm `systemctl is-active`, inspect recent journals for
