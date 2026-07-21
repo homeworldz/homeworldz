@@ -1,9 +1,14 @@
 name: CI
 
+# The account's included GitHub Actions minutes are limited, and pushes to main
+# are frequent, so CI does not run per-push or per-pull-request. It runs at most
+# once per day on a schedule, plus on manual dispatch when a run is genuinely
+# needed. Primary verification is local: the Go and region suites on a
+# workstation and the Linux build host.
 on:
-  push:
-    branches: [main]
-  pull_request:
+  schedule:
+    - cron: "0 7 * * *"
+  workflow_dispatch:
 
 permissions:
   contents: read

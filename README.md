@@ -65,8 +65,13 @@ standard `/get_grid_info` endpoint. Set `[server] public_url` in
 `config/grid.ini` when the grid is exposed at a different address.
 
 PostgreSQL lifecycle tests run when `HOMEWORLDZ_TEST_DATABASE_URL` is set and
-otherwise skip cleanly. CI supplies a disposable PostgreSQL service and runs
-the region lease, identity/session, and presence cleanup suites against it.
+otherwise skip cleanly. When the GitHub Actions workflow runs it supplies a
+disposable PostgreSQL service and runs the region lease, identity/session, and
+presence cleanup suites against it. Because the account's included Actions
+minutes are limited and pushes are frequent, that workflow runs at most once
+per day on a schedule (and on manual dispatch) rather than on every push, so
+primary verification is local: run the Go and region suites on your workstation
+and Linux build host and do not block on CI.
 
 After pulling new database migrations into an already bootstrapped checkout,
 apply them without re-entering the PostgreSQL administrator credentials:
