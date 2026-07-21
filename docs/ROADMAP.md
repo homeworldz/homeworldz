@@ -80,7 +80,10 @@ Falcon LSL scripting foundation.
 - [x] Add animation-state selection and synchronization for standing, walking,
   running, jumping, falling, flying, hovering, and landing.
 - [x] Reconcile viewer prediction with the authoritative region position without
-  visible snapping or drift.
+  visible snapping or drift, confirmed by live Firestorm observation. The region
+  streams authoritative position and velocity and the viewer dead-reckons between
+  updates; reconciliation is a viewer-side, live-verified outcome rather than
+  region-side code.
 
 ### Basic avatar physics
 
@@ -443,7 +446,10 @@ Falcon LSL scripting foundation.
 
 - [x] Restart or replace the central grid service without restarting connected
   regions; retain PostgreSQL-backed viewer sessions so region simulation and
-  active viewer circuits continue while grid-backed operations resume.
+  active viewer circuits continue while grid-backed operations resume. This holds
+  as long as grid services return before a region's lease renewal window elapses;
+  a grid outage that persists for an extended period past that window stops the
+  affected regions.
 
 - [ ] Back up and restore PostgreSQL grid state, region SQLite state, assets,
   terrain, configuration, and compatible runtime state.
