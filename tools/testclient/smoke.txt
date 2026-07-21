@@ -1,0 +1,4 @@
+location
+moveto 140 140 30
+location
+quit
