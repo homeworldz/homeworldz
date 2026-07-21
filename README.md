@@ -7,11 +7,17 @@ Firestorm compatibility. It is a new implementation informed by Halcyon,
 OpenSimulator, and the Second Life viewer protocol without preserving their
 internal service boundaries or storage formats.
 
-The intended architecture uses a C++20 region server, a Go grid service,
-HTTP/JSON APIs described by OpenAPI, Postgres for central state, and
-region-local scene and asset storage.
+The architecture uses a C++20 region server, a Go grid service, HTTP/JSON APIs
+described by OpenAPI, Postgres for central state, and region-local scene and
+asset storage.
 
-This repository is currently in its planning and foundation phase.
+The functional single-region world is largely in place: Firestorm login,
+authoritative avatar movement, Jolt avatar and object physics, live terrain
+editing, AIS v3 inventory, object rez/edit/permissions/persistence, and an
+early Second Life LSL subset running on the purpose-built Falcon VM all work
+against the supported viewer. Connected multi-region support, the interactive
+physical world, and the Falcon scripting runtime are actively progressing. See
+the [roadmap](docs/ROADMAP.md) for the current phase-by-phase status.
 
 ## Development
 
@@ -130,5 +136,12 @@ unsupported.
 - [Project roadmap](docs/ROADMAP.md)
 - [Implementation plan](docs/PLAN.md)
 - [Architecture](docs/ARCHITECTURE.md)
+- [Asset storage and federation](docs/ASSETS.md)
 - [Physics evaluation](docs/PHYSICS.md)
 - [Scripting architecture](docs/SCRIPTING.md)
+- [Falcon VM](docs/VM.md)
+- [Firestorm compatibility](docs/FIRESTORM.md)
+
+## License
+
+HomeWorldz is open source under the [MIT License](LICENSE).
