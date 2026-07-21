@@ -42,6 +42,15 @@ public:
     bool set_enabled(std::string_view object_id, std::string_view inventory_item_id,
                      bool enabled);
     bool erase(std::string_view object_id, std::string_view inventory_item_id);
+    // Whether an object carries scripts and whether any enabled script declares a
+    // touch handler. The region advertises these to Firestorm as the SCRIPTED and
+    // HANDLE_TOUCH object-update flags so the viewer enables the Touch action and
+    // sends ObjectGrab in the first place.
+    struct ScriptStatus {
+        bool scripted{};
+        bool handles_touch{};
+    };
+    ScriptStatus object_script_status(std::string_view object_id) const;
     // Queues touch_start(total_number) for every enabled compiled script in the
     // named object whose program declares that handler. Events are queued rather
     // than dispatched immediately so an in-flight handler is never clobbered;

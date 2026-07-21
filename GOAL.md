@@ -106,10 +106,14 @@ Firestorm as of 2026-07-20:
   globals and a handler suspended in the middle of `touch_start`.
 - Removing a task script removes its live VM.
 
-Firestorm `ObjectGrab` touch packets are now decoded distinctly from the
-physical `ObjectGrabUpdate` drag path and dispatch `touch_start(1)` into each
-enabled compiled script through a bounded per-script event queue; this is
-implemented, tested, and committed but not yet deployed or Firestorm-accepted.
+Scripted prims now advertise the `SCRIPTED` and `HANDLE_TOUCH` object-update
+flags so Firestorm enables the Touch action, and `ObjectGrab` touch packets are
+decoded distinctly from the physical `ObjectGrabUpdate` drag path and dispatch
+`touch_start(1)` into each enabled compiled script through a bounded per-script
+event queue; this is implemented and tested. The first deploy landed the packet
+and dispatch path but Firestorm still greyed out Touch because the flags were
+missing; the flag advertising is the follow-up fix awaiting deploy and
+Firestorm acceptance.
 
 Important limitations: sustained-touch and touch-end are not yet delivered,
 running script instances are not restored after Region restart, the scheduler

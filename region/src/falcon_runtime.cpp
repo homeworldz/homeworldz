@@ -111,6 +111,22 @@ bool FalconRuntime::erase(std::string_view object_id, std::string_view inventory
     return impl_->scripts.erase(instance_key(object_id, inventory_item_id)) != 0;
 }
 
+FalconRuntime::ScriptStatus FalconRuntime::object_script_status(
+    std::string_view object_id) const {
+    ScriptStatus status;
+    for (const auto& [key, script] : impl_->scripts) {
+        (void)key;
+        if (script->identity.object_id != object_id) continue;
+        status.scripted = true;
+        if (script->enabled && !script->trapped &&
+            (script->program.find_event("touch_start") ||
+             script->program.find_event("touch") ||
+             script->program.find_event("touch_end")))
+            status.handles_touch = true;
+    }
+    return status;
+}
+
 std::size_t FalconRuntime::dispatch_touch_start(std::string_view object_id,
                                                 std::int32_t total_number) {
     std::size_t accepted = 0;

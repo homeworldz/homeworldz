@@ -12,7 +12,7 @@ acceptance tests pass.
 
 ## Progress snapshot
 
-Updated 2026-07-20. These bars are effort-weighted engineering estimates, not
+Updated 2026-07-21. These bars are effort-weighted engineering estimates, not
 simple checkbox ratios. Later scripting, crossings, social systems, security,
 recovery, and scale items are substantially larger than many completed viewer
 protocol tasks. Percentages are deliberately approximate and should be revised
@@ -27,7 +27,7 @@ when scope or implementation evidence changes.
 | Phase | Progress | Estimate |
 | --- | --- | ---: |
 | 1. Functional Single-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="98" aria-label="Phase 1 progress: 98%">98%</progress> | 98% |
-| 2. Connected Multi-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="70" aria-label="Phase 2 progress: 70%">70%</progress> | 70% |
+| 2. Connected Multi-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="68" aria-label="Phase 2 progress: 68%">68%</progress> | 68% |
 | 3. Interactive Physical World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="39" aria-label="Phase 3 progress: 39%">39%</progress> | 39% |
 | 4. LSL Scripting | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="15" aria-label="Phase 4 progress: 15%">15%</progress> | 15% |
 | 5. Social and Creator Platform | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="9" aria-label="Phase 5 progress: 9%">9%</progress> | 9% |
@@ -218,6 +218,22 @@ Falcon LSL scripting foundation.
 - [ ] Show friends and authorized users useful presence and location without
   leaking restricted information.
 
+### Inventory asset durability
+
+- [ ] Implement the grid asset vault: a durable, replica-only blob store that
+  never originates assets, never hosts agents, and is never in the viewer data
+  path (ADR 0026).
+- [ ] Enforce the vault invariant grid-side: commit an inventory item only
+  after the vault holds verified bytes for its referenced asset, with
+  write-through ingest on upload, take-to-inventory, give, and purchase.
+- [ ] Treat region copies of vault-held assets as an evictable cache and
+  scene-only assets as region-owned; demote region-to-region fetch to an
+  optimization with the vault as the always-available fallback location.
+- [ ] Backfill existing inventory-referenced assets into the vault from live
+  registered locations and report assets that are already unfetchable.
+- [ ] Tier rarely accessed vault blobs onto slower S3-compatible storage with
+  hash re-verification on rehydration, keeping tiering vault-internal.
+
 ## Phase 3: Interactive Physical World
 
 ### Production physics integration
@@ -323,11 +339,12 @@ Falcon LSL scripting foundation.
   the live VM when its task inventory item is deleted.
 - [x] Route the initial `llSay` and `llOwnerSay` host calls to Firestorm object
   chat with owner-only and distance behavior, confirmed in the live cloud Grid.
-- [x] Decode the Firestorm `ObjectGrab` touch packet distinctly from the
-  physical `ObjectGrabUpdate` drag path, authorize the touching avatar, resolve
-  the clicked child and linkset root, and dispatch `touch_start(1)` to each
-  enabled compiled script through a bounded per-script event queue that never
-  clobbers an in-flight handler.
+- [x] Advertise the `SCRIPTED` and `HANDLE_TOUCH` object-update flags for prims
+  carrying enabled scripts so Firestorm enables the Touch action, then decode the
+  `ObjectGrab` touch packet distinctly from the physical `ObjectGrabUpdate` drag
+  path, authorize the touching avatar, resolve the clicked child and linkset
+  root, and dispatch `touch_start(1)` to each enabled compiled script through a
+  bounded per-script event queue that never clobbers an in-flight handler.
 - [ ] Implement the remaining object lifecycle, sustained/ended touch, timer,
   listen, sensor, control, permission, inventory, changed, link-message,
   collision, land-collision, attachment, and moving events.
@@ -426,6 +443,12 @@ Falcon LSL scripting foundation.
 
 - [ ] Back up and restore PostgreSQL grid state, region SQLite state, assets,
   terrain, configuration, and compatible runtime state.
+- [ ] Export and import OpenSim-compatible region archives (OAR) and user
+  inventory archives (IAR). OAR is the portable scene backup and migration
+  format; IAR covers user inventory transfer.
+- [ ] Write only the latest supported OAR and IAR format versions while
+  reading older format versions where practical, since archives are
+  long-lived files that outlive the software that wrote them.
 - [ ] Test full-grid, single-region, and selected-user recovery with documented
   recovery-point and recovery-time expectations.
 - [ ] Version schemas and protocols and support rolling grid and region upgrades

@@ -608,7 +608,9 @@ void apply_extra_physics(
 
 std::optional<homeworldz::viewer::StaticObject> static_object_from_entity(
     const homeworldz::scene::Scene& scene, const homeworldz::scene::Entity& entity,
-    std::string_view recipient_id) {
+    std::string_view recipient_id, const homeworldz::script::FalconRuntime& falcon) {
+    constexpr std::uint32_t object_scripted = 0x00000040;
+    constexpr std::uint32_t object_handle_touch = 0x00000080;
     constexpr std::uint32_t object_modify = 0x00000004;
     constexpr std::uint32_t object_copy = 0x00000008;
     constexpr std::uint32_t object_any_owner = 0x00000010;
@@ -641,6 +643,9 @@ std::optional<homeworldz::viewer::StaticObject> static_object_from_entity(
     if ((permissions & homeworldz::scene::permission_move) != 0) object.update_flags |= object_move;
     if ((permissions & homeworldz::scene::permission_transfer) != 0) object.update_flags |= object_transfer;
     if (is_owner) object.update_flags |= object_you_owner | object_owner_modify;
+    const auto script_status = falcon.object_script_status(entity.object_id);
+    if (script_status.scripted) object.update_flags |= object_scripted;
+    if (script_status.handles_touch) object.update_flags |= object_handle_touch;
     object.material = entity.material;
     const auto& protocol_position = entity.parent_id == 0 ? entity.position : entity.local_position;
     const auto& protocol_rotation = entity.parent_id == 0 ? entity.rotation : entity.local_rotation;
@@ -4240,7 +4245,7 @@ int main(int argc, char* argv[]) {
                                 }
                             for (const auto& [entity_id, entity] : scene.entities()) {
                                 static_cast<void>(entity_id);
-                                const auto restored_object = static_object_from_entity(scene, entity, live_avatar.user_id);
+                                const auto restored_object = static_object_from_entity(scene, entity, live_avatar.user_id, falcon);
                                 if (!restored_object) continue;
                                 if (const auto object = circuits.send(endpoint,
                                         homeworldz::viewer::encode_static_object_update(
@@ -4302,7 +4307,7 @@ int main(int argc, char* argv[]) {
                                     for (const auto entity_id : updates) {
                                         const auto* entity = scene.find(entity_id);
                                         const auto object = entity
-                                            ? static_object_from_entity(scene, *entity, recipient.user_id) : std::nullopt;
+                                            ? static_object_from_entity(scene, *entity, recipient.user_id, falcon) : std::nullopt;
                                         if (!object) continue;
                                         if (const auto sent = circuits.send(recipient_endpoint,
                                                 homeworldz::viewer::encode_static_object_update(
@@ -4359,7 +4364,7 @@ int main(int argc, char* argv[]) {
                                     if (!entity) continue;
                                     synchronize_physics_object(*entity);
                                     for (const auto& [recipient_endpoint, recipient] : avatars) {
-                                        const auto object = static_object_from_entity(scene, *entity, recipient.user_id);
+                                        const auto object = static_object_from_entity(scene, *entity, recipient.user_id, falcon);
                                         if (!object) continue;
                                         if (const auto sent = circuits.send(recipient_endpoint,
                                                 homeworldz::viewer::encode_static_object_update(
@@ -4702,7 +4707,7 @@ int main(int argc, char* argv[]) {
                                 if (!entity) continue;
                                 if (persisted) synchronize_physics_object(*entity);
                                 for (const auto& [recipient_endpoint, recipient] : avatars) {
-                                    const auto object = static_object_from_entity(scene, *entity, recipient.user_id);
+                                    const auto object = static_object_from_entity(scene, *entity, recipient.user_id, falcon);
                                     if (!object) continue;
                                     if (const auto sent = circuits.send(recipient_endpoint,
                                             homeworldz::viewer::encode_static_object_update(
@@ -4887,7 +4892,7 @@ int main(int argc, char* argv[]) {
                                     const auto* entity = scene.find(entity_id);
                                     if (!entity) continue;
                                     for (const auto& [recipient_endpoint, recipient] : avatars) {
-                                        const auto object = static_object_from_entity(scene, *entity, recipient.user_id);
+                                        const auto object = static_object_from_entity(scene, *entity, recipient.user_id, falcon);
                                         if (!object) continue;
                                         if (const auto sent = circuits.send(recipient_endpoint,
                                                 homeworldz::viewer::encode_static_object_update(
@@ -4999,7 +5004,7 @@ int main(int argc, char* argv[]) {
                                     if (!entity) continue;
                                     synchronize_physics_object(*entity);
                                     for (const auto& [recipient_endpoint, recipient] : avatars) {
-                                        auto object = static_object_from_entity(scene, *entity, recipient.user_id);
+                                        auto object = static_object_from_entity(scene, *entity, recipient.user_id, falcon);
                                         if (!object) continue;
                                         if (recipient_endpoint == endpoint)
                                             object->update_flags |=
@@ -5067,7 +5072,7 @@ int main(int argc, char* argv[]) {
                                 const auto* entity = scene.find(entity_id);
                                 if (!entity) continue;
                                 for (const auto& [recipient_endpoint, recipient] : avatars) {
-                                    const auto object = static_object_from_entity(scene, *entity, recipient.user_id);
+                                    const auto object = static_object_from_entity(scene, *entity, recipient.user_id, falcon);
                                     if (!object) continue;
                                     if (const auto sent = circuits.send(recipient_endpoint,
                                             homeworldz::viewer::encode_static_object_update(
@@ -5127,7 +5132,7 @@ int main(int argc, char* argv[]) {
                                 const auto* entity = scene.find(entity_id);
                                 if (!entity) continue;
                                 for (const auto& [recipient_endpoint, recipient] : avatars) {
-                                    const auto object = static_object_from_entity(scene, *entity, recipient.user_id);
+                                    const auto object = static_object_from_entity(scene, *entity, recipient.user_id, falcon);
                                     if (!object) continue;
                                     if (const auto sent = circuits.send(recipient_endpoint,
                                             homeworldz::viewer::encode_static_object_update(
@@ -5192,7 +5197,7 @@ int main(int argc, char* argv[]) {
                                         (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
                                         static_cast<std::uint32_t>(region_grid_y * 256);
                                     for (const auto& [recipient_endpoint, recipient] : avatars) {
-                                        const auto object = static_object_from_entity(scene, *entity, recipient.user_id);
+                                        const auto object = static_object_from_entity(scene, *entity, recipient.user_id, falcon);
                                         if (!object) continue;
                                         if (const auto sent = circuits.send(recipient_endpoint,
                                                 homeworldz::viewer::encode_static_object_update(
@@ -5359,7 +5364,7 @@ int main(int argc, char* argv[]) {
                                         (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
                                         static_cast<std::uint32_t>(region_grid_y * 256);
                                     for (const auto& [recipient_endpoint, recipient] : avatars) {
-                                        auto object = static_object_from_entity(scene, *entity, recipient.user_id);
+                                        auto object = static_object_from_entity(scene, *entity, recipient.user_id, falcon);
                                         if (!object) continue;
                                         if (recipient.user_id == entity->owner_id &&
                                             (object_add->add_flags & add_create_selected) != 0)
@@ -5683,7 +5688,7 @@ int main(int argc, char* argv[]) {
                                         (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
                                         static_cast<std::uint32_t>(region_grid_y * 256);
                                     for (const auto& [recipient_endpoint, recipient] : avatars) {
-                                        const auto object = static_object_from_entity(scene, *entity, recipient.user_id);
+                                        const auto object = static_object_from_entity(scene, *entity, recipient.user_id, falcon);
                                         if (!object) continue;
                                         if (const auto outgoing = circuits.send(
                                                 recipient_endpoint,
@@ -6085,7 +6090,7 @@ int main(int argc, char* argv[]) {
                         !homeworldz::physics::body_transform_changed(
                             previous->second.state, state))
                         continue;
-                    const auto object = static_object_from_entity(scene, *entity, recipient.user_id);
+                    const auto object = static_object_from_entity(scene, *entity, recipient.user_id, falcon);
                     if (!object) continue;
                     if (const auto sent = circuits.send(recipient_endpoint,
                             homeworldz::viewer::encode_static_object_update(

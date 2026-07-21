@@ -62,6 +62,14 @@ int main() {
         {"touch-asset", "touch-item", "touch-object", "owner"},
         "default { touch_start(integer n) { llOwnerSay(\"Touched!\"); } }", true);
     assert(touch_rez.compiled && touch_rez.running);
+    // The object now advertises as scripted and touch-handling so Firestorm
+    // enables its Touch action.
+    {
+        const auto status = runtime.object_script_status("touch-object");
+        assert(status.scripted && status.handles_touch);
+        const auto none = runtime.object_script_status("no-such-object");
+        assert(!none.scripted && !none.handles_touch);
+    }
     runtime.run_tick(); // drains the ctor-dispatched state_entry (there is none here)
     assert(messages.empty());
     // A non-matching object id reaches no script; the touched object reaches one.
@@ -90,10 +98,21 @@ int main() {
     assert(silent.compiled && silent.running);
     runtime.run_tick();
     messages.clear();
+    // A script without a touch handler is scripted but not touch-handling.
+    {
+        const auto status = runtime.object_script_status("silent-object");
+        assert(status.scripted && !status.handles_touch);
+    }
     assert(runtime.dispatch_touch_start("silent-object", 1) == 0);
     assert(runtime.set_enabled("touch-object", "touch-item", false));
     assert(runtime.dispatch_touch_start("touch-object", 1) == 0);
     runtime.run_tick();
     assert(messages.empty());
+    // Disabling the only touch script clears HANDLE_TOUCH but the object stays
+    // scripted.
+    {
+        const auto status = runtime.object_script_status("touch-object");
+        assert(status.scripted && !status.handles_touch);
+    }
     return 0;
 }
