@@ -42,6 +42,13 @@ public:
     bool set_enabled(std::string_view object_id, std::string_view inventory_item_id,
                      bool enabled);
     bool erase(std::string_view object_id, std::string_view inventory_item_id);
+    // Queues touch_start(total_number) for every enabled compiled script in the
+    // named object whose program declares that handler. Events are queued rather
+    // than dispatched immediately so an in-flight handler is never clobbered;
+    // run_tick() drains one queued event per idle script. Returns the number of
+    // scripts that accepted the event.
+    std::size_t dispatch_touch_start(std::string_view object_id,
+                                     std::int32_t total_number = 1);
     FalconTickResult run_tick(std::uint64_t total_instruction_budget = 0x00010000,
                               std::uint64_t per_script_slice = 0x00000400);
     std::size_t size() const;

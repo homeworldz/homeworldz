@@ -323,9 +323,14 @@ Falcon LSL scripting foundation.
   the live VM when its task inventory item is deleted.
 - [x] Route the initial `llSay` and `llOwnerSay` host calls to Firestorm object
   chat with owner-only and distance behavior, confirmed in the live cloud Grid.
-- [ ] Implement object lifecycle, touch, timer, listen, sensor, control,
-  permission, inventory, changed, link-message, collision, land-collision,
-  attachment, and moving events.
+- [x] Decode the Firestorm `ObjectGrab` touch packet distinctly from the
+  physical `ObjectGrabUpdate` drag path, authorize the touching avatar, resolve
+  the clicked child and linkset root, and dispatch `touch_start(1)` to each
+  enabled compiled script through a bounded per-script event queue that never
+  clobbers an in-flight handler.
+- [ ] Implement the remaining object lifecycle, sustained/ended touch, timer,
+  listen, sensor, control, permission, inventory, changed, link-message,
+  collision, land-collision, attachment, and moving events.
 - [ ] Implement bounded LSL host functions for scene, physics, inventory,
   communication, parcel, avatar, HTTP, and data operations.
 - [ ] Preserve Second Life event ordering and delay semantics where observable

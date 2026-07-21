@@ -5,6 +5,7 @@
 #include "homeworldz/script/vm.h"
 
 #include <algorithm>
+#include <deque>
 #include <unordered_map>
 #include <utility>
 
@@ -19,11 +20,30 @@ std::string instance_key(std::string_view object_id, std::string_view item_id) {
 
 struct FalconRuntime::Impl {
     struct LiveScript {
+        struct PendingEvent {
+            std::string name;
+            std::vector<Value> args;
+        };
+
+        // A single click can arrive while an earlier handler is still yielded
+        // mid-slice. Events queue here and drain one at a time as the VM goes
+        // idle so no in-flight handler is ever clobbered. Bounded so a script
+        // that never keeps up cannot grow the queue without limit.
+        static constexpr std::size_t max_pending = 0x40;
+
         Identity identity;
         Program program;
         VM vm;
         bool enabled{};
         bool trapped{};
+        std::deque<PendingEvent> pending;
+
+        bool queue_event(std::string event, std::vector<Value> args) {
+            if (!enabled || trapped || !program.find_event(event)) return false;
+            if (pending.size() >= max_pending) return false;
+            pending.push_back({std::move(event), std::move(args)});
+            return true;
+        }
 
         LiveScript(Identity script_identity, Program compiled, bool start_enabled,
                    const HostSink& sink)
@@ -91,6 +111,18 @@ bool FalconRuntime::erase(std::string_view object_id, std::string_view inventory
     return impl_->scripts.erase(instance_key(object_id, inventory_item_id)) != 0;
 }
 
+std::size_t FalconRuntime::dispatch_touch_start(std::string_view object_id,
+                                                std::int32_t total_number) {
+    std::size_t accepted = 0;
+    for (auto& [key, script] : impl_->scripts) {
+        (void)key;
+        if (script->identity.object_id != object_id) continue;
+        if (script->queue_event("touch_start", {Value::make_integer(total_number)}))
+            ++accepted;
+    }
+    return accepted;
+}
+
 FalconTickResult FalconRuntime::run_tick(std::uint64_t total_instruction_budget,
                                          std::uint64_t per_script_slice) {
     FalconTickResult result;
@@ -99,7 +131,14 @@ FalconTickResult FalconRuntime::run_tick(std::uint64_t total_instruction_budget,
     for (auto& [key, script] : impl_->scripts) {
         (void)key;
         if (remaining == 0) break;
-        if (!script->enabled || script->trapped || script->vm.finished()) continue;
+        if (!script->enabled || script->trapped) continue;
+        if (script->vm.finished()) {
+            // Idle: seed the next queued event, or skip if nothing is pending.
+            if (script->pending.empty()) continue;
+            auto event = std::move(script->pending.front());
+            script->pending.pop_front();
+            script->vm.dispatch(event.name, event.args);
+        }
         ++result.scripts_visited;
         const auto slice = (std::min)(remaining, per_script_slice);
         const auto before = script->vm.total_instructions();

@@ -90,6 +90,8 @@ constexpr std::array<std::byte, 4> object_link_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x73}};
 constexpr std::array<std::byte, 4> object_delink_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x74}};
+constexpr std::array<std::byte, 4> object_grab_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x75}};
 constexpr std::array<std::byte, 4> object_grab_update_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x76}};
 constexpr std::array<std::byte, 2> multiple_object_update_id{
@@ -1276,6 +1278,29 @@ std::optional<ObjectSelect> decode_object_link(std::span<const std::byte> payloa
 
 std::optional<ObjectSelect> decode_object_delink(std::span<const std::byte> payload) {
     return decode_object_relationship_request(payload, object_delink_id);
+}
+
+std::optional<ObjectGrab> decode_object_grab(std::span<const std::byte> payload) {
+    // ObjectGrab (Low 117): AgentID, SessionID, LocalID (U32), GrabOffset
+    // (LLVector3), then a variable SurfaceInfo array. Unlike ObjectGrabUpdate
+    // this identifies the clicked prim by its region-local id, not its full
+    // object UUID, and carries the initial touch offset rather than a drag path.
+    constexpr std::size_t fixed_size = 53;
+    constexpr std::size_t surface_block_size = 64;
+    if (payload.size() < fixed_size ||
+        !std::equal(object_grab_id.begin(), object_grab_id.end(), payload.begin()))
+        return std::nullopt;
+    const auto surface_count = std::to_integer<std::size_t>(payload[52]);
+    if (payload.size() != fixed_size + surface_count * surface_block_size) return std::nullopt;
+    ObjectGrab result;
+    std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
+    result.local_id = read_le_u32(payload, 36);
+    result.grab_offset = {read_f32(payload, 40), read_f32(payload, 44), read_f32(payload, 48)};
+    if (!std::all_of(result.grab_offset.begin(), result.grab_offset.end(),
+                     [](float value) { return std::isfinite(value); }))
+        return std::nullopt;
+    return result;
 }
 
 std::optional<ObjectGrabUpdate> decode_object_grab_update(std::span<const std::byte> payload) {

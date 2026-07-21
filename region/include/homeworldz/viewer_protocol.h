@@ -256,6 +256,11 @@ struct ObjectSelect : AgentMessage {
     std::vector<std::uint32_t> local_ids;
 };
 
+struct ObjectGrab : AgentMessage {
+    std::uint32_t local_id{};
+    std::array<float, 3> grab_offset{};
+};
+
 struct ObjectGrabUpdate : AgentMessage {
     Uuid object_id{};
     std::array<float, 3> grab_offset_initial{};
@@ -687,6 +692,7 @@ std::optional<ObjectSelect> decode_object_select(std::span<const std::byte> payl
 std::optional<ObjectSelect> decode_object_deselect(std::span<const std::byte> payload);
 std::optional<ObjectSelect> decode_object_link(std::span<const std::byte> payload);
 std::optional<ObjectSelect> decode_object_delink(std::span<const std::byte> payload);
+std::optional<ObjectGrab> decode_object_grab(std::span<const std::byte> payload);
 std::optional<ObjectGrabUpdate> decode_object_grab_update(std::span<const std::byte> payload);
 std::optional<MultipleObjectUpdate> decode_multiple_object_update(std::span<const std::byte> payload);
 std::optional<ObjectName> decode_object_name(std::span<const std::byte> payload);

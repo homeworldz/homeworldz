@@ -54,5 +54,46 @@ int main() {
     assert(!invalid.compiled && !invalid.diagnostic.empty() && runtime.size() == 3);
 
     assert(runtime.erase("object", "item") && runtime.size() == 2);
+
+    // touch_start dispatch: an enabled script in the touched object receives the
+    // event and fires it on the next tick.
+    messages.clear();
+    const auto touch_rez = runtime.rez(
+        {"touch-asset", "touch-item", "touch-object", "owner"},
+        "default { touch_start(integer n) { llOwnerSay(\"Touched!\"); } }", true);
+    assert(touch_rez.compiled && touch_rez.running);
+    runtime.run_tick(); // drains the ctor-dispatched state_entry (there is none here)
+    assert(messages.empty());
+    // A non-matching object id reaches no script; the touched object reaches one.
+    assert(runtime.dispatch_touch_start("no-such-object", 1) == 0);
+    assert(runtime.dispatch_touch_start("touch-object", 1) == 1);
+    runtime.run_tick();
+    assert(messages.size() == 1 && messages[0].owner_only &&
+           messages[0].text == "Touched!" &&
+           messages[0].identity.inventory_item_id == "touch-item");
+
+    // Queued touches drain one per idle tick rather than clobbering each other.
+    messages.clear();
+    assert(runtime.dispatch_touch_start("touch-object", 1) == 1);
+    assert(runtime.dispatch_touch_start("touch-object", 1) == 1);
+    runtime.run_tick();
+    assert(messages.size() == 1);
+    runtime.run_tick();
+    assert(messages.size() == 2);
+
+    // A disabled script accepts no touch, and a script without a touch_start
+    // handler is not counted as a recipient.
+    messages.clear();
+    const auto silent = runtime.rez(
+        {"silent-asset", "silent-item", "silent-object", "owner"},
+        "default { state_entry() { llOwnerSay(\"ready\"); } }", true);
+    assert(silent.compiled && silent.running);
+    runtime.run_tick();
+    messages.clear();
+    assert(runtime.dispatch_touch_start("silent-object", 1) == 0);
+    assert(runtime.set_enabled("touch-object", "touch-item", false));
+    assert(runtime.dispatch_touch_start("touch-object", 1) == 0);
+    runtime.run_tick();
+    assert(messages.empty());
     return 0;
 }

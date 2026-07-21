@@ -1130,11 +1130,37 @@ bool object_interaction_codecs() {
     write_f32(grab, 72, 24.0F);
     grab[76] = std::byte{25};
     const auto decoded_grab = decode_object_grab_update(grab);
-    return decoded_grab && decoded_grab->agent_id == agent &&
-           decoded_grab->session_id == session && decoded_grab->object_id == object &&
-           decoded_grab->grab_offset_initial == std::array<float, 3>{0.25F, -0.5F, 0.75F} &&
-           decoded_grab->grab_position == std::array<float, 3>{100.0F, 101.0F, 24.0F} &&
-           decoded_grab->time_since_last == 25;
+    if (!decoded_grab || decoded_grab->agent_id != agent ||
+        decoded_grab->session_id != session || decoded_grab->object_id != object ||
+        decoded_grab->grab_offset_initial != std::array<float, 3>{0.25F, -0.5F, 0.75F} ||
+        decoded_grab->grab_position != std::array<float, 3>{100.0F, 101.0F, 24.0F} ||
+        decoded_grab->time_since_last != 25)
+        return false;
+
+    // ObjectGrab (Low 117) is the initial touch: LocalID + GrabOffset, then a
+    // variable SurfaceInfo array whose declared count must match the payload.
+    std::vector<std::byte> touch(53);
+    touch[0] = std::byte{0xff};
+    touch[1] = std::byte{0xff};
+    touch[2] = std::byte{0x00};
+    touch[3] = std::byte{0x75};
+    std::copy(agent.begin(), agent.end(), touch.begin() + 4);
+    std::copy(session.begin(), session.end(), touch.begin() + 20);
+    touch[36] = std::byte{0x2a}; // LocalID 42, little-endian
+    write_f32(touch, 40, 0.5F);
+    write_f32(touch, 44, -0.25F);
+    write_f32(touch, 48, 1.5F);
+    touch[52] = std::byte{0}; // zero SurfaceInfo blocks
+    const auto decoded_touch = decode_object_grab(touch);
+    if (!decoded_touch || decoded_touch->agent_id != agent ||
+        decoded_touch->session_id != session || decoded_touch->local_id != 42 ||
+        decoded_touch->grab_offset != std::array<float, 3>{0.5F, -0.25F, 1.5F})
+        return false;
+    // A SurfaceInfo count that does not match the trailing bytes is rejected.
+    touch[52] = std::byte{1};
+    if (decode_object_grab(touch)) return false;
+    // ObjectGrabUpdate (118) must not decode as ObjectGrab.
+    return !decode_object_grab(grab);
 }
 
 bool default_primitive_texture() {

@@ -4439,6 +4439,30 @@ int main(int argc, char* argv[]) {
                                 }
                             }
                         }
+                        const auto grab =
+                            homeworldz::viewer::decode_object_grab(packet->payload);
+                        if (grab && grab->agent_id == identity->agent_id &&
+                            grab->session_id == identity->session_id) {
+                            // The initial touch (ObjectGrab), distinct from the
+                            // physical drag path carried by ObjectGrabUpdate, is
+                            // the only trigger for touch_start; drag motion must
+                            // not synthesize duplicate touch events.
+                            if (const auto* clicked = scene.find(grab->local_id)) {
+                                std::size_t fired =
+                                    falcon.dispatch_touch_start(clicked->object_id, 1);
+                                const auto root_id = clicked->parent_id == 0
+                                    ? clicked->id : clicked->parent_id;
+                                if (root_id != clicked->id) {
+                                    if (const auto* root = scene.find(root_id))
+                                        fired += falcon.dispatch_touch_start(
+                                            root->object_id, 1);
+                                }
+                                if (fired != 0)
+                                    std::cerr << "{\"level\":\"info\",\"message\":\"Falcon touch_start dispatched\",\"localId\":"
+                                              << grab->local_id << ",\"scripts\":" << fired
+                                              << "}" << std::endl;
+                            }
+                        }
                         const auto grab_update =
                             homeworldz::viewer::decode_object_grab_update(packet->payload);
                         if (grab_update && grab_update->agent_id == identity->agent_id &&

@@ -106,10 +106,15 @@ Firestorm as of 2026-07-20:
   globals and a handler suspended in the middle of `touch_start`.
 - Removing a task script removes its live VM.
 
-Important limitations: Firestorm touch packets are not yet dispatched into
-Falcon, running script instances are not restored after Region restart, the
-scheduler is bounded but not yet fully fair or resource-accounted, and Falcon
-implements only a small portion of the required LSL language and host surface.
+Firestorm `ObjectGrab` touch packets are now decoded distinctly from the
+physical `ObjectGrabUpdate` drag path and dispatch `touch_start(1)` into each
+enabled compiled script through a bounded per-script event queue; this is
+implemented, tested, and committed but not yet deployed or Firestorm-accepted.
+
+Important limitations: sustained-touch and touch-end are not yet delivered,
+running script instances are not restored after Region restart, the scheduler
+is bounded but not yet fully fair or resource-accounted, and Falcon implements
+only a small portion of the required LSL language and host surface.
 
 Recent scripting checkpoints include:
 
