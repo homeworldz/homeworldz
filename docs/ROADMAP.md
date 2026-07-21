@@ -20,8 +20,8 @@ when scope or implementation evidence changes.
 
 <label class="roadmap-overall-progress">
   <span>Overall progress</span>
-  <progress data-color="primary" max="100" value="25">25%</progress>
-  <strong>25%</strong>
+  <progress data-color="primary" max="100" value="27">27%</progress>
+  <strong>27%</strong>
 </label>
 
 | Phase | Progress | Estimate |
@@ -29,7 +29,7 @@ when scope or implementation evidence changes.
 | 1. Functional Single-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="98" aria-label="Phase 1 progress: 98%">98%</progress> | 98% |
 | 2. Connected Multi-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="70" aria-label="Phase 2 progress: 70%">70%</progress> | 70% |
 | 3. Interactive Physical World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="39" aria-label="Phase 3 progress: 39%">39%</progress> | 39% |
-| 4. LSL Scripting | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="4" aria-label="Phase 4 progress: 4%">4%</progress> | 4% |
+| 4. LSL Scripting | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="15" aria-label="Phase 4 progress: 15%">15%</progress> | 15% |
 | 5. Social and Creator Platform | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="9" aria-label="Phase 5 progress: 9%">9%</progress> | 9% |
 | 6. Reliable Operations and Distribution | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="12" aria-label="Phase 6 progress: 12%">12%</progress> | 12% |
 | 7. Scale, Compatibility, and Ecosystem | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="2" aria-label="Phase 7 progress: 2%">2%</progress> | 2% |
@@ -39,9 +39,11 @@ arithmetic mean of the phase percentages. The binary checkboxes below remain
 the acceptance record; partially implemented work contributes to these bars
 but stays unchecked until its complete wording is satisfied.
 
-Current implementation focus is Phase 2, Connected Multi-region World. Phase 3
-work should advance concurrently only when it is a dependency for crossings,
-attachments, vehicles, authority transfer, or another active Phase 2 item.
+The phases are parallel workstreams, not completion gates. Work may advance in
+any phase when it delivers useful capability or evidence; dependencies constrain
+individual tasks rather than requiring an earlier phase to be complete. Current
+active work spans connected regions, the interactive physical world, and the
+Falcon LSL scripting foundation.
 
 ## Phase 1: Functional Single-region World
 
@@ -114,8 +116,8 @@ attachments, vehicles, authority transfer, or another active Phase 2 item.
   mutation, copy, derez, return, and inventory round-trip lifecycle.
 - [x] Implement creator-attributed sound and animation uploads; personal
   landmark, notecard, gesture, and LSL-source creation and updates; and task
-  notecard and script updates. LSL source remains intentionally uncompiled
-  until Phase 4.
+  notecard and script updates. Phase 4 now compiles and executes the supported
+  Falcon language subset when a script enters or is saved in object contents.
 - [ ] Complete Firestorm creation, editing, playback, object-contents,
   restart, and relog acceptance for those fundamental content types.
 
@@ -280,21 +282,31 @@ attachments, vehicles, authority transfer, or another active Phase 2 item.
 
 ### Language and compiler
 
+- [x] Establish the dependency-free handwritten Falcon lexer, parser, semantic
+  analyzer, versioned bytecode format, compiler, and automated proof-of-concept
+  suite for an initial typed LSL subset.
+- [x] Return Falcon compilation success and escaped error arrays through the
+  Firestorm task-script capability protocol, including line and column locations
+  for lexical errors.
 - [ ] Inventory the complete Second Life LSL language and built-in surface plus
   Halcyon/InWorldz extensions, explicitly excluding OpenSimulator extensions.
-- [ ] Implement the handwritten lexer, parser, semantic analysis, diagnostics,
-  and versioned HomeWorldz bytecode compiler.
-- [ ] Store LSL source with creator provenance and cache immutable bytecode by
-  source hash, compiler version, and runtime ABI.
+- [ ] Complete the handwritten lexer, parser, semantic analysis, diagnostics,
+  and versioned HomeWorldz bytecode compiler for that full supported language.
+- [x] Store creator-attributed LSL source in personal and task inventory, with
+  Firestorm creation, retrieval, editing, saving, and drag-to-contents behavior.
+- [ ] Cache immutable bytecode by source hash, compiler version, and runtime ABI.
 - [ ] Build compatibility tests for syntax, types, conversions, lists, strings,
   states, constants, built-ins, and observable errors.
 
 ### Cooperative runtime and resource control
 
-- [ ] Implement the single-threaded C++ bytecode VM on the authoritative region
-  thread with explicit instruction-level execution state.
+- [x] Integrate the single-threaded C++ Falcon bytecode VM into the authoritative
+  Region thread with explicit instruction-level execution state and no native
+  thread per script.
+- [x] Apply bounded aggregate and per-script instruction slices on every Region
+  tick so an infinite loop yields cooperatively instead of blocking the world.
 - [ ] Schedule scripts fairly using bounded weighted instruction and wall-clock
-  budgets with no native thread per script.
+  budgets across scripts, objects, owners, and parcels.
 - [ ] Enforce memory, stack, call-depth, event-queue, string, list, payload,
   owner, object, and parcel limits.
 - [ ] Make slow host operations asynchronous and represent waits as serializable
@@ -304,6 +316,13 @@ attachments, vehicles, authority transfer, or another active Phase 2 item.
 
 ### Events and region integration
 
+- [x] Decode Firestorm `RezScript`, create or transfer the task inventory item,
+  compile its source, instantiate an enabled VM, and dispatch `state_entry`.
+- [x] Recompile task scripts after Firestorm edits, preserve the previous running
+  instance after a failed compile, honor the viewer's running flag, and remove
+  the live VM when its task inventory item is deleted.
+- [x] Route the initial `llSay` and `llOwnerSay` host calls to Firestorm object
+  chat with owner-only and distance behavior, confirmed in the live cloud Grid.
 - [ ] Implement object lifecycle, touch, timer, listen, sensor, control,
   permission, inventory, changed, link-message, collision, land-collision,
   attachment, and moving events.
@@ -316,11 +335,15 @@ attachments, vehicles, authority transfer, or another active Phase 2 item.
 
 ### Script persistence and crossings
 
+- [x] Demonstrate automated Falcon snapshots after every completed instruction,
+  restoration into a fresh VM, preservation of globals, and continuation from
+  the middle of a `touch_start` handler.
 - [ ] Serialize bytecode identity, instruction pointer, stacks, frames, globals,
   current event, event queue, timers, listens, permissions, and pending work in
   a compact versioned binary format.
-- [ ] Stop and restore a script after any completed bytecode instruction without
-  relying on the native C++ stack.
+- [ ] Integrate stop-and-restore after any completed bytecode instruction into
+  live task scripts and Region persistence without relying on the native C++
+  stack.
 - [ ] Snapshot scripts atomically with their attachment, object, or vehicle
   physics bundle.
 - [ ] Cross heavily scripted attachments and vehicles within defined latency,
