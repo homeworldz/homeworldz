@@ -65,6 +65,13 @@ with the grid, fetch missing assets directly from another region using an
 authenticated internal endpoint, verify the advertised size and SHA-256, and
 retain the original UUID and creator provenance in the local replica.
 
+Durability of inventory content does not rely on regions staying alive. A
+planned grid-side asset vault (ADR 0026) durably holds the bytes of every
+inventory-referenced asset, ingested and verified when the inventory item is
+created, so a user's inventory survives the permanent loss of any region. The
+vault is replica-only: it never originates assets and is never in the viewer
+fetch path, which still always goes to the connected region.
+
 ### Free texture uploads
 
 HomeWorldz does not charge users to upload textures. Regions advertise a zero

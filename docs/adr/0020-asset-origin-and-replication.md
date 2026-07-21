@@ -2,6 +2,11 @@
 
 Status: Accepted
 
+ADR 0026 supersedes the durability role of peer replication described here:
+the grid vault durably stores all inventory-referenced asset bytes, and
+region-to-region fetch is an optimization. The identity, verification, and
+registration mechanics below remain authoritative.
+
 Viewer-facing asset UUIDs are immutable content identities within a HomeWorldz
 grid. Registering an existing UUID is idempotent only when its SHA-256 hash,
 byte size, and creator UUID match. A conflicting registration is rejected; a

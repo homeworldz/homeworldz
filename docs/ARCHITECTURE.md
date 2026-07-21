@@ -17,13 +17,17 @@ The current preferred split is:
 - HTTP and JSON for internal service APIs by default.
 - OpenAPI for API documentation.
 - Postgres for central grid-service persistence.
-- Region-local storage for scene and asset data.
+- Region-local storage for scene and asset data, serving all viewer traffic.
+- A grid-side, replica-only asset vault for durable storage of the bytes behind
+  inventory-referenced assets (ADR 0026), never in the viewer fetch path.
 
 ## Goals
 
 - Preserve practical Firestorm viewer compatibility.
 - Support distributed region servers operated independently.
 - Store assets primarily with the region servers that need them.
+- Guarantee that assets referenced by user inventories survive the permanent
+  loss of any region.
 - Keep central services focused on identity, inventory metadata, presence,
   region registration, discovery, and coordination.
 - Avoid preserving legacy internal protocols unless they are still the simplest
@@ -37,7 +41,8 @@ The current preferred split is:
 - Preserving the current MySQL schema.
 - Using protobuf because Halcyon used protobuf.
 - Using C#/.NET as an implementation constraint.
-- Making the central grid services responsible for all asset blobs.
+- Making the central grid services the primary asset store or placing them in
+  the viewer asset fetch path.
 - Making gRPC a default before there is a measured need.
 
 ## Region Server
@@ -79,6 +84,8 @@ Grid services should own:
 - Map and search metadata.
 - Permissions and groups.
 - Asset federation metadata and lookup.
+- The asset vault: durable storage for asset bytes referenced by user
+  inventories (ADR 0026).
 - Administrative APIs.
 - Background reconciliation jobs.
 
@@ -271,19 +278,30 @@ See [ASSETS.md](ASSETS.md) for the full asset design: region storage, inventory
 asset references, federation, teleport/crossing behavior, and cross-border
 observation.
 
-Assets should be primarily region-local.
+Assets are primarily region-local: each region server stores and serves the
+assets its scene and connected viewers need, and viewers always fetch from the
+region they are connected to.
 
-Each region server should be able to store and serve the assets needed by its
-region. Central services may track metadata and federation information, but they
-do not need to store every asset blob.
+Durability is grid-owned for inventory content. A grid-side, replica-only
+**asset vault** durably stores the deduplicated bytes of every asset
+referenced by a user inventory; an inventory item may only be committed once
+the vault holds verified bytes for its asset
+([ADR 0026](adr/0026-vault-authoritative-inventory-assets.md)). This keeps
+inventories intact when independently operated regions disappear without
+warning. Region copies of vault-held assets are caches; assets referenced only
+by rezzed scene content are region-owned and share the fate of the region's
+scene. The vault never originates assets, never hosts agents, is never in the
+viewer data path, and may internally tier rarely accessed blobs onto slower
+S3-compatible storage.
 
-The asset model should support:
+The asset model supports:
 
-- Region-local asset storage.
-- Authorized asset fetch between regions.
+- Region-local asset storage and viewer-facing serving.
+- Write-through vault ingest for every inventory-creating operation.
+- Authorized asset fetch between regions as an optimization, with the vault as
+  the always-available source for inventory-referenced assets.
 - Authorized asset copy or replication when content moves between regions.
 - Asset metadata lookup through grid services where useful.
-- Optional central fallback storage later, but not as a v1 foundation.
 
 Local asset bytes are immutable SHA-256-addressed blobs sharded by the first
 hash byte. SQLite maps viewer-facing UUIDs to hashes, sizes, and required
@@ -292,8 +310,10 @@ provenance is independent of inventory ownership. A viewer UUID cannot be
 remapped to different content or provenance. Grid metadata locates stable
 region origin and replica endpoints; receiving regions verify size and SHA-256
 before retaining the same UUID and creator. Reads verify the content hash
-before returning bytes; garbage collection is deferred until retention and
-replication rules exist. See [ADR 0020](adr/0020-asset-origin-and-replication.md).
+before returning bytes; garbage collection is deferred, and region eviction of
+vault-held blobs becomes safe once the vault exists. See
+[ADR 0020](adr/0020-asset-origin-and-replication.md) and
+[ADR 0026](adr/0026-vault-authoritative-inventory-assets.md).
 
 This replaces the assumption that WHIP/Aperture are central platform services.
 They remain useful references for asset behavior and performance expectations.

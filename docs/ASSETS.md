@@ -5,12 +5,13 @@ content: region-local storage, inventory-referenced assets, what happens to an
 avatar's attachments during a teleport or border crossing, and how viewers will
 observe content across a region border. It is the implementation-level
 companion to the asset sections of [ARCHITECTURE.md](ARCHITECTURE.md) and to
-four ADRs:
+five ADRs:
 
 - [ADR 0014: Content-Addressed Region Assets](adr/0014-content-addressed-assets.md)
 - [ADR 0017: Central Inventory Metadata](adr/0017-central-inventory-metadata.md)
 - [ADR 0018: AIS-First Viewer Inventory](adr/0018-ais-first-viewer-inventory.md)
 - [ADR 0020: Asset Origin And Replication](adr/0020-asset-origin-and-replication.md)
+- [ADR 0026: Vault-Authoritative Inventory Assets](adr/0026-vault-authoritative-inventory-assets.md)
 
 Sections are labeled **Implemented** (in the tree today), **Partially
 implemented**, or **Planned** (accepted direction, not yet built). Planned
@@ -19,21 +20,29 @@ an open design area with no ADR yet.
 
 ## Design summary
 
-Two kinds of truth live in two places:
+Truth is split three ways:
 
-- **Asset bytes are region-local.** Every region server owns an immutable,
+- **Regions serve asset bytes.** Every region server owns an immutable,
   content-addressed blob store for the assets its scene and connected viewers
-  need. There is no central blob service; the grid never stores asset bytes.
+  need. Viewers always fetch from the region they are connected to; no
+  central service sits in the viewer data path.
+- **The grid vault durably stores inventory-referenced bytes.** A grid-side,
+  replica-only blob store (ADR 0026) holds the deduplicated bytes of every
+  asset referenced by a user inventory, so no user's inventory depends on any
+  region staying alive. Region copies of vault-held assets are caches; assets
+  referenced only by rezzed scene content are region-owned and share the fate
+  of the scene.
 - **Asset and inventory *metadata* are grid-central.** PostgreSQL at the grid
   holds inventory folders/items and the asset **federation registry**: which
-  asset UUIDs exist, their SHA-256/size/creator, and which region endpoints can
+  asset UUIDs exist, their SHA-256/size/creator, and which endpoints can
   serve them.
 
 Content moves by **pull-through replication**: when a region needs bytes it
-does not have, it asks the grid *where* the asset lives, fetches it from
-another region, verifies it, stores it, and registers itself as an additional
-replica. Nothing is pushed ahead of time, and replicas are only ever added —
-immutable content-addressed blobs make copying safe and idempotent.
+does not have, it asks the grid *where* the asset lives, fetches it from the
+vault or another region, verifies it, stores it, and registers itself as an
+additional replica. Nothing is pushed ahead of time except vault ingest at
+inventory creation, and replicas are only ever added — immutable
+content-addressed blobs make copying safe and idempotent.
 
 ## 1. Region-local asset storage — **Implemented**
 
@@ -82,36 +91,70 @@ local blob store — or fetches them on demand via federation (section 3).
 Unreferenced-blob collection is deferred until retention requirements are
 defined (ADR 0014); today the blob set only grows.
 
-## 2. Inventory assets (including non-rezzed items) — **Implemented**
+## 2. Inventory assets and the vault — **Partially implemented**
 
-Defined by ADRs 0017/0018; grid schema in `db/migrations/000005` (inventory)
-and `000006` (library identity); code in `grid/internal/inventory`.
+Inventory metadata is defined by ADRs 0017/0018; grid schema in
+`db/migrations/000005` (inventory) and `000006` (library identity); code in
+`grid/internal/inventory`. Durable storage of the referenced bytes is defined
+by ADR 0026 and is planned, not yet built.
 
-A natural assumption is that the grid must store the asset bytes for inventory
-items, since an item may not be rezzed in any region. HomeWorldz deliberately
-does **not** do this:
+### Inventory metadata — Implemented
 
 - The grid's PostgreSQL stores inventory **metadata**: folders (one root per
   user, at most one folder per system type, monotonic versions for descendant
   change detection) and items (explicit viewer asset/inventory types,
   permission masks, sale metadata, flags, creator/owner). Items reference
   viewer-facing **asset UUIDs**.
-- The **bytes** behind those UUIDs remain on region servers — normally the
-  region where the upload or edit happened (the *origin*), plus any regions
-  that have since replicated them.
+- Viewer inventory access is AIS v3-first (ADR 0018): mutations go through
+  the Agent Inventory Service protocol backed by the same grid store; legacy
+  UDP paths are optional compatibility shims over identical operations. The
+  shared "Library" is ordinary inventory owned by a reserved
+  `homeworldz.library` identity, seeded by the `configure-library` tool.
 
-Inventory therefore survives independently of any one region (the metadata is
-central), while bytes stay where they were created until some region actually
-needs them. The federation registry (section 3) is what connects the two: any
-region can resolve an inventory item's asset UUID to a fetchable endpoint. A
-region being offline can make specific *bytes* temporarily unfetchable (if it
-holds the only replica), but never damages the inventory structure itself.
+Inventory *structure* therefore already survives independently of any one
+region. The *bytes* behind item asset UUIDs do not, yet: today they live only
+on the region where the upload or edit happened, plus any regions that have
+since replicated them on demand. An asset only ever used in one region has
+exactly one replica — and independently operated regions may disappear
+without warning, taking such bytes with them.
 
-Viewer inventory access is AIS v3-first (ADR 0018): mutations go through the
-Agent Inventory Service protocol backed by the same grid store; legacy UDP
-paths are optional compatibility shims over identical operations. The shared
-"Library" is ordinary inventory owned by a reserved `homeworldz.library`
-identity, seeded by the `configure-library` tool.
+### The asset vault — Planned (ADR 0026)
+
+ADR 0026 closes that gap with a grid-side **asset vault** and one invariant:
+
+> An inventory item row may only be committed when the vault already holds
+> verified bytes for the asset it references.
+
+- The vault is a durable, replica-only blob store: it never originates
+  assets, never hosts agents, and is never in the viewer data path. Viewers
+  keep fetching from regions.
+- Every inventory-creating operation — upload, take-to-inventory, give,
+  purchase — writes the asset through to the vault (verified by SHA-256 and
+  size) before the item commits. Enforcement is grid-side; no durability
+  property depends on region cooperation, replication lag, or orderly
+  shutdown. Vault unavailability fails inventory writes; asset reads are
+  unaffected.
+- Region blob stores become two tiers: vault-held blobs are a **cache**,
+  evictable at will and re-fetchable on demand — which unblocks the
+  region-side collection deferred by ADR 0014 — while blobs referenced only
+  by rezzed scene content are **region-owned** and live and die with the
+  region, like the scene state itself. Region backups, not the vault,
+  preserve scenes.
+- Baked appearance textures are regenerable derived data, exempt from vault
+  ingest.
+- The vault may internally tier rarely accessed blobs (for example, untouched
+  for six months) onto slower S3-compatible storage. Tier-2 storage is not a
+  registry location, and rehydrated bytes are re-verified against their hash
+  before serving.
+- Vault garbage collection is deferred; when defined it must treat "was ever
+  inventory-referenced" as sticky, because rezzing a no-copy item removes its
+  inventory row while the bytes remain needed for take-back.
+- Adoption requires a one-time backfill of existing inventory-referenced
+  assets from live regions, reporting any that are already unfetchable.
+
+Because vault content is deduplicated by SHA-256 and scoped to
+inventory-referenced assets, it stores far less than "every asset for every
+user, ever" — ten thousand users owning the same item is one blob.
 
 ## 3. Asset federation: lookup, fetch, replicate — **Implemented**
 
@@ -139,6 +182,13 @@ asset_locations(asset_id, endpoint, origin, verified_at)
   6. Register itself with the grid as an additional **replica**.
 - Origin loss does not invalidate verified replicas; any registered location
   can serve future fetches.
+
+Once the vault exists (ADR 0026), region-to-region fetch is demoted from
+durability mechanism to optimization: the vault is always a valid location
+for inventory-referenced assets, so a fetching region never depends on
+another region being alive or honest — it can always fall back to bytes the
+vault verified at ingest. Peer fetch remains useful for picking a nearer or
+faster source and for scene-only content.
 
 Endpoints are operator-configured stable region URLs. The single service token
 is acceptable for the current single-operator grid; scoped, short-lived fetch
@@ -198,7 +248,8 @@ location. Because blobs are immutable and content-addressed, this is safe,
 idempotent, and convergent: an avatar commuting between two regions causes at
 most one fetch per asset per region, ever — after that, both regions serve the
 content locally. The replica set for an asset only grows (garbage collection
-is deferred per ADR 0014).
+is deferred per ADR 0014; ADR 0026 makes region eviction of vault-held blobs
+safe once the vault exists).
 
 For every *moving* entity, the roadmap requires a defined off-region
 disposition: cross to an accepting neighbor, bounce/contain within the source,
@@ -250,9 +301,11 @@ across a border never duplicates simulation.
 
 The stack-and-cache asset topology of InWorldz (per-region caches over central
 services) informs performance expectations, but HomeWorldz inverts the
-authority: regions are the *primary* asset stores and the center holds only
-metadata (ARCHITECTURE.md). Whisper/Aperture-style separate texture servers
-are unnecessary because each region serves its own HTTP asset capabilities.
+serving authority: regions are the *primary* asset stores for all viewer
+traffic, and the center holds metadata plus a replica-only durability vault
+(ADR 0026) that is never in the viewer data path. Whisper/Aperture-style
+separate texture servers are unnecessary because each region serves its own
+HTTP asset capabilities.
 
 ## References
 
@@ -260,6 +313,6 @@ are unnecessary because each region serves its own HTTP asset capabilities.
 - [FEATURES.md](FEATURES.md) — asset creation provenance; region-local assets
 - [ADR 0014](adr/0014-content-addressed-assets.md), [ADR 0017](adr/0017-central-inventory-metadata.md),
   [ADR 0018](adr/0018-ais-first-viewer-inventory.md), [ADR 0020](adr/0020-asset-origin-and-replication.md),
-  [ADR 0025](adr/0025-idempotent-avatar-transits.md)
+  [ADR 0025](adr/0025-idempotent-avatar-transits.md), [ADR 0026](adr/0026-vault-authoritative-inventory-assets.md)
 - [ROADMAP.md](ROADMAP.md) — Phase 2 crossings and navigation milestones
 - [VM.md](VM.md) — Falcon VM crossing snapshots for scripted attachments

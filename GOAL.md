@@ -137,9 +137,14 @@ the user or other repository tooling may have added later commits.
 ## Product and architecture decisions
 
 - Region runtime: native C++20 and CMake.
-- Central Grid and management services: Go with PostgreSQL.
+- Central Grid and management services: Go with PostgreSQL for metadata, plus a
+  durable, replica-only asset vault that holds the bytes of every
+  inventory-referenced asset so inventory content survives the loss of any
+  region (ADR 0026). The vault is never in the viewer asset fetch path.
 - Region-local durable state: configuration files, SQLite, and filesystem asset
-  blobs. Prefer persistent configuration files over environment-variable
+  blobs. Region asset blobs the vault also holds are an evictable cache; blobs
+  referenced only by rezzed scene content are region-owned. Prefer persistent
+  configuration files over environment-variable
   configuration. Region startup credentials may come from the provisioned
   Region configuration and systemd environment files required for service
   launch, but application settings belong in configuration files.
