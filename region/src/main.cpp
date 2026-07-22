@@ -3853,11 +3853,19 @@ int main(int argc, char* argv[]) {
                             // of appearing as a cloud (ADR 0029).
                             std::vector<std::byte> broadcast_texture_entry = appearance->texture_entry;
                             std::vector<std::uint8_t> broadcast_visual_params = appearance->visual_params;
-                            const bool client_baked =
-                                !is_placeholder_texture(appearance->texture_ids[8]) &&
-                                storage->find_asset(homeworldz::viewer::format_uuid(
-                                                        appearance->texture_ids[8]))
-                                    .has_value();
+                            // A real viewer bake is uploaded under the wearer's
+                            // id; our server bakes use the system (zero) creator.
+                            // Only the former counts as client-baked — a thin
+                            // client may echo back the server-bake UUID we handed
+                            // it, which must not be mistaken for a real bake.
+                            const bool client_baked = [&] {
+                                const auto& head = appearance->texture_ids[8];
+                                if (is_placeholder_texture(head)) return false;
+                                const auto meta =
+                                    storage->find_asset(homeworldz::viewer::format_uuid(head));
+                                return meta.has_value() &&
+                                       meta->creator_id != "00000000-0000-0000-0000-000000000000";
+                            }();
                             if (!client_baked) {
                                 if (const auto* bake = ensure_default_outfit_bake()) {
                                     // A client that could not bake its textures
