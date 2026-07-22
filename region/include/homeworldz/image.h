@@ -1,6 +1,7 @@
 #ifndef HOMEWORLDZ_IMAGE_H
 #define HOMEWORLDZ_IMAGE_H
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -36,6 +37,30 @@ std::optional<Image> decode_j2c(const std::vector<std::uint8_t>& data);
 // Encode an Image as a lossless JPEG2000 codestream (.j2c). Returns nullopt on
 // invalid input or encoder failure.
 std::optional<std::vector<std::uint8_t>> encode_j2c(const Image& image);
+
+// Expand any 1..4-channel Image to a 4-channel RGBA copy (L->grey+opaque,
+// LA->grey+alpha, RGB->opaque). An RGBA input is returned unchanged. An empty
+// or malformed Image yields an empty Image.
+Image to_rgba(const Image& src);
+
+// Nearest-neighbor resample to width x height, preserving channel count.
+// Returns an empty Image on invalid input.
+Image resize_nearest(const Image& src, std::uint32_t width, std::uint32_t height);
+
+// One contribution to a composite: a source image plus an RGB tint multiplied
+// into its color channels (255,255,255 = no tint).
+struct Layer {
+    Image image;
+    std::array<std::uint8_t, 3> tint{255, 255, 255};
+};
+
+// Composite layers bottom-to-top into a width x height RGBA image using
+// straight-alpha source-over blending. Each layer is converted to RGBA, tinted,
+// and resized to the target first. This is the bake step's pixel engine
+// (ADR 0029): the first layer is the base (e.g. skin), later layers stack on
+// top (clothing). Returns an empty Image on invalid dimensions.
+Image composite_rgba(std::uint32_t width, std::uint32_t height,
+                     const std::vector<Layer>& layers);
 
 }  // namespace homeworldz::image
 

@@ -252,4 +252,114 @@ std::optional<std::vector<std::uint8_t>> encode_j2c(const Image&) { return std::
 
 #endif
 
+// ---- codec-independent image operations (compositing pixel engine) ----
+
+Image to_rgba(const Image& src) {
+    if (src.empty() || src.channels < 1 || src.channels > 4 ||
+        src.pixels.size() != src.expected_size()) {
+        return {};
+    }
+    if (src.channels == 4) return src;
+
+    Image out;
+    out.width = src.width;
+    out.height = src.height;
+    out.channels = 4;
+    out.pixels.resize(out.expected_size());
+    const std::size_t count = src.pixel_count();
+    const std::uint8_t sc = src.channels;
+    for (std::size_t i = 0; i < count; ++i) {
+        const std::uint8_t* s = &src.pixels[i * sc];
+        std::uint8_t* d = &out.pixels[i * 4];
+        switch (sc) {
+            case 1:  // luminance
+                d[0] = d[1] = d[2] = s[0];
+                d[3] = 255;
+                break;
+            case 2:  // luminance + alpha
+                d[0] = d[1] = d[2] = s[0];
+                d[3] = s[1];
+                break;
+            default:  // 3: RGB
+                d[0] = s[0];
+                d[1] = s[1];
+                d[2] = s[2];
+                d[3] = 255;
+                break;
+        }
+    }
+    return out;
+}
+
+Image resize_nearest(const Image& src, std::uint32_t width, std::uint32_t height) {
+    if (src.empty() || width == 0 || height == 0 || src.channels < 1 ||
+        src.pixels.size() != src.expected_size()) {
+        return {};
+    }
+    if (src.width == width && src.height == height) return src;
+
+    Image out;
+    out.width = width;
+    out.height = height;
+    out.channels = src.channels;
+    out.pixels.resize(out.expected_size());
+    const std::uint8_t c = src.channels;
+    for (std::uint32_t y = 0; y < height; ++y) {
+        const std::uint32_t sy = static_cast<std::uint32_t>(
+            (static_cast<std::uint64_t>(y) * src.height) / height);
+        for (std::uint32_t x = 0; x < width; ++x) {
+            const std::uint32_t sx = static_cast<std::uint32_t>(
+                (static_cast<std::uint64_t>(x) * src.width) / width);
+            const std::uint8_t* s = &src.pixels[(static_cast<std::size_t>(sy) * src.width + sx) * c];
+            std::uint8_t* d = &out.pixels[(static_cast<std::size_t>(y) * width + x) * c];
+            for (std::uint8_t k = 0; k < c; ++k) d[k] = s[k];
+        }
+    }
+    return out;
+}
+
+Image composite_rgba(std::uint32_t width, std::uint32_t height,
+                     const std::vector<Layer>& layers) {
+    if (width == 0 || height == 0) return {};
+
+    Image acc;
+    acc.width = width;
+    acc.height = height;
+    acc.channels = 4;
+    acc.pixels.assign(acc.expected_size(), 0);  // transparent
+
+    const std::size_t count = acc.pixel_count();
+    for (const Layer& layer : layers) {
+        Image rgba = to_rgba(layer.image);
+        if (rgba.empty()) continue;
+        rgba = resize_nearest(rgba, width, height);
+        if (rgba.empty()) continue;
+
+        for (std::size_t i = 0; i < count; ++i) {
+            const std::uint8_t* s = &rgba.pixels[i * 4];
+            // Tint multiplies the source color (255 == identity).
+            const int sr = s[0] * layer.tint[0] / 255;
+            const int sg = s[1] * layer.tint[1] / 255;
+            const int sb = s[2] * layer.tint[2] / 255;
+            const int sa = s[3];
+            if (sa == 0) continue;
+
+            std::uint8_t* d = &acc.pixels[i * 4];
+            const int da = d[3];
+            // Straight-alpha source-over: out_a = sa + da*(1-sa).
+            const int out_a = sa + da * (255 - sa) / 255;
+            if (out_a == 0) {
+                d[0] = d[1] = d[2] = d[3] = 0;
+                continue;
+            }
+            const int inv = 255 - sa;
+            d[0] = static_cast<std::uint8_t>((sr * sa + d[0] * da * inv / 255) / out_a);
+            d[1] = static_cast<std::uint8_t>((sg * sa + d[1] * da * inv / 255) / out_a);
+            d[2] = static_cast<std::uint8_t>((sb * sa + d[2] * da * inv / 255) / out_a);
+            d[3] = static_cast<std::uint8_t>(out_a);
+        }
+    }
+    return acc;
+}
+
 }  // namespace homeworldz::image
