@@ -3852,6 +3852,7 @@ int main(int argc, char* argv[]) {
                             // of the default outfit so the avatar rezzes instead
                             // of appearing as a cloud (ADR 0029).
                             std::vector<std::byte> broadcast_texture_entry = appearance->texture_entry;
+                            std::vector<std::uint8_t> broadcast_visual_params = appearance->visual_params;
                             const bool client_baked =
                                 !is_placeholder_texture(appearance->texture_ids[8]) &&
                                 storage->find_asset(homeworldz::viewer::format_uuid(
@@ -3859,13 +3860,21 @@ int main(int argc, char* argv[]) {
                                     .has_value();
                             if (!client_baked) {
                                 if (const auto* bake = ensure_default_outfit_bake()) {
+                                    // A client that could not bake its textures
+                                    // also cannot be trusted to transmit correct
+                                    // visual params (e.g. LibreMetaverse's encoder
+                                    // sends the wrong param set), so use the
+                                    // server's own default-outfit shape as well.
                                     broadcast_texture_entry = bake->texture_entry;
-                                    avatar_appearances.at(endpoint).texture_entry = bake->texture_entry;
+                                    broadcast_visual_params = default_outfit_visual_params;
+                                    auto& retained = avatar_appearances.at(endpoint);
+                                    retained.texture_entry = bake->texture_entry;
+                                    retained.visual_params = default_outfit_visual_params;
                                 }
                             }
                             const auto remote_appearance = homeworldz::viewer::encode_avatar_appearance({
                                 identity->agent_id, appearance->serial, broadcast_texture_entry,
-                                appearance->visual_params});
+                                broadcast_visual_params});
                             std::size_t recipients = 0;
                             if (!remote_appearance.empty()) {
                                 // Echo the completed appearance to the originating viewer as well.
