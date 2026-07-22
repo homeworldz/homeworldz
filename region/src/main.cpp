@@ -4425,6 +4425,33 @@ int main(int argc, char* argv[]) {
                                     seeded.visual_params = default_outfit_visual_params;
                                     seeded.appearance_version = 1;
                                     avatar_appearances.insert_or_assign(endpoint, seeded);
+                                    // LMV never sends AgentSetAppearance, so derive
+                                    // the avatar's body geometry from the seeded
+                                    // default shape too, or its physics capsule
+                                    // keeps default dimensions (wrong height ->
+                                    // bent-knee stance).
+                                    if (const auto geometry =
+                                            homeworldz::viewer::avatar_geometry(seeded)) {
+                                        avatar_geometries[endpoint] = *geometry;
+                                        if (const auto live = avatars.find(endpoint);
+                                            live != avatars.end()) {
+                                            live->second.controller.set_avatar_geometry(
+                                                geometry->height, geometry->hip_offset);
+                                            if (physics_world) {
+                                                if (live->second.physics_character != 0)
+                                                    physics_world->remove_character(
+                                                        live->second.physics_character);
+                                                live->second.physics_character =
+                                                    physics_world->create_character(
+                                                        {live->second.entity_id,
+                                                         live->second.controller.state().position, 0.3,
+                                                         geometry->height, 0.4});
+                                                physics_world->set_character_flying(
+                                                    live->second.physics_character,
+                                                    live->second.controller.state().flying);
+                                            }
+                                        }
+                                    }
                                     const auto seeded_appearance =
                                         homeworldz::viewer::encode_avatar_appearance({
                                             identity->agent_id, 1, bake->texture_entry,
