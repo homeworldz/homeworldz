@@ -4429,9 +4429,17 @@ int main(int argc, char* argv[]) {
                                         homeworldz::viewer::encode_avatar_appearance({
                                             identity->agent_id, 1, bake->texture_entry,
                                             default_outfit_visual_params, {}, std::uint8_t{1}});
+                                    // Send the default-outfit bake only to OTHER
+                                    // avatars, never back to the joiner: a real
+                                    // baker (e.g. Firestorm) would otherwise apply
+                                    // this server-side (v1) default to itself and
+                                    // lose its own local bake. Its own appearance
+                                    // still overrides this entry for others when it
+                                    // sends AgentSetAppearance.
                                     if (!seeded_appearance.empty())
                                         for (const auto& [recipient_endpoint, recipient] : avatars) {
                                             static_cast<void>(recipient);
+                                            if (recipient_endpoint == endpoint) continue;
                                             if (const auto outgoing = circuits.send(
                                                     recipient_endpoint, seeded_appearance, true, now,
                                                     true))
