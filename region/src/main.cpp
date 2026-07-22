@@ -1246,8 +1246,13 @@ int main(int argc, char* argv[]) {
     // computed once (lazily) and reused. Baking is inline; the one-time first
     // call fetches the bundled default wearables/textures, composites the bake
     // slots, and stores the results as content-addressed assets.
+    // Unbaked bake slots fall back to this face. It must be IMG_DEFAULT_AVATAR
+    // — the viewer's "no bake here, never rendered" sentinel — so slots we do
+    // not produce (e.g. the skirt when no skirt is worn) render nothing and do
+    // not block the avatar from being treated as fully baked. (IMG_WHITE draws
+    // a solid mesh; IMG_INVISIBLE is treated as an unfinished bake -> cloud.)
     const auto server_bake_default_face =
-        homeworldz::viewer::parse_uuid("5748decc-f629-461c-9a36-a35a221fe21f").value();
+        homeworldz::viewer::parse_uuid("c228d1cf-4b5d-4ba8-84f4-899a0796aa97").value();
     const auto fetch_asset_bytes =
         [&](const homeworldz::viewer::Uuid& id) -> std::optional<std::vector<std::byte>> {
         try {
@@ -1313,7 +1318,9 @@ int main(int argc, char* argv[]) {
             homeworldz::viewer::parse_uuid("5748decc-f629-461c-9a36-a35a221fe21f").value();
         static const auto viewer_default =
             homeworldz::viewer::parse_uuid("d2114404-dd59-4a4d-8e6c-49359e91bbf0").value();
-        return id == zero || id == blank || id == viewer_default;
+        static const auto default_avatar =
+            homeworldz::viewer::parse_uuid("c228d1cf-4b5d-4ba8-84f4-899a0796aa97").value();
+        return id == zero || id == blank || id == viewer_default || id == default_avatar;
     };
 
     homeworldz::simulation::FixedStepLoop simulation(scene);
