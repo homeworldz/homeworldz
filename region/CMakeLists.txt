@@ -21,7 +21,7 @@ target_include_directories(homeworldz-region-core PUBLIC include)
 target_compile_features(homeworldz-region-core PUBLIC cxx_std_20)
 target_compile_definitions(homeworldz-region-core PUBLIC
   HOMEWORLDZ_VERSION="${HOMEWORLDZ_VERSION}")
-target_link_libraries(homeworldz-region-core PUBLIC homeworldz-sqlite homeworldz-script)
+target_link_libraries(homeworldz-region-core PUBLIC homeworldz-sqlite homeworldz-script homeworldz-openjpeg)
 if(HOMEWORLDZ_JOLT_AVAILABLE)
   target_sources(homeworldz-region-core PRIVATE src/jolt_world.cpp)
   target_link_libraries(homeworldz-region-core PUBLIC Jolt::Jolt)
