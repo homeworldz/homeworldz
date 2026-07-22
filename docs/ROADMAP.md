@@ -68,6 +68,15 @@ Falcon LSL scripting foundation.
   content.
 - [x] Synchronize nearby avatar presence, movement, appearance rebakes, and
   animation changes between concurrently connected viewers.
+- [ ] Bake avatar appearance **server-side** — the region composites the bake
+  layers from a user's worn wearables and serves baked textures — so thin or
+  headless clients (e.g. LibreMetaverse) rez correctly with no client-side
+  baking. Reference: SL's open-source server-side appearance and LMV's
+  permissive implementation; C++ compositing with OpenJPEG for the JPEG2000
+  encode.
+- [ ] Broadcast `KillObject` and clear presence/People-list state when a viewer
+  logs out or disconnects; today a departed avatar lingers rezzed in others'
+  views (no departure is detected).
 
 ### Authoritative avatar movement
 
@@ -388,6 +397,9 @@ Falcon LSL scripting foundation.
   account administration.
 - [ ] Implement direct messages, offline messages, group chat, conference chat,
   mute/block behavior, and delivery history where appropriate.
+- [ ] Provide voice via **WebRTC** — the direction Second Life and current
+  viewers (including Firestorm) are moving to. Vivox is explicitly not pursued.
+  Lower priority than server-side baking, but wanted sooner rather than later.
 - [ ] Implement friendship, calling cards, presence permissions, and offers.
 - [ ] Add abuse reporting and the minimum moderation evidence needed by grid
   operators.
@@ -507,6 +519,11 @@ Falcon LSL scripting foundation.
   and evaluate newer releases deliberately.
 - [ ] Add read-only legacy inventory access only if its older-viewer benefit
   justifies the maintenance cost; AIS v3 remains authoritative.
+- [ ] Support thin/headless clients such as LibreMetaverse: advertise the
+  per-region `FetchInventoryDescendents2` / `FetchLibDescendents2` capabilities
+  and make the HTTP asset-fetch capabilities LMV-compatible
+  (see `tools/testclient/README.md`). Server-side baking largely removes the
+  appearance dependency on these.
 - [ ] Validate Halcyon/InWorldz LSL extensions without admitting OpenSimulator
   scripting extensions accidentally.
 - [ ] Document import and migration tools separately from live legacy service or

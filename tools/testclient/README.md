@@ -126,7 +126,43 @@ holds a live in-world avatar position. Verified that the legacy XML-RPC login
 still returns a valid `<methodResponse>` and the httpapi tests pass, so
 Firestorm is unaffected.
 
-Remaining polish (not blockers): `moveto` autopilot is dispatched but a
-scripted run `quit`s before it completes — a longer script (or a wait between
-`moveto` and `quit`) would demonstrate full movement; and the multi-bot
-`--file` load path is untested so far.
+## Cloud same-grid test + LMV compatibility findings (2026-07-22)
+
+LLSD login was deployed to the OVH cloud grid (`grid.homeworldz.com`; see the
+deployment memory), and a same-grid test was run: 4 LMV bots
+(`cloudbot0..3.tester`) plus two Firestorm avatars (Jim + Fae) on the **same**
+cloud grid.
+
+**What works against HomeWorldz (LMV):** LLSD login; presence; the **People/
+Nearby list**; the **minimap** (fed from ObjectUpdate, not CoarseLocationUpdate);
+avatar **movement** (control-flag `forward` walked the avatar ~16 m); ~8-bot
+concurrent login load; and bots are **visible** to Firestorm viewers on the
+same grid (as clouds). (An earlier "bots invisible" scare was purely
+**cross-grid** — bots on the local dev grid, viewers on the cloud grid.)
+
+**Gaps to reach full LMV parity (HomeWorldz-side, share-ready for Cinder):**
+
+1. **Inventory-descendents capabilities not advertised** —
+   `FetchInventoryDescendents2` / `FetchLibDescendents2` are absent from the
+   region seed caps, so LMV's `AppearanceManager` can't enumerate the agent's
+   wearables (→ no bake → avatar stays a cloud). HomeWorldz implements **AIS v3**
+   (`/caps/inventory/ais/`), which Firestorm uses, but not the older per-region
+   descendents caps LMV relies on.
+2. **HTTP asset fetch fails for LMV** — `RequestAssetHTTP` throws in a loop; LMV
+   can't download wearable/texture assets. The `GetTexture`/`ViewerAsset` cap
+   flow doesn't match LMV's expectations.
+3. **Logout not handled → ghost avatars** — the region never detects a viewer
+   logout/disconnect (0 "departed" events) and never broadcasts `KillObject`, so
+   a logged-out avatar lingers, rezzed, in others' views and the People list.
+   Affects **all** viewers, not just LMV.
+
+**Recommended direction (Cinder Roxley, LMV maintainer):** implement
+**server-side (region) appearance baking**. If the region composites the bake
+layers from a user's worn wearables and serves baked textures, then *every*
+client — headless LMV bots, thin viewers, anything — rezzes correctly with no
+client-side baking, which **supersedes** chasing gaps #1/#2 for appearance. It's
+a natural C++ region job (HomeWorldz already has inventory, asset blobs, a
+`baked_texture_cache`, and legacy-baking groundwork); output needs JPEG2000
+encoding (C++ **OpenJPEG**; Cinder's .NET **CoreJ2K** and SL's open-source
+server-side-appearance "Sunshine" are references). Also noted for the future:
+**WebRTC voice** (SL's current path; Firestorm also supports Vivox).

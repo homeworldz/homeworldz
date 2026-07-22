@@ -220,6 +220,24 @@ and access key—not a group of loosely joined 256-metre Regions. Provisioned
 extents drive terrain persistence and extended viewer packets, Jolt heightfield
 and movement bounds, login/teleport/map size metadata, and live map slicing.
 
+### Server-side appearance baking
+
+HomeWorldz will bake avatar appearance **server-side**: the region composites
+the bake layers from a user's worn wearables and serves the baked textures, so
+any client — including thin or headless ones such as LibreMetaverse/TestClient —
+rezzes correctly without performing its own baking. Second Life moved viewer
+appearance baking to the server ("server-side appearance"); HomeWorldz adopts
+the same model rather than depending on every client to fetch wearables, bake,
+and upload textures. Planned; today appearance relies on client-side baking,
+which leaves non-baking clients rendered as clouds.
+
+### Voice via WebRTC
+
+HomeWorldz will provide voice using **WebRTC**, matching the direction Second
+Life and current viewers (including the supported Firestorm release) are moving.
+**Vivox is explicitly not pursued.** Planned and lower priority than server-side
+baking; no voice is provided today.
+
 ## Maintenance rule
 
 Add an entry here when a behavior is an intentional product or architecture
