@@ -278,11 +278,15 @@ constexpr ParamDef kParams[] = {
 
 std::size_t visual_param_count() { return std::size(kParams); }
 
-std::vector<std::uint8_t> build_visual_params(const std::vector<Wearable>& worn) {
+std::vector<std::uint8_t> build_visual_params(const std::vector<Wearable>& worn,
+                                              std::uint8_t appearance_version) {
     std::vector<std::uint8_t> params;
     params.reserve(std::size(kParams));
     for (const ParamDef& def : kParams) {
         float value = def.def;
+        if (def.id == 11000) {
+            value = static_cast<float>(appearance_version);  // AppearanceMessage Version
+        }
         for (const Wearable& wearable : worn) {
             const auto found = wearable.parameters.find(static_cast<std::uint32_t>(def.id));
             if (found != wearable.parameters.end()) {

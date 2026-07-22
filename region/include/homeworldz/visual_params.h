@@ -18,7 +18,11 @@ namespace homeworldz::viewer {
 //
 // With no wearables (or wearables that set no params) this yields the canonical
 // default avatar's shape.
-std::vector<std::uint8_t> build_visual_params(const std::vector<Wearable>& worn);
+// appearance_version sets visual param 11000 (AppearanceMessage Version), which
+// must match the AppearanceData version field in the AvatarAppearance message
+// (0 = legacy, 1 = server-side appearance) or the viewer discards the message.
+std::vector<std::uint8_t> build_visual_params(const std::vector<Wearable>& worn,
+                                              std::uint8_t appearance_version = 0);
 
 // The number of visual params transmitted (253).
 std::size_t visual_param_count();

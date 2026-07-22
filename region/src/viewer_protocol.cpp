@@ -1863,7 +1863,7 @@ std::vector<std::byte> encode_avatar_appearance(const AvatarAppearance& message)
     output.push_back(static_cast<std::byte>(message.visual_params.size()));
     for (const auto value : message.visual_params) output.push_back(static_cast<std::byte>(value));
     output.push_back(std::byte{1}); // one appearance metadata block
-    output.push_back(std::byte{}); // legacy appearance version
+    output.push_back(static_cast<std::byte>(message.appearance_version)); // 0=legacy, 1=server-side
     append_le_u32(output, message.serial);
     append_le_u32(output, 0); // no server-side appearance flags yet
     output.push_back(std::byte{1}); // one hover-height block

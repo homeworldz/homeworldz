@@ -440,6 +440,10 @@ struct AgentSetAppearance : AgentMessage {
     std::array<Uuid, 32> texture_ids{};
     std::vector<std::byte> texture_entry;
     std::vector<std::uint8_t> visual_params;
+    // Server-side-appearance version to broadcast for this avatar (0 = legacy,
+    // 1 = server-side). Set when the region supplies a server bake so the
+    // join-backfill re-broadcasts it correctly. Not part of the wire decode.
+    std::uint8_t appearance_version{};
 };
 
 struct AvatarAppearance {
@@ -448,6 +452,10 @@ struct AvatarAppearance {
     std::vector<std::byte> texture_entry;
     std::vector<std::uint8_t> visual_params;
     std::array<float, 3> hover{};
+    // AppearanceVersion: 0 = legacy (viewer composites locally); 1 = server-side
+    // appearance (viewer uses the baked textures in texture_entry directly).
+    // Must agree with visual param 11000 or the viewer discards the message.
+    std::uint8_t appearance_version{};
 };
 
 struct AgentAnimationEntry {

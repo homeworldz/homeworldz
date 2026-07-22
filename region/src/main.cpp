@@ -1305,7 +1305,9 @@ int main(int argc, char* argv[]) {
                           << homeworldz::api::json_string(error.what()) << "}" << std::endl;
             }
         }
-        default_outfit_visual_params = homeworldz::viewer::build_visual_params(baked->worn);
+        // appearance_version 1 marks this as a server-side bake so the viewer
+        // uses the baked textures directly instead of compositing locally.
+        default_outfit_visual_params = homeworldz::viewer::build_visual_params(baked->worn, 1);
         default_outfit_bake = std::move(*baked);
         std::cout << "{\"level\":\"info\",\"message\":\"server default-outfit bake ready\",\"slots\":"
                   << default_outfit_bake->assets.size() << ",\"visualParams\":"
@@ -3882,24 +3884,27 @@ int main(int argc, char* argv[]) {
                                 return meta.has_value() &&
                                        meta->creator_id != "00000000-0000-0000-0000-000000000000";
                             }();
-                            if (true /* TEST: force server bake to visually verify render */) {
-                                static_cast<void>(client_baked);
+                            std::uint8_t broadcast_version = 0;  // legacy relay by default
+                            if (!client_baked) {
                                 if (const auto* bake = ensure_default_outfit_bake()) {
                                     // A client that could not bake its textures
                                     // also cannot be trusted to transmit correct
                                     // visual params (e.g. LibreMetaverse's encoder
                                     // sends the wrong param set), so use the
-                                    // server's own default-outfit shape as well.
+                                    // server's own default-outfit shape as well, and
+                                    // mark it as a server-side (v1) appearance.
                                     broadcast_texture_entry = bake->texture_entry;
                                     broadcast_visual_params = default_outfit_visual_params;
+                                    broadcast_version = 1;
                                     auto& retained = avatar_appearances.at(endpoint);
                                     retained.texture_entry = bake->texture_entry;
                                     retained.visual_params = default_outfit_visual_params;
+                                    retained.appearance_version = 1;
                                 }
                             }
                             const auto remote_appearance = homeworldz::viewer::encode_avatar_appearance({
                                 identity->agent_id, appearance->serial, broadcast_texture_entry,
-                                broadcast_visual_params});
+                                broadcast_visual_params, {}, broadcast_version});
                             std::size_t recipients = 0;
                             if (!remote_appearance.empty()) {
                                 // Echo the completed appearance to the originating viewer as well.
@@ -4400,7 +4405,7 @@ int main(int argc, char* argv[]) {
                                 const auto retained_appearance =
                                     homeworldz::viewer::encode_avatar_appearance({
                                         retained.agent_id, retained.serial, retained.texture_entry,
-                                        retained.visual_params});
+                                        retained.visual_params, {}, retained.appearance_version});
                                 if (retained_appearance.empty()) continue;
                                 if (const auto outgoing = circuits.send(
                                         endpoint, retained_appearance, true, now, true))
@@ -4418,11 +4423,12 @@ int main(int argc, char* argv[]) {
                                     seeded.serial = 1;
                                     seeded.texture_entry = bake->texture_entry;
                                     seeded.visual_params = default_outfit_visual_params;
+                                    seeded.appearance_version = 1;
                                     avatar_appearances.insert_or_assign(endpoint, seeded);
                                     const auto seeded_appearance =
                                         homeworldz::viewer::encode_avatar_appearance({
                                             identity->agent_id, 1, bake->texture_entry,
-                                            default_outfit_visual_params});
+                                            default_outfit_visual_params, {}, std::uint8_t{1}});
                                     if (!seeded_appearance.empty())
                                         for (const auto& [recipient_endpoint, recipient] : avatars) {
                                             static_cast<void>(recipient);
