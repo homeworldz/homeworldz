@@ -2,6 +2,7 @@
 #define HOMEWORLDZ_APPEARANCE_BAKE_H
 
 #include "homeworldz/viewer_protocol.h"
+#include "homeworldz/wearable.h"
 
 #include <array>
 #include <cstdint>
@@ -23,6 +24,7 @@ struct OutfitBake {
         std::vector<std::byte> j2c;    // encoded JPEG2000 bytes to store
     };
     std::vector<BakedAsset> assets;
+    std::vector<Wearable> worn;  // the parsed wearables (for visual-param assembly)
 };
 
 // Fetches the raw bytes of an asset (wearable or texture) by UUID, or nullopt.

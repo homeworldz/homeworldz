@@ -69,6 +69,7 @@ std::optional<OutfitBake> bake_worn_outfit(const std::vector<Uuid>& wearable_ass
     if (result.assets.empty()) return std::nullopt;
 
     result.texture_entry = encode_avatar_texture_entry(result.faces, default_id);
+    result.worn = std::move(worn);
     return result;
 }
 

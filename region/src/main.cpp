@@ -27,6 +27,7 @@
 #include <vector>
 
 #include "homeworldz/api_models.h"
+#include "homeworldz/appearance_bake.h"
 #include "homeworldz/avatar_controller.h"
 #include "homeworldz/falcon_runtime.h"
 #include "homeworldz/grid_client.h"
@@ -44,6 +45,7 @@
 #include "homeworldz/terrain_edit.h"
 #include "homeworldz/viewer_capabilities.h"
 #include "homeworldz/viewer_protocol.h"
+#include "homeworldz/visual_params.h"
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -1229,6 +1231,82 @@ int main(int argc, char* argv[]) {
         }
         throw std::runtime_error("no verified asset replica was available");
     };
+
+    // --- Server-side appearance baking (ADR 0029) --------------------------
+    // The default outfit is identical for every default avatar, so its bake is
+    // computed once (lazily) and reused. Baking is inline; the one-time first
+    // call fetches the bundled default wearables/textures, composites the bake
+    // slots, and stores the results as content-addressed assets.
+    const auto server_bake_default_face =
+        homeworldz::viewer::parse_uuid("5748decc-f629-461c-9a36-a35a221fe21f").value();
+    const auto fetch_asset_bytes =
+        [&](const homeworldz::viewer::Uuid& id) -> std::optional<std::vector<std::byte>> {
+        try {
+            auto bytes = read_federated_asset(homeworldz::viewer::format_uuid(id));
+            if (bytes.empty()) return std::nullopt;
+            return bytes;
+        } catch (const std::exception&) {
+            return std::nullopt;
+        }
+    };
+    std::optional<homeworldz::viewer::OutfitBake> default_outfit_bake;
+    std::vector<std::uint8_t> default_outfit_visual_params;
+    bool default_outfit_bake_attempted = false;
+    const auto ensure_default_outfit_bake = [&]() -> const homeworldz::viewer::OutfitBake* {
+        if (default_outfit_bake) return &*default_outfit_bake;
+        if (default_outfit_bake_attempted) return nullptr;
+        default_outfit_bake_attempted = true;
+        static const char* const default_wearable_asset_ids[] = {
+            "66c41e39-38f9-f75a-024e-585989bfab73",  // Default Shape
+            "77c41e39-38f9-f75a-024e-585989bbabbb",  // Default Skin
+            "d342e6c0-b9d2-11dc-95ff-0800200c9a66",  // Default Hair
+            "4bb6fa4d-1cd2-498a-a84c-95c1a0e745a7",  // Default Eyes
+            "00000000-38f9-1111-024e-222222111110",  // Default Shirt
+            "00000000-38f9-1111-024e-222222111120",  // Default Pants
+        };
+        std::vector<homeworldz::viewer::Uuid> wearable_ids;
+        for (const char* id : default_wearable_asset_ids)
+            if (const auto parsed = homeworldz::viewer::parse_uuid(id))
+                wearable_ids.push_back(*parsed);
+        auto baked = homeworldz::viewer::bake_worn_outfit(
+            wearable_ids, server_bake_default_face, fetch_asset_bytes);
+        if (!baked) {
+            std::cerr << "{\"level\":\"warning\",\"message\":\"server default-outfit bake failed\"}"
+                      << std::endl;
+            return nullptr;
+        }
+        const std::string system_creator = "00000000-0000-0000-0000-000000000000";
+        for (const auto& asset : baked->assets) {
+            try {
+                const auto content =
+                    std::span<const std::byte>(asset.j2c.data(), asset.j2c.size());
+                const auto record = storage->store_asset(
+                    homeworldz::viewer::format_uuid(asset.id), system_creator, content);
+                if (viewer_grid)
+                    static_cast<void>(viewer_grid->register_asset(
+                        record.viewer_id, record.creator_id, record.sha256, record.size,
+                        region_public_endpoint, true));
+            } catch (const std::exception& error) {
+                std::cerr << "{\"level\":\"warning\",\"message\":\"store baked texture failed\",\"error\":"
+                          << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+            }
+        }
+        default_outfit_visual_params = homeworldz::viewer::build_visual_params(baked->worn);
+        default_outfit_bake = std::move(*baked);
+        std::cout << "{\"level\":\"info\",\"message\":\"server default-outfit bake ready\",\"slots\":"
+                  << default_outfit_bake->assets.size() << ",\"visualParams\":"
+                  << default_outfit_visual_params.size() << "}" << std::endl;
+        return &*default_outfit_bake;
+    };
+    const auto is_placeholder_texture = [](const homeworldz::viewer::Uuid& id) {
+        static const homeworldz::viewer::Uuid zero{};
+        static const auto blank =
+            homeworldz::viewer::parse_uuid("5748decc-f629-461c-9a36-a35a221fe21f").value();
+        static const auto viewer_default =
+            homeworldz::viewer::parse_uuid("d2114404-dd59-4a4d-8e6c-49359e91bbf0").value();
+        return id == zero || id == blank || id == viewer_default;
+    };
+
     homeworldz::simulation::FixedStepLoop simulation(scene);
 #ifdef HOMEWORLDZ_JOLT_AVAILABLE
     auto physics_world = homeworldz::physics::make_jolt_world();
@@ -3768,14 +3846,29 @@ int main(int argc, char* argv[]) {
                             if (stored != 0)
                                 std::cout << "{\"level\":\"info\",\"message\":\"wearable cache updated\","
                                              "\"count\":" << stored << "}" << std::endl;
+                            // Reuse the client's own visual params, but if it did
+                            // not supply usable baked textures (thin/headless
+                            // clients cannot bake), substitute a server-side bake
+                            // of the default outfit so the avatar rezzes instead
+                            // of appearing as a cloud (ADR 0029).
+                            std::vector<std::byte> broadcast_texture_entry = appearance->texture_entry;
+                            const bool client_baked =
+                                !is_placeholder_texture(appearance->texture_ids[8]) &&
+                                storage->find_asset(homeworldz::viewer::format_uuid(
+                                                        appearance->texture_ids[8]))
+                                    .has_value();
+                            if (!client_baked) {
+                                if (const auto* bake = ensure_default_outfit_bake()) {
+                                    broadcast_texture_entry = bake->texture_entry;
+                                    avatar_appearances.at(endpoint).texture_entry = bake->texture_entry;
+                                }
+                            }
                             const auto remote_appearance = homeworldz::viewer::encode_avatar_appearance({
-                                identity->agent_id, appearance->serial, appearance->texture_entry,
+                                identity->agent_id, appearance->serial, broadcast_texture_entry,
                                 appearance->visual_params});
                             std::size_t recipients = 0;
                             if (!remote_appearance.empty()) {
                                 // Echo the completed appearance to the originating viewer as well.
-                                // This closes its initial legacy-bake state after the uploaded baked
-                                // texture IDs have reached AgentSetAppearance.
                                 for (const auto& [recipient_endpoint, recipient] : avatars) {
                                     static_cast<void>(recipient);
                                     if (const auto outgoing = circuits.send(
@@ -3786,7 +3879,9 @@ int main(int argc, char* argv[]) {
                                 }
                             }
                             std::cout << "{\"level\":\"info\",\"message\":\"avatar appearance distributed\",\"bytes\":"
-                                      << remote_appearance.size() << ",\"recipients\":" << recipients << "}" << std::endl;
+                                      << remote_appearance.size() << ",\"recipients\":" << recipients
+                                      << ",\"serverBaked\":" << (client_baked ? "false" : "true") << "}"
+                                      << std::endl;
                         }
                         const auto agent_animation =
                             homeworldz::viewer::decode_agent_animation(packet->payload);
@@ -4276,6 +4371,37 @@ int main(int argc, char* argv[]) {
                                 if (const auto outgoing = circuits.send(
                                         endpoint, retained_appearance, true, now, true))
                                     static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
+                            }
+                            // If this avatar has not supplied an appearance yet,
+                            // publish a server-side default-outfit bake so it
+                            // rezzes immediately even if its client never bakes.
+                            // A later AgentSetAppearance overrides this.
+                            if (!avatar_appearances.contains(endpoint)) {
+                                if (const auto* bake = ensure_default_outfit_bake()) {
+                                    homeworldz::viewer::AgentSetAppearance seeded;
+                                    seeded.agent_id = identity->agent_id;
+                                    seeded.session_id = identity->session_id;
+                                    seeded.serial = 1;
+                                    seeded.texture_entry = bake->texture_entry;
+                                    seeded.visual_params = default_outfit_visual_params;
+                                    avatar_appearances.insert_or_assign(endpoint, seeded);
+                                    const auto seeded_appearance =
+                                        homeworldz::viewer::encode_avatar_appearance({
+                                            identity->agent_id, 1, bake->texture_entry,
+                                            default_outfit_visual_params});
+                                    if (!seeded_appearance.empty())
+                                        for (const auto& [recipient_endpoint, recipient] : avatars) {
+                                            static_cast<void>(recipient);
+                                            if (const auto outgoing = circuits.send(
+                                                    recipient_endpoint, seeded_appearance, true, now,
+                                                    true))
+                                                static_cast<void>(send_udp(
+                                                    viewer_server, recipient_endpoint, *outgoing));
+                                        }
+                                    std::cout << "{\"level\":\"info\",\"message\":\"server default "
+                                                 "appearance seeded on join\"}"
+                                              << std::endl;
+                                }
                             }
                             const auto terrain_patches_per_axis = terrain_width / 16;
                             constexpr std::size_t terrain_patches_per_packet = 16;
