@@ -457,12 +457,17 @@ std::string capability_visit(std::string_view path, std::string_view prefix) {
 
 std::optional<std::pair<std::string, std::string>> texture_request(std::string_view path) {
     constexpr std::string_view prefix = "/caps/texture/";
-    constexpr std::string_view marker = "/?texture_id=";
+    constexpr std::string_view key = "texture_id=";
     if (!path.starts_with(prefix)) return std::nullopt;
-    const auto separator = path.find(marker, prefix.size());
-    if (separator == std::string_view::npos) return std::nullopt;
-    const auto session = path.substr(prefix.size(), separator - prefix.size());
-    const auto texture = path.substr(separator + marker.size());
+    // Accept both "<session>/?texture_id=<uuid>" and "<session>?texture_id=<uuid>";
+    // viewers differ on whether they append the trailing slash before the query.
+    const auto question = path.find('?', prefix.size());
+    if (question == std::string_view::npos) return std::nullopt;
+    auto session = path.substr(prefix.size(), question - prefix.size());
+    if (!session.empty() && session.back() == '/') session.remove_suffix(1);
+    const auto query = path.substr(question + 1);
+    if (!query.starts_with(key)) return std::nullopt;
+    const auto texture = query.substr(key.size());
     if (session.empty() || texture.empty() || texture.find('&') != std::string_view::npos)
         return std::nullopt;
     return std::pair{std::string(session), std::string(texture)};
@@ -471,10 +476,14 @@ std::optional<std::pair<std::string, std::string>> texture_request(std::string_v
 std::optional<std::pair<std::string, std::string>> viewer_asset_request(std::string_view path) {
     constexpr std::string_view prefix = "/caps/assets/";
     if (!path.starts_with(prefix)) return std::nullopt;
-    const auto separator = path.find("/?", prefix.size());
-    if (separator == std::string_view::npos) return std::nullopt;
-    const auto session = path.substr(prefix.size(), separator - prefix.size());
-    const auto query = path.substr(separator + 2);
+    // Accept both "<session>/?<type>_id=<uuid>" and "<session>?<type>_id=<uuid>".
+    // The type prefix varies (texture_id, bodypart_id, clothing_id, ...); the
+    // "_id=" marker is common to all and identifies the requested asset UUID.
+    const auto question = path.find('?', prefix.size());
+    if (question == std::string_view::npos) return std::nullopt;
+    auto session = path.substr(prefix.size(), question - prefix.size());
+    if (!session.empty() && session.back() == '/') session.remove_suffix(1);
+    const auto query = path.substr(question + 1);
     const auto id_marker = query.find("_id=");
     if (session.empty() || id_marker == std::string_view::npos || id_marker == 0 ||
         query.find('&') != std::string_view::npos) return std::nullopt;
@@ -3866,7 +3875,8 @@ int main(int argc, char* argv[]) {
                                 return meta.has_value() &&
                                        meta->creator_id != "00000000-0000-0000-0000-000000000000";
                             }();
-                            if (!client_baked) {
+                            if (true /* TEST: force server bake to visually verify render */) {
+                                static_cast<void>(client_baked);
                                 if (const auto* bake = ensure_default_outfit_bake()) {
                                     // A client that could not bake its textures
                                     // also cannot be trusted to transmit correct
