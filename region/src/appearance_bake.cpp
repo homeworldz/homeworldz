@@ -68,6 +68,16 @@ std::optional<OutfitBake> bake_worn_outfit(const std::vector<Uuid>& wearable_ass
     }
     if (result.assets.empty()) return std::nullopt;
 
+    // Renderable bake slots we did not produce must be explicitly invisible
+    // rather than left at the (opaque) default face — otherwise, e.g., an
+    // unworn skirt renders as a solid grey mesh cone.
+    static const Uuid invisible =
+        parse_uuid("3a367d1c-bef1-6d43-7595-e88c1e3aadb3").value();
+    for (const BakeSlotLayout& layout : bake_slot_layouts()) {
+        if (baked.count(layout.slot) == 0)
+            result.faces[baked_texture_index(layout.slot)] = invisible;
+    }
+
     result.texture_entry = encode_avatar_texture_entry(result.faces, default_id);
     result.worn = std::move(worn);
     return result;
