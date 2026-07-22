@@ -1,4 +1,5 @@
 add_library(homeworldz-region-core
+  src/appearance_bake.cpp
   src/avatar_controller.cpp
   src/api_models.cpp
   src/falcon_runtime.cpp
@@ -62,6 +63,10 @@ add_test(NAME region-wearable COMMAND homeworldz-wearable-tests)
 add_executable(homeworldz-bake-tests tests/bake_test.cpp)
 target_link_libraries(homeworldz-bake-tests PRIVATE homeworldz-region-core)
 add_test(NAME region-bake COMMAND homeworldz-bake-tests)
+
+add_executable(homeworldz-appearance-bake-tests tests/appearance_bake_test.cpp)
+target_link_libraries(homeworldz-appearance-bake-tests PRIVATE homeworldz-region-core)
+add_test(NAME region-appearance-bake COMMAND homeworldz-appearance-bake-tests)
 
 add_executable(homeworldz-inventory-asset-tests tests/inventory_asset_test.cpp)
 target_link_libraries(homeworldz-inventory-asset-tests PRIVATE homeworldz-region-core)
