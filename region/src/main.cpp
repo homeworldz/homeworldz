@@ -1314,16 +1314,6 @@ int main(int argc, char* argv[]) {
                   << default_outfit_visual_params.size() << "}" << std::endl;
         return &*default_outfit_bake;
     };
-    const auto is_placeholder_texture = [](const homeworldz::viewer::Uuid& id) {
-        static const homeworldz::viewer::Uuid zero{};
-        static const auto blank =
-            homeworldz::viewer::parse_uuid("5748decc-f629-461c-9a36-a35a221fe21f").value();
-        static const auto viewer_default =
-            homeworldz::viewer::parse_uuid("d2114404-dd59-4a4d-8e6c-49359e91bbf0").value();
-        static const auto default_avatar =
-            homeworldz::viewer::parse_uuid("c228d1cf-4b5d-4ba8-84f4-899a0796aa97").value();
-        return id == zero || id == blank || id == viewer_default || id == default_avatar;
-    };
 
     homeworldz::simulation::FixedStepLoop simulation(scene);
 #ifdef HOMEWORLDZ_JOLT_AVAILABLE
@@ -3864,47 +3854,16 @@ int main(int argc, char* argv[]) {
                             if (stored != 0)
                                 std::cout << "{\"level\":\"info\",\"message\":\"wearable cache updated\","
                                              "\"count\":" << stored << "}" << std::endl;
-                            // Reuse the client's own visual params, but if it did
-                            // not supply usable baked textures (thin/headless
-                            // clients cannot bake), substitute a server-side bake
-                            // of the default outfit so the avatar rezzes instead
-                            // of appearing as a cloud (ADR 0029).
-                            std::vector<std::byte> broadcast_texture_entry = appearance->texture_entry;
-                            std::vector<std::uint8_t> broadcast_visual_params = appearance->visual_params;
-                            // A real viewer bake is uploaded under the wearer's
-                            // id; our server bakes use the system (zero) creator.
-                            // Only the former counts as client-baked — a thin
-                            // client may echo back the server-bake UUID we handed
-                            // it, which must not be mistaken for a real bake.
-                            const bool client_baked = [&] {
-                                const auto& head = appearance->texture_ids[8];
-                                if (is_placeholder_texture(head)) return false;
-                                const auto meta =
-                                    storage->find_asset(homeworldz::viewer::format_uuid(head));
-                                return meta.has_value() &&
-                                       meta->creator_id != "00000000-0000-0000-0000-000000000000";
-                            }();
-                            std::uint8_t broadcast_version = 0;  // legacy relay by default
-                            if (!client_baked) {
-                                if (const auto* bake = ensure_default_outfit_bake()) {
-                                    // A client that could not bake its textures
-                                    // also cannot be trusted to transmit correct
-                                    // visual params (e.g. LibreMetaverse's encoder
-                                    // sends the wrong param set), so use the
-                                    // server's own default-outfit shape as well, and
-                                    // mark it as a server-side (v1) appearance.
-                                    broadcast_texture_entry = bake->texture_entry;
-                                    broadcast_visual_params = default_outfit_visual_params;
-                                    broadcast_version = 1;
-                                    auto& retained = avatar_appearances.at(endpoint);
-                                    retained.texture_entry = bake->texture_entry;
-                                    retained.visual_params = default_outfit_visual_params;
-                                    retained.appearance_version = 1;
-                                }
-                            }
+                            // Relay the client's own appearance untouched. Headless
+                            // clients that cannot bake never send a valid appearance
+                            // (they error out), so they are covered by the
+                            // default-outfit bake seeded on join; we must never
+                            // substitute the server default into a real client's
+                            // appearance stream, or an avatar mid-bake oscillates
+                            // between its own shape and the default (ADR 0029).
                             const auto remote_appearance = homeworldz::viewer::encode_avatar_appearance({
-                                identity->agent_id, appearance->serial, broadcast_texture_entry,
-                                broadcast_visual_params, {}, broadcast_version});
+                                identity->agent_id, appearance->serial, appearance->texture_entry,
+                                appearance->visual_params});
                             std::size_t recipients = 0;
                             if (!remote_appearance.empty()) {
                                 // Echo the completed appearance to the originating viewer as well.
@@ -3918,8 +3877,7 @@ int main(int argc, char* argv[]) {
                                 }
                             }
                             std::cout << "{\"level\":\"info\",\"message\":\"avatar appearance distributed\",\"bytes\":"
-                                      << remote_appearance.size() << ",\"recipients\":" << recipients
-                                      << ",\"serverBaked\":" << (client_baked ? "false" : "true") << "}"
+                                      << remote_appearance.size() << ",\"recipients\":" << recipients << "}"
                                       << std::endl;
                         }
                         const auto agent_animation =
