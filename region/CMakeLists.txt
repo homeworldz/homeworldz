@@ -14,7 +14,8 @@ add_library(homeworldz-region-core
   src/region_storage.cpp
   src/scene.cpp
   src/sha256.cpp
-  src/simulation_loop.cpp)
+  src/simulation_loop.cpp
+  src/wearable.cpp)
 target_sources(homeworldz-region-core PRIVATE src/terrain_edit.cpp)
 target_sources(homeworldz-region-core PRIVATE src/viewer_protocol.cpp)
 target_sources(homeworldz-region-core PRIVATE src/viewer_capabilities.cpp)
@@ -52,6 +53,10 @@ add_test(NAME region-http-response COMMAND homeworldz-region-tests)
 add_executable(homeworldz-image-tests tests/image_test.cpp)
 target_link_libraries(homeworldz-image-tests PRIVATE homeworldz-region-core)
 add_test(NAME region-image COMMAND homeworldz-image-tests)
+
+add_executable(homeworldz-wearable-tests tests/wearable_test.cpp)
+target_link_libraries(homeworldz-wearable-tests PRIVATE homeworldz-region-core)
+add_test(NAME region-wearable COMMAND homeworldz-wearable-tests)
 
 add_executable(homeworldz-inventory-asset-tests tests/inventory_asset_test.cpp)
 target_link_libraries(homeworldz-inventory-asset-tests PRIVATE homeworldz-region-core)
