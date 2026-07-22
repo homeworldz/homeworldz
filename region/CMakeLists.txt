@@ -17,6 +17,7 @@ add_library(homeworldz-region-core
   src/scene.cpp
   src/sha256.cpp
   src/simulation_loop.cpp
+  src/visual_params.cpp
   src/wearable.cpp)
 target_sources(homeworldz-region-core PRIVATE src/terrain_edit.cpp)
 target_sources(homeworldz-region-core PRIVATE src/viewer_protocol.cpp)
@@ -67,6 +68,10 @@ add_test(NAME region-bake COMMAND homeworldz-bake-tests)
 add_executable(homeworldz-appearance-bake-tests tests/appearance_bake_test.cpp)
 target_link_libraries(homeworldz-appearance-bake-tests PRIVATE homeworldz-region-core)
 add_test(NAME region-appearance-bake COMMAND homeworldz-appearance-bake-tests)
+
+add_executable(homeworldz-visual-params-tests tests/visual_params_test.cpp)
+target_link_libraries(homeworldz-visual-params-tests PRIVATE homeworldz-region-core)
+add_test(NAME region-visual-params COMMAND homeworldz-visual-params-tests)
 
 add_executable(homeworldz-inventory-asset-tests tests/inventory_asset_test.cpp)
 target_link_libraries(homeworldz-inventory-asset-tests PRIVATE homeworldz-region-core)
