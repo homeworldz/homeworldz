@@ -643,6 +643,21 @@ std::vector<std::byte> default_texture_entry(const Uuid& texture_id);
 bool normalize_primitive_texture_entry(
     std::vector<std::byte>& texture_entry, std::span<const std::byte> default_entry);
 
+// Unpacks the TextureID section of a TextureEntry blob into 32 per-face UUIDs
+// (the default fills faces without an explicit override). Returns nullopt if the
+// blob is shorter than the 16-byte default or is malformed.
+std::optional<std::array<Uuid, 32>> unpack_texture_entry_faces(
+    std::span<const std::byte> texture_entry);
+
+// Builds a full avatar TextureEntry wire blob from 32 per-face texture UUIDs.
+// Faces equal to default_id are emitted only via the section default; the other
+// attribute sections (color, repeats, offsets, rotation, material, glow,
+// material id) use the same canonical defaults as default_texture_entry. This
+// is the inverse of unpack_texture_entry_faces for the TextureID section and is
+// used to assemble a server-baked avatar appearance.
+std::vector<std::byte> encode_avatar_texture_entry(const std::array<Uuid, 32>& faces,
+                                                   const Uuid& default_id);
+
 std::vector<std::byte> encode_use_circuit_code(const UseCircuitCode& message);
 std::optional<UseCircuitCode> decode_use_circuit_code(std::span<const std::byte> payload);
 std::optional<TeleportLocationRequest> decode_teleport_location_request(

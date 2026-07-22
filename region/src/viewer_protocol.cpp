@@ -1842,28 +1842,9 @@ std::optional<AgentSetAppearance> decode_agent_set_appearance(std::span<const st
     for (std::size_t index = 0; index < visual_count; ++index)
         result.visual_params.push_back(std::to_integer<std::uint8_t>(payload[position + index]));
     if (texture_entry.size() >= 16) {
-        Uuid default_id;
-        std::copy_n(texture_entry.begin(), 16, default_id.begin());
-        result.texture_ids.fill(default_id);
-        std::size_t texture_position = 16;
-        while (texture_position < texture_entry.size()) {
-            std::uint32_t faces = 0;
-            unsigned face_bits = 0;
-            std::uint8_t value{};
-            do {
-                if (texture_position >= texture_entry.size() || face_bits >= 32) return std::nullopt;
-                value = std::to_integer<std::uint8_t>(texture_entry[texture_position++]);
-                faces = (faces << 7) | (value & 0x7f);
-                face_bits += 7;
-            } while (value & 0x80);
-            if (faces == 0) break;
-            if (texture_position + 16 > texture_entry.size()) return std::nullopt;
-            Uuid texture_id;
-            std::copy_n(texture_entry.begin() + texture_position, 16, texture_id.begin());
-            texture_position += 16;
-            for (unsigned face = 0; face < 32; ++face)
-                if (faces & (std::uint32_t{1} << face)) result.texture_ids[face] = texture_id;
-        }
+        auto faces = unpack_texture_entry_faces(texture_entry);
+        if (!faces) return std::nullopt;
+        result.texture_ids = *faces;
     }
     return result;
 }
@@ -2349,6 +2330,93 @@ bool normalize_primitive_texture_entry(
     if (!null_default && !viewer_local_default) return false;
     std::copy_n(default_entry.begin(), 16, texture_entry.begin());
     return true;
+}
+
+std::optional<std::array<Uuid, 32>> unpack_texture_entry_faces(
+    std::span<const std::byte> texture_entry) {
+    if (texture_entry.size() < 16) return std::nullopt;
+    std::array<Uuid, 32> faces;
+    Uuid default_id;
+    std::copy_n(texture_entry.begin(), 16, default_id.begin());
+    faces.fill(default_id);
+    std::size_t position = 16;
+    while (position < texture_entry.size()) {
+        std::uint32_t face_bits = 0;
+        unsigned bit_count = 0;
+        std::uint8_t value{};
+        do {
+            if (position >= texture_entry.size() || bit_count >= 32) return std::nullopt;
+            value = std::to_integer<std::uint8_t>(texture_entry[position++]);
+            face_bits = (face_bits << 7) | (value & 0x7f);
+            bit_count += 7;
+        } while (value & 0x80);
+        if (face_bits == 0) break;
+        if (position + 16 > texture_entry.size()) return std::nullopt;
+        Uuid texture_id;
+        std::copy_n(texture_entry.begin() + position, 16, texture_id.begin());
+        position += 16;
+        for (unsigned face = 0; face < 32; ++face)
+            if (face_bits & (std::uint32_t{1} << face)) faces[face] = texture_id;
+    }
+    return faces;
+}
+
+std::vector<std::byte> encode_avatar_texture_entry(const std::array<Uuid, 32>& faces,
+                                                   const Uuid& default_id) {
+    std::vector<std::byte> output;
+
+    // Variable-length face bitmap: 7 bits per byte, most-significant group
+    // first, with the continuation bit (0x80) on every byte but the last. This
+    // is the inverse of the accumulation loop in unpack_texture_entry_faces.
+    auto append_face_bitmap = [&output](std::uint32_t bits) {
+        int chunks = 1;
+        for (std::uint32_t rest = bits >> 7; rest != 0; rest >>= 7) ++chunks;
+        for (int chunk = chunks - 1; chunk >= 0; --chunk) {
+            auto seven = static_cast<std::uint8_t>((bits >> (7 * chunk)) & 0x7f);
+            if (chunk != 0) seven |= 0x80;
+            output.push_back(static_cast<std::byte>(seven));
+        }
+    };
+
+    // TextureID section: default UUID, then one grouped override per distinct
+    // non-default UUID, then a zero bitmap to terminate the section.
+    output.insert(output.end(), default_id.begin(), default_id.end());
+    std::array<bool, 32> emitted{};
+    for (unsigned face = 0; face < 32; ++face) {
+        if (emitted[face] || faces[face] == default_id) {
+            emitted[face] = true;
+            continue;
+        }
+        std::uint32_t bitmap = 0;
+        for (unsigned other = face; other < 32; ++other) {
+            if (!emitted[other] && faces[other] == faces[face]) {
+                bitmap |= (std::uint32_t{1} << other);
+                emitted[other] = true;
+            }
+        }
+        append_face_bitmap(bitmap);
+        output.insert(output.end(), faces[face].begin(), faces[face].end());
+    }
+    output.push_back(std::byte{});  // terminate TextureID section
+
+    // Remaining attribute sections use canonical defaults, matching the layout
+    // of default_texture_entry so viewers parse the whole blob.
+    output.insert(output.end(), 4, std::byte{});  // inverted white RGBA
+    output.push_back(std::byte{});                // no color overrides
+    append_f32(output, 1.0F);                     // repeat U
+    output.push_back(std::byte{});
+    append_f32(output, 1.0F);  // repeat V
+    output.push_back(std::byte{});
+    for (int field = 0; field < 3; ++field) {  // offset U, offset V, rotation
+        output.insert(output.end(), 2, std::byte{});
+        output.push_back(std::byte{});
+    }
+    for (int field = 0; field < 3; ++field) {  // material, media, glow
+        output.push_back(std::byte{});
+        output.push_back(std::byte{});
+    }
+    output.insert(output.end(), 16, std::byte{});  // render material UUID
+    return output;
 }
 
 std::vector<std::byte> encode_avatar_object_update(std::uint64_t region_handle, std::uint32_t local_id,

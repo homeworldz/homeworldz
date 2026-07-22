@@ -1195,6 +1195,42 @@ bool default_primitive_texture() {
     return !normalize_primitive_texture_entry(viewer_default, entry);
 }
 
+bool baked_texture_entry_roundtrip() {
+    const auto default_id = *parse_uuid("5748decc-f629-461c-9a36-a35a221fe21f");
+    std::array<Uuid, 32> faces;
+    faces.fill(default_id);
+    // Distinct baked UUIDs at the six classic bake slots (head/upper/lower/
+    // eyes/skirt/hair). Index 19/20 force multi-byte face bitmaps.
+    faces[8] = *parse_uuid("11111111-0000-4000-8000-000000000008");
+    faces[9] = *parse_uuid("22222222-0000-4000-8000-000000000009");
+    faces[10] = *parse_uuid("33333333-0000-4000-8000-000000000010");
+    faces[11] = *parse_uuid("44444444-0000-4000-8000-000000000011");
+    faces[19] = *parse_uuid("55555555-0000-4000-8000-000000000019");
+    faces[20] = *parse_uuid("66666666-0000-4000-8000-000000000020");
+    // Two faces on opposite sides of a 7-bit bitmap boundary sharing one UUID
+    // exercises override grouping and a multi-byte bitmap.
+    const auto shared = *parse_uuid("77777777-0000-4000-8000-000000000077");
+    faces[0] = shared;
+    faces[7] = shared;
+
+    const auto encoded = encode_avatar_texture_entry(faces, default_id);
+    const auto decoded = unpack_texture_entry_faces(encoded);
+    if (!decoded || *decoded != faces) return false;
+
+    // The non-texture attribute tail must match default_texture_entry's tail
+    // (46 bytes: color..render material) so viewers parse the whole blob.
+    const auto reference = default_texture_entry(default_id);
+    if (encoded.size() < 46 || reference.size() < 46) return false;
+    if (!std::equal(reference.end() - 46, reference.end(), encoded.end() - 46)) return false;
+
+    // Faces left at the default must not emit overrides: with no non-default
+    // faces the blob equals default_texture_entry exactly.
+    std::array<Uuid, 32> all_default;
+    all_default.fill(default_id);
+    if (encode_avatar_texture_entry(all_default, default_id) != reference) return false;
+    return true;
+}
+
 bool transfer_codecs() {
     const auto transfer = parse_uuid("12345678-90ab-4cde-8f01-234567890abc");
     const auto agent = parse_uuid("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");
@@ -1277,6 +1313,7 @@ int main() {
     if (!default_primitive_texture()) return 16;
     if (!task_inventory_codecs()) return 20;
     if (!transfer_codecs()) return 22;
+    if (!baked_texture_entry_roundtrip()) return 23;
     if (decode_packet(std::array<std::byte, 2>{})) return 12;
     return 0;
 }
