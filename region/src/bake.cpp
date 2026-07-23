@@ -1,6 +1,45 @@
 #include "homeworldz/bake.h"
 
+#include <array>
+
 namespace homeworldz::viewer {
+namespace {
+
+// SL clothing color is carried as three visual params (red, green, blue), each
+// 0..1, that tint the layer's texture. The default outfit relies on this: its
+// shirt and pants both use the opaque white "Blank" texture and are colored
+// entirely by these params (shirt grey 803/804/805 = .5/.5/.6, pants reddish
+// 806/807/808 = .8/.2/.2). Body parts (skin/shape/hair/eyes) carry no such
+// params and render untinted.
+std::array<std::uint8_t, 3> wearable_tint(const Wearable& w) {
+    struct ColorParams {
+        WearableType type;
+        std::uint32_t r, g, b;
+    };
+    static const std::array<ColorParams, 9> table = {{
+        {WearableType::Shirt, 803, 804, 805},
+        {WearableType::Pants, 806, 807, 808},
+        {WearableType::Shoes, 812, 813, 817},
+        {WearableType::Socks, 818, 819, 820},
+        {WearableType::Jacket, 834, 835, 836},
+        {WearableType::Gloves, 827, 829, 830},
+        {WearableType::Undershirt, 821, 822, 823},
+        {WearableType::Underpants, 824, 825, 826},
+        {WearableType::Skirt, 921, 922, 923},
+    }};
+    const auto channel = [&](std::uint32_t id) -> std::uint8_t {
+        const auto it = w.parameters.find(id);
+        double v = (it == w.parameters.end()) ? 1.0 : it->second;
+        v = v < 0.0 ? 0.0 : (v > 1.0 ? 1.0 : v);
+        return static_cast<std::uint8_t>(v * 255.0 + 0.5);
+    };
+    for (const auto& c : table) {
+        if (c.type == w.type) return {channel(c.r), channel(c.g), channel(c.b)};
+    }
+    return {255, 255, 255};
+}
+
+}  // namespace
 
 const std::vector<BakeSlotLayout>& bake_slot_layouts() {
     namespace tx = tex_index;
@@ -45,10 +84,16 @@ std::uint32_t baked_texture_index(BakeSlot slot) {
 
 std::map<BakeSlot, image::Image> bake_outfit(const std::vector<Wearable>& worn,
                                              const TextureFetch& fetch) {
-    // Merge worn textures by texture-entry index (later wearable wins).
-    std::map<std::uint32_t, Uuid> worn_textures;
+    // Merge worn textures by texture-entry index (later wearable wins), carrying
+    // each source wearable's color tint so the layer is colored on composite.
+    struct WornTexture {
+        Uuid id;
+        std::array<std::uint8_t, 3> tint;
+    };
+    std::map<std::uint32_t, WornTexture> worn_textures;
     for (const Wearable& w : worn) {
-        for (const auto& [index, id] : w.textures) worn_textures[index] = id;
+        const auto tint = wearable_tint(w);
+        for (const auto& [index, id] : w.textures) worn_textures[index] = {id, tint};
     }
 
     std::map<BakeSlot, image::Image> baked;
@@ -57,9 +102,9 @@ std::map<BakeSlot, image::Image> bake_outfit(const std::vector<Wearable>& worn,
         for (std::uint32_t source : layout.source_texture_indices) {
             const auto it = worn_textures.find(source);
             if (it == worn_textures.end()) continue;
-            std::optional<image::Image> texture = fetch(it->second);
+            std::optional<image::Image> texture = fetch(it->second.id);
             if (!texture || texture->empty()) continue;
-            layers.push_back(image::Layer{std::move(*texture), {255, 255, 255}});
+            layers.push_back(image::Layer{std::move(*texture), it->second.tint});
         }
         if (layers.empty()) continue;
         image::Image slot_image =
