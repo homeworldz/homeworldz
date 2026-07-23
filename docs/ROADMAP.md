@@ -88,10 +88,12 @@ Falcon LSL scripting foundation.
   cleared on explicit logout and deliberately preserved on teleport/crossing
   (the avatar stays online in the destination region). Live Firestorm
   acceptance: a departing bot vanished immediately on clean logout and was
-  removed from the observer's view, People radar, and minimap. Follow-up: a hard
-  crash or force-kill only fires the kill once the grid session is revoked or its
-  TTL lapses; a ping/pong timeout that retires unresponsive avatars would make
-  that path prompt as well.
+  removed from the observer's view, People radar, and minimap. Hard
+  crash / force-kill / sustained packet loss is covered by a viewer-inactivity
+  timeout (`region.viewer_timeout_seconds`, default 60s) that retires an avatar
+  with no inbound packets and broadcasts its kill, so it no longer waits on the
+  grid session TTL; verified by force-killing a bot (retired at ~62s idle). The
+  timeout stays well above transient outages.
 
 ### Authoritative avatar movement
 
