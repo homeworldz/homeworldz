@@ -92,3 +92,49 @@ bake completes.
 - Complements the thin-client capability work (`FetchInventoryDescendents2`,
   etc.) but largely **removes** the appearance dependency on client-side
   inventory/asset fetch, since the region produces the finished bakes.
+
+## Phase 1 status (2026-07-22/23)
+
+Implemented and deployed to the cloud grid (all four regions). Live-tested with
+a LibreMetaverse bot (which cannot bake at all — it fails to enumerate its
+wearables) plus a Firestorm avatar.
+
+**Working:**
+- Full bake pipeline, each stage unit-tested: J2C codec wrapper (OpenJPEG),
+  LLWearable parser, compositing engine, bake-slot compositor, `TextureEntry`
+  encoder, orchestrator, and the 253-param visual-params assembly.
+- The bot rezzes with **no cloud and no skirt cone**, at the correct height
+  (geometry derived from the default shape and applied to the seeded avatar).
+- Key correctness fixes found live:
+  - **Viewer asset/texture caps** must accept the slashless `?<type>_id=<uuid>`
+    query form, not only `/?…` — otherwise every wearable/texture fetch 404s.
+  - Unbaked bake slots must use **`IMG_DEFAULT_AVATAR`** (`c228d1cf-…`), the
+    viewer's "never rendered" sentinel. `IMG_WHITE` (5748decc) draws a solid
+    grey mesh (skirt cone); `IMG_INVISIBLE` (3a367d1c) is treated as an
+    unfinished bake and leaves the avatar a cloud.
+  - Never substitute the server bake into a *real* client's appearance stream:
+    a baker mid-bake briefly presents zero-creator textures, and re-marking
+    them oscillates the avatar between its own shape and the default. The seed
+    covers headless clients; real bakers relay untouched.
+  - Server-side appearance is signalled by **`appearance_version = 1`** in the
+    `AppearanceData` field, which must agree with visual param **11000**
+    (`llvoavatar.cpp`: `setIsUsingServerBakes(appearance_version > 0)`).
+
+**Open (blocking the bot's body skin):**
+1. **Bake reliability in the server context.** The region deterministically
+   produces a degenerate ~204-byte (empty) *body* bake (upper/lower), while the
+   identical code run standalone (`homeworldz-bake-diag`) produces valid ~228KB
+   skin from the same, sha256-verified source textures. Head/eyes/hair bake
+   fine. Suspect: the RGB (3-channel) skin layers being dropped only when baked
+   inside the running server. Needs targeted per-slot logging in the region's
+   bake path (layer count + decoded dimensions).
+2. **Delivery.** The viewer parses the baked UUIDs from the `TextureEntry`
+   (confirmed via Firestorm's `DebugAvatarAppearanceMessage` dump) but never
+   requests them (0 fetches), rendering the default avatar instead. Tied to the
+   legacy-vs-server-bake path; getting `appearance_version 1` reliably applied
+   without disturbing real bakers is unresolved. Compare against OpenSim's
+   server-side-appearance delivery.
+
+Until both are resolved, the region relays client appearances untouched and
+seeds headless clients on join; the bot rezzes but its body renders as the
+default (grey) skin.
