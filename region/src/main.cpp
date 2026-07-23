@@ -91,6 +91,7 @@ struct LiveAvatar {
     std::chrono::steady_clock::time_point next_ping{};
     std::chrono::steady_clock::time_point next_presence{};
     std::chrono::steady_clock::time_point next_transform{};
+    std::chrono::steady_clock::time_point last_seen{};  // last inbound packet from this viewer
     homeworldz::scene::Vector3 last_sent_position{};
     homeworldz::scene::Vector3 last_sent_velocity{};
     std::array<float, 3> last_sent_rotation{};
@@ -853,6 +854,12 @@ int main(int argc, char* argv[]) {
     const auto region_data_path = std::filesystem::path(
         configured_value("region.data_path", "var/region"));
     const auto terrain_state_path = region_data_path / "terrain.f32";
+    // Retire an avatar whose viewer has sent no packets for this long (hard
+    // disconnect: crash, force-kill, or sustained network loss) so its
+    // KillObject broadcasts promptly. Kept well above transient outages; raise
+    // via region.viewer_timeout_seconds if your users see longer blips.
+    const auto viewer_timeout =
+        std::chrono::seconds(configured_int("region.viewer_timeout_seconds", 60, 15, 3600));
     std::unique_ptr<homeworldz::grid::RegistrationLifecycle> registration;
     std::unique_ptr<homeworldz::grid::Client> viewer_grid;
     std::unique_ptr<homeworldz::grid::ViewerSessionCache> viewer_sessions;
@@ -2503,6 +2510,8 @@ int main(int argc, char* argv[]) {
                               << homeworldz::api::json_string(replaced.endpoint) << "}" << std::endl;
                 }
                 if (packet) {
+                    if (auto live = avatars.find(endpoint); live != avatars.end())
+                        live->second.last_seen = now;  // keep-alive: any viewer packet counts
                     const auto identity = circuits.identity(endpoint);
                     if (identity && homeworldz::viewer::decode_use_circuit_code(packet->payload)) {
                         handshake_replies.erase(endpoint);
@@ -4310,6 +4319,7 @@ int main(int argc, char* argv[]) {
                                     now + std::chrono::seconds(5), now + std::chrono::seconds(30),
                                     now + std::chrono::milliseconds(100), initial_viewer_position});
                                 static_cast<void>(inserted);
+                                avatar_iterator->second.last_seen = now;
                                 avatar_iterator->second.restored_flying_until =
                                     avatar_iterator->second.controller.state().flying ?
                                         now + std::chrono::seconds(2) : now;
@@ -6111,6 +6121,18 @@ int main(int argc, char* argv[]) {
                 const auto* circuit_identity = circuits.identity(endpoint);
                 const auto session_id = circuit_identity ?
                     homeworldz::viewer::format_uuid(circuit_identity->session_id) : std::string{};
+                if (now - avatar.last_seen > viewer_timeout) {
+                    // Hard disconnect: no packets within the timeout. Retire it
+                    // (the departed path broadcasts the KillObject) instead of
+                    // waiting for the grid session TTL.
+                    std::cout << "{\"level\":\"info\",\"message\":\"avatar timed out\",\"sessionId\":"
+                              << homeworldz::api::json_string(session_id) << ",\"idleSeconds\":"
+                              << std::chrono::duration_cast<std::chrono::seconds>(
+                                     now - avatar.last_seen).count()
+                              << "}" << std::endl;
+                    departed_avatars.emplace_back(endpoint, session_id);
+                    continue;
+                }
                 try {
                     const auto session = circuit_identity && viewer_sessions ?
                         viewer_sessions->validate(session_id, now) : std::nullopt;
