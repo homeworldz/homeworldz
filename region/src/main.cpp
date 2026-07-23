@@ -6,6 +6,7 @@
 #include <cctype>
 #include <csignal>
 #include <chrono>
+#include <thread>
 #include <cmath>
 #include <deque>
 #include <exception>
@@ -91,7 +92,7 @@ struct LiveAvatar {
     std::chrono::steady_clock::time_point next_ping{};
     std::chrono::steady_clock::time_point next_presence{};
     std::chrono::steady_clock::time_point next_transform{};
-    std::chrono::steady_clock::time_point last_seen{};  // last inbound packet from this viewer
+    std::chrono::steady_clock::time_point last_pong{};  // last CompletePingCheck reply from this viewer
     homeworldz::scene::Vector3 last_sent_position{};
     homeworldz::scene::Vector3 last_sent_velocity{};
     std::array<float, 3> last_sent_rotation{};
@@ -854,12 +855,14 @@ int main(int argc, char* argv[]) {
     const auto region_data_path = std::filesystem::path(
         configured_value("region.data_path", "var/region"));
     const auto terrain_state_path = region_data_path / "terrain.f32";
-    // Retire an avatar whose viewer has sent no packets for this long (hard
-    // disconnect: crash, force-kill, or sustained network loss) so its
-    // KillObject broadcasts promptly. Kept well above transient outages; raise
-    // via region.viewer_timeout_seconds if your users see longer blips.
-    const auto viewer_timeout =
-        std::chrono::seconds(configured_int("region.viewer_timeout_seconds", 60, 15, 3600));
+    // Retire an avatar whose viewer stops answering pings for this long (a lost
+    // connection: crash, force-kill, or sustained packet loss) so its KillObject
+    // broadcasts promptly rather than waiting on the grid session TTL. The region
+    // pings every 5s; this counts missed replies, so an idle-but-connected viewer
+    // is never affected. Kept well above transient outages; raise via
+    // region.connection_timeout_seconds if your users see longer blips.
+    const auto connection_timeout =
+        std::chrono::seconds(configured_int("region.connection_timeout_seconds", 60, 15, 3600));
     std::unique_ptr<homeworldz::grid::RegistrationLifecycle> registration;
     std::unique_ptr<homeworldz::grid::Client> viewer_grid;
     std::unique_ptr<homeworldz::grid::ViewerSessionCache> viewer_sessions;
@@ -2510,8 +2513,14 @@ int main(int argc, char* argv[]) {
                               << homeworldz::api::json_string(replaced.endpoint) << "}" << std::endl;
                 }
                 if (packet) {
-                    if (auto live = avatars.find(endpoint); live != avatars.end())
-                        live->second.last_seen = now;  // keep-alive: any viewer packet counts
+                    if (homeworldz::viewer::decode_complete_ping_check(packet->payload)) {
+                        // Pong: the viewer answered our StartPingCheck, so the
+                        // connection is alive. (Liveness is tracked by ping
+                        // replies, not general activity — an idle-but-connected
+                        // viewer still answers pings.)
+                        if (auto live = avatars.find(endpoint); live != avatars.end())
+                            live->second.last_pong = now;
+                    }
                     const auto identity = circuits.identity(endpoint);
                     if (identity && homeworldz::viewer::decode_use_circuit_code(packet->payload)) {
                         handshake_replies.erase(endpoint);
@@ -4319,7 +4328,7 @@ int main(int argc, char* argv[]) {
                                     now + std::chrono::seconds(5), now + std::chrono::seconds(30),
                                     now + std::chrono::milliseconds(100), initial_viewer_position});
                                 static_cast<void>(inserted);
-                                avatar_iterator->second.last_seen = now;
+                                avatar_iterator->second.last_pong = now;
                                 avatar_iterator->second.restored_flying_until =
                                     avatar_iterator->second.controller.state().flying ?
                                         now + std::chrono::seconds(2) : now;
@@ -6121,14 +6130,16 @@ int main(int argc, char* argv[]) {
                 const auto* circuit_identity = circuits.identity(endpoint);
                 const auto session_id = circuit_identity ?
                     homeworldz::viewer::format_uuid(circuit_identity->session_id) : std::string{};
-                if (now - avatar.last_seen > viewer_timeout) {
-                    // Hard disconnect: no packets within the timeout. Retire it
-                    // (the departed path broadcasts the KillObject) instead of
-                    // waiting for the grid session TTL.
-                    std::cout << "{\"level\":\"info\",\"message\":\"avatar timed out\",\"sessionId\":"
-                              << homeworldz::api::json_string(session_id) << ",\"idleSeconds\":"
+                if (now - avatar.last_pong > connection_timeout) {
+                    // Connection lost: the viewer has not answered a ping within
+                    // the timeout (crash, force-kill, or sustained packet loss).
+                    // Retire it (the departed path broadcasts the KillObject)
+                    // instead of waiting for the grid session TTL.
+                    std::cout << "{\"level\":\"info\",\"message\":\"viewer connection lost (no ping reply)\","
+                                 "\"sessionId\":"
+                              << homeworldz::api::json_string(session_id) << ",\"secondsSincePong\":"
                               << std::chrono::duration_cast<std::chrono::seconds>(
-                                     now - avatar.last_seen).count()
+                                     now - avatar.last_pong).count()
                               << "}" << std::endl;
                     departed_avatars.emplace_back(endpoint, session_id);
                     continue;
@@ -6452,6 +6463,32 @@ int main(int argc, char* argv[]) {
         }
         if (viewer_grid && now >= next_neighbor_refresh)
             static_cast<void>(refresh_region_neighbors(false));
+    }
+    // Graceful shutdown (SIGINT/SIGTERM set running=false): tell every connected
+    // viewer why it is being disconnected — a KickUser with a reason string, so
+    // it shows a clear message instead of a generic timeout/crash — then give the
+    // datagrams a few seconds to leave and be processed before the process exits.
+    if (!avatars.empty()) {
+        const auto shutdown_now = std::chrono::steady_clock::now();
+        const std::string reason = "This region is restarting. Please log back in shortly.";
+        std::size_t kicked = 0;
+        for (const auto& [endpoint, avatar] : avatars) {
+            static_cast<void>(avatar);
+            const auto* id = circuits.identity(endpoint);
+            if (id == nullptr) continue;
+            const auto kick = homeworldz::viewer::encode_kick_user(
+                id->agent_id, id->session_id, reason);
+            if (kick.empty()) continue;
+            if (const auto framed = circuits.send(endpoint, kick, true, shutdown_now, true)) {
+                static_cast<void>(send_udp(viewer_server, endpoint, *framed));
+                ++kicked;
+            }
+        }
+        std::cout << "{\"level\":\"info\",\"message\":\"region shutdown: viewers kicked\",\"count\":"
+                  << kicked << "}" << std::endl;
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+        std::cout.flush();
+        std::cerr.flush();
     }
     try {
         storage->save_snapshot(scene);

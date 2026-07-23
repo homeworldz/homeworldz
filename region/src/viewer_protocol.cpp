@@ -40,6 +40,8 @@ constexpr std::array<std::byte, 4> logout_request_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0xfc}};
 constexpr std::array<std::byte, 4> logout_reply_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0xfd}};
+constexpr std::array<std::byte, 4> kick_user_id{  // KickUser, Low 163 (0xA3)
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0xa3}};
 constexpr std::array<std::byte, 4> agent_cached_texture_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x80}};
 constexpr std::array<std::byte, 4> agent_cached_texture_response_id{
@@ -695,6 +697,26 @@ std::optional<std::uint8_t> decode_start_ping_check(std::span<const std::byte> p
 
 std::vector<std::byte> encode_complete_ping_check(std::uint8_t ping_id) {
     return {std::byte{2}, static_cast<std::byte>(ping_id)};
+}
+
+std::optional<std::uint8_t> decode_complete_ping_check(std::span<const std::byte> payload) {
+    if (payload.size() != 2 || payload[0] != std::byte{2}) return std::nullopt;
+    return std::to_integer<std::uint8_t>(payload[1]);
+}
+
+std::vector<std::byte> encode_kick_user(const Uuid& agent_id, const Uuid& session_id,
+                                        std::string_view reason) {
+    std::vector<std::byte> output(kick_user_id.begin(), kick_user_id.end());
+    // TargetBlock: TargetIP (U32) + TargetPort (U16). The viewer only shows the
+    // Reason, so the target address is irrelevant here — send zeros.
+    append_le_u32(output, 0);
+    output.push_back(std::byte{0});
+    output.push_back(std::byte{0});
+    // UserInfo: AgentID, SessionID, Reason (Variable, 2-byte length).
+    append_uuid(output, agent_id);
+    append_uuid(output, session_id);
+    if (!append_variable2(output, reason)) return {};
+    return output;
 }
 
 bool is_economy_data_request(std::span<const std::byte> payload) {

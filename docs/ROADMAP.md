@@ -88,12 +88,17 @@ Falcon LSL scripting foundation.
   cleared on explicit logout and deliberately preserved on teleport/crossing
   (the avatar stays online in the destination region). Live Firestorm
   acceptance: a departing bot vanished immediately on clean logout and was
-  removed from the observer's view, People radar, and minimap. Hard
-  crash / force-kill / sustained packet loss is covered by a viewer-inactivity
-  timeout (`region.viewer_timeout_seconds`, default 60s) that retires an avatar
-  with no inbound packets and broadcasts its kill, so it no longer waits on the
-  grid session TTL; verified by force-killing a bot (retired at ~62s idle). The
-  timeout stays well above transient outages.
+  removed from the observer's view, People radar, and minimap. Lost connections
+  (crash / force-kill / sustained packet loss) are detected by **missed ping
+  replies**: the region pings every 5s and retires a viewer that has not answered
+  a `CompletePingCheck` within `region.connection_timeout_seconds` (default 60s),
+  broadcasting its kill rather than waiting on the grid session TTL (verified by
+  force-killing a bot → retired ~62s later). An idle-but-connected viewer still
+  answers pings, so it is never affected, and the timeout stays well above
+  transient outages. On region shutdown (SIGINT/SIGTERM) the region sends each
+  connected viewer a `KickUser` with a reason string — so it shows a clear
+  "region is restarting" message instead of a generic disconnect — then waits
+  briefly for delivery before exiting.
 
 ### Authoritative avatar movement
 

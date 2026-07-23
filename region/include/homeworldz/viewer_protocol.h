@@ -680,6 +680,13 @@ std::vector<std::byte> encode_agent_movement_complete(const AgentMovementComplet
 std::vector<std::byte> encode_start_ping_check(std::uint8_t ping_id, std::uint32_t oldest_unacked = 0);
 std::optional<std::uint8_t> decode_start_ping_check(std::span<const std::byte> payload);
 std::vector<std::byte> encode_complete_ping_check(std::uint8_t ping_id);
+// Decode a viewer's CompletePingCheck (pong) reply; returns the echoed ping id.
+std::optional<std::uint8_t> decode_complete_ping_check(std::span<const std::byte> payload);
+// Force a viewer to log out, displaying `reason`. Used for graceful shutdown and
+// connection-loss retirement so the viewer shows a clear message, not a generic
+// disconnect.
+std::vector<std::byte> encode_kick_user(const Uuid& agent_id, const Uuid& session_id,
+                                        std::string_view reason);
 bool is_economy_data_request(std::span<const std::byte> payload);
 std::vector<std::byte> encode_economy_data(std::int32_t price_upload = 0,
                                            std::int32_t object_capacity = 15000,
