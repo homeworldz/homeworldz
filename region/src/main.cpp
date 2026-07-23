@@ -1263,20 +1263,24 @@ int main(int argc, char* argv[]) {
             return std::nullopt;
         }
     };
-    // Clothing alpha masks (TGA) are bundled region assets imported by their
-    // file stem (e.g. "shirt_sleeve_alpha"); load their raw bytes by name.
+    // Clothing alpha masks (TGA) are bundled region files, read straight from
+    // the default-avatar asset directory by name (they are not UUID-named
+    // assets, so they are not imported into the content-addressed store).
+    const std::filesystem::path mask_directory =
+        std::filesystem::path(configured_value("region.asset_path", "assets/region")) /
+        "default-avatar";
     const auto fetch_mask_bytes =
-        [&](std::string_view name) -> std::optional<std::vector<std::uint8_t>> {
-        try {
-            auto bytes = read_federated_asset(std::string(name));
-            if (bytes.empty()) return std::nullopt;
-            std::vector<std::uint8_t> out(bytes.size());
-            for (std::size_t i = 0; i < bytes.size(); ++i)
-                out[i] = static_cast<std::uint8_t>(bytes[i]);
-            return out;
-        } catch (const std::exception&) {
-            return std::nullopt;
-        }
+        [mask_directory](std::string_view name) -> std::optional<std::vector<std::uint8_t>> {
+        std::ifstream input(mask_directory / (std::string(name) + ".tga"),
+                            std::ios::binary | std::ios::ate);
+        if (!input) return std::nullopt;
+        const auto length = static_cast<std::streamsize>(input.tellg());
+        if (length <= 0) return std::nullopt;
+        input.seekg(0);
+        std::vector<std::uint8_t> out(static_cast<std::size_t>(length));
+        input.read(reinterpret_cast<char*>(out.data()), length);
+        if (!input) return std::nullopt;
+        return out;
     };
     std::optional<homeworldz::viewer::OutfitBake> default_outfit_bake;
     std::vector<std::uint8_t> default_outfit_visual_params;

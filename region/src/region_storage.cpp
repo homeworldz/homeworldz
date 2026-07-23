@@ -829,7 +829,7 @@ std::size_t RegionStorage::import_asset_directory(const std::filesystem::path& d
         if (!entry.is_regular_file() ||
             (entry.path().extension() != ".j2c" && entry.path().extension() != ".ogg" &&
              entry.path().extension() != ".bodypart" && entry.path().extension() != ".clothing" &&
-             entry.path().extension() != ".settings" && entry.path().extension() != ".tga"))
+             entry.path().extension() != ".settings"))
             continue;
         std::ifstream input(entry.path(), std::ios::binary | std::ios::ate);
         if (!input) throw std::runtime_error("asset source file could not be opened");
