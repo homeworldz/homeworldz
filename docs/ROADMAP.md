@@ -78,9 +78,16 @@ Falcon LSL scripting foundation.
   for arbitrary custom outfits and server-side-appearance (SSB) delivery to full
   viewers remain future work; full clients still bake locally and are relayed
   untouched.
-- [ ] Broadcast `KillObject` and clear presence/People-list state when a viewer
-  logs out or disconnects; today a departed avatar lingers rezzed in others'
-  views (no departure is detected).
+- [ ] Broadcast `KillObject` for a departing avatar so it no longer lingers
+  rezzed in other viewers' views. Departure is now detected (logout,
+  disconnect/timeout via session validation, duplicate-login replacement, and
+  teleport/region-crossing source-retirement) and all removal paths funnel
+  through one point, which now sends a `KillObject` for the avatar's local id to
+  the remaining in-region viewers. Presence/People-list is cleared on explicit
+  logout and deliberately preserved on teleport/crossing (the avatar is still
+  online in the destination region). Implemented and building; pending deploy
+  and live Firestorm acceptance (a second viewer confirming the departed avatar
+  disappears) before this is checked.
 
 ### Authoritative avatar movement
 

@@ -1696,6 +1696,26 @@ int main(int argc, char* argv[]) {
                       << restored_scripts << "}" << std::endl;
     }
     const auto clear_viewer_endpoint = [&](const std::string& endpoint, const std::string& session_id) {
+        // Tell the remaining viewers to remove this avatar's rezzed
+        // representation. Every avatar-removal path (logout, disconnect/timeout,
+        // duplicate-login replacement, and teleport/crossing source-retirement
+        // via departed_avatars) funnels through here, and it runs only once the
+        // avatar has actually left this region — so it is safe for crossings and
+        // teleports: a rolled-back crossing never reaches this point, and the
+        // destination region independently rezzes the avatar for viewers there.
+        if (const auto departing = avatars.find(endpoint); departing != avatars.end()) {
+            const std::array<std::uint32_t, 1> kill_ids{
+                static_cast<std::uint32_t>(departing->second.entity_id)};
+            const auto kill = homeworldz::viewer::encode_kill_object(kill_ids);
+            const auto kill_now = std::chrono::steady_clock::now();
+            for (const auto& [recipient_endpoint, recipient] : avatars) {
+                static_cast<void>(recipient);
+                if (recipient_endpoint == endpoint) continue;
+                if (const auto outgoing = circuits.send(
+                        recipient_endpoint, kill, true, kill_now, true))
+                    static_cast<void>(send_udp(viewer_server, recipient_endpoint, *outgoing));
+            }
+        }
         if (const auto live = avatars.find(endpoint); live != avatars.end() &&
             physics_world && live->second.physics_character != 0)
             physics_world->remove_character(live->second.physics_character);
