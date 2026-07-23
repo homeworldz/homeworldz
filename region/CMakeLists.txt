@@ -73,6 +73,9 @@ add_executable(homeworldz-visual-params-tests tests/visual_params_test.cpp)
 target_link_libraries(homeworldz-visual-params-tests PRIVATE homeworldz-region-core)
 add_test(NAME region-visual-params COMMAND homeworldz-visual-params-tests)
 
+add_executable(homeworldz-bake-diag tests/bake_diag.cpp)
+target_link_libraries(homeworldz-bake-diag PRIVATE homeworldz-region-core)
+
 add_executable(homeworldz-inventory-asset-tests tests/inventory_asset_test.cpp)
 target_link_libraries(homeworldz-inventory-asset-tests PRIVATE homeworldz-region-core)
 add_test(NAME region-inventory-asset COMMAND homeworldz-inventory-asset-tests)
