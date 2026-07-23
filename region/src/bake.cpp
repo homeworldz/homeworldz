@@ -1,6 +1,8 @@
 #include "homeworldz/bake.h"
 
+#include <algorithm>
 #include <array>
+#include <memory>
 
 namespace homeworldz::viewer {
 namespace {
@@ -72,6 +74,112 @@ std::array<std::uint8_t, 3> hair_tint(const Wearable& w) {
 // entirely by these params (shirt grey 803/804/805 = .5/.5/.6, pants reddish
 // 806/807/808 = .8/.2/.2). Hair uses the global-color ramp above; other body
 // parts (skin/shape/eyes) carry no such params and render untinted.
+// Clothing alpha masks. The default shirt/pants use the opaque Blank texture,
+// so their coverage is defined entirely by parametrized alpha masks (from
+// avatar_lad.xml). Each entry names a TGA mask resource, the wearable param
+// whose value thresholds it, and whether it multiplies (carves) rather than
+// unions. Mirrors LibreMetaverse's bake: normal masks union their coverage,
+// multiply masks remove it; the threshold per texel is
+// mask <= (1-value)*255 -> transparent, else opaque.
+struct ClothingMask {
+    const char* name;
+    std::uint32_t param;
+    bool multiply;
+};
+
+const std::vector<ClothingMask>* clothing_masks(WearableType type) {
+    static const std::vector<ClothingMask> shirt = {
+        {"shirt_sleeve_alpha", 800, false},  // Sleeve Length: base upper coverage
+        {"shirt_bottom_alpha", 801, true},   // Shirt Bottom: carve the hem
+        {"shirt_collar_alpha", 802, true},   // Collar Front: carve the neck
+    };
+    static const std::vector<ClothingMask> pants = {
+        {"pants_length_alpha", 815, false},  // Pants Length: base lower coverage
+        {"pants_waist_alpha", 814, false},   // Waist Height
+    };
+    switch (type) {
+        case WearableType::Shirt: return &shirt;
+        case WearableType::Pants: return &pants;
+        default: return nullptr;
+    }
+}
+
+// Threshold a grayscale mask by a param value into 0/255 (LMV ApplyAlpha).
+std::uint8_t threshold_texel(std::uint8_t texel, double value) {
+    return (static_cast<double>(texel) <= (1.0 - value) * 255.0) ? std::uint8_t{0}
+                                                                  : std::uint8_t{255};
+}
+
+// Build the combined alpha mask (1-channel L Image) for a clothing wearable, or
+// nullopt if it has no masks defined or none could be loaded.
+std::optional<image::Image> clothing_alpha(const Wearable& w, const MaskFetch& mask_fetch) {
+    if (!mask_fetch) return std::nullopt;
+    const std::vector<ClothingMask>* entries = clothing_masks(w.type);
+    if (entries == nullptr) return std::nullopt;
+
+    const auto load = [&](const char* name) -> std::optional<image::Image> {
+        auto bytes = mask_fetch(name);
+        if (!bytes || bytes->empty()) return std::nullopt;
+        auto img = image::decode_tga(*bytes);
+        if (!img || img->empty()) return std::nullopt;
+        return img;
+    };
+
+    std::uint32_t width = 0;
+    std::uint32_t height = 0;
+    std::vector<std::uint8_t> combined;
+    int normal_added = 0;
+
+    // Pass 1: normal-blend masks union their coverage.
+    for (const auto& e : *entries) {
+        if (e.multiply) continue;
+        const auto it = w.parameters.find(e.param);
+        if (it == w.parameters.end()) continue;
+        auto img = load(e.name);
+        if (!img) continue;
+        if (combined.empty()) {
+            width = img->width;
+            height = img->height;
+            combined.assign(static_cast<std::size_t>(width) * height, 0);
+        } else if (img->width != width || img->height != height) {
+            *img = image::resize_nearest(*img, width, height);
+        }
+        const double v = std::clamp(it->second, 0.0, 1.0);
+        const std::uint8_t ch = img->channels;
+        const std::size_t n = static_cast<std::size_t>(width) * height;
+        for (std::size_t i = 0; i < n; ++i) {
+            const std::uint8_t a = threshold_texel(img->pixels[i * ch], v);
+            if (a > combined[i]) combined[i] = a;
+        }
+        ++normal_added;
+    }
+    if (combined.empty()) return std::nullopt;
+    if (normal_added == 0) std::fill(combined.begin(), combined.end(), 255);
+
+    // Pass 2: multiply-blend masks carve coverage away.
+    for (const auto& e : *entries) {
+        if (!e.multiply) continue;
+        const auto it = w.parameters.find(e.param);
+        if (it == w.parameters.end()) continue;
+        auto img = load(e.name);
+        if (!img) continue;
+        if (img->width != width || img->height != height)
+            *img = image::resize_nearest(*img, width, height);
+        const double v = std::clamp(it->second, 0.0, 1.0);
+        const std::uint8_t ch = img->channels;
+        const std::size_t n = static_cast<std::size_t>(width) * height;
+        for (std::size_t i = 0; i < n; ++i)
+            if (threshold_texel(img->pixels[i * ch], v) == 0) combined[i] = 0;
+    }
+
+    image::Image mask;
+    mask.width = width;
+    mask.height = height;
+    mask.channels = 1;
+    mask.pixels = std::move(combined);
+    return mask;
+}
+
 std::array<std::uint8_t, 3> wearable_tint(const Wearable& w) {
     if (w.type == WearableType::Hair) return hair_tint(w);
     struct ColorParams {
@@ -145,17 +253,23 @@ std::uint32_t baked_texture_index(BakeSlot slot) {
 }
 
 std::map<BakeSlot, image::Image> bake_outfit(const std::vector<Wearable>& worn,
-                                             const TextureFetch& fetch) {
+                                             const TextureFetch& fetch,
+                                             const MaskFetch& mask_fetch) {
     // Merge worn textures by texture-entry index (later wearable wins), carrying
-    // each source wearable's color tint so the layer is colored on composite.
+    // each source wearable's color tint and (for clothing) its combined alpha
+    // mask so the layer is colored and shaped on composite.
     struct WornTexture {
         Uuid id;
         std::array<std::uint8_t, 3> tint;
+        std::shared_ptr<const image::Image> mask;
     };
     std::map<std::uint32_t, WornTexture> worn_textures;
     for (const Wearable& w : worn) {
         const auto tint = wearable_tint(w);
-        for (const auto& [index, id] : w.textures) worn_textures[index] = {id, tint};
+        std::shared_ptr<const image::Image> mask;
+        if (auto m = clothing_alpha(w, mask_fetch))
+            mask = std::make_shared<const image::Image>(std::move(*m));
+        for (const auto& [index, id] : w.textures) worn_textures[index] = {id, tint, mask};
     }
 
     std::map<BakeSlot, image::Image> baked;
@@ -166,7 +280,20 @@ std::map<BakeSlot, image::Image> bake_outfit(const std::vector<Wearable>& worn,
             if (it == worn_textures.end()) continue;
             std::optional<image::Image> texture = fetch(it->second.id);
             if (!texture || texture->empty()) continue;
-            layers.push_back(image::Layer{std::move(*texture), it->second.tint});
+            image::Layer layer{std::move(*texture), it->second.tint};
+            if (it->second.mask) {
+                // Apply the clothing alpha mask: upsize the (often tiny "Blank")
+                // texture to the mask resolution and set its alpha to the mask,
+                // so the garment only covers where the mask is opaque.
+                const image::Image& m = *it->second.mask;
+                image::Image rgba = image::resize_nearest(image::to_rgba(layer.image), m.width, m.height);
+                const std::size_t n = static_cast<std::size_t>(m.width) * m.height;
+                if (!rgba.empty() && rgba.pixels.size() == n * 4 && m.pixels.size() == n) {
+                    for (std::size_t i = 0; i < n; ++i) rgba.pixels[i * 4 + 3] = m.pixels[i];
+                    layer.image = std::move(rgba);
+                }
+            }
+            layers.push_back(std::move(layer));
         }
         if (layers.empty()) continue;
         image::Image slot_image =

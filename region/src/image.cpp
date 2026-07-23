@@ -254,6 +254,99 @@ std::optional<std::vector<std::uint8_t>> encode_j2c(const Image&) { return std::
 
 // ---- codec-independent image operations (compositing pixel engine) ----
 
+std::optional<Image> decode_tga(const std::vector<std::uint8_t>& data) {
+    if (data.size() < 18) return std::nullopt;
+    const std::uint8_t id_length = data[0];
+    const std::uint8_t color_map_type = data[1];
+    const std::uint8_t image_type = data[2];
+    const auto color_map_length = static_cast<std::uint16_t>(data[5] | (data[6] << 8));
+    const std::uint8_t color_map_entry_size = data[7];
+    const auto width = static_cast<std::uint32_t>(data[12] | (data[13] << 8));
+    const auto height = static_cast<std::uint32_t>(data[14] | (data[15] << 8));
+    const std::uint8_t bpp = data[16];
+    const std::uint8_t descriptor = data[17];
+    if (width == 0 || height == 0) return std::nullopt;
+
+    const bool rle = (image_type == 10 || image_type == 11);
+    const std::uint8_t base_type = (image_type == 10) ? 2 : (image_type == 11) ? 3 : image_type;
+    if (base_type != 2 && base_type != 3) return std::nullopt;  // truecolor / grayscale only
+    const std::uint8_t bytes_per_pixel = bpp / 8;
+    if (base_type == 3 && bytes_per_pixel != 1) return std::nullopt;
+    if (base_type == 2 && bytes_per_pixel != 3 && bytes_per_pixel != 4) return std::nullopt;
+
+    std::size_t offset = std::size_t{18} + id_length;
+    if (color_map_type == 1)
+        offset += static_cast<std::size_t>(color_map_length) * ((color_map_entry_size + 7u) / 8u);
+    if (offset > data.size()) return std::nullopt;
+
+    const std::size_t pixel_count = static_cast<std::size_t>(width) * height;
+    std::vector<std::uint8_t> raw(pixel_count * bytes_per_pixel);
+    if (!rle) {
+        if (offset + raw.size() > data.size()) return std::nullopt;
+        std::memcpy(raw.data(), data.data() + offset, raw.size());
+    } else {
+        std::size_t out = 0;
+        std::size_t in = offset;
+        while (out < raw.size()) {
+            if (in >= data.size()) return std::nullopt;
+            const std::uint8_t packet = data[in++];
+            const std::size_t count = (packet & 0x7Fu) + 1u;
+            if (packet & 0x80u) {  // RLE packet: one pixel repeated `count` times
+                if (in + bytes_per_pixel > data.size()) return std::nullopt;
+                for (std::size_t k = 0; k < count && out < raw.size(); ++k) {
+                    std::memcpy(raw.data() + out, data.data() + in, bytes_per_pixel);
+                    out += bytes_per_pixel;
+                }
+                in += bytes_per_pixel;
+            } else {  // raw packet: `count` literal pixels
+                const std::size_t bytes = count * bytes_per_pixel;
+                if (in + bytes > data.size()) return std::nullopt;
+                const std::size_t copy = std::min(bytes, raw.size() - out);
+                std::memcpy(raw.data() + out, data.data() + in, copy);
+                out += copy;
+                in += bytes;
+            }
+        }
+    }
+
+    Image image;
+    image.width = width;
+    image.height = height;
+    image.channels = (base_type == 3) ? 1 : bytes_per_pixel;
+    image.pixels.resize(pixel_count * image.channels);
+    for (std::size_t i = 0; i < pixel_count; ++i) {
+        const std::uint8_t* s = &raw[i * bytes_per_pixel];
+        std::uint8_t* d = &image.pixels[i * image.channels];
+        if (base_type == 3) {
+            d[0] = s[0];
+        } else if (bytes_per_pixel == 3) {  // BGR -> RGB
+            d[0] = s[2];
+            d[1] = s[1];
+            d[2] = s[0];
+        } else {  // BGRA -> RGBA
+            d[0] = s[2];
+            d[1] = s[1];
+            d[2] = s[0];
+            d[3] = s[3];
+        }
+    }
+
+    // Descriptor bit 5 set = origin top-left (rows top->bottom); clear =
+    // bottom-left, so flip vertically to top-down.
+    if ((descriptor & 0x20u) == 0) {
+        const std::size_t row = static_cast<std::size_t>(width) * image.channels;
+        std::vector<std::uint8_t> tmp(row);
+        for (std::uint32_t y = 0; y < height / 2; ++y) {
+            std::uint8_t* top = &image.pixels[static_cast<std::size_t>(y) * row];
+            std::uint8_t* bot = &image.pixels[static_cast<std::size_t>(height - 1 - y) * row];
+            std::memcpy(tmp.data(), top, row);
+            std::memcpy(top, bot, row);
+            std::memcpy(bot, tmp.data(), row);
+        }
+    }
+    return image;
+}
+
 Image to_rgba(const Image& src) {
     if (src.empty() || src.channels < 1 || src.channels > 4 ||
         src.pixels.size() != src.expected_size()) {

@@ -36,7 +36,8 @@ Uuid content_uuid(const std::vector<std::byte>& content) {
 }  // namespace
 
 std::optional<OutfitBake> bake_worn_outfit(const std::vector<Uuid>& wearable_asset_ids,
-                                           const Uuid& default_id, const AssetBytesFetch& fetch) {
+                                           const Uuid& default_id, const AssetBytesFetch& fetch,
+                                           const MaskFetch& mask_fetch) {
     std::vector<Wearable> worn;
     for (const Uuid& id : wearable_asset_ids) {
         auto bytes = fetch(id);
@@ -52,7 +53,7 @@ std::optional<OutfitBake> bake_worn_outfit(const std::vector<Uuid>& wearable_ass
         return image::decode_j2c(to_bytes_u8(*bytes));
     };
 
-    std::map<BakeSlot, image::Image> baked = bake_outfit(worn, texture_fetch);
+    std::map<BakeSlot, image::Image> baked = bake_outfit(worn, texture_fetch, mask_fetch);
     if (baked.empty()) return std::nullopt;
 
     OutfitBake result;

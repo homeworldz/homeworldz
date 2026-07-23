@@ -1,6 +1,7 @@
 #ifndef HOMEWORLDZ_APPEARANCE_BAKE_H
 #define HOMEWORLDZ_APPEARANCE_BAKE_H
 
+#include "homeworldz/bake.h"
 #include "homeworldz/viewer_protocol.h"
 #include "homeworldz/wearable.h"
 
@@ -34,9 +35,12 @@ using AssetBytesFetch = std::function<std::optional<std::vector<std::byte>>(cons
 // Each wearable asset is fetched + parsed; its layer textures are fetched and
 // JPEG2000-decoded; the slots are composited and re-encoded to JPEG2000. Baked
 // texture UUIDs are content-derived (sha256) so identical outfits dedupe.
-// default_id fills faces with no bake. Returns nullopt if nothing baked.
+// default_id fills faces with no bake. mask_fetch loads clothing alpha masks by
+// name (optional; without it clothing is fully opaque). Returns nullopt if
+// nothing baked.
 std::optional<OutfitBake> bake_worn_outfit(const std::vector<Uuid>& wearable_asset_ids,
-                                           const Uuid& default_id, const AssetBytesFetch& fetch);
+                                           const Uuid& default_id, const AssetBytesFetch& fetch,
+                                           const MaskFetch& mask_fetch = {});
 
 }  // namespace homeworldz::viewer
 

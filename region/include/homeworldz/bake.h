@@ -9,6 +9,7 @@
 #include <functional>
 #include <map>
 #include <optional>
+#include <string_view>
 #include <vector>
 
 namespace homeworldz::viewer {
@@ -71,12 +72,20 @@ std::uint32_t baked_texture_index(BakeSlot slot);
 // Fetches the RGBA image for a texture UUID, or nullopt if unavailable.
 using TextureFetch = std::function<std::optional<image::Image>(const Uuid&)>;
 
+// Fetches raw bytes for a named clothing alpha-mask resource (e.g.
+// "shirt_sleeve_alpha"), or nullopt. The mask assets are TGA. When empty/unset,
+// clothing layers composite fully opaque (no masking).
+using MaskFetch = std::function<std::optional<std::vector<std::uint8_t>>(std::string_view)>;
+
 // Composite the worn wearables into baked slot images. Worn textures are merged
 // by texture-entry index (a later wearable overrides an earlier one for the
 // same index); each bake slot composites its source indices in order via the
 // image pixel engine. Slots with no available source texture are omitted.
+// Clothing layers apply their parametrized alpha masks (via mask_fetch) so that
+// e.g. a shirt covers the torso but not the hands.
 std::map<BakeSlot, image::Image> bake_outfit(const std::vector<Wearable>& worn,
-                                             const TextureFetch& fetch);
+                                             const TextureFetch& fetch,
+                                             const MaskFetch& mask_fetch = {});
 
 }  // namespace homeworldz::viewer
 

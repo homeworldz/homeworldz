@@ -1263,6 +1263,21 @@ int main(int argc, char* argv[]) {
             return std::nullopt;
         }
     };
+    // Clothing alpha masks (TGA) are bundled region assets imported by their
+    // file stem (e.g. "shirt_sleeve_alpha"); load their raw bytes by name.
+    const auto fetch_mask_bytes =
+        [&](std::string_view name) -> std::optional<std::vector<std::uint8_t>> {
+        try {
+            auto bytes = read_federated_asset(std::string(name));
+            if (bytes.empty()) return std::nullopt;
+            std::vector<std::uint8_t> out(bytes.size());
+            for (std::size_t i = 0; i < bytes.size(); ++i)
+                out[i] = static_cast<std::uint8_t>(bytes[i]);
+            return out;
+        } catch (const std::exception&) {
+            return std::nullopt;
+        }
+    };
     std::optional<homeworldz::viewer::OutfitBake> default_outfit_bake;
     std::vector<std::uint8_t> default_outfit_visual_params;
     bool default_outfit_bake_attempted = false;
@@ -1283,7 +1298,7 @@ int main(int argc, char* argv[]) {
             if (const auto parsed = homeworldz::viewer::parse_uuid(id))
                 wearable_ids.push_back(*parsed);
         auto baked = homeworldz::viewer::bake_worn_outfit(
-            wearable_ids, server_bake_default_face, fetch_asset_bytes);
+            wearable_ids, server_bake_default_face, fetch_asset_bytes, fetch_mask_bytes);
         if (!baked) {
             std::cerr << "{\"level\":\"warning\",\"message\":\"server default-outfit bake failed\"}"
                       << std::endl;

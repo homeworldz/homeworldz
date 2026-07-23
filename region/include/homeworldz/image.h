@@ -38,6 +38,13 @@ std::optional<Image> decode_j2c(const std::vector<std::uint8_t>& data);
 // invalid input or encoder failure.
 std::optional<std::vector<std::uint8_t>> encode_j2c(const Image& image);
 
+// Decode a TGA blob into an Image. Supports uncompressed and RLE, grayscale
+// (types 3/11 -> 1-channel L) and truecolor (types 2/10, 24/32 bpp -> RGB/RGBA,
+// BGRA reordered to RGBA), honoring the image-descriptor vertical origin.
+// Returns nullopt on malformed or unsupported input. Used to load the clothing
+// alpha masks for the bake (ADR 0029).
+std::optional<Image> decode_tga(const std::vector<std::uint8_t>& data);
+
 // Expand any 1..4-channel Image to a 4-channel RGBA copy (L->grey+opaque,
 // LA->grey+alpha, RGB->opaque). An RGBA input is returned unchanged. An empty
 // or malformed Image yields an empty Image.

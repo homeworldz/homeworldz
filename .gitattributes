@@ -2,3 +2,9 @@
 *.service text eol=lf
 *.tsv text eol=lf
 Caddyfile* text eol=lf
+
+# Binary assets — never apply text/EOL normalization.
+*.tga binary
+*.j2c binary
+*.ogg binary
+*.raw binary
