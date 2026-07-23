@@ -683,6 +683,19 @@ func TestAISFetchInventoryFolderChildrenAndCurrentLinks(t *testing.T) {
 	if len(folders) == 0 {
 		t.Fatal("system folders were not created")
 	}
+	// Fetching a folder's links by its explicit id (not "current") must work —
+	// Firestorm reads a saved outfit folder this way during "Replace Current
+	// Outfit"; this route previously 404'd.
+	explicitLinksRequest := httptest.NewRequest(http.MethodGet,
+		base+"/category/"+inventory.SystemFolderID(user.ID, 46)+"/links", nil)
+	explicitLinksResponse := httptest.NewRecorder()
+	handler.ServeHTTP(explicitLinksResponse, explicitLinksRequest)
+	if explicitLinksResponse.Code != http.StatusOK ||
+		!strings.Contains(explicitLinksResponse.Body.String(), "<key>links</key><map>") ||
+		!strings.Contains(explicitLinksResponse.Body.String(), "<key>linked_id</key><uuid>") {
+		t.Fatalf("status = %d, AIS explicit folder links response = %s",
+			explicitLinksResponse.Code, explicitLinksResponse.Body.String())
+	}
 	orphansRequest := httptest.NewRequest(http.MethodGet, base+"/orphans", nil)
 	orphansResponse := httptest.NewRecorder()
 	handler.ServeHTTP(orphansResponse, orphansRequest)

@@ -58,6 +58,17 @@ func (a *API) inventoryAISCapability(w http.ResponseWriter, r *http.Request) {
 		case len(parts) == 4 && parts[1] == "category" && parts[2] == "current" && parts[3] == "links":
 			a.fetchAISInventoryFolder(w, r, session.UserID, inventory.SystemFolderID(session.UserID, 46), true)
 			return
+		case len(parts) == 4 && parts[1] == "category" && validUUID(parts[2]) && parts[3] == "links":
+			// Fetch only the link items of an arbitrary folder (e.g. an outfit
+			// folder). Firestorm reads a saved outfit's links this way during
+			// "Replace Current Outfit" before slamming them into the COF.
+			if inventory.IsLibraryFolder(parts[2]) {
+				writeAISInventoryFolder(w, r, inventory.LibraryOwnerID, parts[2],
+					inventory.LibraryFolders(), inventory.LibraryItems(), true)
+			} else {
+				a.fetchAISInventoryFolder(w, r, session.UserID, parts[2], true)
+			}
+			return
 		case len(parts) == 2 && parts[1] == "orphans":
 			writeAISEmptyOrphans(w)
 			return
