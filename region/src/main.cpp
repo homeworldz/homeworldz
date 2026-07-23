@@ -3989,12 +3989,21 @@ int main(int argc, char* argv[]) {
                             }
                             const homeworldz::viewer::AvatarAnimation response{
                                 identity->agent_id, animations};
-                            if (const auto outgoing = circuits.send(endpoint,
-                                    homeworldz::viewer::encode_avatar_animation(response), false, now))
-                                static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
+                            // Broadcast to every viewer in the region (not just
+                            // the emitter) so played animations — including
+                            // gesture-triggered ones — are visible to others,
+                            // mirroring the locomotion-animation broadcast.
+                            const auto payload = homeworldz::viewer::encode_avatar_animation(response);
+                            for (const auto& [recipient_endpoint, recipient] : avatars) {
+                                static_cast<void>(recipient);
+                                if (const auto outgoing = circuits.send(
+                                        recipient_endpoint, payload, false, now, true))
+                                    static_cast<void>(send_udp(viewer_server, recipient_endpoint, *outgoing));
+                            }
                             std::cout << "{\"level\":\"info\",\"message\":\"avatar animation state updated\","
                                          "\"changes\":" << agent_animation->animations.size()
-                                      << ",\"active\":" << animations.size() << "}" << std::endl;
+                                      << ",\"active\":" << animations.size()
+                                      << ",\"recipients\":" << avatars.size() << "}" << std::endl;
                         }
                         const auto asset_upload =
                             homeworldz::viewer::decode_asset_upload_request(packet->payload);
