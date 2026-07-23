@@ -12,7 +12,7 @@ acceptance tests pass.
 
 ## Progress snapshot
 
-Updated 2026-07-21. These bars are effort-weighted engineering estimates, not
+Updated 2026-07-23. These bars are effort-weighted engineering estimates, not
 simple checkbox ratios. Later scripting, crossings, social systems, security,
 recovery, and scale items are substantially larger than many completed viewer
 protocol tasks. Percentages are deliberately approximate and should be revised
@@ -26,7 +26,7 @@ when scope or implementation evidence changes.
 
 | Phase | Progress | Estimate |
 | --- | --- | ---: |
-| 1. Functional Single-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="98" aria-label="Phase 1 progress: 98%">98%</progress> | 98% |
+| 1. Functional Single-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="99" aria-label="Phase 1 progress: 99%">99%</progress> | 99% |
 | 2. Connected Multi-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="68" aria-label="Phase 2 progress: 68%">68%</progress> | 68% |
 | 3. Interactive Physical World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="39" aria-label="Phase 3 progress: 39%">39%</progress> | 39% |
 | 4. LSL Scripting | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="15" aria-label="Phase 4 progress: 15%">15%</progress> | 15% |
@@ -68,12 +68,16 @@ Falcon LSL scripting foundation.
   content.
 - [x] Synchronize nearby avatar presence, movement, appearance rebakes, and
   animation changes between concurrently connected viewers.
-- [ ] Bake avatar appearance **server-side** — the region composites the bake
-  layers from a user's worn wearables and serves baked textures — so thin or
-  headless clients (e.g. LibreMetaverse) rez correctly with no client-side
-  baking. Reference: SL's open-source server-side appearance and LMV's
-  permissive implementation; C++ compositing with OpenJPEG for the JPEG2000
-  encode.
+- [x] Bake avatar appearance **server-side** — the region composites the bake
+  layers (skin, colour-tinted and alpha-masked clothing, hair colour) from worn
+  wearables with OpenJPEG and serves the baked textures, so thin or headless
+  clients (e.g. LibreMetaverse) rez correctly with no client-side baking
+  (ADR 0029). A LibreMetaverse bot — whose own client baker fails — rezzes as a
+  correct default avatar (textured head, hair colour, tinted shirt/pants,
+  skin hands and feet) entirely from the server bake. Per-user COF-driven baking
+  for arbitrary custom outfits and server-side-appearance (SSB) delivery to full
+  viewers remain future work; full clients still bake locally and are relayed
+  untouched.
 - [ ] Broadcast `KillObject` and clear presence/People-list state when a viewer
   logs out or disconnects; today a departed avatar lingers rezzed in others'
   views (no departure is detected).
