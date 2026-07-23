@@ -624,6 +624,62 @@ func TestAISCreateInventoryLinks(t *testing.T) {
 	}
 }
 
+func TestAISSlamAcceptsOutfitFolderLink(t *testing.T) {
+	// "Replace Current Outfit" slams the COF with the wearable item links
+	// (type 24) plus an "outfit link" — a folder link (type 25) pointing at the
+	// worn outfit's folder. The folder link must resolve against folders, not
+	// items, or the whole slam is rejected and the outfit never changes.
+	identities := newMemoryIdentityStore()
+	user, err := identities.CreateUser(context.Background(), "inventory.ais.folderlink", "development-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := identities.CreateSession(context.Background(), "inventory.ais.folderlink", "development-password", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.AssignViewerDestination(context.Background(), session.ID, 123456,
+		"30000000-0000-4000-8000-000000000001"); err != nil {
+		t.Fatal(err)
+	}
+	inventories := &memoryInventoryStore{
+		folders: make(map[string][]inventory.Folder),
+		items:   make(map[string][]inventory.Item),
+	}
+	if _, err := inventories.EnsureSystemFolders(context.Background(), user.ID); err != nil {
+		t.Fatal(err)
+	}
+	cof := inventory.SystemFolderID(user.ID, 46)
+	const outfitID = "40000000-0000-4000-8000-0000000000a1"
+	if _, err := inventories.CreateFolder(context.Background(), inventory.Folder{
+		ID: outfitID, OwnerUserID: user.ID, ParentID: cof, Name: "Test Outfit", TypeDefault: -1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	handler := New(checker{}, "test", Options{Identity: identities, Inventory: inventories})
+	slamBody := `<?xml version="1.0"?><llsd><array>` +
+		`<map><key>linked_id</key><uuid>` + outfitID + `</uuid>` +
+		`<key>type</key><integer>25</integer><key>name</key><string>Test Outfit</string>` +
+		`<key>desc</key><string></string></map></array></llsd>`
+	request := httptest.NewRequest(http.MethodPut,
+		"/caps/inventory/ais/"+session.ID+"/category/"+cof+"/links", strings.NewReader(slamBody))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("folder-link slam status = %d, response = %s", response.Code, response.Body.String())
+	}
+	items, _ := inventories.ListItems(context.Background(), user.ID)
+	found := false
+	for _, item := range items {
+		if item.FolderID == cof && item.AssetType == 25 && item.AssetID == outfitID && item.InventoryType == 8 {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("COF outfit folder link (type 25 -> %s) was not created; items = %#v", outfitID, items)
+	}
+}
+
 func TestAISFetchInventoryFolderChildrenAndCurrentLinks(t *testing.T) {
 	identities := newMemoryIdentityStore()
 	user, err := identities.CreateUser(context.Background(), "inventory.ais.read", "development-password")

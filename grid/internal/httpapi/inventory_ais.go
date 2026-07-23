@@ -647,10 +647,11 @@ func (a *API) createAISInventoryLinks(w http.ResponseWriter, r *http.Request, us
 		return
 	}
 	parentFound := false
+	folderByID := make(map[string]inventory.Folder, len(folders))
 	for _, folder := range folders {
+		folderByID[folder.ID] = folder
 		if folder.ID == parentID {
 			parentFound = true
-			break
 		}
 	}
 	if !parentFound {
@@ -669,34 +670,53 @@ func (a *API) createAISInventoryLinks(w http.ResponseWriter, r *http.Request, us
 	created := make([]inventory.Item, 0, len(requests))
 	seenSources := make(map[string]bool, len(requests))
 	for _, request := range requests {
-		source, ok := sources[request.LinkedID]
-		if !ok {
-			writeLLSDError(w, http.StatusNotFound, "AIS inventory link source was not found")
-			return
-		}
-		if !validUUID(request.LinkedID) || request.AssetType != 24 ||
-			(request.HasInvType && request.InventoryType != source.InventoryType) || request.Name == "" ||
+		if !validUUID(request.LinkedID) || request.Name == "" ||
 			len(request.Name) > 255 || len(request.Description) > 1024 || seenSources[request.LinkedID] {
 			writeLLSDError(w, http.StatusBadRequest, "invalid AIS inventory link request")
 			return
 		}
-		seenSources[request.LinkedID] = true
 		itemID, err := identifier.NewUUID()
 		if err != nil {
 			writeLLSDError(w, http.StatusServiceUnavailable, "inventory link ID could not be allocated")
 			return
 		}
-		creatorID := source.CreatorUserID
-		if creatorID == "" || creatorID == nullInventoryFolderID {
-			creatorID = userID
+		switch request.AssetType {
+		case 24: // item link
+			source, ok := sources[request.LinkedID]
+			if !ok {
+				writeLLSDError(w, http.StatusNotFound, "AIS inventory link source was not found")
+				return
+			}
+			if request.HasInvType && request.InventoryType != source.InventoryType {
+				writeLLSDError(w, http.StatusBadRequest, "invalid AIS inventory link request")
+				return
+			}
+			creatorID := source.CreatorUserID
+			if creatorID == "" || creatorID == nullInventoryFolderID {
+				creatorID = userID
+			}
+			created = append(created, inventory.Item{
+				ID: itemID, OwnerUserID: userID, CreatorUserID: creatorID, FolderID: parentID,
+				AssetID: request.LinkedID, AssetType: 24, InventoryType: source.InventoryType,
+				Name: request.Name, Description: request.Description, Flags: source.Flags,
+				BasePermissions: source.BasePermissions, CurrentPermissions: source.CurrentPermissions,
+				EveryonePermissions: source.EveryonePermissions, NextPermissions: source.NextPermissions,
+			})
+		case 25: // folder link (outfit link) — points at a folder, not an item
+			if _, ok := folderByID[request.LinkedID]; !ok {
+				writeLLSDError(w, http.StatusNotFound, "AIS inventory link source folder was not found")
+				return
+			}
+			created = append(created, inventory.Item{
+				ID: itemID, OwnerUserID: userID, CreatorUserID: userID, FolderID: parentID,
+				AssetID: request.LinkedID, AssetType: 25, InventoryType: 8, // AT_LINK_FOLDER / IT_CATEGORY
+				Name: request.Name, Description: request.Description,
+			})
+		default:
+			writeLLSDError(w, http.StatusBadRequest, "invalid AIS inventory link request")
+			return
 		}
-		created = append(created, inventory.Item{
-			ID: itemID, OwnerUserID: userID, CreatorUserID: creatorID, FolderID: parentID,
-			AssetID: request.LinkedID, AssetType: 24, InventoryType: source.InventoryType,
-			Name: request.Name, Description: request.Description, Flags: source.Flags,
-			BasePermissions: source.BasePermissions, CurrentPermissions: source.CurrentPermissions,
-			EveryonePermissions: source.EveryonePermissions, NextPermissions: source.NextPermissions,
-		})
+		seenSources[request.LinkedID] = true
 	}
 	created, err = a.inventory.CreateItems(r.Context(), created)
 	if writeAISItemError(w, err) {
@@ -722,10 +742,11 @@ func (a *API) slamAISInventoryLinks(w http.ResponseWriter, r *http.Request, user
 		return
 	}
 	folderFound := false
+	folderByID := make(map[string]inventory.Folder, len(folders))
 	for _, folder := range folders {
+		folderByID[folder.ID] = folder
 		if folder.ID == folderID {
 			folderFound = true
-			break
 		}
 	}
 	if !folderFound {
@@ -744,33 +765,49 @@ func (a *API) slamAISInventoryLinks(w http.ResponseWriter, r *http.Request, user
 	created := make([]inventory.Item, 0, len(requests))
 	seenSources := make(map[string]bool, len(requests))
 	for _, request := range requests {
-		source, ok := sources[request.LinkedID]
-		if !ok {
-			writeLLSDError(w, http.StatusNotFound, "AIS inventory link source was not found")
-			return
-		}
-		if request.AssetType != 24 || request.Name == "" || len(request.Name) > 255 ||
+		if request.Name == "" || len(request.Name) > 255 ||
 			len(request.Description) > 1024 || seenSources[request.LinkedID] {
 			writeLLSDError(w, http.StatusBadRequest, "invalid AIS folder links replacement")
 			return
 		}
-		seenSources[request.LinkedID] = true
 		itemID, err := identifier.NewUUID()
 		if err != nil {
 			writeLLSDError(w, http.StatusServiceUnavailable, "inventory link ID could not be allocated")
 			return
 		}
-		creatorID := source.CreatorUserID
-		if creatorID == "" || creatorID == nullInventoryFolderID {
-			creatorID = userID
+		switch request.AssetType {
+		case 24: // item link — points at an inventory item
+			source, ok := sources[request.LinkedID]
+			if !ok {
+				writeLLSDError(w, http.StatusNotFound, "AIS inventory link source was not found")
+				return
+			}
+			creatorID := source.CreatorUserID
+			if creatorID == "" || creatorID == nullInventoryFolderID {
+				creatorID = userID
+			}
+			created = append(created, inventory.Item{
+				ID: itemID, OwnerUserID: userID, CreatorUserID: creatorID, FolderID: folderID,
+				AssetID: source.ID, AssetType: 24, InventoryType: source.InventoryType,
+				Name: request.Name, Description: request.Description, Flags: source.Flags,
+				BasePermissions: source.BasePermissions, CurrentPermissions: source.CurrentPermissions,
+				EveryonePermissions: source.EveryonePermissions, NextPermissions: source.NextPermissions,
+			})
+		case 25: // folder link — the COF "outfit link" points at a folder, not an item
+			if _, ok := folderByID[request.LinkedID]; !ok {
+				writeLLSDError(w, http.StatusNotFound, "AIS inventory link source folder was not found")
+				return
+			}
+			created = append(created, inventory.Item{
+				ID: itemID, OwnerUserID: userID, CreatorUserID: userID, FolderID: folderID,
+				AssetID: request.LinkedID, AssetType: 25, InventoryType: 8, // AT_LINK_FOLDER / IT_CATEGORY
+				Name: request.Name, Description: request.Description,
+			})
+		default:
+			writeLLSDError(w, http.StatusBadRequest, "invalid AIS folder links replacement")
+			return
 		}
-		created = append(created, inventory.Item{
-			ID: itemID, OwnerUserID: userID, CreatorUserID: creatorID, FolderID: folderID,
-			AssetID: source.ID, AssetType: 24, InventoryType: source.InventoryType,
-			Name: request.Name, Description: request.Description, Flags: source.Flags,
-			BasePermissions: source.BasePermissions, CurrentPermissions: source.CurrentPermissions,
-			EveryonePermissions: source.EveryonePermissions, NextPermissions: source.NextPermissions,
-		})
+		seenSources[request.LinkedID] = true
 	}
 	removed := make([]string, 0, 16)
 	for _, item := range existing {
