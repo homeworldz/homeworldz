@@ -1,2 +1,9 @@
 # External test tooling clones and build outputs (reproducible, not vendored).
 libremetaverse/
+
+# Local test-bot credential lists (dev-only) — do not publish.
+testclient/userlist.txt
+testclient/cloud-userlist.txt
+
+# LibreMetaverse client cache/runtime output under the test harness.
+testclient/linden/
