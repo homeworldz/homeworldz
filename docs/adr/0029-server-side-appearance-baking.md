@@ -120,28 +120,36 @@ wearables) plus a Firestorm avatar.
     `AppearanceData` field, which must agree with visual param **11000**
     (`llvoavatar.cpp`: `setIsUsingServerBakes(appearance_version > 0)`).
 
-**Fixed after live debugging:**
-- **Empty/white in-server body bake.** The region baked a ~204-byte body
-  (upper/lower) while the standalone `homeworldz-bake-diag` produced valid
-  ~228KB skin from the same sources. Root cause: the default shirt/pants
-  reference **`IMG_WHITE`** (`5748decc`, "Blank") for their texture; the region
-  has that asset (the diag's local file set does not), so it was composited
-  **opaque over the skin**, turning the body solid white — which encodes to a
-  tiny (~204-byte) J2C. Fix: the bake skips blank/placeholder texture UUIDs
-  (`IMG_WHITE` / `IMG_INVISIBLE` / `IMG_DEFAULT` / `IMG_DEFAULT_AVATAR` / null),
-  so a "Blank"-textured layer no longer paints over the skin. The region now
-  bakes valid ~228KB skin for all body slots.
+**Layer fidelity — the default outfit renders correctly (2026-07-23):**
+The default shirt/pants use the opaque `IMG_WHITE` ("Blank") texture and are
+shaped/coloured entirely by wearable params, so a faithful default bake needs
+both tint and alpha masks (the SL layer model), not just raw compositing:
+- **Per-layer color tint.** Clothing color is three params (r,g,b in 0..1) that
+  multiply the layer (shirt grey `803/804/805`, pants reddish `806/807/808`).
+  Hair is an `LLTexGlobalColor` ("hair_color"): params `112/113/114/115` each
+  ramped (avatar_lad.xml) and summed (default Blonde `114`=.5 → brown).
+- **Clothing alpha masks.** Without them the opaque Blank clothing covered the
+  whole upper/lower region (grey hands, red feet). A TGA decoder
+  (`image::decode_tga`) loads the shirt/pants masks (bundled under
+  `assets/region/default-avatar/`, read directly from disk — they are not
+  UUID-named store assets); they are applied per LibreMetaverse's bake — normal
+  masks (sleeve `800`, pants length `815`) union coverage, multiply masks (shirt
+  bottom `801`, collar `802`) carve — thresholded per texel at
+  `mask <= (1-value)*255`. Garments now stop at wrists/ankles; hands and feet
+  stay skin.
 
-**Open (blocks the bot's body skin from actually rendering):**
-- **Delivery.** The viewer parses the baked UUIDs from the `TextureEntry`
-  (confirmed via Firestorm's `DebugAvatarAppearanceMessage` dump) but never
-  requests them (0 fetches), rendering the stock `IMG_DEFAULT_AVATAR` instead.
-  Tied to the legacy-vs-server-bake path (`llvoavatar.cpp`:
-  `setIsUsingServerBakes(appearance_version > 0)`); getting `appearance_version
-  1` reliably applied without disturbing real bakers (a baker mid-bake briefly
-  presents zero-creator textures) is unresolved. Compare against OpenSim's
-  server-side-appearance delivery.
+Result: a LibreMetaverse bot (whose own client baker crashes in
+`Baker.ApplyTint`) rezzes as a correct default avatar — brown hair, grey shirt
+with skin hands, reddish pants with skin feet — entirely from the server seed.
 
-Until delivery is resolved, the region relays client appearances untouched and
-seeds headless clients on join; the bot rezzes but its body renders as the
-stock default avatar (solid white), a reasonable bot fallback.
+**Notes / follow-ups:**
+- Earlier a "204-byte empty body bake" was misdiagnosed as a bug and the bake
+  briefly skipped Blank textures; that was reverted — Blank is opaque *white*,
+  not "no layer", and the correct result comes from tint + masks above.
+- LibreMetaverse's baker throws `IndexOutOfRangeException` in
+  `Baker.ApplyTint` (`BakeLayer.cs`) on the default outfit — a real LMV bug
+  (reported to Cinder). It is why the bot falls back to the server bake; useful
+  as a pure server-side-bake test.
+- Only the default six-wearable outfit is exercised end-to-end. Stacked
+  clothing, tattoos/alpha wearables, jacket/glove/shoe masks, skin tone params,
+  and re-bake on outfit change remain future work.
