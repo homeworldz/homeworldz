@@ -1708,13 +1708,19 @@ int main(int argc, char* argv[]) {
                 static_cast<std::uint32_t>(departing->second.entity_id)};
             const auto kill = homeworldz::viewer::encode_kill_object(kill_ids);
             const auto kill_now = std::chrono::steady_clock::now();
+            std::size_t kill_recipients = 0;
             for (const auto& [recipient_endpoint, recipient] : avatars) {
                 static_cast<void>(recipient);
                 if (recipient_endpoint == endpoint) continue;
                 if (const auto outgoing = circuits.send(
-                        recipient_endpoint, kill, true, kill_now, true))
+                        recipient_endpoint, kill, true, kill_now, true)) {
                     static_cast<void>(send_udp(viewer_server, recipient_endpoint, *outgoing));
+                    ++kill_recipients;
+                }
             }
+            std::cout << "{\"level\":\"info\",\"message\":\"avatar departure kill broadcast\","
+                         "\"localId\":" << kill_ids[0] << ",\"recipients\":" << kill_recipients
+                      << "}" << std::endl;
         }
         if (const auto live = avatars.find(endpoint); live != avatars.end() &&
             physics_world && live->second.physics_character != 0)
