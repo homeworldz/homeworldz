@@ -3854,16 +3854,39 @@ int main(int argc, char* argv[]) {
                             if (stored != 0)
                                 std::cout << "{\"level\":\"info\",\"message\":\"wearable cache updated\","
                                              "\"count\":" << stored << "}" << std::endl;
-                            // Relay the client's own appearance untouched. Headless
-                            // clients that cannot bake never send a valid appearance
-                            // (they error out), so they are covered by the
-                            // default-outfit bake seeded on join; we must never
-                            // substitute the server default into a real client's
-                            // appearance stream, or an avatar mid-bake oscillates
-                            // between its own shape and the default (ADR 0029).
+                            // Relay the client's own appearance. But a headless
+                            // client echoes back the server-bake UUIDs we seeded it,
+                            // in a legacy (v0) message; relayed as-is, viewers would
+                            // composite it locally (grey) instead of using the bakes.
+                            // Detect our own server bake (system/zero creator) in the
+                            // head slot and re-broadcast it as server-side (v1) with
+                            // the matching default visual params. A real baker's own
+                            // textures — and mid-bake placeholders — are never our
+                            // system bake, so they relay unchanged as v0 (no shape
+                            // oscillation) and the wearer keeps its local bake.
+                            std::vector<std::byte> broadcast_texture_entry = appearance->texture_entry;
+                            std::vector<std::uint8_t> broadcast_visual_params = appearance->visual_params;
+                            std::uint8_t broadcast_version = 0;
+                            {
+                                const auto meta = storage->find_asset(homeworldz::viewer::format_uuid(
+                                    appearance->texture_ids[8]));
+                                const bool uses_server_bake =
+                                    meta && meta->creator_id == "00000000-0000-0000-0000-000000000000";
+                                if (uses_server_bake) {
+                                    if (const auto* bake = ensure_default_outfit_bake()) {
+                                        broadcast_texture_entry = bake->texture_entry;
+                                        broadcast_visual_params = default_outfit_visual_params;
+                                        broadcast_version = 1;
+                                        auto& retained = avatar_appearances.at(endpoint);
+                                        retained.texture_entry = bake->texture_entry;
+                                        retained.visual_params = default_outfit_visual_params;
+                                        retained.appearance_version = 1;
+                                    }
+                                }
+                            }
                             const auto remote_appearance = homeworldz::viewer::encode_avatar_appearance({
-                                identity->agent_id, appearance->serial, appearance->texture_entry,
-                                appearance->visual_params});
+                                identity->agent_id, appearance->serial, broadcast_texture_entry,
+                                broadcast_visual_params, {}, broadcast_version});
                             std::size_t recipients = 0;
                             if (!remote_appearance.empty()) {
                                 // Echo the completed appearance to the originating viewer as well.
