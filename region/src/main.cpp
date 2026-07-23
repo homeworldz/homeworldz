@@ -3864,29 +3864,15 @@ int main(int argc, char* argv[]) {
                             // textures — and mid-bake placeholders — are never our
                             // system bake, so they relay unchanged as v0 (no shape
                             // oscillation) and the wearer keeps its local bake.
-                            std::vector<std::byte> broadcast_texture_entry = appearance->texture_entry;
-                            std::vector<std::uint8_t> broadcast_visual_params = appearance->visual_params;
-                            std::uint8_t broadcast_version = 0;
-                            {
-                                const auto meta = storage->find_asset(homeworldz::viewer::format_uuid(
-                                    appearance->texture_ids[8]));
-                                const bool uses_server_bake =
-                                    meta && meta->creator_id == "00000000-0000-0000-0000-000000000000";
-                                if (uses_server_bake) {
-                                    if (const auto* bake = ensure_default_outfit_bake()) {
-                                        broadcast_texture_entry = bake->texture_entry;
-                                        broadcast_visual_params = default_outfit_visual_params;
-                                        broadcast_version = 1;
-                                        auto& retained = avatar_appearances.at(endpoint);
-                                        retained.texture_entry = bake->texture_entry;
-                                        retained.visual_params = default_outfit_visual_params;
-                                        retained.appearance_version = 1;
-                                    }
-                                }
-                            }
+                            // Relay the client's own appearance untouched. Never
+                            // substitute or re-mark it: a real baker's mid-bake
+                            // states briefly reference zero-creator textures, and
+                            // rewriting them oscillates the avatar. Headless clients
+                            // are covered by the join-seed; the server-bake delivery
+                            // to viewers is tracked separately (ADR 0029).
                             const auto remote_appearance = homeworldz::viewer::encode_avatar_appearance({
-                                identity->agent_id, appearance->serial, broadcast_texture_entry,
-                                broadcast_visual_params, {}, broadcast_version});
+                                identity->agent_id, appearance->serial, appearance->texture_entry,
+                                appearance->visual_params});
                             std::size_t recipients = 0;
                             if (!remote_appearance.empty()) {
                                 // Echo the completed appearance to the originating viewer as well.
