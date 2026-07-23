@@ -78,16 +78,20 @@ Falcon LSL scripting foundation.
   for arbitrary custom outfits and server-side-appearance (SSB) delivery to full
   viewers remain future work; full clients still bake locally and are relayed
   untouched.
-- [ ] Broadcast `KillObject` for a departing avatar so it no longer lingers
-  rezzed in other viewers' views. Departure is now detected (logout,
-  disconnect/timeout via session validation, duplicate-login replacement, and
-  teleport/region-crossing source-retirement) and all removal paths funnel
-  through one point, which now sends a `KillObject` for the avatar's local id to
-  the remaining in-region viewers. Presence/People-list is cleared on explicit
-  logout and deliberately preserved on teleport/crossing (the avatar is still
-  online in the destination region). Implemented and building; pending deploy
-  and live Firestorm acceptance (a second viewer confirming the departed avatar
-  disappears) before this is checked.
+- [x] Broadcast `KillObject` for a departing avatar so it no longer lingers
+  rezzed in other viewers' views. All avatar-removal paths (clean logout,
+  session-invalidation/disconnect via the 5-second session revalidation,
+  duplicate-login replacement, and teleport/region-crossing source-retirement)
+  funnel through one teardown point that broadcasts a `KillObject` for the
+  avatar's local id to the remaining in-region viewers; in-region moves keep the
+  avatar in the region set, so it does not misfire. Presence/People-list is
+  cleared on explicit logout and deliberately preserved on teleport/crossing
+  (the avatar stays online in the destination region). Live Firestorm
+  acceptance: a departing bot vanished immediately on clean logout and was
+  removed from the observer's view, People radar, and minimap. Follow-up: a hard
+  crash or force-kill only fires the kill once the grid session is revoked or its
+  TTL lapses; a ping/pong timeout that retires unresponsive avatars would make
+  that path prompt as well.
 
 ### Authoritative avatar movement
 
