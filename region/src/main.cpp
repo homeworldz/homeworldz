@@ -2507,6 +2507,15 @@ int main(int argc, char* argv[]) {
                 const auto packet = circuits.receive(
                      endpoint, std::span<const std::byte>(datagram.data(), static_cast<std::size_t>(received)), now);
                 for (const auto& replaced : circuits.take_replaced()) {
+                    // A newer login took over this account. Tell the old viewer
+                    // why it is being disconnected (sent before teardown, while
+                    // its circuit still exists).
+                    if (const auto kick = homeworldz::viewer::encode_kick_user(
+                            replaced.identity.agent_id, replaced.identity.session_id,
+                            "You have logged in from another location.");
+                        !kick.empty())
+                        if (const auto framed = circuits.send(replaced.endpoint, kick, true, now, true))
+                            static_cast<void>(send_udp(viewer_server, replaced.endpoint, *framed));
                     clear_viewer_endpoint(replaced.endpoint,
                         homeworldz::viewer::format_uuid(replaced.identity.session_id));
                     std::cout << "{\"level\":\"info\",\"message\":\"stale viewer circuit replaced\",\"endpoint\":"
