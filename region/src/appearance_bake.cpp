@@ -5,7 +5,6 @@
 #include "homeworldz/sha256.h"
 #include "homeworldz/wearable.h"
 
-#include <array>
 #include <cstring>
 #include <string>
 
@@ -22,24 +21,6 @@ std::vector<std::byte> to_bytes_std(const std::vector<std::uint8_t>& in) {
     std::vector<std::byte> out(in.size());
     if (!in.empty()) std::memcpy(out.data(), in.data(), in.size());
     return out;
-}
-
-// Placeholder/"no content" texture UUIDs that a wearable may reference to mean
-// "no visible layer" (the default shirt/pants use IMG_WHITE "Blank"). These must
-// be skipped in the composite: compositing them — IMG_WHITE is opaque single
-// channel — would paint the skin solid white/grey instead of showing it. (The
-// standalone diag never hit this because these aren't in the local file set.)
-bool is_blank_texture(const Uuid& id) {
-    static const std::array<Uuid, 5> blanks = {
-        Uuid{},                                                       // null
-        parse_uuid("5748decc-f629-461c-9a36-a35a221fe21f").value(),   // IMG_WHITE / "Blank"
-        parse_uuid("3a367d1c-bef1-6d43-7595-e88c1e3aadb3").value(),   // IMG_INVISIBLE
-        parse_uuid("d2114404-dd59-4a4d-8e6c-49359e91bbf0").value(),   // IMG_DEFAULT
-        parse_uuid("c228d1cf-4b5d-4ba8-84f4-899a0796aa97").value(),   // IMG_DEFAULT_AVATAR
-    };
-    for (const auto& blank : blanks)
-        if (id == blank) return true;
-    return false;
 }
 
 // Derive a deterministic viewer UUID from content so identical bakes share an
@@ -66,10 +47,6 @@ std::optional<OutfitBake> bake_worn_outfit(const std::vector<Uuid>& wearable_ass
     if (worn.empty()) return std::nullopt;
 
     const TextureFetch texture_fetch = [&](const Uuid& id) -> std::optional<image::Image> {
-        // A wearable that references a blank/placeholder texture (e.g. the
-        // default shirt/pants use IMG_WHITE) means "no visible layer" — skip it
-        // so it doesn't composite over the skin.
-        if (is_blank_texture(id)) return std::nullopt;
         auto bytes = fetch(id);
         if (!bytes || bytes->empty()) return std::nullopt;
         return image::decode_j2c(to_bytes_u8(*bytes));
