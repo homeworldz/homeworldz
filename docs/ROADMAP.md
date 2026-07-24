@@ -12,7 +12,7 @@ acceptance tests pass.
 
 ## Progress snapshot
 
-Updated 2026-07-23. These bars are effort-weighted engineering estimates, not
+Updated 2026-07-24. These bars are effort-weighted engineering estimates, not
 simple checkbox ratios. Later scripting, crossings, social systems, security,
 recovery, and scale items are substantially larger than many completed viewer
 protocol tasks. Percentages are deliberately approximate and should be revised
@@ -26,7 +26,7 @@ when scope or implementation evidence changes.
 
 | Phase | Progress | Estimate |
 | --- | --- | ---: |
-| 1. Functional Single-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="99" aria-label="Phase 1 progress: 99%">99%</progress> | 99% |
+| 1. Functional Single-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="100" aria-label="Phase 1 progress: 100%">100%</progress> | 100% |
 | 2. Connected Multi-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="68" aria-label="Phase 2 progress: 68%">68%</progress> | 68% |
 | 3. Interactive Physical World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="39" aria-label="Phase 3 progress: 39%">39%</progress> | 39% |
 | 4. LSL Scripting | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="15" aria-label="Phase 4 progress: 15%">15%</progress> | 15% |
@@ -152,7 +152,7 @@ Falcon LSL scripting foundation.
   landmark, notecard, gesture, and LSL-source creation and updates; and task
   notecard and script updates. Phase 4 now compiles and executes the supported
   Falcon language subset when a script enters or is saved in object contents.
-- [ ] Complete Firestorm creation, editing, playback, object-contents,
+- [x] Complete Firestorm creation, editing, playback, object-contents,
   restart, and relog acceptance for those fundamental content types.
 
 ## Phase 2: Connected Multi-region World
@@ -247,7 +247,10 @@ Falcon LSL scripting foundation.
   region sizes.
 - [x] Implement viewer map-block and prefix-name discovery for registered live
   regions.
-- [ ] Implement landmark resolution, home location, and teleport routing.
+- [x] Implement landmark resolution, home location, and teleport routing.
+  Login-to-home currently lands in the home region at the last in-region
+  position; exact home-coordinate placement on login is deferred within this
+  phase.
 - [ ] Add region and parcel search sufficient to find and reach destinations.
 - [ ] Show friends and authorized users useful presence and location without
   leaking restricted information.
