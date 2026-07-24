@@ -736,6 +736,74 @@ inline constexpr std::uint32_t object_return_group = 1U << 2;
 inline constexpr std::uint32_t object_return_other = 1U << 3;
 inline constexpr std::uint32_t object_return_list = 1U << 4;
 
+// RequestRegionInfo (Low 141): opens the Region/Estate floater.
+struct RequestRegionInfo {
+    Uuid agent_id{};
+    Uuid session_id{};
+};
+
+// RegionInfo (Low 142): sim -> viewer, populates the Region tab.
+struct RegionInfoReply {
+    Uuid agent_id{};
+    Uuid session_id{};
+    std::string sim_name;
+    std::uint32_t estate_id{};
+    std::uint32_t parent_estate_id{};
+    std::uint32_t region_flags{};
+    std::uint8_t sim_access{13};
+    std::uint8_t max_agents{40};
+    float billable_factor{};
+    float object_bonus_factor{1.0F};
+    float water_height{20.0F};
+    float terrain_raise_limit{100.0F};
+    float terrain_lower_limit{-100.0F};
+    std::int32_t price_per_meter{};
+    std::int32_t redirect_grid_x{};
+    std::int32_t redirect_grid_y{};
+    bool use_estate_sun{true};
+    float sun_hour{};
+    std::string product_sku{"HomeWorldz"};
+    std::string product_name{"HomeWorldz Region"};
+    std::uint64_t region_flags_extended{};
+};
+
+// EstateOwnerMessage (Low 260): both directions. Method + invoice + string params.
+struct EstateOwnerMessage {
+    Uuid agent_id{};
+    Uuid session_id{};
+    Uuid transaction_id{};
+    std::string method;
+    Uuid invoice{};
+    std::vector<std::string> params;
+};
+
+// estateaccessdelta command bits (Halcyon EstateAccessDeltaCommands).
+inline constexpr std::uint32_t estate_access_add_allowed = 4;
+inline constexpr std::uint32_t estate_access_remove_allowed = 8;
+inline constexpr std::uint32_t estate_access_add_group = 16;
+inline constexpr std::uint32_t estate_access_remove_group = 32;
+inline constexpr std::uint32_t estate_access_ban_user = 64;
+inline constexpr std::uint32_t estate_access_unban_user = 128;
+inline constexpr std::uint32_t estate_access_add_manager = 256;
+inline constexpr std::uint32_t estate_access_remove_manager = 512;
+inline constexpr std::uint32_t estate_access_no_reply = 1024;
+
+// setaccess reply list bits (indra ESTATE_ACCESS_*).
+inline constexpr std::uint32_t estate_list_allowed_agents = 1U << 0;
+inline constexpr std::uint32_t estate_list_allowed_groups = 1U << 1;
+inline constexpr std::uint32_t estate_list_banned_agents = 1U << 2;
+inline constexpr std::uint32_t estate_list_managers = 1U << 3;
+
+// estatechangeinfo param1 flag bits (Halcyon handleEstateChangeInfo).
+inline constexpr std::uint32_t estate_flag_fixed_sun = 0x00000010;
+inline constexpr std::uint32_t estate_flag_public_access = 0x00008000;
+inline constexpr std::uint32_t estate_flag_allow_direct_teleport = 0x00100000;
+inline constexpr std::uint32_t estate_flag_deny_anonymous = 0x00800000;
+inline constexpr std::uint32_t estate_flag_deny_identified = 0x01000000;
+inline constexpr std::uint32_t estate_flag_deny_transacted = 0x02000000;
+inline constexpr std::uint32_t estate_flag_allow_voice = 0x10000000;
+inline constexpr std::uint32_t estate_flag_deny_minors = 0x40000000;
+
 struct AgentMovementComplete : AgentMessage {
     std::array<float, 3> position{128.0F, 128.0F, 25.0F};
     std::array<float, 3> look_at{1.0F, 0.0F, 0.0F};
@@ -985,6 +1053,12 @@ std::vector<std::byte> encode_parcel_object_owners_reply(
 std::optional<ParcelSelectObjects> decode_parcel_select_objects(std::span<const std::byte> payload);
 std::vector<std::vector<std::byte>> encode_force_object_select(std::span<const std::uint32_t> local_ids);
 std::optional<ParcelReturnObjects> decode_parcel_return_objects(std::span<const std::byte> payload);
+std::optional<RequestRegionInfo> decode_request_region_info(std::span<const std::byte> payload);
+std::vector<std::byte> encode_region_info(const RegionInfoReply& message);
+std::optional<EstateOwnerMessage> decode_estate_owner_message(std::span<const std::byte> payload);
+std::vector<std::byte> encode_estate_owner_message(const Uuid& agent_id, const Uuid& invoice,
+                                                   std::string_view method,
+                                                   std::span<const std::string> params);
 std::optional<ChatFromViewer> decode_chat_from_viewer(std::span<const std::byte> payload);
 std::vector<std::byte> encode_chat_from_simulator(const ChatFromSimulator& message);
 std::vector<std::byte> encode_flat_terrain(std::span<const TerrainPatch> patches, float height);

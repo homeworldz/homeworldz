@@ -239,6 +239,20 @@ to owner-only behaviour because groups are not yet modelled (Phase 5). The damag
 (`AllowDamage`) and push (`RestrictPushObject`) flags are carried but inert until
 the combat/health and `llPushObject` systems exist.
 
+### Grid-level estates
+
+Estates are stored centrally on the grid (Postgres), not per region, because an
+estate spans regions: every region maps to exactly one estate and all regions
+sharing an estate id share its owner, managers, allowed-user/group and ban lists,
+and its deny/voice/teleport flags. A region with no estate is lazily assigned a
+default estate (id 100, "My Estate") owned by the region owner, and a single
+default estate is reused for all regions owned by the same owner. The region
+fetches its estate at registration and applies it to `RegionHandshake`/`RegionInfo`
+flags, `ParcelProperties` region deny flags, and region-entry enforcement; estate
+edits from the Region/Estate floater are written back through the grid so sibling
+regions can pick them up. Viewer-driven region terrain-texture settings, region
+restart, and estate kick/teleport-home remain future work.
+
 ## Planned differences
 
 ### Variable-sized regions

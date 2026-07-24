@@ -22,14 +22,14 @@ when scope or implementation evidence changes.
 
 <label class="roadmap-overall-progress">
   <span>Overall progress</span>
-  <progress data-color="primary" max="100" value="29">29%</progress>
-  <strong>29%</strong>
+  <progress data-color="primary" max="100" value="30">30%</progress>
+  <strong>30%</strong>
 </label>
 
 | Phase | Progress | Estimate |
 | --- | --- | ---: |
 | 1. Functional Single-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="100" aria-label="Phase 1 progress: 100%">100%</progress> | 100% |
-| 2. Connected Multi-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="78" aria-label="Phase 2 progress: 78%">78%</progress> | 78% |
+| 2. Connected Multi-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="82" aria-label="Phase 2 progress: 82%">82%</progress> | 82% |
 | 3. Interactive Physical World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="39" aria-label="Phase 3 progress: 39%">39%</progress> | 39% |
 | 4. LSL Scripting | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="15" aria-label="Phase 4 progress: 15%">15%</progress> | 15% |
 | 5. Social and Creator Platform | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="9" aria-label="Phase 5 progress: 9%">9%</progress> | 9% |
@@ -214,8 +214,18 @@ Falcon LSL scripting foundation.
   (`AllowDamage`) and push (`RestrictPushObject`) flags are carried and surfaced
   but their enforcement is inert until the combat/health and `llPushObject`
   systems exist (Phase 4).
-- [ ] Implement estate and region settings needed for terrain, access, maturity,
-  restart, and emergency administration.
+- [x] Implement estate and region settings needed for terrain, access, maturity,
+  restart, and emergency administration. Estates are grid-level records shared
+  across regions (owner, managers, allowed users/groups, bans, deny/voice/teleport
+  flags), persisted centrally and fetched by each region. The Region/Estate floater
+  works: `RequestRegionInfo`/`RegionInfo` populate the Region tab (flags, maturity
+  SimAccess, water, terrain limits, estate id), and `EstateOwnerMessage` `getinfo`
+  returns `estateupdateinfo` + the `setaccess` lists, `estateaccessdelta` adds and
+  removes bans/allowed users/managers, and `estatechangeinfo` toggles the estate
+  flags. Estate bans and private-estate access gate region entry; estate owner and
+  managers bypass parcel and estate restrictions. Viewer-driven terrain-texture
+  settings (`setregionterrain`), region restart, and estate kick/teleport-home
+  admin actions remain.
 - [ ] Apply permissions recursively and consistently to linksets, object
   contents, attachments, and inventory transfers.
 

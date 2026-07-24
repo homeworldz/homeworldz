@@ -42,6 +42,12 @@ constexpr std::array<std::byte, 4> chat_from_viewer_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x50}};
 constexpr std::array<std::byte, 4> modify_land_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x7c}};
+constexpr std::array<std::byte, 4> request_region_info_id{ // Low 141
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x8d}};
+constexpr std::array<std::byte, 4> region_info_id{ // Low 142
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x8e}};
+constexpr std::array<std::byte, 4> estate_owner_message_id{ // Low 260 (0x0104)
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x04}};
 constexpr std::array<std::byte, 4> parcel_object_owners_request_id{ // Low 56
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x38}};
 constexpr std::array<std::byte, 4> parcel_object_owners_reply_id{ // Low 57
@@ -2652,6 +2658,101 @@ std::optional<ParcelReturnObjects> decode_parcel_return_objects(std::span<const 
     if (!owners) return std::nullopt;
     result.owner_ids = std::move(owners->first);
     return result;
+}
+
+std::optional<RequestRegionInfo> decode_request_region_info(std::span<const std::byte> payload) {
+    if (payload.size() < 4 + 32 ||
+        !std::equal(request_region_info_id.begin(), request_region_info_id.end(), payload.begin()))
+        return std::nullopt;
+    RequestRegionInfo result;
+    result.agent_id = read_uuid(payload, 4);
+    result.session_id = read_uuid(payload, 20);
+    return result;
+}
+
+std::vector<std::byte> encode_region_info(const RegionInfoReply& message) {
+    std::vector<std::byte> output(region_info_id.begin(), region_info_id.end());
+    append_uuid(output, message.agent_id);
+    append_uuid(output, message.session_id);
+    // RegionInfo block.
+    if (!append_variable1(output, message.sim_name)) return {};
+    append_le_u32(output, message.estate_id);
+    append_le_u32(output, message.parent_estate_id);
+    append_le_u32(output, message.region_flags);
+    output.push_back(static_cast<std::byte>(message.sim_access));
+    output.push_back(static_cast<std::byte>(message.max_agents));
+    append_f32(output, message.billable_factor);
+    append_f32(output, message.object_bonus_factor);
+    append_f32(output, message.water_height);
+    append_f32(output, message.terrain_raise_limit);
+    append_f32(output, message.terrain_lower_limit);
+    append_le_u32(output, static_cast<std::uint32_t>(message.price_per_meter));
+    append_le_u32(output, static_cast<std::uint32_t>(message.redirect_grid_x));
+    append_le_u32(output, static_cast<std::uint32_t>(message.redirect_grid_y));
+    output.push_back(static_cast<std::byte>(message.use_estate_sun ? 1 : 0));
+    append_f32(output, message.sun_hour);
+    // RegionInfo2 block.
+    if (!append_variable1(output, message.product_sku) ||
+        !append_variable1(output, message.product_name))
+        return {};
+    append_le_u32(output, message.max_agents);      // MaxAgents32
+    append_le_u32(output, message.max_agents);      // HardMaxAgents
+    append_le_u32(output, 15000);                   // HardMaxObjects
+    // RegionInfo3 (Variable): one entry with the extended flags.
+    output.push_back(std::byte{1});
+    append_le_u64(output, message.region_flags_extended != 0 ? message.region_flags_extended
+                                                             : message.region_flags);
+    // RegionInfo5 and CombatSettings variable blocks: none.
+    output.push_back(std::byte{0});
+    output.push_back(std::byte{0});
+    return output;
+}
+
+std::optional<EstateOwnerMessage> decode_estate_owner_message(std::span<const std::byte> payload) {
+    constexpr std::size_t id = 4;
+    if (payload.size() < id + 48 + 1 ||
+        !std::equal(estate_owner_message_id.begin(), estate_owner_message_id.end(), payload.begin()))
+        return std::nullopt;
+    EstateOwnerMessage result;
+    result.agent_id = read_uuid(payload, id);
+    result.session_id = read_uuid(payload, id + 16);
+    result.transaction_id = read_uuid(payload, id + 32);
+    std::size_t offset = id + 48;
+    const auto method = read_variable1(payload, offset);
+    if (!method) return std::nullopt;
+    result.method = method->first;
+    offset = method->second;
+    if (offset + 16 + 1 > payload.size()) return std::nullopt;
+    result.invoice = read_uuid(payload, offset);
+    offset += 16;
+    const auto count = std::to_integer<std::size_t>(payload[offset++]);
+    result.params.reserve(count);
+    for (std::size_t index = 0; index < count; ++index) {
+        const auto param = read_variable1(payload, offset);
+        if (!param) return std::nullopt;
+        result.params.push_back(param->first);
+        offset = param->second;
+    }
+    return result;
+}
+
+std::vector<std::byte> encode_estate_owner_message(const Uuid& agent_id, const Uuid& invoice,
+                                                   std::string_view method,
+                                                   std::span<const std::string> params) {
+    std::vector<std::byte> output(estate_owner_message_id.begin(), estate_owner_message_id.end());
+    append_uuid(output, agent_id);
+    const Uuid zero{};
+    append_uuid(output, zero); // SessionID (unused in replies)
+    append_uuid(output, zero); // TransactionID
+    if (!append_variable1(output, method)) return {};
+    append_uuid(output, invoice);
+    output.push_back(static_cast<std::byte>(std::min<std::size_t>(params.size(), 255)));
+    std::size_t emitted = 0;
+    for (const auto& param : params) {
+        if (emitted++ >= 255) break;
+        if (!append_variable1(output, param)) return {};
+    }
+    return output;
 }
 
 std::optional<ChatFromViewer> decode_chat_from_viewer(std::span<const std::byte> payload) {

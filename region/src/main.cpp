@@ -846,6 +846,7 @@ int main(int argc, char* argv[]) {
     std::string region_name;
     std::string region_owner_id;
     std::optional<homeworldz::grid::Estate> region_estate;
+    int region_maturity{};
     int region_grid_x{};
     int region_grid_y{};
 	int region_size_x{256};
@@ -868,6 +869,8 @@ int main(int argc, char* argv[]) {
         std::chrono::seconds(configured_int("region.connection_timeout_seconds", 60, 15, 3600));
     std::unique_ptr<homeworldz::grid::RegistrationLifecycle> registration;
     std::unique_ptr<homeworldz::grid::Client> viewer_grid;
+    // Access-key-authenticated client for estate updates via the region-runtime API.
+    std::unique_ptr<homeworldz::grid::Client> estate_client;
     std::unique_ptr<homeworldz::grid::ViewerSessionCache> viewer_sessions;
     std::vector<homeworldz::grid::RegionNeighbor> region_neighbors;
     auto next_neighbor_refresh = std::chrono::steady_clock::time_point{};
@@ -959,6 +962,7 @@ int main(int argc, char* argv[]) {
             region_name = provisioned->name;
             region_owner_id = provisioned->owner_id;
             region_estate = provisioned->estate;
+            region_maturity = provisioned->maturity;
             region_grid_x = provisioned->grid_x;
             region_grid_y = provisioned->grid_y;
 			region_size_x = provisioned->size_x;
@@ -971,6 +975,8 @@ int main(int argc, char* argv[]) {
 			provisioned_region_id = provisioned->id;
             auto viewer_transport = homeworldz::grid::socket_transport(grid_url, service_token);
             viewer_grid = std::make_unique<homeworldz::grid::Client>(std::move(viewer_transport));
+            estate_client = std::make_unique<homeworldz::grid::Client>(
+                homeworldz::grid::socket_transport(grid_url, region_access_key));
             if (!refresh_region_neighbors(true)) {
 #ifdef _WIN32
                 WSACleanup();
@@ -1916,6 +1922,77 @@ int main(int argc, char* argv[]) {
             if (estate & p_deny_minors) flags |= 1U << 30;        // DenyAgeUnverified
         }
         return flags;
+    };
+    // Estate flags in RegionFlags form for the estateupdateinfo reply (floater UI).
+    const auto estate_detail_flags = [&]() -> std::uint32_t {
+        std::uint32_t flags = 0;
+        if (region_estate) {
+            const auto estate = region_estate->flags;
+            if (region_estate->fixed_sun) flags |= 1U << 4;                 // SunFixed
+            if (region_estate->public_access) flags |= (1U << 17) | (1U << 15); // PublicAllowed|ExternallyVisible
+            if (estate & homeworldz::viewer::estate_flag_allow_direct_teleport) flags |= 1U << 20;
+            if (estate & homeworldz::viewer::estate_flag_deny_anonymous) flags |= 1U << 23;
+            if (estate & homeworldz::viewer::estate_flag_deny_identified) flags |= 1U << 24;
+            if (estate & homeworldz::viewer::estate_flag_deny_transacted) flags |= 1U << 25;
+            if (estate & homeworldz::viewer::estate_flag_allow_voice) flags |= 1U << 28;
+            if (estate & homeworldz::viewer::estate_flag_deny_minors) flags |= 1U << 30;
+        }
+        return flags;
+    };
+    // One setaccess EstateOwnerMessage carrying a single access list as raw 16-byte
+    // UUID params (indra sends estate list UUIDs in binary form).
+    const auto send_estate_list = [&](const std::string& viewer_endpoint,
+                                      const homeworldz::viewer::Uuid& agent,
+                                      std::uint32_t list_bit,
+                                      const std::vector<std::string>& members,
+                                      std::chrono::steady_clock::time_point when) {
+        const std::uint32_t estate_id = region_estate ? static_cast<std::uint32_t>(region_estate->id) : 0;
+        std::vector<std::string> params(6);
+        params[0] = std::to_string(estate_id);
+        params[1] = std::to_string(list_bit);
+        params[2] = std::to_string(list_bit == homeworldz::viewer::estate_list_allowed_agents ? members.size() : 0);
+        params[3] = std::to_string(list_bit == homeworldz::viewer::estate_list_allowed_groups ? members.size() : 0);
+        params[4] = std::to_string(list_bit == homeworldz::viewer::estate_list_banned_agents ? members.size() : 0);
+        params[5] = std::to_string(list_bit == homeworldz::viewer::estate_list_managers ? members.size() : 0);
+        for (const auto& member : members) {
+            if (const auto id = homeworldz::viewer::parse_uuid(member))
+                params.emplace_back(reinterpret_cast<const char*>(id->data()), id->size());
+        }
+        const homeworldz::viewer::Uuid invoice{};
+        auto message = homeworldz::viewer::encode_estate_owner_message(agent, invoice, "setaccess", params);
+        if (const auto outgoing = circuits.send(viewer_endpoint, std::move(message), true, when, true))
+            static_cast<void>(send_udp(viewer_server, viewer_endpoint, *outgoing));
+    };
+    // Send the estateupdateinfo reply plus the four access lists (getinfo response).
+    const auto send_estate_detail = [&](const std::string& viewer_endpoint,
+                                        const homeworldz::viewer::Uuid& agent,
+                                        const homeworldz::viewer::Uuid& invoice,
+                                        std::chrono::steady_clock::time_point when) {
+        if (!region_estate) return;
+        std::vector<std::string> params(10);
+        params[0] = region_estate->name.empty() ? region_name : region_estate->name;
+        params[1] = region_estate->owner_id.empty() ? region_owner_id : region_estate->owner_id;
+        params[2] = std::to_string(region_estate->id);
+        params[3] = std::to_string(estate_detail_flags());
+        params[4] = std::to_string(region_estate->use_global_time ? 0 :
+            static_cast<std::uint32_t>(region_estate->sun_hour * 1024.0 + 0x1800));
+        params[5] = std::to_string(region_estate->parent_estate_id);
+        params[6] = "00000000-0000-0000-0000-000000000000"; // covenant
+        params[7] = "0";                                     // covenant timestamp
+        params[8] = "1";
+        params[9] = region_estate->abuse_email;
+        auto message = homeworldz::viewer::encode_estate_owner_message(
+            agent, invoice, "estateupdateinfo", params);
+        if (const auto outgoing = circuits.send(viewer_endpoint, std::move(message), true, when, true))
+            static_cast<void>(send_udp(viewer_server, viewer_endpoint, *outgoing));
+        send_estate_list(viewer_endpoint, agent, homeworldz::viewer::estate_list_managers,
+                         region_estate->managers, when);
+        send_estate_list(viewer_endpoint, agent, homeworldz::viewer::estate_list_allowed_agents,
+                         region_estate->allowed_users, when);
+        send_estate_list(viewer_endpoint, agent, homeworldz::viewer::estate_list_allowed_groups,
+                         region_estate->allowed_groups, when);
+        send_estate_list(viewer_endpoint, agent, homeworldz::viewer::estate_list_banned_agents,
+                         region_estate->bans, when);
     };
     // Region-wide simulator prim capacity, scaled by the number of 256 m tiles.
     const auto region_prim_limit = [&]() {
@@ -3207,6 +3284,96 @@ int main(int argc, char* argv[]) {
                                                  "\"parcel\":" << ret->local_id << ",\"removed\":"
                                               << removed_ids.size() << "}" << std::endl;
                                 }
+                            }
+                        }
+                        if (const auto request =
+                                homeworldz::viewer::decode_request_region_info(packet->payload);
+                            request && request->agent_id == identity->agent_id &&
+                            request->session_id == identity->session_id) {
+                            homeworldz::viewer::RegionInfoReply reply;
+                            reply.agent_id = identity->agent_id;
+                            reply.session_id = identity->session_id;
+                            reply.sim_name = region_name;
+                            reply.estate_id = region_estate ?
+                                static_cast<std::uint32_t>(region_estate->id) : 0;
+                            reply.parent_estate_id = region_estate ?
+                                static_cast<std::uint32_t>(region_estate->parent_estate_id) : 1;
+                            reply.region_flags = region_flags();
+                            reply.region_flags_extended = region_flags();
+                            // SimAccess: PG(13)/Mature(21)/Adult(42) from region maturity.
+                            reply.sim_access = region_size_x == 0 ? 13 :
+                                (region_maturity == 1 ? 21 : (region_maturity >= 2 ? 42 : 13));
+                            reply.billable_factor = region_estate ?
+                                static_cast<float>(region_estate->billable_factor) : 0.0F;
+                            reply.price_per_meter = region_estate ? region_estate->price_per_meter : 0;
+                            reply.use_estate_sun = region_estate ? region_estate->use_global_time : true;
+                            reply.sun_hour = region_estate ?
+                                static_cast<float>(region_estate->sun_hour) : 0.0F;
+                            auto response = homeworldz::viewer::encode_region_info(reply);
+                            if (!response.empty())
+                                if (const auto outgoing = circuits.send(
+                                        endpoint, std::move(response), true, now, true))
+                                    static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
+                        }
+                        if (const auto estate_message =
+                                homeworldz::viewer::decode_estate_owner_message(packet->payload);
+                            estate_message && estate_message->agent_id == identity->agent_id &&
+                            estate_message->session_id == identity->session_id) {
+                            const auto agent = homeworldz::viewer::format_uuid(identity->agent_id);
+                            const auto to_u32 = [](const std::string& value) {
+                                std::uint32_t parsed = 0;
+                                std::from_chars(value.data(), value.data() + value.size(), parsed);
+                                return parsed;
+                            };
+                            const bool manager = is_estate_manager(agent);
+                            const bool owner = !region_owner_id.empty() && region_owner_id == agent ||
+                                (region_estate && region_estate->owner_id == agent);
+                            const auto& method = estate_message->method;
+                            if (method == "getinfo") {
+                                send_estate_detail(endpoint, identity->agent_id,
+                                                   estate_message->invoice, now);
+                            } else if (method == "estateaccessdelta" && manager &&
+                                       estate_message->params.size() >= 3 && estate_client &&
+                                       registration) {
+                                const auto command = to_u32(estate_message->params[1]);
+                                const auto& target = estate_message->params[2];
+                                int role = -1;
+                                bool present = true;
+                                bool allowed_op = manager;
+                                if (command & homeworldz::viewer::estate_access_add_allowed) { role = 1; present = true; }
+                                else if (command & homeworldz::viewer::estate_access_remove_allowed) { role = 1; present = false; }
+                                else if (command & homeworldz::viewer::estate_access_add_group) { role = 2; present = true; }
+                                else if (command & homeworldz::viewer::estate_access_remove_group) { role = 2; present = false; }
+                                else if (command & homeworldz::viewer::estate_access_ban_user) { role = 3; present = true; }
+                                else if (command & homeworldz::viewer::estate_access_unban_user) { role = 3; present = false; }
+                                else if (command & homeworldz::viewer::estate_access_add_manager) { role = 0; present = true; allowed_op = owner; }
+                                else if (command & homeworldz::viewer::estate_access_remove_manager) { role = 0; present = false; allowed_op = owner; }
+                                if (role >= 0 && allowed_op) {
+                                    if (const auto updated = estate_client->set_estate_member(
+                                            registration->region_id(), target, role, present))
+                                        region_estate = *updated;
+                                    if ((command & homeworldz::viewer::estate_access_no_reply) == 0)
+                                        send_estate_detail(endpoint, identity->agent_id,
+                                                           estate_message->invoice, now);
+                                }
+                            } else if (method == "estatechangeinfo" && manager &&
+                                       estate_message->params.size() >= 3 && estate_client &&
+                                       registration) {
+                                const auto param1 = to_u32(estate_message->params[1]);
+                                const auto param2 = to_u32(estate_message->params[2]);
+                                homeworldz::grid::EstateSettingsPatch patch;
+                                patch.flags = param1;
+                                patch.public_access =
+                                    (param1 & homeworldz::viewer::estate_flag_public_access) != 0;
+                                patch.fixed_sun = (param1 & homeworldz::viewer::estate_flag_fixed_sun) != 0;
+                                patch.use_global_time = param2 == 0;
+                                patch.sun_hour = param2 == 0 ? 0.0 :
+                                    (static_cast<double>(param2) - 0x1800) / 1024.0;
+                                if (const auto updated = estate_client->update_estate_settings(
+                                        registration->region_id(), patch))
+                                    region_estate = *updated;
+                                send_estate_detail(endpoint, identity->agent_id,
+                                                   estate_message->invoice, now);
                             }
                         }
                         if (const auto requested_names =

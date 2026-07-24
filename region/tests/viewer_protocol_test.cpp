@@ -1535,9 +1535,51 @@ bool parcel_codecs() {
     return true;
 }
 
+bool estate_codecs() {
+    // RequestRegionInfo (Low 141).
+    {
+        std::vector<std::byte> payload(4 + 32, std::byte{0});
+        payload[0] = std::byte{0xff}; payload[1] = std::byte{0xff};
+        payload[2] = std::byte{0x00}; payload[3] = std::byte{0x8d};
+        payload[4] = std::byte{0x11};
+        const auto request = decode_request_region_info(payload);
+        if (!request || std::to_integer<int>(request->agent_id[0]) != 0x11) return false;
+    }
+    // RegionInfo (Low 142) encode.
+    {
+        RegionInfoReply reply;
+        reply.sim_name = "Region";
+        reply.estate_id = 100;
+        reply.region_flags = 6;
+        const auto encoded = encode_region_info(reply);
+        if (encoded.size() < 40 || encoded[0] != std::byte{0xff} || encoded[3] != std::byte{0x8e})
+            return false;
+    }
+    // EstateOwnerMessage (Low 260) round-trip.
+    {
+        Uuid agent{};
+        agent[0] = std::byte{0xab};
+        Uuid invoice{};
+        invoice[0] = std::byte{0xcd};
+        const std::vector<std::string> params{"0", "64", "55555555-5555-4555-8555-555555555555"};
+        const auto encoded = encode_estate_owner_message(agent, invoice, "estateaccessdelta", params);
+        if (encoded[0] != std::byte{0xff} || encoded[2] != std::byte{0x01} || encoded[3] != std::byte{0x04})
+            return false;
+        const auto decoded = decode_estate_owner_message(encoded);
+        if (!decoded || decoded->method != "estateaccessdelta" || decoded->params.size() != 3 ||
+            decoded->params[1] != "64" ||
+            decoded->params[2] != "55555555-5555-4555-8555-555555555555" ||
+            std::to_integer<int>(decoded->agent_id[0]) != 0xab ||
+            std::to_integer<int>(decoded->invoice[0]) != 0xcd)
+            return false;
+    }
+    return true;
+}
+
 int main() {
     if (!packet_round_trip()) return 1;
     if (!parcel_codecs()) return 25;
+    if (!estate_codecs()) return 26;
     if (!message_codecs()) return 2;
     if (!teleport_codecs()) return 18;
     if (!map_codecs()) return 17;
