@@ -5542,37 +5542,20 @@ int main(int argc, char* argv[]) {
                                                        object_add->rotation[1] * object_add->rotation[1] +
                                                        object_add->rotation[2] * object_add->rotation[2];
                             const bool valid_rotation = rotation_norm <= 1.001F;
-                            const bool canonical_shape_parameters = object_add->path_begin == 0 &&
-                                object_add->path_end == 0 && object_add->path_twist == 0 &&
-                                object_add->path_twist_begin == 0 && object_add->path_radius_offset == 0 &&
-                                object_add->path_taper_x == 0 && object_add->path_taper_y == 0 &&
-                                object_add->path_revolutions == 0 && object_add->path_skew == 0 &&
-                                object_add->profile_begin == 0 && object_add->profile_end == 0 &&
-                                object_add->profile_hollow == 0;
-                            const bool unmodified_shape = canonical_shape_parameters &&
-                                object_add->path_scale_x == 100 && object_add->path_scale_y == 100 &&
-                                object_add->path_shear_x == 0 && object_add->path_shear_y == 0;
-                            const bool supported_box = object_add->pcode == 9 &&
-                                object_add->path_curve == 0x10 &&
-                                (object_add->profile_curve & 0x0f) == 0x01 && unmodified_shape;
-                            const bool supported_sphere = object_add->pcode == 9 &&
-                                object_add->path_curve == 0x20 &&
-                                (object_add->profile_curve & 0x0f) == 0x05 && unmodified_shape;
-                            const bool supported_cylinder = object_add->pcode == 9 &&
-                                object_add->path_curve == 0x10 &&
-                                (object_add->profile_curve & 0x0f) == 0x00 && unmodified_shape;
-                            const bool supported_prism = object_add->pcode == 9 &&
-                                object_add->path_curve == 0x10 &&
-                                (object_add->profile_curve & 0x0f) == 0x01 &&
-                                object_add->path_scale_x == 200 && object_add->path_scale_y == 100 &&
-                                object_add->path_shear_x == 0xce && object_add->path_shear_y == 0 &&
-                                canonical_shape_parameters;
-                            const bool supported_pyramid = object_add->pcode == 9 &&
-                                object_add->path_curve == 0x10 &&
-                                (object_add->profile_curve & 0x0f) == 0x01 &&
-                                object_add->path_scale_x == 200 && object_add->path_scale_y == 200 &&
-                                object_add->path_shear_x == 0 && object_add->path_shear_y == 0 &&
-                                canonical_shape_parameters;
+                            // Accept any well-formed basic prim: PCODE_PRIM (9) with a
+                            // recognized path curve (line 0x10 / circle 0x20 / circle2
+                            // 0x30) and profile curve (circle/square/iso-tri/equal-tri/
+                            // right-tri/half-circle, low nibble 0x00..0x05). The full
+                            // path+profile parameters are stored on the entity and
+                            // echoed in the object update, so all seven basic shapes —
+                            // Box, Cylinder, Prism, Sphere, Torus, Tube, Ring — plus
+                            // edited variations (cut, hollow, twist, taper, shear,
+                            // revolutions) rez and render from the viewer-supplied params.
+                            const bool valid_path_curve = object_add->path_curve == 0x10 ||
+                                object_add->path_curve == 0x20 || object_add->path_curve == 0x30;
+                            const bool valid_profile_curve = (object_add->profile_curve & 0x0f) <= 0x05;
+                            const bool valid_prim_shape = object_add->pcode == 9 &&
+                                valid_path_curve && valid_profile_curve;
                             std::optional<homeworldz::scene::Vector3> placement;
                             if (valid_scale && object_add->bypass_raycast) {
                                 const homeworldz::scene::Vector3 ray_end{
@@ -5610,8 +5593,7 @@ int main(int argc, char* argv[]) {
                             bool created = false;
                             std::string object_id;
                             homeworldz::scene::EntityId entity_id{};
-                            if ((supported_box || supported_sphere || supported_cylinder ||
-                                supported_prism || supported_pyramid) &&
+                            if (valid_prim_shape &&
                                 valid_position && valid_rotation && object_add->material <= 7) {
                                 object_id = homeworldz::viewer::random_uuid();
                                 const auto owner_id = homeworldz::viewer::format_uuid(identity->agent_id);
