@@ -191,6 +191,17 @@ Falcon LSL scripting foundation.
 - [x] Prevent overlaps and invalid neighbor layouts and define behavior beside
   offline or differently sized regions.
 
+### Parcels and local authority
+
+- [ ] Implement parcel geometry, ownership, access, landing points, media,
+  environment, and object accounting.
+- [ ] Enforce build, rez, entry, script, damage, push, and object-return policy
+  at authoritative boundaries.
+- [ ] Implement estate and region settings needed for terrain, access, maturity,
+  restart, and emergency administration.
+- [ ] Apply permissions recursively and consistently to linksets, object
+  contents, attachments, and inventory transfers.
+
 ### Teleports and avatar crossings
 
 - [x] Keep avatar appearance, inventory, and Current Outfit stable through an
@@ -312,32 +323,6 @@ Falcon LSL scripting foundation.
 - [ ] Define lifecycle ordering for attachment, seated-avatar, physics, viewer,
   and later script events.
 
-### Vehicles and physical objects
-
-- [x] Implement stable dynamic-object movement, editing, taking, and restoration
-  without losing physics state.
-- [ ] Add the Second Life vehicle parameter model required by LSL vehicles.
-- [ ] Make a single `llSetVehicleType(VEHICLE_TYPE_*)` call activate a usable
-  SL/Halcyon-compatible car, sled, boat, airplane, balloon, sailboat, or motorcycle
-  preset; map presets and later parameter overrides to each physics plugin's
-  native vehicle, motor, and constraint facilities.
-- [ ] Synchronize driver controls, vehicle motion, cameras, passengers, and
-  seated-avatar transforms.
-- [ ] Preserve object, linkset, inventory, permission, passenger, and physical
-  state as one transferable vehicle bundle.
-- [ ] Add load, tunneling, stacking, recovery, and abusive-object safeguards.
-
-### Parcels and local authority
-
-- [ ] Implement parcel geometry, ownership, access, landing points, media,
-  environment, and object accounting.
-- [ ] Enforce build, rez, entry, script, damage, push, and object-return policy
-  at authoritative boundaries.
-- [ ] Implement estate and region settings needed for terrain, access, maturity,
-  restart, and emergency administration.
-- [ ] Apply permissions recursively and consistently to linksets, object
-  contents, attachments, and inventory transfers.
-
 ## Phase 4: LSL Scripting
 
 ### Language and compiler
@@ -420,6 +405,21 @@ Falcon LSL scripting foundation.
   memory, duplication, and event-loss limits.
 - [ ] Version the runtime ABI and provide safe upgrade, incompatibility, and
   rollback behavior for stored script state.
+
+### Vehicles and physical objects
+
+- [x] Implement stable dynamic-object movement, editing, taking, and restoration
+  without losing physics state.
+- [ ] Add the Second Life vehicle parameter model required by LSL vehicles.
+- [ ] Make a single `llSetVehicleType(VEHICLE_TYPE_*)` call activate a usable
+  SL/Halcyon-compatible car, sled, boat, airplane, balloon, sailboat, or motorcycle
+  preset; map presets and later parameter overrides to each physics plugin's
+  native vehicle, motor, and constraint facilities.
+- [ ] Synchronize driver controls, vehicle motion, cameras, passengers, and
+  seated-avatar transforms.
+- [ ] Preserve object, linkset, inventory, permission, passenger, and physical
+  state as one transferable vehicle bundle.
+- [ ] Add load, tunneling, stacking, recovery, and abusive-object safeguards.
 
 ## Phase 5: Social and Creator Platform
 
