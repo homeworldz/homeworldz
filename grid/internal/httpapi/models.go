@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"github.com/homeworldz/homeworldz/grid/internal/estate"
 	"github.com/homeworldz/homeworldz/grid/internal/inventory"
 	"github.com/homeworldz/homeworldz/grid/internal/presence"
 	"github.com/homeworldz/homeworldz/grid/internal/provisioning"
@@ -49,12 +50,49 @@ type StartProvisionedRegionRequest struct {
 
 type ProvisionedRegionRuntimeResult struct {
 	regions.Region
-	GridName      string `json:"gridName"`
-	GridPublicURL string `json:"gridPublicUrl"`
-	SizeX         int    `json:"sizeX"`
-	SizeY         int    `json:"sizeY"`
-	Maturity      int    `json:"maturity"`
-	OwnerUserID   string `json:"ownerUserId"`
+	GridName      string         `json:"gridName"`
+	GridPublicURL string         `json:"gridPublicUrl"`
+	SizeX         int            `json:"sizeX"`
+	SizeY         int            `json:"sizeY"`
+	Maturity      int            `json:"maturity"`
+	OwnerUserID   string         `json:"ownerUserId"`
+	Estate        *estate.Estate `json:"estate,omitempty"`
+}
+
+// EstateResult wraps an estate for the region-runtime estate endpoints.
+type EstateResult struct {
+	Estate estate.Estate `json:"estate"`
+}
+
+// EstateSettingsRequest updates estate scalar/flag fields; nil fields are unchanged.
+type EstateSettingsRequest struct {
+	Name           *string  `json:"name,omitempty"`
+	OwnerUserID    *string  `json:"ownerUserId,omitempty"`
+	Flags          *uint64  `json:"flags,omitempty"`
+	PublicAccess   *bool    `json:"publicAccess,omitempty"`
+	SunHour        *float64 `json:"sunHour,omitempty"`
+	UseGlobalTime  *bool    `json:"useGlobalTime,omitempty"`
+	FixedSun       *bool    `json:"fixedSun,omitempty"`
+	BillableFactor *float64 `json:"billableFactor,omitempty"`
+	PricePerMeter  *int     `json:"pricePerMeter,omitempty"`
+	RedirectGridX  *int     `json:"redirectGridX,omitempty"`
+	RedirectGridY  *int     `json:"redirectGridY,omitempty"`
+	AbuseEmail     *string  `json:"abuseEmail,omitempty"`
+}
+
+func (r EstateSettingsRequest) toUpdate() estate.SettingsUpdate {
+	return estate.SettingsUpdate{Name: r.Name, OwnerUserID: r.OwnerUserID, Flags: r.Flags,
+		PublicAccess: r.PublicAccess, SunHour: r.SunHour, UseGlobalTime: r.UseGlobalTime,
+		FixedSun: r.FixedSun, BillableFactor: r.BillableFactor, PricePerMeter: r.PricePerMeter,
+		RedirectGridX: r.RedirectGridX, RedirectGridY: r.RedirectGridY, AbuseEmail: r.AbuseEmail}
+}
+
+// EstateMemberRequest adds or removes one access-list member (role 0=manager,
+// 1=allowed user, 2=allowed group, 3=ban).
+type EstateMemberRequest struct {
+	MemberID string `json:"memberId"`
+	Role     int    `json:"role"`
+	Present  bool   `json:"present"`
 }
 
 type RegionList struct {

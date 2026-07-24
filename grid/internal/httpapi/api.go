@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/homeworldz/homeworldz/grid/internal/assetmeta"
+	"github.com/homeworldz/homeworldz/grid/internal/estate"
 	"github.com/homeworldz/homeworldz/grid/internal/gestures"
 	"github.com/homeworldz/homeworldz/grid/internal/identity"
 	"github.com/homeworldz/homeworldz/grid/internal/inventory"
@@ -45,6 +46,7 @@ type API struct {
 	taskTransfers tasktransfer.Store
 	locations     locations.Store
 	gestures      gestures.Store
+	estates       estate.Store
 }
 
 func (a *API) regionExtent(ctx context.Context, id string) float32 {
@@ -72,6 +74,7 @@ type Options struct {
 	TaskTransfers     tasktransfer.Store
 	Locations         locations.Store
 	Gestures          gestures.Store
+	Estates           estate.Store
 }
 
 func New(ready ReadinessChecker, version string, options Options) http.Handler {
@@ -82,7 +85,7 @@ func New(ready ReadinessChecker, version string, options Options) http.Handler {
 		provisioned: options.Provisioned, terrainHTTP: options.TerrainHTTPClient,
 		terrainCache: newTerrainTileCache(), transits: options.Transits,
 		taskTransfers: options.TaskTransfers, locations: options.Locations,
-		gestures: options.Gestures}
+		gestures: options.Gestures, estates: options.Estates}
 	if a.publicURL == "" {
 		a.publicURL = "http://127.0.0.1:42000"
 	}
@@ -179,11 +182,21 @@ func (a *API) provisionedRegionRuntime(w http.ResponseWriter, r *http.Request) {
 		} else if err != nil {
 			writeJSON(w, http.StatusInternalServerError, Error{Code: "region_store_error", Message: "region registration failed"})
 		} else {
-			writeJSON(w, http.StatusOK, ProvisionedRegionRuntimeResult{
+			result := ProvisionedRegionRuntimeResult{
 				Region: region, GridName: a.gridName, GridPublicURL: a.publicURL,
 				SizeX: provisioned.Size * 256, SizeY: provisioned.Size * 256,
-				Maturity: provisioned.Maturity, OwnerUserID: provisioned.OwnerUserID})
+				Maturity: provisioned.Maturity, OwnerUserID: provisioned.OwnerUserID}
+			if a.estates != nil {
+				if est, eerr := a.estates.ForRegion(r.Context(), id, provisioned.OwnerUserID); eerr == nil {
+					result.Estate = &est
+				}
+			}
+			writeJSON(w, http.StatusOK, result)
 		}
+		return
+	}
+	if len(parts) >= 2 && parts[1] == "estate" {
+		a.provisionedRegionEstate(w, r, id, provisioned.OwnerUserID, parts)
 		return
 	}
 	if len(parts) == 2 && parts[1] == "lease" && r.Method == http.MethodPut {
@@ -209,6 +222,69 @@ func (a *API) provisionedRegionRuntime(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.notFound(w, r)
+}
+
+// provisionedRegionEstate handles the estate sub-routes of an authenticated
+// region: GET/POST /api/v1/region-runtime/{id}/estate (fetch/update settings) and
+// POST /api/v1/region-runtime/{id}/estate/members (add/remove an access-list member).
+// The region has already authenticated with its access key; it is responsible for
+// checking the acting agent is the estate owner or a manager before calling.
+func (a *API) provisionedRegionEstate(w http.ResponseWriter, r *http.Request, regionID,
+	ownerUserID string, parts []string) {
+	if a.estates == nil {
+		writeJSON(w, http.StatusServiceUnavailable, Error{Code: "estate_unavailable", Message: "estate service is unavailable"})
+		return
+	}
+	current, err := a.estates.ForRegion(r.Context(), regionID, ownerUserID)
+	if writeEstateError(w, err) {
+		return
+	}
+	if len(parts) == 2 {
+		switch r.Method {
+		case http.MethodGet:
+			writeJSON(w, http.StatusOK, EstateResult{Estate: current})
+		case http.MethodPost:
+			var request EstateSettingsRequest
+			if !decodeJSON(w, r, &request) {
+				return
+			}
+			updated, err := a.estates.UpdateSettings(r.Context(), current.ID, request.toUpdate())
+			if !writeEstateError(w, err) {
+				writeJSON(w, http.StatusOK, EstateResult{Estate: updated})
+			}
+		default:
+			w.Header().Set("Allow", "GET, POST")
+			writeJSON(w, http.StatusMethodNotAllowed, Error{Code: "method_not_allowed", Message: "only GET and POST are supported"})
+		}
+		return
+	}
+	if len(parts) == 3 && parts[2] == "members" && r.Method == http.MethodPost {
+		var request EstateMemberRequest
+		if !decodeJSON(w, r, &request) {
+			return
+		}
+		updated, err := a.estates.SetMember(r.Context(), current.ID, request.MemberID, request.Role, request.Present)
+		if !writeEstateError(w, err) {
+			writeJSON(w, http.StatusOK, EstateResult{Estate: updated})
+		}
+		return
+	}
+	a.notFound(w, r)
+}
+
+func writeEstateError(w http.ResponseWriter, err error) bool {
+	if err == nil {
+		return false
+	}
+	switch {
+	case errors.Is(err, estate.ErrNotFound):
+		writeJSON(w, http.StatusNotFound, Error{Code: "estate_not_found", Message: "estate was not found"})
+	case errors.Is(err, estate.ErrInvalid):
+		writeJSON(w, http.StatusBadRequest, Error{Code: "invalid_estate", Message: "estate request is invalid"})
+	default:
+		writeJSON(w, http.StatusInternalServerError, Error{Code: "estate_error", Message: "estate operation failed"})
+	}
+	return true
 }
 
 func getOnly(next http.HandlerFunc) http.HandlerFunc {

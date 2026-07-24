@@ -15,6 +15,7 @@ import (
 
 	"github.com/homeworldz/homeworldz/grid/internal/assetmeta"
 	"github.com/homeworldz/homeworldz/grid/internal/config"
+	"github.com/homeworldz/homeworldz/grid/internal/estate"
 	"github.com/homeworldz/homeworldz/grid/internal/gestures"
 	"github.com/homeworldz/homeworldz/grid/internal/httpapi"
 	"github.com/homeworldz/homeworldz/grid/internal/identity"
@@ -87,6 +88,7 @@ func main() {
 			TaskTransfers:     taskTransferStore(db),
 			Locations:         locationStore(db),
 			Gestures:          gestureStore(db),
+			Estates:           estate.NewPostgresStore(db),
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}

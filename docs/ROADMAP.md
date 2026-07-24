@@ -4,7 +4,9 @@ This roadmap describes the major implementation sequence for HomeWorldz. It is
 organized at three levels: phases, milestones within each phase, and major work
 items within each milestone. [`PLAN.md`](PLAN.md) remains the detailed
 engineering checklist, while [`FEATURES.md`](FEATURES.md) records intentional
-product differences and the ADRs record architectural decisions.
+product differences and the ADRs record architectural decisions. The
+[commit history for this document](https://github.com/homeworldz/homeworldz/commits/main/docs/ROADMAP.md)
+shows how the roadmap has evolved over time.
 
 Checkboxes describe the present state, not a promise of a release date. A
 milestone is complete only when its automated tests and applicable Firestorm
