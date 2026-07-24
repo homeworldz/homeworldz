@@ -18,6 +18,8 @@ constexpr std::array<std::byte, 4> teleport_local_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x40}};
 constexpr std::array<std::byte, 4> teleport_landmark_request_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x41}};
+constexpr std::array<std::byte, 4> set_start_location_request_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x44}};
 constexpr std::array<std::byte, 4> teleport_start_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x49}};
 constexpr std::array<std::byte, 4> teleport_failed_id{
@@ -622,6 +624,31 @@ std::optional<TeleportLandmarkRequest> decode_teleport_landmark_request(
     std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
     std::copy_n(payload.begin() + 36, 16, result.landmark_id.begin());
     return result;
+}
+
+std::optional<SetStartLocationRequest> decode_set_start_location_request(
+    std::span<const std::byte> payload) {
+    // AgentData: AgentID(16), SessionID(16); StartLocationData: SimName(Variable 1),
+    // LocationID(U32), LocationPos(LLVector3), LocationLookAt(LLVector3).
+    if (payload.size() < 4 + 16 + 16 + 1 ||
+        !std::equal(set_start_location_request_id.begin(), set_start_location_request_id.end(),
+                    payload.begin()))
+        return std::nullopt;
+    SetStartLocationRequest result;
+    std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
+    std::size_t offset = 36;
+    const auto name_len = std::to_integer<std::size_t>(payload[offset]);
+    offset += 1 + name_len; // skip the SimName string
+    if (payload.size() < offset + 4 + 12 + 12) return std::nullopt;
+    result.location_id = read_le_u32(payload, offset);
+    result.position = read_vector3(payload, offset + 4);
+    result.look_at = read_vector3(payload, offset + 16);
+    const auto finite = [](const std::array<float, 3>& value) {
+        return std::all_of(value.begin(), value.end(),
+                           [](float component) { return std::isfinite(component); });
+    };
+    return finite(result.position) ? std::optional<SetStartLocationRequest>{result} : std::nullopt;
 }
 
 std::vector<std::byte> encode_teleport_start(const TeleportStart& message) {

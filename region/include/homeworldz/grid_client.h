@@ -108,6 +108,12 @@ struct AssetLocation {
     bool origin{};
 };
 
+struct HomeLocation {
+    std::string region_id;
+    std::array<float, 3> position{};
+    std::array<float, 3> look_at{};
+};
+
 struct FederatedAsset {
     std::string asset_id;
     std::string creator_id;
@@ -291,6 +297,10 @@ public:
     bool update_last_location(std::string_view user_id, std::string_view region_id,
                               const std::array<float, 3>& position,
                               const std::array<float, 3>& look_at, bool flying);
+    bool set_home_location(std::string_view user_id, std::string_view region_id,
+                           const std::array<float, 3>& position,
+                           const std::array<float, 3>& look_at);
+    std::optional<HomeLocation> home_location(std::string_view user_id);
 
 private:
     std::shared_ptr<Transport> transport_;

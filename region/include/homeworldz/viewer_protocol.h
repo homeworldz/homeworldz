@@ -57,6 +57,14 @@ struct TeleportLandmarkRequest : AgentMessage {
     Uuid landmark_id{};
 };
 
+// SetStartLocationRequest (Low 324). Sets the user's Home to the given position
+// in the current region ("World > Set Home to Here").
+struct SetStartLocationRequest : AgentMessage {
+    std::uint32_t location_id{};
+    std::array<float, 3> position{};
+    std::array<float, 3> look_at{};
+};
+
 struct TeleportStart {
     std::uint32_t flags{};
 };
@@ -702,6 +710,8 @@ std::optional<UseCircuitCode> decode_use_circuit_code(std::span<const std::byte>
 std::optional<TeleportLocationRequest> decode_teleport_location_request(
     std::span<const std::byte> payload);
 std::optional<TeleportLandmarkRequest> decode_teleport_landmark_request(
+    std::span<const std::byte> payload);
+std::optional<SetStartLocationRequest> decode_set_start_location_request(
     std::span<const std::byte> payload);
 std::vector<std::byte> encode_teleport_start(const TeleportStart& message);
 std::vector<std::byte> encode_teleport_local(const TeleportLocal& message);

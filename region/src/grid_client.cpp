@@ -4,6 +4,7 @@
 
 #include <atomic>
 #include <charconv>
+#include <cstdlib>
 #include <stdexcept>
 #include <utility>
 
@@ -974,6 +975,51 @@ bool Client::update_last_location(std::string_view user_id, std::string_view reg
                       ",\"flying\":" + (flying ? "true" : "false") + '}';
     return transport_->send(
         "PUT", "/api/v1/locations/" + std::string(user_id), body).status_code == 200;
+}
+
+bool Client::set_home_location(std::string_view user_id, std::string_view region_id,
+                               const std::array<float, 3>& position,
+                               const std::array<float, 3>& look_at) {
+    const auto vector_json = [](const std::array<float, 3>& value) {
+        return std::string{"{\"x\":"} + std::to_string(value[0]) +
+               ",\"y\":" + std::to_string(value[1]) +
+               ",\"z\":" + std::to_string(value[2]) + '}';
+    };
+    const auto body = "{\"regionId\":" + api::json_string(region_id) +
+                      ",\"position\":" + vector_json(position) +
+                      ",\"lookAt\":" + vector_json(look_at) +
+                      ",\"flying\":false}";
+    return transport_->send(
+        "PUT", "/api/v1/locations/" + std::string(user_id) + "?scope=home", body).status_code == 200;
+}
+
+std::optional<HomeLocation> Client::home_location(std::string_view user_id) {
+    const auto response = transport_->send(
+        "GET", "/api/v1/locations/" + std::string(user_id) + "?scope=home", "");
+    if (response.status_code != 200) return std::nullopt;
+    HomeLocation home;
+    home.region_id = json_field(response.body, "regionId");
+    if (home.region_id.empty()) return std::nullopt;
+    // Position and lookAt marshal as JSON arrays ([x,y,z]) from the grid.
+    const auto parse_vec3 = [](std::string_view body, std::string_view name,
+                               std::array<float, 3>& out) -> bool {
+        const auto marker = "\"" + std::string(name) + "\":[";
+        const auto start = body.find(marker);
+        if (start == std::string_view::npos) return false;
+        const std::string chunk(body.substr(start + marker.size()));
+        const char* cursor = chunk.c_str();
+        for (auto& component : out) {
+            char* next = nullptr;
+            component = std::strtof(cursor, &next);
+            if (next == cursor) return false;
+            cursor = next;
+            while (*cursor == ',' || *cursor == ' ') ++cursor;
+        }
+        return true;
+    };
+    if (!parse_vec3(response.body, "position", home.position)) return std::nullopt;
+    parse_vec3(response.body, "lookAt", home.look_at);
+    return home;
 }
 
 RegistrationLifecycle::RegistrationLifecycle(Client client, RegionSettings settings,

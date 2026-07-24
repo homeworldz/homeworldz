@@ -2822,8 +2822,34 @@ int main(int argc, char* argv[]) {
                                     static_cast<void>(send_udp(viewer_server, endpoint, *failed));
                             };
                             if (landmark_tp->landmark_id == homeworldz::viewer::Uuid{}) {
-                                // Null landmark = Teleport Home; wired in the Home step.
-                                fail_landmark("Home location is not set");
+                                // Null landmark = Teleport Home.
+                                const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
+                                std::optional<homeworldz::grid::HomeLocation> home;
+                                if (viewer_grid) {
+                                    try {
+                                        home = viewer_grid->home_location(user_id);
+                                    } catch (const std::exception&) {
+                                    }
+                                }
+                                std::optional<std::uint64_t> destination_handle;
+                                if (home) {
+                                    if (registration && home->region_id == registration->region_id()) {
+                                        destination_handle =
+                                            (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
+                                            static_cast<std::uint32_t>(region_grid_y * 256);
+                                    } else {
+                                        for (const auto& neighbor : region_neighbors) {
+                                            if (neighbor.id != home->region_id) continue;
+                                            destination_handle =
+                                                (static_cast<std::uint64_t>(neighbor.grid_x * 256) << 32) |
+                                                static_cast<std::uint32_t>(neighbor.grid_y * 256);
+                                            break;
+                                        }
+                                    }
+                                }
+                                if (!home) fail_landmark("Home location is not set");
+                                else if (destination_handle) perform_teleport(*destination_handle, home->position);
+                                else fail_landmark("Your home region is unavailable");
                             } else {
                                 // Landmark asset: "Landmark version 2\nregion_id <uuid>\nlocal_pos x y z".
                                 std::optional<std::uint64_t> destination_handle;
@@ -2859,6 +2885,33 @@ int main(int argc, char* argv[]) {
                                 if (destination_handle) perform_teleport(*destination_handle, local_pos);
                                 else fail_landmark("Landmark destination is unavailable");
                             }
+                        }
+                        if (const auto set_home =
+                                homeworldz::viewer::decode_set_start_location_request(packet->payload);
+                            set_home && set_home->agent_id == identity->agent_id &&
+                            set_home->session_id == identity->session_id && viewer_grid && registration) {
+                            // "World > Set Home to Here". Until parcel permissions exist, home may be
+                            // set anywhere; use the server-authoritative avatar position when available.
+                            const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
+                            std::array<float, 3> position = set_home->position;
+                            std::array<float, 3> look = set_home->look_at;
+                            if (const auto live = avatars.find(endpoint); live != avatars.end()) {
+                                const auto& state = live->second.controller.state();
+                                position = {static_cast<float>(state.position.x),
+                                            static_cast<float>(state.position.y),
+                                            static_cast<float>(state.position.z)};
+                                look = live->second.controller.look_direction();
+                            }
+                            bool ok = false;
+                            try {
+                                ok = viewer_grid->set_home_location(
+                                    user_id, registration->region_id(), position, look);
+                            } catch (const std::exception&) {
+                            }
+                            std::cout << "{\"level\":\"" << (ok ? "info" : "warn")
+                                      << "\",\"message\":\"set home location "
+                                      << (ok ? "stored" : "rejected") << "\",\"userId\":"
+                                      << homeworldz::api::json_string(user_id) << "}" << std::endl;
                         }
                         const auto logout = homeworldz::viewer::decode_logout_request(packet->payload);
                         if (logout && logout->agent_id == identity->agent_id &&
