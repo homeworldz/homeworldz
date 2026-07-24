@@ -79,6 +79,54 @@ func (s *PostgresStore) CreateUser(ctx context.Context, username, password strin
 	return user, nil
 }
 
+// UpsertUser creates a user with the given username and both password hashes
+// (bcrypt for web/account login, MD5 for viewer login), or, when a user with that
+// username already exists, replaces only its password hashes. It reports whether a
+// new user was created. Intended for the command-line administration path, so it is
+// deliberately not part of the Store interface.
+func (s *PostgresStore) UpsertUser(ctx context.Context, username, password string) (User, bool, error) {
+	if password == "" {
+		return User{}, false, errors.New("password cannot be empty")
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return User{}, false, fmt.Errorf("hash password: %w", err)
+	}
+	viewerDigest := md5.Sum([]byte(password))
+	viewerHash := hex.EncodeToString(viewerDigest[:])
+	var user User
+	err = s.db.QueryRowContext(ctx, `
+		UPDATE users SET password_hash = $2, viewer_password_hash = $3
+		WHERE username = $1 RETURNING id, username, created_at`,
+		username, string(hash), viewerHash,
+	).Scan(&user.ID, &user.Username, &user.CreatedAt)
+	if err == nil {
+		return user, false, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return User{}, false, fmt.Errorf("update user: %w", err)
+	}
+	id, err := identifier.NewUUID()
+	if err != nil {
+		return User{}, false, err
+	}
+	// A CLI-created account is marked verified so it can log in on the website as
+	// well as in the viewer immediately.
+	err = s.db.QueryRowContext(ctx, `
+		INSERT INTO users (id, username, password_hash, viewer_password_hash, verified_at)
+		VALUES ($1, $2, $3, $4, now()) RETURNING id, username, created_at`,
+		id, username, string(hash), viewerHash,
+	).Scan(&user.ID, &user.Username, &user.CreatedAt)
+	var postgresError *pgconn.PgError
+	if errors.As(err, &postgresError) && postgresError.Code == "23505" {
+		return User{}, false, ErrConflict
+	}
+	if err != nil {
+		return User{}, false, fmt.Errorf("create user: %w", err)
+	}
+	return user, true, nil
+}
+
 func (s *PostgresStore) FindUser(ctx context.Context, id string) (User, error) {
 	var user User
 	err := s.db.QueryRowContext(ctx,

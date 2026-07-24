@@ -1,17 +1,22 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"database/sql"
 	"errors"
 	"flag"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
+
+	"golang.org/x/term"
 
 	"github.com/homeworldz/homeworldz/grid/internal/assetmeta"
 	"github.com/homeworldz/homeworldz/grid/internal/config"
@@ -33,16 +38,36 @@ var version = "dev"
 
 func main() {
 	configDirectory := flag.String("config", "config", "directory containing grid.ini and db.ini")
+	var showVersion, showHelp bool
+	flag.BoolVar(&showVersion, "v", false, "print version and exit")
+	flag.BoolVar(&showVersion, "version", false, "print version and exit")
+	flag.BoolVar(&showHelp, "h", false, "show this help and exit")
+	flag.BoolVar(&showHelp, "?", false, "show this help and exit")
+	flag.BoolVar(&showHelp, "help", false, "show this help and exit")
+	createUser := flag.String("u", "", "create or update a user (prompts for a password) and exit")
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "HomeWorldz grid server %s\n\n", version)
+		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n\n", filepath.Base(os.Args[0]))
+		fmt.Fprintln(os.Stderr, "Options:")
+		fmt.Fprintln(os.Stderr, "  -config <dir>    directory containing grid.ini and db.ini (default \"config\")")
+		fmt.Fprintln(os.Stderr, "  -u <username>    create or update a user, prompting for a password, then exit")
+		fmt.Fprintln(os.Stderr, "  -v, --version    print version and exit")
+		fmt.Fprintln(os.Stderr, "  -h, -?, --help   show this help and exit")
+		fmt.Fprintln(os.Stderr, "\nWith no options the grid server starts normally.")
+	}
 	flag.Parse()
+	if showHelp {
+		flag.Usage()
+		return
+	}
+	if showVersion {
+		fmt.Println(version)
+		return
+	}
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	settings, err := config.LoadGrid(*configDirectory)
 	if err != nil {
 		logger.Error("load configuration", "error", err)
-		os.Exit(1)
-	}
-	provisionedRegions, err := provisioning.Load(filepath.Join(settings.Directory, "regions.json"))
-	if err != nil {
-		logger.Error("load provisioned regions", "error", err)
 		os.Exit(1)
 	}
 
@@ -54,6 +79,26 @@ func main() {
 			os.Exit(1)
 		}
 		defer db.Close()
+	}
+
+	// User administration: create or update one user, then exit without starting
+	// the server.
+	if strings.TrimSpace(*createUser) != "" {
+		if db == nil {
+			fmt.Fprintln(os.Stderr, "create user requires a configured database (set database.url in db.ini)")
+			os.Exit(1)
+		}
+		if err := runCreateUser(context.Background(), db, strings.TrimSpace(*createUser)); err != nil {
+			fmt.Fprintln(os.Stderr, "create user failed:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	provisionedRegions, err := provisioning.Load(filepath.Join(settings.Directory, "regions.json"))
+	if err != nil {
+		logger.Error("load provisioned regions", "error", err)
+		os.Exit(1)
 	}
 	var provisionedStore provisioning.Store = provisionedRegions
 	if db != nil {
@@ -109,6 +154,55 @@ func main() {
 	if err := server.Shutdown(ctx); err != nil {
 		logger.Error("shutdown", "error", err)
 	}
+}
+
+// runCreateUser prompts for a password (with confirmation) and creates or updates
+// the named user's web (bcrypt) and viewer (MD5) password hashes.
+func runCreateUser(ctx context.Context, db *sql.DB, username string) error {
+	if username == "" {
+		return errors.New("username cannot be empty")
+	}
+	password, err := readPassword("Password for '" + username + "': ")
+	if err != nil {
+		return err
+	}
+	if password == "" {
+		return errors.New("password cannot be empty")
+	}
+	confirm, err := readPassword("Confirm password: ")
+	if err != nil {
+		return err
+	}
+	if password != confirm {
+		return errors.New("passwords do not match")
+	}
+	user, created, err := identity.NewPostgresStore(db).UpsertUser(ctx, username, password)
+	if err != nil {
+		return err
+	}
+	action := "updated password hashes for existing user"
+	if created {
+		action = "created user"
+	}
+	fmt.Printf("%s %q (id %s).\n", action, user.Username, user.ID)
+	return nil
+}
+
+func readPassword(prompt string) (string, error) {
+	fmt.Print(prompt)
+	if term.IsTerminal(int(syscall.Stdin)) {
+		value, err := term.ReadPassword(int(syscall.Stdin))
+		fmt.Println()
+		if err != nil {
+			return "", fmt.Errorf("read password: %w", err)
+		}
+		return string(value), nil
+	}
+	value, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	if err != nil {
+		return "", fmt.Errorf("read password: %w", err)
+	}
+	return strings.TrimSpace(value), nil
 }
 
 func regionStore(db *sql.DB) regions.Store {

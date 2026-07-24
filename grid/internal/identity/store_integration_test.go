@@ -90,3 +90,52 @@ func TestPostgresIdentityLifecycle(t *testing.T) {
 		t.Fatalf("revoked session error = %v, want ErrSessionNotFound", err)
 	}
 }
+
+func TestPostgresUpsertUser(t *testing.T) {
+	databaseURL := os.Getenv("HOMEWORLDZ_TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("HOMEWORLDZ_TEST_DATABASE_URL is not configured")
+	}
+	db, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	store := NewPostgresStore(db)
+	username := fmt.Sprintf("upsert.%d", time.Now().UnixNano())
+
+	created, wasCreated, err := store.UpsertUser(ctx, username, "first-password")
+	if err != nil || !wasCreated {
+		t.Fatalf("first upsert created=%v error=%v", wasCreated, err)
+	}
+	t.Cleanup(func() { _, _ = db.Exec("DELETE FROM users WHERE id = $1", created.ID) })
+	// Both hashes work: web (bcrypt) session and viewer (MD5) session.
+	if _, err := store.CreateSession(ctx, username, "first-password", time.Hour); err != nil {
+		t.Fatalf("web login after create: %v", err)
+	}
+	firstDigest := md5.Sum([]byte("first-password"))
+	if _, err := store.CreateViewerSession(ctx, username, hex.EncodeToString(firstDigest[:]), time.Hour); err != nil {
+		t.Fatalf("viewer login after create: %v", err)
+	}
+
+	// Upserting the same username replaces the hashes and keeps the same id.
+	updated, wasCreated, err := store.UpsertUser(ctx, username, "second-password")
+	if err != nil || wasCreated {
+		t.Fatalf("second upsert created=%v error=%v", wasCreated, err)
+	}
+	if updated.ID != created.ID {
+		t.Fatalf("upsert changed id: %s -> %s", created.ID, updated.ID)
+	}
+	if _, err := store.CreateSession(ctx, username, "first-password", time.Hour); !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("old web password should be rejected, got %v", err)
+	}
+	if _, err := store.CreateSession(ctx, username, "second-password", time.Hour); err != nil {
+		t.Fatalf("new web password should work: %v", err)
+	}
+	secondDigest := md5.Sum([]byte("second-password"))
+	if _, err := store.CreateViewerSession(ctx, username, hex.EncodeToString(secondDigest[:]), time.Hour); err != nil {
+		t.Fatalf("new viewer password should work: %v", err)
+	}
+}
