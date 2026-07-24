@@ -27,6 +27,20 @@ func (s *memoryWritableLocationStore) Update(
 	return value, nil
 }
 
+func (s *memoryWritableLocationStore) GetHome(_ context.Context, userID string) (locations.Location, error) {
+	if s.value.UserID != userID {
+		return locations.Location{}, locations.ErrNotFound
+	}
+	return s.value, nil
+}
+
+func (s *memoryWritableLocationStore) UpdateHome(
+	_ context.Context, value locations.Location,
+) (locations.Location, error) {
+	s.value = value
+	return value, nil
+}
+
 func TestUpdateLastLocation(t *testing.T) {
 	store := &memoryWritableLocationStore{}
 	const userID = "20000000-0000-4000-8000-000000000001"

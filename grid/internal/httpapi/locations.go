@@ -20,10 +20,33 @@ func (a *API) locationByUser(w http.ResponseWriter, r *http.Request) {
 		a.notFound(w, r)
 		return
 	}
+	// ?scope=home targets the user's Home location; otherwise the last location.
+	home := r.URL.Query().Get("scope") == "home"
+
+	// GET is supported only for the Home scope (to serve Teleport Home).
+	if r.Method == http.MethodGet {
+		if !home {
+			w.Header().Set("Allow", "GET, PUT")
+			writeJSON(w, http.StatusMethodNotAllowed, Error{
+				Code: "method_not_allowed", Message: "GET is only supported for scope=home"})
+			return
+		}
+		value, err := a.locations.GetHome(r.Context(), userID)
+		if errors.Is(err, locations.ErrNotFound) {
+			writeJSON(w, http.StatusNotFound, Error{
+				Code: "home_not_set", Message: "user has no home location"})
+		} else if err != nil {
+			writeJSON(w, http.StatusInternalServerError, Error{
+				Code: "location_store_error", Message: "home lookup failed"})
+		} else {
+			writeJSON(w, http.StatusOK, value)
+		}
+		return
+	}
 	if r.Method != http.MethodPut {
-		w.Header().Set("Allow", http.MethodPut)
+		w.Header().Set("Allow", "GET, PUT")
 		writeJSON(w, http.StatusMethodNotAllowed, Error{
-			Code: "method_not_allowed", Message: "only PUT is supported"})
+			Code: "method_not_allowed", Message: "only GET and PUT are supported"})
 		return
 	}
 	var request UpdateLocationRequest
@@ -42,18 +65,24 @@ func (a *API) locationByUser(w http.ResponseWriter, r *http.Request) {
 			Code: "invalid_location", Message: "regionId, position, and lookAt must describe a valid Region location"})
 		return
 	}
-	value, err := a.locations.Update(r.Context(), locations.Location{
+	value := locations.Location{
 		UserID: userID, RegionID: request.RegionID,
 		Position: [3]float32{request.Position.X, request.Position.Y, request.Position.Z},
 		LookAt:   [3]float32{request.LookAt.X, request.LookAt.Y, request.LookAt.Z},
 		Flying:   request.Flying,
-	})
+	}
+	var err error
+	if home {
+		value, err = a.locations.UpdateHome(r.Context(), value)
+	} else {
+		value, err = a.locations.Update(r.Context(), value)
+	}
 	if errors.Is(err, locations.ErrNotFound) {
 		writeJSON(w, http.StatusNotFound, Error{
 			Code: "location_subject_not_found", Message: "user or Region was not found"})
 	} else if err != nil {
 		writeJSON(w, http.StatusInternalServerError, Error{
-			Code: "location_store_error", Message: "last-location update failed"})
+			Code: "location_store_error", Message: "location update failed"})
 	} else {
 		writeJSON(w, http.StatusOK, value)
 	}

@@ -224,13 +224,17 @@ func (a *API) resolveViewerLogin(r *http.Request, firstRaw, lastRaw, passwd, sta
 	if err != nil {
 		return nil, "unavailable", "The HomeWorldz grid could not create a session."
 	}
-	lastRegionID := ""
+	preferredRegionID := ""
 	if a.locations != nil {
-		if location, locationErr := a.locations.Get(r.Context(), session.UserID); locationErr == nil {
-			lastRegionID = location.RegionID
+		if strings.EqualFold(start, "home") {
+			if location, locationErr := a.locations.GetHome(r.Context(), session.UserID); locationErr == nil {
+				preferredRegionID = location.RegionID
+			}
+		} else if location, locationErr := a.locations.Get(r.Context(), session.UserID); locationErr == nil {
+			preferredRegionID = location.RegionID
 		}
 	}
-	region, err := resolveDestination(r.Context(), a.regions, start, lastRegionID)
+	region, err := resolveDestination(r.Context(), a.regions, start, preferredRegionID)
 	if err != nil {
 		_ = a.identity.RevokeSession(r.Context(), session.ID)
 		return nil, "destination", "No online region matches the requested destination."
@@ -370,7 +374,7 @@ func (a *API) regionStartState(ctx context.Context, endpoint, userID string) (re
 
 func isFinite(value float64) bool { return !math.IsNaN(value) && !math.IsInf(value, 0) }
 
-func resolveDestination(ctx context.Context, store regions.Store, start, lastRegionID string) (regions.Region, error) {
+func resolveDestination(ctx context.Context, store regions.Store, start, preferredRegionID string) (regions.Region, error) {
 	items, err := store.List(ctx)
 	if err != nil || len(items) == 0 {
 		return regions.Region{}, regions.ErrNotFound
@@ -387,9 +391,10 @@ func resolveDestination(ctx context.Context, store regions.Store, start, lastReg
 		}
 		return regions.Region{}, regions.ErrNotFound
 	}
-	if !strings.EqualFold(start, "home") && lastRegionID != "" {
+	// preferredRegionID is the home region for start=home, else the last region.
+	if preferredRegionID != "" {
 		for _, region := range items {
-			if region.ID == lastRegionID {
+			if region.ID == preferredRegionID {
 				return region, nil
 			}
 		}
