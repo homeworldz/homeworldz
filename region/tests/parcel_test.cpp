@@ -143,6 +143,31 @@ int main() {
         check(can_enter(parcel, guest, region_owner), "listed agent enters");
     }
 
+    // ParcelOverlay per-cell colouring and borders.
+    {
+        using namespace homeworldz::parcel;
+        const std::string owner = "22222222-2222-4222-8222-222222222222";
+        const std::string other = "77777777-7777-4777-8777-777777777777";
+        ParcelSet set(256, "11111111-1111-4111-8111-111111111111", owner, 0);
+        set.divide(0.0F, 0.0F, 64.0F, 64.0F, "33333333-3333-4333-8333-333333333333", other, 0);
+        const int edge = set.edge_cells();
+        const auto self_view = set.overlay_for(owner, "");
+        check(static_cast<int>(self_view.size()) == edge * edge, "overlay covers every cell");
+        // Cell (0,0): SW corner of the carved parcel, owned by `other`, on both region edges.
+        const auto sw = self_view[0];
+        check((sw & 0x07) == overlay_owned_by_other, "SW cell owned by other from owner's view");
+        check((sw & overlay_border_west) != 0, "region west edge marks a border");
+        check((sw & overlay_border_south) != 0, "region south edge marks a border");
+        // Cell just north of the carved parcel's top edge belongs to the owner's parcel
+        // and must carry a south border where it meets the carved parcel (y = 16 cells).
+        const auto boundary = self_view[static_cast<std::size_t>(16) * edge + 0];
+        check((boundary & 0x07) == overlay_owned_by_self, "cell above carve is owner's from owner view");
+        check((boundary & overlay_border_south) != 0, "internal parcel edge marks a south border");
+        // From the other resident's view, their carved parcel colours as self.
+        const auto other_view = set.overlay_for(other, "");
+        check((other_view[0] & 0x07) == overlay_owned_by_self, "carved parcel is self from other's view");
+    }
+
     if (failures != 0) {
         std::printf("%d parcel test check(s) failed\n", failures);
         return 1;

@@ -174,6 +174,39 @@ const Parcel* ParcelSet::parcel_at(float x, float y) const {
     return nullptr;
 }
 
+const Parcel* ParcelSet::parcel_at_cell(int cell_x, int cell_y) const {
+    if (cell_x < 0 || cell_y < 0 || cell_x >= edge_cells_ || cell_y >= edge_cells_) return nullptr;
+    for (const auto& parcel : parcels_)
+        if (parcel.contains_cell(edge_cells_, cell_x, cell_y)) return &parcel;
+    return nullptr;
+}
+
+std::vector<std::uint8_t> ParcelSet::overlay_for(std::string_view agent,
+                                                 std::string_view region_owner) const {
+    static_cast<void>(region_owner);
+    std::vector<std::uint8_t> cells(static_cast<std::size_t>(edge_cells_) * edge_cells_, 0);
+    for (int y = 0; y < edge_cells_; ++y)
+        for (int x = 0; x < edge_cells_; ++x) {
+            const Parcel* parcel = parcel_at_cell(x, y);
+            std::uint8_t byte = overlay_public;
+            if (parcel != nullptr) {
+                if (!parcel->owner_id.empty() && parcel->owner_id == agent)
+                    byte = overlay_owned_by_self;
+                else if ((parcel->flags & flag_for_sale) != 0)
+                    byte = overlay_for_sale;
+                else if (parcel->owner_id.empty())
+                    byte = overlay_public;
+                else
+                    byte = overlay_owned_by_other;
+            }
+            // West/south borders: region edge, or a different parcel neighbour.
+            if (x == 0 || parcel_at_cell(x - 1, y) != parcel) byte |= overlay_border_west;
+            if (y == 0 || parcel_at_cell(x, y - 1) != parcel) byte |= overlay_border_south;
+            cells[static_cast<std::size_t>(y) * edge_cells_ + x] = byte;
+        }
+    return cells;
+}
+
 const Parcel* ParcelSet::parcel_covering(float west, float south, float east, float north) const {
     const int start_x = std::max(0, static_cast<int>(std::floor(west / 4.0F)));
     const int start_y = std::max(0, static_cast<int>(std::floor(south / 4.0F)));

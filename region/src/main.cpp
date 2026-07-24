@@ -1606,6 +1606,7 @@ int main(int argc, char* argv[]) {
     });
     std::unordered_set<std::string> handshake_replies;
     std::unordered_set<std::string> established_events;
+    std::unordered_set<std::string> parcel_overlay_sent;
     std::unordered_map<std::string, LiveAvatar> avatars;
     std::unordered_map<std::string, homeworldz::viewer::AvatarGeometry> avatar_geometries;
     std::unordered_map<std::string, homeworldz::viewer::AgentSetAppearance> avatar_appearances;
@@ -1798,6 +1799,7 @@ int main(int argc, char* argv[]) {
         movement_animations.erase(endpoint);
         handshake_replies.erase(endpoint);
         established_events.erase(session_id);
+        parcel_overlay_sent.erase(session_id);
         queued_viewer_events.erase(session_id);
         capability_arrival_gate.clear_session(session_id);
         std::erase_if(pending_agent_movement_completes,
@@ -1942,6 +1944,20 @@ int main(int argc, char* argv[]) {
         event.max_prims = region_area > 0 ? static_cast<std::int32_t>(
             static_cast<long long>(event.area) * region_prim_limit() / region_area) : 0;
         enqueue_viewer_event(session_id, homeworldz::viewer::parcel_properties_event_xml(event));
+    };
+    // Send ParcelOverlay (coloured parcel boundaries) to one viewer over UDP.
+    const auto send_parcel_overlay = [&](const std::string& viewer_endpoint,
+                                         const std::string& agent_id,
+                                         std::chrono::steady_clock::time_point when) {
+        const auto cells = parcels->overlay_for(agent_id, region_owner_id);
+        for (auto& packet : homeworldz::viewer::encode_parcel_overlay(cells))
+            if (const auto outgoing = circuits.send(viewer_endpoint, std::move(packet), true, when, true))
+                static_cast<void>(send_udp(viewer_server, viewer_endpoint, *outgoing));
+    };
+    // Refresh parcel boundaries for every connected viewer after a land change.
+    const auto broadcast_parcel_overlay = [&](std::chrono::steady_clock::time_point when) {
+        for (const auto& [recipient_endpoint, recipient] : avatars)
+            send_parcel_overlay(recipient_endpoint, recipient.user_id, when);
     };
 
     std::cout << "{\"level\":\"info\",\"message\":\"region service listening\",\"httpPort\":"
@@ -2783,6 +2799,11 @@ int main(int argc, char* argv[]) {
                                 send_parcel_properties(session_id, *parcel,
                                     homeworldz::parcel::result_single, request->sequence_id,
                                     request->snap_selection);
+                            // Deliver the colored parcel-boundary overlay once per
+                            // session, on the viewer's initial parcel sweep.
+                            if (parcel_overlay_sent.insert(session_id).second)
+                                send_parcel_overlay(endpoint,
+                                    homeworldz::viewer::format_uuid(identity->agent_id), now);
                         }
                         if (const auto request =
                                 homeworldz::viewer::decode_parcel_properties_request_by_id(packet->payload);
@@ -2831,6 +2852,7 @@ int main(int argc, char* argv[]) {
                                     update->user_look_at[1], update->user_look_at[2]};
                                 parcel->landing_type = update->landing_type;
                                 persist_parcels();
+                                broadcast_parcel_overlay(now);
                                 const auto session_id =
                                     homeworldz::viewer::format_uuid(identity->session_id);
                                 send_parcel_properties(session_id, *parcel,
@@ -2853,6 +2875,7 @@ int main(int argc, char* argv[]) {
                                     agent, covered->claim_date);
                                 if (carved) {
                                     persist_parcels();
+                                    broadcast_parcel_overlay(now);
                                     const auto session_id =
                                         homeworldz::viewer::format_uuid(identity->session_id);
                                     if (const auto* fresh = parcels->find_by_local_id(*carved))
@@ -2872,6 +2895,7 @@ int main(int argc, char* argv[]) {
                                                             std::string_view{agent});
                             if (merged) {
                                 persist_parcels();
+                                broadcast_parcel_overlay(now);
                                 const auto session_id =
                                     homeworldz::viewer::format_uuid(identity->session_id);
                                 if (const auto* fresh = parcels->find_by_local_id(*merged))

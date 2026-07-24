@@ -60,6 +60,20 @@ enum AccessFlags : std::uint32_t {
     access_both = access_allowed | access_ban,
 };
 
+// ParcelOverlay per-cell byte: low 3 bits are the ownership colour (relative to
+// the viewing agent) and the high bits are region/parcel border markers.
+enum OverlayType : std::uint8_t {
+    overlay_public = 0,
+    overlay_owned_by_other = 1,
+    overlay_owned_by_group = 2,
+    overlay_owned_by_self = 3,
+    overlay_for_sale = 4,
+    overlay_auction = 5,
+    overlay_flag_private = 32,
+    overlay_border_west = 64,
+    overlay_border_south = 128,
+};
+
 // ParcelResult sequence-id sentinels handed back in ParcelProperties.RequestResult.
 constexpr std::int32_t result_no_data = -1;
 constexpr std::int32_t result_single = 0;
@@ -154,6 +168,14 @@ public:
 
     // Parcel covering a world-metre point, or nullptr if outside the region.
     const Parcel* parcel_at(float x, float y) const;
+
+    // Parcel owning a 4 m cell (cell_x/cell_y in [0, edge_cells)), or nullptr.
+    const Parcel* parcel_at_cell(int cell_x, int cell_y) const;
+
+    // Per-cell ParcelOverlay bytes (row-major, x inner) coloured from the point of
+    // view of `agent`, with west/south parcel and region-edge borders marked.
+    std::vector<std::uint8_t> overlay_for(std::string_view agent,
+                                          std::string_view region_owner) const;
 
     // The single parcel covering an entire (west,south,east,north) metre rectangle,
     // or nullptr when the rectangle spans more than one parcel or lies outside.

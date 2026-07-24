@@ -932,6 +932,9 @@ std::optional<ParcelAccessListRequest> decode_parcel_access_list_request(
 std::optional<ParcelAccessListUpdate> decode_parcel_access_list_update(
     std::span<const std::byte> payload);
 std::vector<std::byte> encode_parcel_access_list_reply(const ParcelAccessListReply& message);
+// Pack per-cell overlay bytes (row-major, x inner) into ParcelOverlay packets,
+// 1024 cells per packet, with an incrementing SequenceID. One or more packets.
+std::vector<std::vector<std::byte>> encode_parcel_overlay(std::span<const std::uint8_t> cells);
 std::optional<ChatFromViewer> decode_chat_from_viewer(std::span<const std::byte> payload);
 std::vector<std::byte> encode_chat_from_simulator(const ChatFromSimulator& message);
 std::vector<std::byte> encode_flat_terrain(std::span<const TerrainPatch> patches, float height);

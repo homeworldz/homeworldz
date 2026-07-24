@@ -42,6 +42,8 @@ constexpr std::array<std::byte, 4> chat_from_viewer_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x50}};
 constexpr std::array<std::byte, 4> modify_land_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x7c}};
+constexpr std::array<std::byte, 4> parcel_overlay_id{ // Low 196
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0xc4}};
 constexpr std::array<std::byte, 2> parcel_properties_request_id{ // Medium 11
     std::byte{0xff}, std::byte{0x0b}};
 constexpr std::array<std::byte, 4> parcel_properties_request_by_id_id{ // Low 197
@@ -2517,6 +2519,25 @@ std::vector<std::byte> encode_parcel_access_list_reply(const ParcelAccessListRep
         }
     }
     return output;
+}
+
+std::vector<std::vector<std::byte>> encode_parcel_overlay(std::span<const std::uint8_t> cells) {
+    constexpr std::size_t per_packet = 1024;
+    std::vector<std::vector<std::byte>> packets;
+    const std::size_t total = cells.size();
+    if (total == 0) return packets;
+    const std::size_t count = (total + per_packet - 1) / per_packet;
+    for (std::size_t sequence = 0; sequence < count; ++sequence) {
+        const std::size_t begin = sequence * per_packet;
+        const std::size_t chunk = std::min(per_packet, total - begin);
+        std::vector<std::byte> output(parcel_overlay_id.begin(), parcel_overlay_id.end());
+        append_le_u32(output, static_cast<std::uint32_t>(sequence));
+        append_le_u16(output, static_cast<std::uint16_t>(chunk)); // Data (Variable 2) length
+        for (std::size_t index = 0; index < chunk; ++index)
+            output.push_back(static_cast<std::byte>(cells[begin + index]));
+        packets.push_back(std::move(output));
+    }
+    return packets;
 }
 
 std::optional<ChatFromViewer> decode_chat_from_viewer(std::span<const std::byte> payload) {

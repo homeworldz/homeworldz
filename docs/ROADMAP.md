@@ -370,7 +370,7 @@ Falcon LSL scripting foundation.
 - [ ] Add operator metrics, throttling, diagnostics, stopping, resetting, and
   isolation for inefficient or faulty scripts.
 
-### Events and region integration
+### LSL Events and Region Interaction
 
 - [x] Decode Firestorm `RezScript`, create or transfer the task inventory item,
   compile its source, instantiate an enabled VM, and dispatch `state_entry`.

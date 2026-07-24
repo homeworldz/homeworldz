@@ -222,7 +222,9 @@ region but 8192 bytes on a 1024 m region, which does not fit a single UDP
 message. The viewer-to-simulator parcel requests (`ParcelPropertiesRequest`,
 `ParcelPropertiesUpdate`, `ParcelDivide`, `ParcelJoin`, `ParcelAccessListRequest`,
 `ParcelAccessListUpdate`) are still decoded from UDP; only the potentially large
-`ParcelProperties` reply moves to the Event Queue.
+`ParcelProperties` reply moves to the Event Queue. The `ParcelOverlay` that draws
+parcel boundaries stays on UDP but is chunked at 1024 cells per packet with an
+incrementing `SequenceID`, so it also scales to the larger region sizes.
 
 The default region owner is authoritative from the grid region record. A region
 whose grid record has no owner (older provisioning) creates its default parcel as
