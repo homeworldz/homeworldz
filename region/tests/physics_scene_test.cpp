@@ -174,6 +174,30 @@ int main() {
         !close(world.last_definition.mass, 500.0) ||
         !close(physics::entity_mass(entity), world.last_definition.mass))
         return 9;
+    // Torus, Tube, and Ring (path 0x20 with circle/square/triangle profiles)
+    // approximate collision as a solid cylinder over the prim extents.
+    entity.path_curve = 0x20;
+    entity.path_scale_x = 100;
+    entity.path_scale_y = 25;
+    for (const std::uint8_t revolved_profile : {0x00, 0x01, 0x03}) {
+        entity.profile_curve = revolved_profile;
+        if (!mirror.synchronize(entity) ||
+            world.last_definition.shape.type != physics::ShapeType::Cylinder ||
+            !close(world.last_definition.shape.radius, 1.0) ||
+            !close(world.last_definition.shape.height, 3.0) ||
+            !close(world.last_definition.mass, 1178.09724509617) ||
+            !close(physics::entity_mass(entity), world.last_definition.mass))
+            return 22;
+    }
+    if (physics::classify_prim_shape(entity) != physics::PrimShape::Ring) return 23;
+    entity.path_curve = 0x10;
+    entity.profile_curve = 0x01;
+    entity.path_scale_x = 100;
+    entity.path_scale_y = 100;
+    if (physics::classify_prim_shape(entity) != physics::PrimShape::Box ||
+        !mirror.synchronize(entity) ||
+        world.last_definition.shape.type != physics::ShapeType::Box)
+        return 24;
     const auto rubber_body = mirror.body_id(entity.id);
     entity.physics_shape_type = 0x01;
     if (!mirror.synchronize(entity) || mirror.size() != 0 || world.definitions.contains(rubber_body))

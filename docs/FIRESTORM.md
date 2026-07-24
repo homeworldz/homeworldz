@@ -143,8 +143,13 @@ asks the Grid to create a correctly typed inventory item in the requested
 folder owned by that user. The completion response contains distinct new asset
 and inventory-item UUIDs. These uploads cost zero. The UDP economy response
 advertises that zero price, while `SimulatorFeatures.OpenSimExtras.currency`
-identifies the grid's viewer-facing currency as credits (`C$`). Mesh, object,
-bulk, and variable-price uploads remain outside this slice.
+identifies the grid's viewer-facing currency as credits (`C$`). Texture,
+snapshot, sound, and animation are the complete set of ordinary Firestorm
+file-upload types: the viewer's Bulk upload iterates the selected files
+through this same single-file capability, so it needs no separate server
+path, and objects enter inventory through Take/DeRez rather than file upload.
+Mesh (and with it the `NewFileAgentInventoryVariablePrice` capability) remains
+outside this slice.
 
 The Region also advertises Firestorm's agent-inventory update capabilities for
 notecards, gestures, and LSL source. Each request is bound to the authenticated
@@ -774,6 +779,19 @@ The edit-reactivation safety check also passed live acceptance after the same
 Physical pyramid was placed roughly 80–90% below terrain: deselection raised
 it smoothly above the surface without a solver launch. A repeat from well
 underground resolved equally cleanly.
+
+All seven basic build-tool shapes are now accepted on rez, and the revolved
+shapes — Torus, Tube, and Ring — collide as solid cylinders over their prim
+extents instead of falling through to a box; their mass model matches that
+cylinder approximation. The central hole, like cut, hollow, and twist on every
+shape, remains visual-only. The `ObjectShape` packet is also decoded, so
+reshaping an existing prim in the build tool (including switching its basic
+shape or editing cut, hollow, twist, taper, shear, or revolutions) is
+authorized against owner and modify permission, applied to the authoritative
+entity, persisted in the scene snapshot, echoed to all viewers, and re-mirrored
+into Jolt. Previously the shape block was write-once at `ObjectAdd` and
+build-tool reshapes were silently ignored. Live Firestorm acceptance for
+torus/tube/ring collision and in-tool reshape remains pending.
 
 ## Cloud deployment acceptance
 

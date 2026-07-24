@@ -108,6 +108,8 @@ constexpr std::array<std::byte, 4> object_duplicate_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x5a}};
 constexpr std::array<std::byte, 4> object_material_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x61}};
+constexpr std::array<std::byte, 4> object_shape_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x62}};
 constexpr std::array<std::byte, 4> object_image_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x60}};
 constexpr std::array<std::byte, 4> object_flag_update_id{
@@ -1520,6 +1522,45 @@ std::optional<ObjectMaterial> decode_object_material(std::span<const std::byte> 
         const auto offset = header_size + index * block_size;
         result.objects.push_back({
             read_le_u32(payload, offset), std::to_integer<std::uint8_t>(payload[offset + 4])});
+    }
+    return result;
+}
+
+std::optional<ObjectShape> decode_object_shape(std::span<const std::byte> payload) {
+    constexpr std::size_t header_size = 37;
+    constexpr std::size_t block_size = 27;
+    if (payload.size() < header_size ||
+        !std::equal(object_shape_id.begin(), object_shape_id.end(), payload.begin()))
+        return std::nullopt;
+    ObjectShape result;
+    std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
+    const auto count = std::to_integer<std::size_t>(payload[36]);
+    if (count == 0 || payload.size() != header_size + count * block_size) return std::nullopt;
+    result.objects.reserve(count);
+    for (std::size_t index = 0; index < count; ++index) {
+        const auto offset = header_size + index * block_size;
+        ObjectShapeUpdate update;
+        update.local_id = read_le_u32(payload, offset);
+        update.path_curve = std::to_integer<std::uint8_t>(payload[offset + 4]);
+        update.profile_curve = std::to_integer<std::uint8_t>(payload[offset + 5]);
+        update.path_begin = read_le_u16(payload, offset + 6);
+        update.path_end = read_le_u16(payload, offset + 8);
+        update.path_scale_x = std::to_integer<std::uint8_t>(payload[offset + 10]);
+        update.path_scale_y = std::to_integer<std::uint8_t>(payload[offset + 11]);
+        update.path_shear_x = std::to_integer<std::uint8_t>(payload[offset + 12]);
+        update.path_shear_y = std::to_integer<std::uint8_t>(payload[offset + 13]);
+        update.path_twist = std::to_integer<std::uint8_t>(payload[offset + 14]);
+        update.path_twist_begin = std::to_integer<std::uint8_t>(payload[offset + 15]);
+        update.path_radius_offset = std::to_integer<std::uint8_t>(payload[offset + 16]);
+        update.path_taper_x = std::to_integer<std::uint8_t>(payload[offset + 17]);
+        update.path_taper_y = std::to_integer<std::uint8_t>(payload[offset + 18]);
+        update.path_revolutions = std::to_integer<std::uint8_t>(payload[offset + 19]);
+        update.path_skew = std::to_integer<std::uint8_t>(payload[offset + 20]);
+        update.profile_begin = read_le_u16(payload, offset + 21);
+        update.profile_end = read_le_u16(payload, offset + 23);
+        update.profile_hollow = read_le_u16(payload, offset + 25);
+        result.objects.push_back(update);
     }
     return result;
 }

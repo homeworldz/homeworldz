@@ -326,6 +326,32 @@ struct ObjectMaterial : AgentMessage {
     std::vector<ObjectMaterialUpdate> objects;
 };
 
+struct ObjectShapeUpdate {
+    std::uint32_t local_id{};
+    std::uint8_t path_curve{};
+    std::uint8_t profile_curve{};
+    std::uint16_t path_begin{};
+    std::uint16_t path_end{};
+    std::uint8_t path_scale_x{};
+    std::uint8_t path_scale_y{};
+    std::uint8_t path_shear_x{};
+    std::uint8_t path_shear_y{};
+    std::uint8_t path_twist{};
+    std::uint8_t path_twist_begin{};
+    std::uint8_t path_radius_offset{};
+    std::uint8_t path_taper_x{};
+    std::uint8_t path_taper_y{};
+    std::uint8_t path_revolutions{};
+    std::uint8_t path_skew{};
+    std::uint16_t profile_begin{};
+    std::uint16_t profile_end{};
+    std::uint16_t profile_hollow{};
+};
+
+struct ObjectShape : AgentMessage {
+    std::vector<ObjectShapeUpdate> objects;
+};
+
 struct ObjectImageUpdate {
     std::uint32_t local_id{};
     std::vector<std::byte> texture_entry;
@@ -730,6 +756,7 @@ std::optional<ObjectDescription> decode_object_description(std::span<const std::
 std::optional<ObjectPermissions> decode_object_permissions(std::span<const std::byte> payload);
 std::optional<ObjectDuplicate> decode_object_duplicate(std::span<const std::byte> payload);
 std::optional<ObjectMaterial> decode_object_material(std::span<const std::byte> payload);
+std::optional<ObjectShape> decode_object_shape(std::span<const std::byte> payload);
 std::optional<ObjectImage> decode_object_image(std::span<const std::byte> payload);
 std::optional<ObjectFlagUpdate> decode_object_flag_update(std::span<const std::byte> payload);
 std::optional<RequestObjectPropertiesFamily> decode_request_object_properties_family(

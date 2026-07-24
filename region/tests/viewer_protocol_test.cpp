@@ -503,6 +503,22 @@ bool message_codecs() {
         {std::byte{1}, std::byte{0x78}, std::byte{0x56}, std::byte{0x34},
          std::byte{0x12}, std::byte{0x01}});
     const auto object_material = decode_object_material(object_material_payload);
+    auto object_shape_payload = bytes({0xff, 0xff, 0x00, 0x62});
+    object_shape_payload.insert(
+        object_shape_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
+    object_shape_payload.insert(
+        object_shape_payload.end(), expected.session_id.begin(), expected.session_id.end());
+    object_shape_payload.insert(object_shape_payload.end(),
+        {std::byte{1}, std::byte{0x78}, std::byte{0x56}, std::byte{0x34}, std::byte{0x12},
+         std::byte{0x20}, std::byte{0x00}, std::byte{0x0a}, std::byte{0x00},
+         std::byte{0x02}, std::byte{0x01}, std::byte{0x64}, std::byte{0x19},
+         std::byte{0x02}, std::byte{0x03}, std::byte{0x04}, std::byte{0x05},
+         std::byte{0x06}, std::byte{0x07}, std::byte{0x08}, std::byte{0x09},
+         std::byte{0x0b}, std::byte{0x03}, std::byte{0x02}, std::byte{0x05},
+         std::byte{0x04}, std::byte{0x88}, std::byte{0x13}});
+    const auto object_shape = decode_object_shape(object_shape_payload);
+    const auto truncated_object_shape = decode_object_shape(
+        std::span(object_shape_payload).first(object_shape_payload.size() - 1));
     auto object_image_payload = bytes({0xff, 0xff, 0x00, 0x60});
     object_image_payload.insert(
         object_image_payload.end(), expected.agent_id.begin(), expected.agent_id.end());
@@ -665,6 +681,29 @@ bool message_codecs() {
            object_material->objects.size() == 1 &&
            object_material->objects[0].local_id == 0x12345678 &&
            object_material->objects[0].material == 0x01 &&
+           object_shape && object_shape->agent_id == expected.agent_id &&
+           object_shape->session_id == expected.session_id &&
+           object_shape->objects.size() == 1 &&
+           object_shape->objects[0].local_id == 0x12345678 &&
+           object_shape->objects[0].path_curve == 0x20 &&
+           object_shape->objects[0].profile_curve == 0x00 &&
+           object_shape->objects[0].path_begin == 0x000a &&
+           object_shape->objects[0].path_end == 0x0102 &&
+           object_shape->objects[0].path_scale_x == 0x64 &&
+           object_shape->objects[0].path_scale_y == 0x19 &&
+           object_shape->objects[0].path_shear_x == 0x02 &&
+           object_shape->objects[0].path_shear_y == 0x03 &&
+           object_shape->objects[0].path_twist == 0x04 &&
+           object_shape->objects[0].path_twist_begin == 0x05 &&
+           object_shape->objects[0].path_radius_offset == 0x06 &&
+           object_shape->objects[0].path_taper_x == 0x07 &&
+           object_shape->objects[0].path_taper_y == 0x08 &&
+           object_shape->objects[0].path_revolutions == 0x09 &&
+           object_shape->objects[0].path_skew == 0x0b &&
+           object_shape->objects[0].profile_begin == 0x0203 &&
+           object_shape->objects[0].profile_end == 0x0405 &&
+           object_shape->objects[0].profile_hollow == 0x1388 &&
+           !truncated_object_shape &&
            object_image && object_image->agent_id == expected.agent_id &&
            object_image->session_id == expected.session_id && object_image->objects.size() == 1 &&
            object_image->objects[0].local_id == 0x12345678 &&

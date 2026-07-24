@@ -5397,6 +5397,113 @@ int main(int argc, char* argv[]) {
                                           << originals.size() << "}" << std::endl;
                             }
                         }
+                        const auto object_shape =
+                            homeworldz::viewer::decode_object_shape(packet->payload);
+                        if (object_shape && object_shape->agent_id == identity->agent_id &&
+                            object_shape->session_id == identity->session_id) {
+                            std::unordered_map<homeworldz::scene::EntityId,
+                                homeworldz::scene::Entity> originals;
+                            std::unordered_set<homeworldz::scene::EntityId> requested_entities;
+                            const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
+                            const auto apply_shape = [](homeworldz::scene::Entity& entity,
+                                const homeworldz::viewer::ObjectShapeUpdate& update) {
+                                entity.path_curve = update.path_curve;
+                                entity.profile_curve = update.profile_curve;
+                                entity.path_begin = update.path_begin;
+                                entity.path_end = update.path_end;
+                                entity.path_scale_x = update.path_scale_x;
+                                entity.path_scale_y = update.path_scale_y;
+                                entity.path_shear_x = update.path_shear_x;
+                                entity.path_shear_y = update.path_shear_y;
+                                entity.path_twist = update.path_twist;
+                                entity.path_twist_begin = update.path_twist_begin;
+                                entity.path_radius_offset = update.path_radius_offset;
+                                entity.path_taper_x = update.path_taper_x;
+                                entity.path_taper_y = update.path_taper_y;
+                                entity.path_revolutions = update.path_revolutions;
+                                entity.path_skew = update.path_skew;
+                                entity.profile_begin = update.profile_begin;
+                                entity.profile_end = update.profile_end;
+                                entity.profile_hollow = update.profile_hollow;
+                            };
+                            const auto shape_changed = [](const homeworldz::scene::Entity& entity,
+                                const homeworldz::viewer::ObjectShapeUpdate& update) {
+                                return entity.path_curve != update.path_curve ||
+                                    entity.profile_curve != update.profile_curve ||
+                                    entity.path_begin != update.path_begin ||
+                                    entity.path_end != update.path_end ||
+                                    entity.path_scale_x != update.path_scale_x ||
+                                    entity.path_scale_y != update.path_scale_y ||
+                                    entity.path_shear_x != update.path_shear_x ||
+                                    entity.path_shear_y != update.path_shear_y ||
+                                    entity.path_twist != update.path_twist ||
+                                    entity.path_twist_begin != update.path_twist_begin ||
+                                    entity.path_radius_offset != update.path_radius_offset ||
+                                    entity.path_taper_x != update.path_taper_x ||
+                                    entity.path_taper_y != update.path_taper_y ||
+                                    entity.path_revolutions != update.path_revolutions ||
+                                    entity.path_skew != update.path_skew ||
+                                    entity.profile_begin != update.profile_begin ||
+                                    entity.profile_end != update.profile_end ||
+                                    entity.profile_hollow != update.profile_hollow;
+                            };
+                            for (const auto& update : object_shape->objects) {
+                                auto* entity = scene.find(update.local_id);
+                                if (!entity) continue;
+                                requested_entities.insert(entity->id);
+                                // Same well-formedness gate as ObjectAdd: a recognized
+                                // path curve and profile curve keep every basic shape
+                                // and its edited variations while rejecting garbage.
+                                const bool valid_path_curve = update.path_curve == 0x10 ||
+                                    update.path_curve == 0x20 || update.path_curve == 0x30;
+                                const bool valid_profile_curve = (update.profile_curve & 0x0f) <= 0x05;
+                                if (!valid_path_curve || !valid_profile_curve ||
+                                    entity->owner_id != user_id ||
+                                    (entity->owner_permissions & homeworldz::scene::permission_modify) == 0 ||
+                                    !shape_changed(*entity, update))
+                                    continue;
+                                originals.try_emplace(entity->id, *entity);
+                                apply_shape(*entity, update);
+                            }
+                            bool persisted = false;
+                            if (!originals.empty()) {
+                                try {
+                                    storage->save_snapshot(scene);
+                                    persisted = true;
+                                } catch (const std::exception& error) {
+                                    for (const auto& [entity_id, original] : originals)
+                                        if (auto* entity = scene.find(entity_id))
+                                            *entity = original;
+                                    std::cout << "{\"level\":\"error\",\"message\":\"primitive shape persistence failed\",\"error\":"
+                                              << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+                                }
+                            }
+                            const auto region_handle =
+                                (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
+                                static_cast<std::uint32_t>(region_grid_y * 256);
+                            for (const auto entity_id : requested_entities) {
+                                const auto* entity = scene.find(entity_id);
+                                if (!entity) continue;
+                                for (const auto& [recipient_endpoint, recipient] : avatars) {
+                                    const auto object = static_object_from_entity(scene, *entity, recipient.user_id, falcon);
+                                    if (!object) continue;
+                                    if (const auto sent = circuits.send(recipient_endpoint,
+                                            homeworldz::viewer::encode_static_object_update(
+                                                region_handle, *object), true, now, true))
+                                        static_cast<void>(send_udp(
+                                            viewer_server, recipient_endpoint, *sent));
+                                }
+                            }
+                            if (persisted) {
+                                for (const auto& [entity_id, original] : originals) {
+                                    static_cast<void>(original);
+                                    if (const auto* entity = scene.find(entity_id))
+                                        synchronize_physics_object(*entity);
+                                }
+                                std::cout << "{\"level\":\"info\",\"message\":\"primitive shapes updated\",\"count\":"
+                                          << originals.size() << "}" << std::endl;
+                            }
+                        }
                         const auto object_image =
                             homeworldz::viewer::decode_object_image(packet->payload);
                         if (object_image && object_image->agent_id == identity->agent_id &&

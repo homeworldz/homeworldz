@@ -126,8 +126,14 @@ appearance-sized avatar capsules, static prim collision, and viewer-toggled
 dynamic box, sphere, cylinder, and convex-prism bodies with persisted
 Physical/Phantom flags and streamed linear and angular motion. Canonical
 spheres and cylinders use native analytic Jolt shapes; prisms use a portable
-six-point convex hull matching Firestorm's wedge preset. Their shape and
+six-point convex hull matching Firestorm's wedge preset. The revolved basic
+shapes — Torus, Tube, and Ring — approximate collision as a solid cylinder
+over the prim's extents; the central hole, like cut, hollow, and twist on
+every shape, is visual only and not yet physical. Their shape and
 collision flags survive Take and re-rez through portable object assets.
+Reshaping an existing prim in the build tool (`ObjectShape`) applies the new
+path/profile block authoritatively, persists it, and rebuilds the collision
+body to match.
 Cylinder collision must retain its round circumference so flattened cylinders
 remain suitable as wheels; physics adapters may not replace them with boxes.
 Viewer Extra Physics values are decoded from `ObjectFlagUpdate` and persisted

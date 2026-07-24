@@ -16,6 +16,16 @@ struct MaterialProperties {
 
 // Second Life-compatible defaults for PRIM_MATERIAL_* values 0x00-0x07.
 MaterialProperties material_properties(std::uint8_t material);
+
+// Collision category for a prim's path+profile parameters. Torus, Tube, and
+// Ring are revolved (path 0x20) shapes whose collision is approximated by a
+// solid cylinder over the prim's bounding extents; the hole is not physical.
+enum class PrimShape { Box, Sphere, Cylinder, Prism, Pyramid, Torus, Tube, Ring };
+PrimShape classify_prim_shape(const scene::Entity& entity);
+// The Jolt collision geometry (type, extents, radius/height, hull points)
+// for a single prim, shared by whole-body and compound-part mirroring.
+Shape prim_collision_shape(const scene::Entity& entity);
+
 double box_mass(scene::Vector3 scale, double density);
 double ellipsoid_mass(scene::Vector3 scale, double density);
 double cylinder_mass(scene::Vector3 scale, double density);

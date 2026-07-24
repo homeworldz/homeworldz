@@ -71,22 +71,78 @@ double pyramid_mass(scene::Vector3 scale, double density) {
     return std::clamp(volume * density, minimum_mass, maximum_mass);
 }
 
+PrimShape classify_prim_shape(const scene::Entity& entity) {
+    const auto profile = entity.profile_curve & 0x0f;
+    if (entity.path_curve == 0x20 && profile == 0x05) return PrimShape::Sphere;
+    if (entity.path_curve == 0x20 && profile == 0x00) return PrimShape::Torus;
+    if (entity.path_curve == 0x20 && profile == 0x01) return PrimShape::Tube;
+    if (entity.path_curve == 0x20 && profile == 0x03) return PrimShape::Ring;
+    if (entity.path_curve == 0x10 && profile == 0x00) return PrimShape::Cylinder;
+    if (entity.path_curve == 0x10 && profile == 0x01 &&
+        entity.path_scale_x == 200 && entity.path_scale_y == 100 &&
+        entity.path_shear_x == 0xce && entity.path_shear_y == 0)
+        return PrimShape::Prism;
+    if (entity.path_curve == 0x10 && profile == 0x01 &&
+        entity.path_scale_x == 200 && entity.path_scale_y == 200 &&
+        entity.path_shear_x == 0 && entity.path_shear_y == 0)
+        return PrimShape::Pyramid;
+    return PrimShape::Box;
+}
+
+Shape prim_collision_shape(const scene::Entity& entity) {
+    Shape shape;
+    shape.half_extents = {
+        entity.scale.x * 0.5, entity.scale.y * 0.5, entity.scale.z * 0.5};
+    const auto x = entity.scale.x * 0.5;
+    const auto y = entity.scale.y * 0.5;
+    const auto z = entity.scale.z * 0.5;
+    switch (classify_prim_shape(entity)) {
+    case PrimShape::Sphere:
+        shape.type = ShapeType::Sphere;
+        shape.radius = std::min({entity.scale.x, entity.scale.y, entity.scale.z}) * 0.5;
+        break;
+    case PrimShape::Cylinder:
+    case PrimShape::Torus:
+    case PrimShape::Tube:
+    case PrimShape::Ring:
+        shape.type = ShapeType::Cylinder;
+        shape.radius = std::min(entity.scale.x, entity.scale.y) * 0.5;
+        shape.height = entity.scale.z;
+        break;
+    case PrimShape::Prism:
+        shape.type = ShapeType::ConvexHull;
+        shape.hull_points = {
+            {-x, -y, -z}, {-x, y, -z}, {x, -y, -z}, {x, y, -z},
+            {-x, -y, z}, {-x, y, z}};
+        break;
+    case PrimShape::Pyramid:
+        shape.type = ShapeType::ConvexHull;
+        shape.hull_points = {
+            {-x, -y, -z}, {-x, y, -z}, {x, -y, -z}, {x, y, -z}, {0.0, 0.0, z}};
+        break;
+    case PrimShape::Box:
+        shape.type = ShapeType::Box;
+        break;
+    }
+    return shape;
+}
+
 double entity_mass(const scene::Entity& entity) {
     const auto density = std::isfinite(entity.physics_density)
         ? std::clamp(entity.physics_density, 1.0, 22587.0)
         : material_properties(entity.material).density;
-    const bool sphere = entity.path_curve == 0x20 && (entity.profile_curve & 0x0f) == 0x05;
-    const bool cylinder = entity.path_curve == 0x10 && (entity.profile_curve & 0x0f) == 0x00;
-    const bool prism = entity.path_curve == 0x10 && (entity.profile_curve & 0x0f) == 0x01 &&
-        entity.path_scale_x == 200 && entity.path_scale_y == 100 &&
-        entity.path_shear_x == 0xce && entity.path_shear_y == 0;
-    const bool pyramid = entity.path_curve == 0x10 && (entity.profile_curve & 0x0f) == 0x01 &&
-        entity.path_scale_x == 200 && entity.path_scale_y == 200 &&
-        entity.path_shear_x == 0 && entity.path_shear_y == 0;
-    return sphere ? ellipsoid_mass(entity.scale, density) :
-        (cylinder ? cylinder_mass(entity.scale, density) :
-        (prism ? prism_mass(entity.scale, density) :
-        (pyramid ? pyramid_mass(entity.scale, density) : box_mass(entity.scale, density))));
+    switch (classify_prim_shape(entity)) {
+    case PrimShape::Sphere: return ellipsoid_mass(entity.scale, density);
+    // Torus/Tube/Ring mass matches their cylinder collision approximation.
+    case PrimShape::Cylinder:
+    case PrimShape::Torus:
+    case PrimShape::Tube:
+    case PrimShape::Ring: return cylinder_mass(entity.scale, density);
+    case PrimShape::Prism: return prism_mass(entity.scale, density);
+    case PrimShape::Pyramid: return pyramid_mass(entity.scale, density);
+    case PrimShape::Box: break;
+    }
+    return box_mass(entity.scale, density);
 }
 
 double linkset_mass(const scene::Scene& scene, const scene::Entity& root) {
@@ -218,40 +274,7 @@ bool StaticSceneMirror::synchronize(
     definition.entity_id = entity.id;
     definition.motion = linked_motion.value_or(
         entity.physical ? MotionType::Dynamic : MotionType::Static);
-    const bool sphere = entity.path_curve == 0x20 && (entity.profile_curve & 0x0f) == 0x05;
-    const bool cylinder = entity.path_curve == 0x10 && (entity.profile_curve & 0x0f) == 0x00;
-    const bool prism = entity.path_curve == 0x10 && (entity.profile_curve & 0x0f) == 0x01 &&
-        entity.path_scale_x == 200 && entity.path_scale_y == 100 &&
-        entity.path_shear_x == 0xce && entity.path_shear_y == 0;
-    const bool pyramid = entity.path_curve == 0x10 && (entity.profile_curve & 0x0f) == 0x01 &&
-        entity.path_scale_x == 200 && entity.path_scale_y == 200 &&
-        entity.path_shear_x == 0 && entity.path_shear_y == 0;
-    definition.shape.type = sphere ? ShapeType::Sphere :
-        (cylinder ? ShapeType::Cylinder :
-        ((prism || pyramid) ? ShapeType::ConvexHull : ShapeType::Box));
-    definition.shape.half_extents = {
-        entity.scale.x * 0.5, entity.scale.y * 0.5, entity.scale.z * 0.5};
-    if (sphere)
-        definition.shape.radius = std::min({entity.scale.x, entity.scale.y, entity.scale.z}) * 0.5;
-    if (cylinder) {
-        definition.shape.radius = std::min(entity.scale.x, entity.scale.y) * 0.5;
-        definition.shape.height = entity.scale.z;
-    }
-    if (prism) {
-        const auto x = entity.scale.x * 0.5;
-        const auto y = entity.scale.y * 0.5;
-        const auto z = entity.scale.z * 0.5;
-        definition.shape.hull_points = {
-            {-x, -y, -z}, {-x, y, -z}, {x, -y, -z}, {x, y, -z},
-            {-x, -y, z}, {-x, y, z}};
-    }
-    if (pyramid) {
-        const auto x = entity.scale.x * 0.5;
-        const auto y = entity.scale.y * 0.5;
-        const auto z = entity.scale.z * 0.5;
-        definition.shape.hull_points = {
-            {-x, -y, -z}, {-x, y, -z}, {x, -y, -z}, {x, y, -z}, {0.0, 0.0, z}};
-    }
+    definition.shape = prim_collision_shape(entity);
     definition.position = entity.position;
     definition.velocity = entity.velocity;
     const auto properties = material_properties(entity.material);
@@ -318,39 +341,12 @@ bool StaticSceneMirror::synchronize_linkset(
         if (entity.phantom || entity.physics_shape_type == 0x01 || entity.object_id.empty())
             return std::nullopt;
         CompoundShapePart part;
-        const bool sphere = entity.path_curve == 0x20 && (entity.profile_curve & 0x0f) == 0x05;
-        const bool cylinder = entity.path_curve == 0x10 && (entity.profile_curve & 0x0f) == 0x00;
-        const bool prism = entity.path_curve == 0x10 && (entity.profile_curve & 0x0f) == 0x01 &&
-            entity.path_scale_x == 200 && entity.path_scale_y == 100 &&
-            entity.path_shear_x == 0xce && entity.path_shear_y == 0;
-        const bool pyramid = entity.path_curve == 0x10 && (entity.profile_curve & 0x0f) == 0x01 &&
-            entity.path_scale_x == 200 && entity.path_scale_y == 200 &&
-            entity.path_shear_x == 0 && entity.path_shear_y == 0;
-        part.type = sphere ? ShapeType::Sphere :
-            (cylinder ? ShapeType::Cylinder :
-            ((prism || pyramid) ? ShapeType::ConvexHull : ShapeType::Box));
-        part.half_extents = {
-            entity.scale.x * 0.5, entity.scale.y * 0.5, entity.scale.z * 0.5};
-        if (sphere) part.radius = std::min({entity.scale.x, entity.scale.y, entity.scale.z}) * 0.5;
-        if (cylinder) {
-            part.radius = std::min(entity.scale.x, entity.scale.y) * 0.5;
-            part.height = entity.scale.z;
-        }
-        if (prism) {
-            const auto x = entity.scale.x * 0.5;
-            const auto y = entity.scale.y * 0.5;
-            const auto z = entity.scale.z * 0.5;
-            part.hull_points = {
-                {-x, -y, -z}, {-x, y, -z}, {x, -y, -z}, {x, y, -z},
-                {-x, -y, z}, {-x, y, z}};
-        }
-        if (pyramid) {
-            const auto x = entity.scale.x * 0.5;
-            const auto y = entity.scale.y * 0.5;
-            const auto z = entity.scale.z * 0.5;
-            part.hull_points = {
-                {-x, -y, -z}, {-x, y, -z}, {x, -y, -z}, {x, y, -z}, {0.0, 0.0, z}};
-        }
+        const auto shape = prim_collision_shape(entity);
+        part.type = shape.type;
+        part.half_extents = shape.half_extents;
+        part.radius = shape.radius;
+        part.height = shape.height;
+        part.hull_points = shape.hull_points;
         part.local_position = position;
         part.local_rotation = rotation;
         return part;
