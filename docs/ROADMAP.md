@@ -149,11 +149,15 @@ Falcon LSL scripting foundation.
 - [x] Implement task inventory (object contents) and complete its permissions,
   mutation, copy, derez, return, and inventory round-trip lifecycle.
 - [x] Implement creator-attributed sound and animation uploads; personal
-  landmark, notecard, gesture, and LSL-source creation and updates; and task
-  notecard and script updates. Phase 4 now compiles and executes the supported
-  Falcon language subset when a script enters or is saved in object contents.
+  notecard, gesture, and LSL-source creation and updates; and task notecard and
+  script updates. Phase 4 now compiles and executes the supported Falcon
+  language subset when a script enters or is saved in object contents.
+  (Menu-based personal landmark creation needs land data and moves to Phase 2;
+  existing landmark assets remain usable via teleport routing.)
 - [x] Complete Firestorm creation, editing, playback, object-contents,
-  restart, and relog acceptance for those fundamental content types.
+  restart, and relog acceptance for those fundamental content types. (Landmark
+  creation via the viewer and About Land ownership are deferred to Phase 2 land
+  operations.)
 
 ## Phase 2: Connected Multi-region World
 
@@ -251,6 +255,9 @@ Falcon LSL scripting foundation.
   Login-to-home currently lands in the home region at the last in-region
   position; exact home-coordinate placement on login is deferred within this
   phase.
+- [ ] Serve minimal region-wide land data (ParcelProperties: owner and
+  permission flags) so the viewer's "Landmark This Place" creation and About
+  Land ownership work. Full parcel geometry and local authority remain Phase 3.
 - [ ] Add region and parcel search sufficient to find and reach destinations.
 - [ ] Show friends and authorized users useful presence and location without
   leaking restricted information.
