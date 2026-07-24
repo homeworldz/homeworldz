@@ -728,7 +728,12 @@ std::vector<std::byte> encode_teleport_failed(const TeleportFailed& message) {
 
 std::vector<std::byte> encode_region_handshake(const RegionHandshake& message) {
     std::vector<std::byte> output(region_handshake_id.begin(), region_handshake_id.end());
-    append_le_u32(output, 0); // region flags
+    // Region-wide permission flags (indra llregionflags.h). Until parcels exist,
+    // advertise landmark creation and region-wide "Set Home to Here" so Firestorm
+    // enables those menu items everywhere in the region.
+    constexpr std::uint32_t region_flags_allow_landmark = 1U << 1;
+    constexpr std::uint32_t region_flags_allow_set_home = 1U << 2;
+    append_le_u32(output, region_flags_allow_landmark | region_flags_allow_set_home);
     output.push_back(std::byte{13}); // PG access
     if (!append_variable1(output, message.name)) return {};
     append_uuid(output, message.owner_id);
