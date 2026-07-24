@@ -212,6 +212,30 @@ Read-only legacy inventory browsing is a stretch compatibility goal for older
 viewers. It is best effort, may remain incomplete, and does not imply support
 for legacy mutation workflows or a commitment to any particular older viewer.
 
+### Parcel land data over the Event Queue
+
+HomeWorldz delivers `ParcelProperties` to viewers as an LLSD message over the
+Event Queue rather than as the legacy `ParcelProperties` UDP packet. This matches
+the current Halcyon/OpenSimulator behaviour and, more importantly, avoids the
+LLUDP datagram size limit: a full-region parcel bitmap is 512 bytes on a 256 m
+region but 8192 bytes on a 1024 m region, which does not fit a single UDP
+message. The viewer-to-simulator parcel requests (`ParcelPropertiesRequest`,
+`ParcelPropertiesUpdate`, `ParcelDivide`, `ParcelJoin`, `ParcelAccessListRequest`,
+`ParcelAccessListUpdate`) are still decoded from UDP; only the potentially large
+`ParcelProperties` reply moves to the Event Queue.
+
+The default region owner is authoritative from the grid region record. A region
+whose grid record has no owner (older provisioning) creates its default parcel as
+public land and reports the connecting viewer as a non-owner, rather than the
+previous placeholder that told every viewer it owned the whole region.
+
+Parcel enforcement is authoritative for build/rez (`CreateObjects`), script
+execution (`AllowOtherScripts`), and teleport entry (ban/access lists plus
+landing-point routing). Group-scoped flags currently fall back to owner-only
+behaviour because groups are not yet modelled (Phase 5). Continuous walk-in
+ejection from banned parcels, `OtherCleanTime` auto-return, and damage/push
+policy are not yet enforced.
+
 ## Planned differences
 
 ### Variable-sized regions

@@ -20,14 +20,14 @@ when scope or implementation evidence changes.
 
 <label class="roadmap-overall-progress">
   <span>Overall progress</span>
-  <progress data-color="primary" max="100" value="27">27%</progress>
-  <strong>27%</strong>
+  <progress data-color="primary" max="100" value="29">29%</progress>
+  <strong>29%</strong>
 </label>
 
 | Phase | Progress | Estimate |
 | --- | --- | ---: |
 | 1. Functional Single-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="100" aria-label="Phase 1 progress: 100%">100%</progress> | 100% |
-| 2. Connected Multi-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="68" aria-label="Phase 2 progress: 68%">68%</progress> | 68% |
+| 2. Connected Multi-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="75" aria-label="Phase 2 progress: 75%">75%</progress> | 75% |
 | 3. Interactive Physical World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="39" aria-label="Phase 3 progress: 39%">39%</progress> | 39% |
 | 4. LSL Scripting | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="15" aria-label="Phase 4 progress: 15%">15%</progress> | 15% |
 | 5. Social and Creator Platform | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="9" aria-label="Phase 5 progress: 9%">9%</progress> | 9% |
@@ -193,10 +193,20 @@ Falcon LSL scripting foundation.
 
 ### Parcels and local authority
 
-- [ ] Implement parcel geometry, ownership, access, landing points, media,
-  environment, and object accounting.
+- [x] Implement parcel geometry, ownership, access, landing points, media,
+  and object accounting. Parcels carry the full ParcelFlags/Category/LandingType
+  set and a 4 m-resolution coverage bitmap generalized to 256/512/1024 m regions;
+  a fresh region gets one region-wide parcel owned by the authoritative grid
+  region owner. Viewers see About Land through `ParcelProperties` (delivered over
+  the Event Queue), edit land options via `ParcelPropertiesUpdate`, subdivide and
+  join with `ParcelDivide`/`ParcelJoin`, and manage access/ban lists via
+  `ParcelAccessListRequest`/`Update`, all persisted in region SQLite. Per-parcel
+  WindLight environment is deferred to the estate/region settings work below.
 - [ ] Enforce build, rez, entry, script, damage, push, and object-return policy
-  at authoritative boundaries.
+  at authoritative boundaries. Build/rez (CreateObjects), script execution
+  (AllowOtherScripts), and teleport entry (ban/access lists plus landing-point
+  routing) are now enforced authoritatively; continuous walk-in ejection,
+  `OtherCleanTime` auto-return, and damage/push policy remain.
 - [ ] Implement estate and region settings needed for terrain, access, maturity,
   restart, and emergency administration.
 - [ ] Apply permissions recursively and consistently to linksets, object
@@ -266,9 +276,10 @@ Falcon LSL scripting foundation.
   Login-to-home currently lands in the home region at the last in-region
   position; exact home-coordinate placement on login is deferred within this
   phase.
-- [ ] Serve minimal region-wide land data (ParcelProperties: owner and
-  permission flags) so the viewer's "Landmark This Place" creation and About
-  Land ownership work. Full parcel geometry and local authority remain Phase 3.
+- [x] Serve region land data (ParcelProperties: owner, flags, area, bitmap,
+  landing point, prim accounting) so the viewer's "Landmark This Place" creation
+  and About Land ownership work. Delivered over the Event Queue as LLSD; full
+  parcel geometry and local authority landed early with the Parcels work above.
 - [ ] Add region and parcel search sufficient to find and reach destinations.
 - [ ] Show friends and authorized users useful presence and location without
   leaking restricted information.
