@@ -36,6 +36,37 @@ struct RegionSettings {
     int lease_seconds{60};
 };
 
+struct Estate {
+    int id{};
+    std::string name;
+    std::string owner_id;
+    int parent_estate_id{1};
+    std::uint64_t flags{};
+    bool public_access{true};
+    double sun_hour{};
+    bool use_global_time{true};
+    bool fixed_sun{};
+    double billable_factor{};
+    int price_per_meter{};
+    int redirect_grid_x{};
+    int redirect_grid_y{};
+    std::string abuse_email;
+    std::vector<std::string> managers;
+    std::vector<std::string> allowed_users;
+    std::vector<std::string> allowed_groups;
+    std::vector<std::string> bans;
+};
+
+// Partial estate settings update; only the engaged fields are sent.
+struct EstateSettingsPatch {
+    std::optional<std::string> name;
+    std::optional<std::uint64_t> flags;
+    std::optional<bool> public_access;
+    std::optional<bool> fixed_sun;
+    std::optional<bool> use_global_time;
+    std::optional<double> sun_hour;
+};
+
 struct RegisteredRegion {
     std::string id;
     std::string name;
@@ -49,6 +80,7 @@ struct RegisteredRegion {
 	int size_y{256};
 	int maturity{};
 	std::string owner_id;
+	std::optional<Estate> estate;
 };
 
 struct RegionNeighbor {
@@ -235,6 +267,10 @@ public:
 		std::string_view region_id, const RegionSettings& settings);
     std::optional<std::vector<RegionNeighbor>> find_region_neighbors(
         std::string_view region_id);
+    std::optional<Estate> update_estate_settings(std::string_view region_id,
+                                                 const EstateSettingsPatch& patch);
+    std::optional<Estate> set_estate_member(std::string_view region_id, std::string_view member_id,
+                                            int role, bool present);
     bool renew_lease(std::string_view region_id, int lease_seconds);
     bool deregister(std::string_view region_id);
 	bool renew_provisioned_lease(std::string_view region_id, int lease_seconds);

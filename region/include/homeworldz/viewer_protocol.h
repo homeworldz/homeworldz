@@ -600,6 +600,9 @@ struct RegionHandshake {
     float water_height{20.0F};
     std::array<Uuid, 4> terrain_textures{};
     bool is_estate_owner{};
+    // indra RegionFlags. Default advertises region-wide landmark creation and
+    // "Set Home to Here" so those viewer menu items activate everywhere.
+    std::uint32_t region_flags{(1U << 1) | (1U << 2)};
 };
 
 // ParcelPropertiesRequest (Medium 11): a (west,south,east,north) metre rectangle query.

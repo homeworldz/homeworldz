@@ -845,6 +845,7 @@ int main(int argc, char* argv[]) {
 
     std::string region_name;
     std::string region_owner_id;
+    std::optional<homeworldz::grid::Estate> region_estate;
     int region_grid_x{};
     int region_grid_y{};
 	int region_size_x{256};
@@ -957,6 +958,7 @@ int main(int argc, char* argv[]) {
             }
             region_name = provisioned->name;
             region_owner_id = provisioned->owner_id;
+            region_estate = provisioned->estate;
             region_grid_x = provisioned->grid_x;
             region_grid_y = provisioned->grid_y;
 			region_size_x = provisioned->size_x;
@@ -1871,6 +1873,50 @@ int main(int argc, char* argv[]) {
         flush_pending_viewer_events(session_id);
     };
 
+    // Estate owner/manager check: the estate owner and any listed manager (and the
+    // provisioned region owner) bypass parcel and estate restrictions.
+    const auto is_estate_manager = [&](std::string_view agent) {
+        if (agent.empty()) return false;
+        if (agent == region_owner_id) return true;
+        if (region_estate) {
+            if (agent == region_estate->owner_id) return true;
+            for (const auto& manager : region_estate->managers)
+                if (manager == agent) return true;
+        }
+        return false;
+    };
+    // Is `agent` banned from the estate, or barred by a private estate's access
+    // lists? Estate owner/managers are always admitted.
+    const auto estate_denies_entry = [&](std::string_view agent) {
+        if (!region_estate || is_estate_manager(agent)) return false;
+        for (const auto& banned : region_estate->bans)
+            if (banned == agent) return true;
+        if (region_estate->public_access) return false;
+        for (const auto& allowed : region_estate->allowed_users)
+            if (allowed == agent) return false;
+        return true; // private estate, agent not on the allowed list (groups TBD)
+    };
+    // Estate/region flags for RegionHandshake and RegionInfo (indra RegionFlags).
+    const auto region_flags = [&]() -> std::uint32_t {
+        constexpr std::uint32_t allow_landmark = 1U << 1;
+        constexpr std::uint32_t allow_set_home = 1U << 2;
+        std::uint32_t flags = allow_landmark | allow_set_home;
+        if (region_estate) {
+            // estatechangeinfo param1 bit layout of the stored estate flags.
+            constexpr std::uint32_t p_allow_dtp = 0x00100000, p_deny_anon = 0x00800000,
+                p_deny_ident = 0x01000000, p_deny_trans = 0x02000000, p_allow_voice = 0x10000000,
+                p_deny_minors = 0x40000000;
+            const auto estate = region_estate->flags;
+            if (region_estate->fixed_sun) flags |= 1U << 4;       // SunFixed
+            if (estate & p_allow_dtp) flags |= 1U << 20;          // AllowDirectTeleport
+            if (estate & p_deny_anon) flags |= 1U << 23;          // DenyAnonymous
+            if (estate & p_deny_ident) flags |= 1U << 24;         // DenyIdentified
+            if (estate & p_deny_trans) flags |= 1U << 25;         // DenyTransacted
+            if (estate & p_allow_voice) flags |= 1U << 28;        // AllowVoice
+            if (estate & p_deny_minors) flags |= 1U << 30;        // DenyAgeUnverified
+        }
+        return flags;
+    };
     // Region-wide simulator prim capacity, scaled by the number of 256 m tiles.
     const auto region_prim_limit = [&]() {
         const long long tiles = static_cast<long long>(region_size_x / 256) *
@@ -1921,6 +1967,13 @@ int main(int argc, char* argv[]) {
         event.landing_type = parcel.landing_type;
         event.other_clean_time = parcel.other_clean_time;
         event.parcel_prim_bonus = 1.0F;
+        if (region_estate) {
+            const auto estate = region_estate->flags;
+            event.region_deny_anonymous = (estate & 0x00800000) != 0;
+            event.region_deny_identified = (estate & 0x01000000) != 0;
+            event.region_deny_transacted = (estate & 0x02000000) != 0;
+            event.region_deny_age_unverified = (estate & 0x40000000) != 0;
+        }
         int min_x = 0, min_y = 0, max_x = 0, max_y = 0;
         if (parcel.cell_bounds(edge, min_x, min_y, max_x, max_y)) {
             event.aabb_min = {static_cast<float>(min_x * 4), static_cast<float>(min_y * 4), 0.0F};
@@ -2742,13 +2795,16 @@ int main(int argc, char* argv[]) {
                             homeworldz::viewer::RegionHandshake handshake;
                             handshake.name = region_name;
                             handshake.region_id = *region_id;
-                            // The region/estate owner is authoritative from the grid record;
+                            // The estate/region owner is authoritative from the grid record;
                             // fall back to the connecting agent only when the grid supplied no
                             // owner (older records), preserving prior single-user behavior.
-                            const auto region_owner = homeworldz::viewer::parse_uuid(region_owner_id);
+                            const auto estate_owner_id = region_estate && !region_estate->owner_id.empty()
+                                ? region_estate->owner_id : region_owner_id;
+                            const auto region_owner = homeworldz::viewer::parse_uuid(estate_owner_id);
                             handshake.owner_id = region_owner ? *region_owner : identity->agent_id;
                             handshake.is_estate_owner =
-                                region_owner && *region_owner == identity->agent_id;
+                                is_estate_manager(homeworldz::viewer::format_uuid(identity->agent_id));
+                            handshake.region_flags = region_flags();
                             constexpr std::array<std::string_view, 4> terrain_texture_ids{
                                 "b8d3965a-ad78-bf43-699b-bff8eca6c975",
                                 "abb783e6-3e93-26c0-248a-247666855da3",
@@ -2887,7 +2943,7 @@ int main(int argc, char* argv[]) {
                             const auto agent = homeworldz::viewer::format_uuid(identity->agent_id);
                             const bool authorized = parcel != nullptr &&
                                 (parcel->owner_id == agent ||
-                                 (!region_owner_id.empty() && region_owner_id == agent));
+                                 is_estate_manager(agent));
                             if (authorized) {
                                 // Preserve server-managed flags the viewer must not toggle.
                                 constexpr std::uint32_t preserved =
@@ -2932,7 +2988,7 @@ int main(int argc, char* argv[]) {
                                 divide->west, divide->south, divide->east, divide->north);
                             const bool authorized = covered != nullptr &&
                                 (covered->owner_id == agent ||
-                                 (!region_owner_id.empty() && region_owner_id == agent));
+                                 is_estate_manager(agent));
                             if (authorized) {
                                 const auto carved = parcels->divide(divide->west, divide->south,
                                     divide->east, divide->north, homeworldz::viewer::random_uuid(),
@@ -2953,10 +3009,10 @@ int main(int argc, char* argv[]) {
                             join && join->agent_id == identity->agent_id &&
                             join->session_id == identity->session_id) {
                             const auto agent = homeworldz::viewer::format_uuid(identity->agent_id);
-                            const bool region_owner = !region_owner_id.empty() && region_owner_id == agent;
+                            const bool manager = is_estate_manager(agent);
                             const auto merged = parcels->join(join->west, join->south, join->east,
-                                join->north, region_owner ? std::string_view{region_owner_id} :
-                                                            std::string_view{agent});
+                                join->north, manager && !region_owner_id.empty() ?
+                                    std::string_view{region_owner_id} : std::string_view{agent});
                             if (merged) {
                                 persist_parcels();
                                 broadcast_parcel_overlay(now);
@@ -3003,7 +3059,7 @@ int main(int argc, char* argv[]) {
                             const auto agent = homeworldz::viewer::format_uuid(identity->agent_id);
                             const bool authorized = parcel != nullptr &&
                                 (parcel->owner_id == agent ||
-                                 (!region_owner_id.empty() && region_owner_id == agent));
+                                 is_estate_manager(agent));
                             if (authorized) {
                                 // Replace the entries carrying the requested access flags.
                                 const std::uint32_t which = update->flags &
@@ -3101,7 +3157,7 @@ int main(int argc, char* argv[]) {
                             const auto agent = homeworldz::viewer::format_uuid(identity->agent_id);
                             const bool authorized = parcel != nullptr &&
                                 (parcel->owner_id == agent ||
-                                 (!region_owner_id.empty() && region_owner_id == agent));
+                                 is_estate_manager(agent));
                             if (authorized) {
                                 std::unordered_set<std::string> listed_tasks;
                                 for (const auto& id : ret->task_ids)
@@ -3218,9 +3274,12 @@ int main(int argc, char* argv[]) {
                                 bool entry_denied = false;
                                 {
                                     const auto agent = homeworldz::viewer::format_uuid(identity->agent_id);
-                                    if (const auto* parcel = parcels->parcel_at(
+                                    if (estate_denies_entry(agent)) {
+                                        entry_denied = true;
+                                    } else if (const auto* parcel = parcels->parcel_at(
                                             static_cast<float>(arrival.x), static_cast<float>(arrival.y))) {
-                                        if (!homeworldz::parcel::can_enter(*parcel, agent, region_owner_id)) {
+                                        if (!homeworldz::parcel::can_enter(*parcel, agent, region_owner_id) &&
+                                            !is_estate_manager(agent)) {
                                             entry_denied = true;
                                         } else if (parcel->landing_type == static_cast<std::uint8_t>(
                                                        homeworldz::parcel::LandingType::landing_point) &&
@@ -6372,7 +6431,8 @@ int main(int argc, char* argv[]) {
                                         static_cast<float>(placement->x),
                                         static_cast<float>(placement->y)))
                                     parcel_allows_build =
-                                        homeworldz::parcel::can_build(*parcel, rezzer, region_owner_id);
+                                        homeworldz::parcel::can_build(*parcel, rezzer, region_owner_id) ||
+                                        is_estate_manager(rezzer);
                             }
                             bool created = false;
                             std::string object_id;
@@ -6676,7 +6736,8 @@ int main(int argc, char* argv[]) {
                                                 static_cast<float>(placement->x),
                                                 static_cast<float>(placement->y)))
                                             parcel_allows_build = homeworldz::parcel::can_build(
-                                                *parcel, user_id, region_owner_id);
+                                                *parcel, user_id, region_owner_id) ||
+                                                is_estate_manager(user_id);
                                     }
                                     if (asset && valid_position && parcel_allows_build) {
                                         object_id = homeworldz::viewer::random_uuid();
@@ -7307,7 +7368,7 @@ int main(int argc, char* argv[]) {
                 const auto& position = avatar.controller.state().position;
                 const auto* parcel = parcels->parcel_at(
                     static_cast<float>(position.x), static_cast<float>(position.y));
-                if (parcel == nullptr ||
+                if (parcel == nullptr || is_estate_manager(avatar.user_id) ||
                     homeworldz::parcel::can_enter(*parcel, avatar.user_id, region_owner_id))
                     continue;
                 std::optional<homeworldz::scene::Vector3> target;

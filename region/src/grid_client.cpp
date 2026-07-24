@@ -303,6 +303,48 @@ std::optional<std::string_view> json_object(std::string_view body, std::string_v
     return std::nullopt;
 }
 
+std::vector<std::string> json_string_array(std::string_view body, std::string_view key) {
+    std::vector<std::string> values;
+    const auto marker = "\"" + std::string(key) + "\":[";
+    const auto found = body.find(marker);
+    if (found == std::string_view::npos) return values;
+    auto position = found + marker.size();
+    while (position < body.size() && body[position] != ']') {
+        if (body[position] == '"') {
+            const auto end = body.find('"', position + 1);
+            if (end == std::string_view::npos) break;
+            values.emplace_back(body.substr(position + 1, end - position - 1));
+            position = end + 1;
+        } else {
+            ++position;
+        }
+    }
+    return values;
+}
+
+Estate estate_from_json(std::string_view body) {
+    Estate estate;
+    estate.id = json_int(body, "id").value_or(0);
+    estate.name = json_field(body, "name");
+    estate.owner_id = json_field(body, "ownerUserId");
+    estate.parent_estate_id = json_int(body, "parentEstateId").value_or(1);
+    estate.flags = json_u64(body, "flags").value_or(0);
+    estate.public_access = json_bool(body, "publicAccess").value_or(true);
+    estate.sun_hour = json_float(body, "sunHour").value_or(0.0F);
+    estate.use_global_time = json_bool(body, "useGlobalTime").value_or(true);
+    estate.fixed_sun = json_bool(body, "fixedSun").value_or(false);
+    estate.billable_factor = json_float(body, "billableFactor").value_or(0.0F);
+    estate.price_per_meter = json_int(body, "pricePerMeter").value_or(0);
+    estate.redirect_grid_x = json_int(body, "redirectGridX").value_or(0);
+    estate.redirect_grid_y = json_int(body, "redirectGridY").value_or(0);
+    estate.abuse_email = json_field(body, "abuseEmail");
+    estate.managers = json_string_array(body, "managers");
+    estate.allowed_users = json_string_array(body, "allowedUsers");
+    estate.allowed_groups = json_string_array(body, "allowedGroups");
+    estate.bans = json_string_array(body, "bans");
+    return estate;
+}
+
 std::optional<TaskInventoryTransfer> task_transfer_from_json(std::string_view body) {
     TaskInventoryTransfer value;
     value.id = json_field(body, "id");
@@ -512,6 +554,8 @@ std::optional<RegisteredRegion> Client::register_provisioned_region(
 	region.size_x = *size_x;
 	region.size_y = *size_y;
 	region.maturity = *maturity;
+    if (const auto estate = json_object(response.body, "estate"))
+        region.estate = estate_from_json(*estate);
     return region;
 }
 
@@ -622,6 +666,41 @@ std::optional<std::vector<RegionNeighbor>> Client::find_region_neighbors(
     if (response.body.find("\"neighbors\":[") == std::string::npos)
         return std::nullopt;
     return neighbors;
+}
+
+std::optional<Estate> Client::update_estate_settings(std::string_view region_id,
+                                                     const EstateSettingsPatch& patch) {
+    std::string body = "{";
+    bool first = true;
+    const auto add = [&](std::string_view field, const std::string& value) {
+        if (!first) body += ',';
+        first = false;
+        body += "\"" + std::string(field) + "\":" + value;
+    };
+    if (patch.name) add("name", api::json_string(*patch.name));
+    if (patch.flags) add("flags", std::to_string(*patch.flags));
+    if (patch.public_access) add("publicAccess", *patch.public_access ? "true" : "false");
+    if (patch.fixed_sun) add("fixedSun", *patch.fixed_sun ? "true" : "false");
+    if (patch.use_global_time) add("useGlobalTime", *patch.use_global_time ? "true" : "false");
+    if (patch.sun_hour) add("sunHour", std::to_string(*patch.sun_hour));
+    body += "}";
+    const auto response = transport_->send(
+        "POST", "/api/v1/region-runtime/" + path_segment(region_id) + "/estate", body);
+    if (response.status_code != 200) return std::nullopt;
+    if (const auto estate = json_object(response.body, "estate")) return estate_from_json(*estate);
+    return std::nullopt;
+}
+
+std::optional<Estate> Client::set_estate_member(std::string_view region_id,
+                                                std::string_view member_id, int role, bool present) {
+    const auto body = "{\"memberId\":" + api::json_string(std::string(member_id)) +
+                      ",\"role\":" + std::to_string(role) +
+                      ",\"present\":" + (present ? "true" : "false") + "}";
+    const auto response = transport_->send(
+        "POST", "/api/v1/region-runtime/" + path_segment(region_id) + "/estate/members", body);
+    if (response.status_code != 200) return std::nullopt;
+    if (const auto estate = json_object(response.body, "estate")) return estate_from_json(*estate);
+    return std::nullopt;
 }
 
 bool Client::renew_lease(std::string_view region_id, int lease_seconds) {
