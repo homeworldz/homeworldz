@@ -52,6 +52,11 @@ struct TeleportLocationRequest : AgentMessage {
     std::array<float, 3> look_at{};
 };
 
+// TeleportLandmarkRequest (Low 65). A null landmark_id means "Teleport Home".
+struct TeleportLandmarkRequest : AgentMessage {
+    Uuid landmark_id{};
+};
+
 struct TeleportStart {
     std::uint32_t flags{};
 };
@@ -695,6 +700,8 @@ std::vector<std::byte> encode_avatar_texture_entry(const std::array<Uuid, 32>& f
 std::vector<std::byte> encode_use_circuit_code(const UseCircuitCode& message);
 std::optional<UseCircuitCode> decode_use_circuit_code(std::span<const std::byte> payload);
 std::optional<TeleportLocationRequest> decode_teleport_location_request(
+    std::span<const std::byte> payload);
+std::optional<TeleportLandmarkRequest> decode_teleport_landmark_request(
     std::span<const std::byte> payload);
 std::vector<std::byte> encode_teleport_start(const TeleportStart& message);
 std::vector<std::byte> encode_teleport_local(const TeleportLocal& message);

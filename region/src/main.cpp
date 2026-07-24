@@ -2674,20 +2674,18 @@ int main(int argc, char* argv[]) {
                                     static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
                             }
                         }
-                        if (const auto teleport =
-                                homeworldz::viewer::decode_teleport_location_request(packet->payload);
-                            teleport && teleport->agent_id == identity->agent_id &&
-                            teleport->session_id == identity->session_id) {
+                        const auto perform_teleport = [&](std::uint64_t destination_handle,
+                                                          const std::array<float, 3>& destination_position) {
                             const auto current_position =
                                 homeworldz::region::resolve_region_teleport_position(
                                     region_grid_x, region_grid_y, region_size_x, region_size_y,
-                                    teleport->region_handle, teleport->position);
+                                    destination_handle, destination_position);
                             const homeworldz::grid::RegionNeighbor* target = nullptr;
                             std::optional<std::array<float, 3>> target_position;
                             for (const auto& neighbor : region_neighbors) {
                                 auto resolved = homeworldz::region::resolve_region_teleport_position(
                                     neighbor.grid_x, neighbor.grid_y, neighbor.size_x, neighbor.size_y,
-                                    teleport->region_handle, teleport->position);
+                                    destination_handle, destination_position);
                                 if (!resolved) continue;
                                 target = &neighbor;
                                 target_position = resolved;
@@ -2805,6 +2803,61 @@ int main(int argc, char* argv[]) {
                                 }
                             } else {
                                 fail_teleport("Destination viewer address could not be resolved");
+                            }
+                        };
+                        if (const auto teleport =
+                                homeworldz::viewer::decode_teleport_location_request(packet->payload);
+                            teleport && teleport->agent_id == identity->agent_id &&
+                            teleport->session_id == identity->session_id) {
+                            perform_teleport(teleport->region_handle, teleport->position);
+                        }
+                        if (const auto landmark_tp =
+                                homeworldz::viewer::decode_teleport_landmark_request(packet->payload);
+                            landmark_tp && landmark_tp->agent_id == identity->agent_id &&
+                            landmark_tp->session_id == identity->session_id) {
+                            const auto fail_landmark = [&](std::string reason) {
+                                if (const auto failed = circuits.send(endpoint,
+                                        homeworldz::viewer::encode_teleport_failed(
+                                            {identity->agent_id, std::move(reason)}), true, now, true))
+                                    static_cast<void>(send_udp(viewer_server, endpoint, *failed));
+                            };
+                            if (landmark_tp->landmark_id == homeworldz::viewer::Uuid{}) {
+                                // Null landmark = Teleport Home; wired in the Home step.
+                                fail_landmark("Home location is not set");
+                            } else {
+                                // Landmark asset: "Landmark version 2\nregion_id <uuid>\nlocal_pos x y z".
+                                std::optional<std::uint64_t> destination_handle;
+                                std::array<float, 3> local_pos{};
+                                try {
+                                    const auto bytes = read_federated_asset(
+                                        homeworldz::viewer::format_uuid(landmark_tp->landmark_id));
+                                    const std::string text(
+                                        reinterpret_cast<const char*>(bytes.data()), bytes.size());
+                                    const auto region_key = text.find("region_id ");
+                                    const auto pos_key = text.find("local_pos ");
+                                    if (region_key != std::string::npos && pos_key != std::string::npos &&
+                                        region_key + 10 + 36 <= text.size()) {
+                                        const auto region_id = text.substr(region_key + 10, 36);
+                                        std::istringstream coords(text.substr(pos_key + 10));
+                                        coords >> local_pos[0] >> local_pos[1] >> local_pos[2];
+                                        if (registration && region_id == registration->region_id()) {
+                                            destination_handle =
+                                                (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
+                                                static_cast<std::uint32_t>(region_grid_y * 256);
+                                        } else {
+                                            for (const auto& neighbor : region_neighbors) {
+                                                if (neighbor.id != region_id) continue;
+                                                destination_handle =
+                                                    (static_cast<std::uint64_t>(neighbor.grid_x * 256) << 32) |
+                                                    static_cast<std::uint32_t>(neighbor.grid_y * 256);
+                                                break;
+                                            }
+                                        }
+                                    }
+                                } catch (const std::exception&) {
+                                }
+                                if (destination_handle) perform_teleport(*destination_handle, local_pos);
+                                else fail_landmark("Landmark destination is unavailable");
                             }
                         }
                         const auto logout = homeworldz::viewer::decode_logout_request(packet->payload);

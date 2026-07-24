@@ -16,6 +16,8 @@ constexpr std::array<std::byte, 4> teleport_location_request_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x3f}};
 constexpr std::array<std::byte, 4> teleport_local_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x40}};
+constexpr std::array<std::byte, 4> teleport_landmark_request_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x41}};
 constexpr std::array<std::byte, 4> teleport_start_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x49}};
 constexpr std::array<std::byte, 4> teleport_failed_id{
@@ -606,6 +608,20 @@ std::optional<TeleportLocationRequest> decode_teleport_location_request(
     };
     return finite(result.position) && finite(result.look_at)
         ? std::optional<TeleportLocationRequest>{result} : std::nullopt;
+}
+
+std::optional<TeleportLandmarkRequest> decode_teleport_landmark_request(
+    std::span<const std::byte> payload) {
+    // Info block: AgentID, SessionID, LandmarkID (16 each) after the 4-byte id.
+    if (payload.size() != 52 ||
+        !std::equal(teleport_landmark_request_id.begin(), teleport_landmark_request_id.end(),
+                    payload.begin()))
+        return std::nullopt;
+    TeleportLandmarkRequest result;
+    std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
+    std::copy_n(payload.begin() + 36, 16, result.landmark_id.begin());
+    return result;
 }
 
 std::vector<std::byte> encode_teleport_start(const TeleportStart& message) {
