@@ -27,7 +27,7 @@ when scope or implementation evidence changes.
 | Phase | Progress | Estimate |
 | --- | --- | ---: |
 | 1. Functional Single-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="100" aria-label="Phase 1 progress: 100%">100%</progress> | 100% |
-| 2. Connected Multi-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="75" aria-label="Phase 2 progress: 75%">75%</progress> | 75% |
+| 2. Connected Multi-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="78" aria-label="Phase 2 progress: 78%">78%</progress> | 78% |
 | 3. Interactive Physical World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="39" aria-label="Phase 3 progress: 39%">39%</progress> | 39% |
 | 4. LSL Scripting | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="15" aria-label="Phase 4 progress: 15%">15%</progress> | 15% |
 | 5. Social and Creator Platform | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="9" aria-label="Phase 5 progress: 9%">9%</progress> | 9% |
@@ -202,14 +202,16 @@ Falcon LSL scripting foundation.
   join with `ParcelDivide`/`ParcelJoin`, and manage access/ban lists via
   `ParcelAccessListRequest`/`Update`, all persisted in region SQLite. Per-parcel
   WindLight environment is deferred to the estate/region settings work below.
-- [ ] Enforce build, rez, entry, script, damage, push, and object-return policy
-  at authoritative boundaries. Build/rez (CreateObjects), script execution
-  (AllowOtherScripts), teleport entry (ban/access lists plus landing-point
-  routing), and viewer-initiated object return (`ParcelReturnObjects` returns
-  objects to their owners' Lost and Found, with the About Land Objects tab backed
-  by `ParcelObjectOwnersReply`/`ForceObjectSelect`) are now enforced
-  authoritatively; continuous walk-in ejection, `OtherCleanTime` auto-return, and
-  damage/push policy remain.
+- [x] Enforce build, rez, entry, script, and object-return policy at authoritative
+  boundaries. Build/rez (CreateObjects), script execution (AllowOtherScripts),
+  teleport entry and continuous walk-in ejection (ban/access lists plus
+  landing-point routing), viewer-initiated object return (`ParcelReturnObjects` to
+  each owner's Lost and Found, with the About Land Objects tab backed by
+  `ParcelObjectOwnersReply`/`ForceObjectSelect`), and periodic `OtherCleanTime`
+  auto-return of non-owner objects are enforced authoritatively. The damage
+  (`AllowDamage`) and push (`RestrictPushObject`) flags are carried and surfaced
+  but their enforcement is inert until the combat/health and `llPushObject`
+  systems exist (Phase 4).
 - [ ] Implement estate and region settings needed for terrain, access, maturity,
   restart, and emergency administration.
 - [ ] Apply permissions recursively and consistently to linksets, object

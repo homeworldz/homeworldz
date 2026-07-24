@@ -232,11 +232,12 @@ public land and reports the connecting viewer as a non-owner, rather than the
 previous placeholder that told every viewer it owned the whole region.
 
 Parcel enforcement is authoritative for build/rez (`CreateObjects`), script
-execution (`AllowOtherScripts`), and teleport entry (ban/access lists plus
-landing-point routing). Group-scoped flags currently fall back to owner-only
-behaviour because groups are not yet modelled (Phase 5). Continuous walk-in
-ejection from banned parcels, `OtherCleanTime` auto-return, and damage/push
-policy are not yet enforced.
+execution (`AllowOtherScripts`), teleport entry and continuous walk-in ejection
+(ban/access lists plus landing-point routing), viewer-initiated object return,
+and periodic `OtherCleanTime` auto-return. Group-scoped flags currently fall back
+to owner-only behaviour because groups are not yet modelled (Phase 5). The damage
+(`AllowDamage`) and push (`RestrictPushObject`) flags are carried but inert until
+the combat/health and `llPushObject` systems exist.
 
 ## Planned differences
 

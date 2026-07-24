@@ -1536,6 +1536,10 @@ int main(int argc, char* argv[]) {
     }
     auto previous_tick = std::chrono::steady_clock::now();
     auto next_snapshot = previous_tick + std::chrono::seconds(30);
+    auto next_parcel_sweep = previous_tick + std::chrono::seconds(30);
+    // When each auto-return-eligible object was first seen on its parcel.
+    std::unordered_map<homeworldz::scene::EntityId, std::chrono::steady_clock::time_point>
+        object_clean_since;
     auto next_dynamic_sync = previous_tick;
 
     const auto server = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -7245,6 +7249,119 @@ int main(int argc, char* argv[]) {
                 std::cerr << "{\"level\":\"error\",\"message\":\"save scene snapshot failed\",\"error\":"
                           << homeworldz::api::json_string(error.what()) << "}" << std::endl;
                 running = false;
+            }
+        }
+        if (parcels && now >= next_parcel_sweep) {
+            next_parcel_sweep = now + std::chrono::seconds(30);
+            // Auto-return: objects not owned by the parcel owner (or region owner)
+            // on a parcel with OtherCleanTime set are returned once they have sat
+            // there longer than that many minutes.
+            std::vector<homeworldz::scene::EntityId> to_return;
+            std::unordered_set<homeworldz::scene::EntityId> still_eligible;
+            for (const auto& [root_id, entity] : scene.entities()) {
+                if (entity.object_id.empty() || entity.temporary || entity.parent_id != 0) continue;
+                const auto* parcel = parcels->parcel_at(
+                    static_cast<float>(entity.position.x), static_cast<float>(entity.position.y));
+                if (parcel == nullptr || parcel->other_clean_time <= 0) continue;
+                if (entity.owner_id == parcel->owner_id) continue;
+                if (!parcel->group_id.empty() && entity.owner_id == parcel->group_id) continue;
+                if (!region_owner_id.empty() && entity.owner_id == region_owner_id) continue;
+                still_eligible.insert(root_id);
+                const auto seen = object_clean_since.find(root_id);
+                if (seen == object_clean_since.end()) {
+                    object_clean_since[root_id] = now;
+                } else if (now - seen->second >= std::chrono::minutes(parcel->other_clean_time)) {
+                    to_return.push_back(root_id);
+                }
+            }
+            std::erase_if(object_clean_since, [&](const auto& entry) {
+                return still_eligible.count(entry.first) == 0;
+            });
+            std::vector<std::uint32_t> auto_removed;
+            for (const auto root_id : to_return) {
+                return_object_to_owner(root_id, auto_removed);
+                object_clean_since.erase(root_id);
+            }
+            if (!auto_removed.empty()) {
+                try {
+                    storage->save_snapshot(scene);
+                } catch (const std::exception& error) {
+                    std::cout << "{\"level\":\"error\",\"message\":\"auto-return persistence failed\","
+                                 "\"error\":" << homeworldz::api::json_string(error.what()) << "}"
+                              << std::endl;
+                }
+                for (const auto entity_id : auto_removed) remove_physics_object(entity_id);
+                const auto kill = homeworldz::viewer::encode_kill_object(auto_removed);
+                for (const auto& [recipient_endpoint, recipient] : avatars) {
+                    static_cast<void>(recipient);
+                    if (const auto outgoing = circuits.send(recipient_endpoint, kill, true, now))
+                        static_cast<void>(send_udp(viewer_server, recipient_endpoint, *outgoing));
+                }
+                std::cout << "{\"level\":\"info\",\"message\":\"parcel objects auto-returned\","
+                             "\"count\":" << auto_removed.size() << "}" << std::endl;
+            }
+            // Ban/access ejection: relocate an avatar standing on a parcel that bans
+            // or access-restricts it to the nearest parcel that admits it. Avoids a
+            // teleport loop because the destination parcel admits the avatar.
+            for (auto& [viewer_endpoint, avatar] : avatars) {
+                const auto& position = avatar.controller.state().position;
+                const auto* parcel = parcels->parcel_at(
+                    static_cast<float>(position.x), static_cast<float>(position.y));
+                if (parcel == nullptr ||
+                    homeworldz::parcel::can_enter(*parcel, avatar.user_id, region_owner_id))
+                    continue;
+                std::optional<homeworldz::scene::Vector3> target;
+                double best = (std::numeric_limits<double>::max)();
+                for (const auto& candidate : parcels->parcels()) {
+                    if (!homeworldz::parcel::can_enter(candidate, avatar.user_id, region_owner_id))
+                        continue;
+                    homeworldz::scene::Vector3 point;
+                    if (candidate.user_location.x != 0.0F || candidate.user_location.y != 0.0F ||
+                        candidate.user_location.z != 0.0F) {
+                        point = {candidate.user_location.x, candidate.user_location.y,
+                                 candidate.user_location.z};
+                    } else {
+                        int min_x = 0, min_y = 0, max_x = 0, max_y = 0;
+                        if (!candidate.cell_bounds(parcels->edge_cells(), min_x, min_y, max_x, max_y))
+                            continue;
+                        point = {static_cast<double>((min_x + max_x) * 2),
+                                 static_cast<double>((min_y + max_y) * 2), 0.0};
+                        point.z = collision_ground_height(point) + 1.0;
+                    }
+                    const auto dx = point.x - position.x, dy = point.y - position.y;
+                    const auto distance = dx * dx + dy * dy;
+                    if (distance < best) {
+                        best = distance;
+                        target = point;
+                    }
+                }
+                if (!target) continue; // nowhere in-region admits this avatar
+                const auto flying = avatar.controller.state().flying;
+                avatar.controller.set_ground_height(collision_ground_height(*target));
+                avatar.controller.teleport(*target, flying);
+                if (physics_world && avatar.physics_character != 0) {
+                    if (auto state = physics_world->character_state(avatar.physics_character)) {
+                        state->position = avatar.controller.state().position;
+                        state->linear_velocity = {};
+                        state->grounded = avatar.controller.state().grounded;
+                        physics_world->set_character_state(avatar.physics_character, *state);
+                        physics_world->set_character_flying(avatar.physics_character, flying);
+                    }
+                }
+                const auto view_position = avatar.controller.viewer_position();
+                const auto look_direction = avatar.controller.look_direction();
+                const auto flags = homeworldz::viewer::teleport_flags_via_location |
+                    (flying ? homeworldz::viewer::teleport_flags_is_flying : 0U);
+                const auto agent_uuid =
+                    homeworldz::viewer::parse_uuid(avatar.user_id).value_or(homeworldz::viewer::Uuid{});
+                if (const auto local = circuits.send(viewer_endpoint,
+                        homeworldz::viewer::encode_teleport_local({agent_uuid, 2,
+                            {static_cast<float>(view_position.x), static_cast<float>(view_position.y),
+                             static_cast<float>(view_position.z)}, look_direction, flags}),
+                        true, now, true))
+                    static_cast<void>(send_udp(viewer_server, viewer_endpoint, *local));
+                std::cout << "{\"level\":\"info\",\"message\":\"avatar ejected from parcel\",\"agent\":"
+                          << homeworldz::api::json_string(avatar.user_id) << "}" << std::endl;
             }
         }
         if (registration && !registration->tick(now)) {
