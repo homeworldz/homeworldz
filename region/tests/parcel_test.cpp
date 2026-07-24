@@ -103,6 +103,46 @@ int main() {
         check(set.parcels().size() == 2, "parcels unchanged after rejected join");
     }
 
+    // Enforcement predicates.
+    {
+        using namespace homeworldz::parcel;
+        const std::string region_owner = "99999999-9999-4999-8999-999999999999";
+        const std::string owner = "22222222-2222-4222-8222-222222222222";
+        const std::string stranger = "55555555-5555-4555-8555-555555555555";
+        Parcel parcel;
+        parcel.owner_id = owner;
+        parcel.flags = default_parcel_flags; // CreateObjects + AllowOtherScripts set
+
+        check(can_build(parcel, owner, region_owner), "owner can build");
+        check(can_build(parcel, region_owner, region_owner), "region owner can build");
+        check(can_build(parcel, stranger, region_owner),
+              "stranger can build when CreateObjects set");
+        parcel.flags &= ~flag_create_objects;
+        check(!can_build(parcel, stranger, region_owner),
+              "stranger cannot build when CreateObjects clear");
+        check(can_build(parcel, owner, region_owner), "owner still builds without CreateObjects");
+
+        check(can_run_scripts(parcel, stranger, region_owner),
+              "other scripts run when AllowOtherScripts set");
+        parcel.flags &= ~flag_allow_other_scripts;
+        check(!can_run_scripts(parcel, stranger, region_owner),
+              "other scripts blocked when AllowOtherScripts clear");
+        check(can_run_scripts(parcel, owner, region_owner), "owner scripts always run");
+
+        check(can_enter(parcel, stranger, region_owner), "open parcel admits strangers");
+        parcel.flags |= flag_use_ban_list;
+        parcel.access.push_back({stranger, 0, access_ban});
+        check(!can_enter(parcel, stranger, region_owner), "banned agent cannot enter");
+        check(can_enter(parcel, owner, region_owner), "owner enters despite ban list");
+        check(can_enter(parcel, region_owner, region_owner), "region owner enters despite ban list");
+        parcel.flags |= flag_use_access_list;
+        const std::string guest = "66666666-6666-4666-8666-666666666666";
+        check(!can_enter(parcel, guest, region_owner),
+              "access list excludes non-listed agent");
+        parcel.access.push_back({guest, 0, access_allowed});
+        check(can_enter(parcel, guest, region_owner), "listed agent enters");
+    }
+
     if (failures != 0) {
         std::printf("%d parcel test check(s) failed\n", failures);
         return 1;

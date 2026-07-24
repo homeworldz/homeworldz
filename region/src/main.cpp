@@ -1678,13 +1678,23 @@ int main(int argc, char* argv[]) {
     const auto rez_task_script = [&](const homeworldz::scene::Entity& entity,
                                      const homeworldz::scene::TaskInventoryItem& item,
                                      bool enabled) {
+        // Parcel script policy: a script only runs when its parcel allows scripts
+        // for the object owner (AllowOtherScripts, or owner/region-owner). The item
+        // stays in contents; it just does not execute where scripts are disallowed.
+        bool effective_enabled = enabled;
+        if (enabled && parcels) {
+            if (const auto* parcel = parcels->parcel_at(
+                    static_cast<float>(entity.position.x), static_cast<float>(entity.position.y)))
+                effective_enabled =
+                    homeworldz::parcel::can_run_scripts(*parcel, entity.owner_id, region_owner_id);
+        }
         try {
             const auto asset = read_federated_asset(item.asset_id);
             const auto source = std::string(
                 reinterpret_cast<const char*>(asset.data()), asset.size());
             return falcon.rez(
                 {item.asset_id, item.item_id, entity.object_id, entity.owner_id},
-                source, enabled);
+                source, effective_enabled);
         } catch (const std::exception& error) {
             return homeworldz::script::FalconRezResult{false, false, error.what()};
         }
@@ -2979,15 +2989,40 @@ int main(int argc, char* argv[]) {
                                 const auto avatar = avatars.find(endpoint);
                                 const homeworldz::scene::Vector3 requested_position{
                                     (*current_position)[0], (*current_position)[1], (*current_position)[2]};
-                                if (avatar == avatars.end() || requested_position.x < 0.0 ||
+                                // Parcel entry policy and landing-point routing: deny a
+                                // teleport into a parcel that bans/​restricts the agent, and
+                                // redirect to the parcel's landing point when one is set.
+                                auto arrival = requested_position;
+                                bool entry_denied = false;
+                                {
+                                    const auto agent = homeworldz::viewer::format_uuid(identity->agent_id);
+                                    if (const auto* parcel = parcels->parcel_at(
+                                            static_cast<float>(arrival.x), static_cast<float>(arrival.y))) {
+                                        if (!homeworldz::parcel::can_enter(*parcel, agent, region_owner_id)) {
+                                            entry_denied = true;
+                                        } else if (parcel->landing_type == static_cast<std::uint8_t>(
+                                                       homeworldz::parcel::LandingType::landing_point) &&
+                                                   (parcel->user_location.x != 0.0F ||
+                                                    parcel->user_location.y != 0.0F ||
+                                                    parcel->user_location.z != 0.0F) &&
+                                                   agent != parcel->owner_id) {
+                                            arrival = {parcel->user_location.x, parcel->user_location.y,
+                                                       parcel->user_location.z};
+                                        }
+                                    }
+                                }
+                                if (avatar == avatars.end() || entry_denied ||
+                                    requested_position.x < 0.0 ||
                                     requested_position.x > region_size_x || requested_position.y < 0.0 ||
                                     requested_position.y > region_size_y) {
-                                    fail_teleport("Destination position is unavailable");
+                                    fail_teleport(entry_denied
+                                        ? "You are not permitted to enter that parcel"
+                                        : "Destination position is unavailable");
                                 } else {
                                     const auto flying = avatar->second.controller.state().flying;
                                     avatar->second.controller.set_ground_height(
-                                        collision_ground_height(requested_position));
-                                    avatar->second.controller.teleport(requested_position, flying);
+                                        collision_ground_height(arrival));
+                                    avatar->second.controller.teleport(arrival, flying);
                                     if (physics_world && avatar->second.physics_character != 0) {
                                         if (auto state = physics_world->character_state(
                                                 avatar->second.physics_character)) {
@@ -6108,10 +6143,19 @@ int main(int argc, char* argv[]) {
                                 placement->x <= region_size_x && placement->y >= 0.0 &&
                                 placement->y <= region_size_y &&
                                 placement->z >= -64.0 && placement->z <= 4096.0;
+                            bool parcel_allows_build = true;
+                            if (placement) {
+                                const auto rezzer = homeworldz::viewer::format_uuid(identity->agent_id);
+                                if (const auto* parcel = parcels->parcel_at(
+                                        static_cast<float>(placement->x),
+                                        static_cast<float>(placement->y)))
+                                    parcel_allows_build =
+                                        homeworldz::parcel::can_build(*parcel, rezzer, region_owner_id);
+                            }
                             bool created = false;
                             std::string object_id;
                             homeworldz::scene::EntityId entity_id{};
-                            if (valid_prim_shape &&
+                            if (valid_prim_shape && parcel_allows_build &&
                                 valid_position && valid_rotation && object_add->material <= 7) {
                                 object_id = homeworldz::viewer::random_uuid();
                                 const auto owner_id = homeworldz::viewer::format_uuid(identity->agent_id);
@@ -6404,7 +6448,15 @@ int main(int argc, char* argv[]) {
                                         placement->x >= 0.0 && placement->x <= region_size_x &&
                                         placement->y >= 0.0 && placement->y <= region_size_y &&
                                         placement->z >= -64.0 && placement->z <= 4096.0;
-                                    if (asset && valid_position) {
+                                    bool parcel_allows_build = true;
+                                    if (placement) {
+                                        if (const auto* parcel = parcels->parcel_at(
+                                                static_cast<float>(placement->x),
+                                                static_cast<float>(placement->y)))
+                                            parcel_allows_build = homeworldz::parcel::can_build(
+                                                *parcel, user_id, region_owner_id);
+                                    }
+                                    if (asset && valid_position && parcel_allows_build) {
                                         object_id = homeworldz::viewer::random_uuid();
                                         const bool no_copy =
                                             (item->current_permissions & homeworldz::scene::permission_copy) == 0;

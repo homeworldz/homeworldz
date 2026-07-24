@@ -52,6 +52,43 @@ bool Parcel::cell_bounds(int edge_cells, int& min_x, int& min_y, int& max_x, int
     return any;
 }
 
+namespace {
+
+bool is_region_owner(std::string_view agent, std::string_view region_owner) {
+    return !region_owner.empty() && agent == region_owner;
+}
+
+bool has_access(const Parcel& parcel, std::string_view agent, std::uint32_t flag) {
+    for (const auto& entry : parcel.access)
+        if (entry.agent_id == agent && (entry.flags & flag) != 0) return true;
+    return false;
+}
+
+} // namespace
+
+bool can_build(const Parcel& parcel, std::string_view agent, std::string_view region_owner) {
+    if (is_region_owner(agent, region_owner)) return true;
+    if (!parcel.owner_id.empty() && agent == parcel.owner_id) return true;
+    return (parcel.flags & flag_create_objects) != 0;
+}
+
+bool can_enter(const Parcel& parcel, std::string_view agent, std::string_view region_owner) {
+    if (is_region_owner(agent, region_owner)) return true;
+    if (!parcel.owner_id.empty() && agent == parcel.owner_id) return true;
+    if ((parcel.flags & flag_use_ban_list) != 0 && has_access(parcel, agent, access_ban))
+        return false;
+    if ((parcel.flags & flag_use_access_list) != 0 && !has_access(parcel, agent, access_allowed))
+        return false;
+    return true;
+}
+
+bool can_run_scripts(const Parcel& parcel, std::string_view owner, std::string_view region_owner) {
+    if ((parcel.flags & flag_allow_other_scripts) != 0) return true;
+    if (is_region_owner(owner, region_owner)) return true;
+    if (!parcel.owner_id.empty() && owner == parcel.owner_id) return true;
+    return false;
+}
+
 bool ParcelSet::bit_get(const std::vector<std::uint8_t>& bitmap, int edge_cells,
                         int cell_x, int cell_y) {
     if (cell_x < 0 || cell_y < 0 || cell_x >= edge_cells || cell_y >= edge_cells) return false;

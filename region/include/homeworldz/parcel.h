@@ -118,6 +118,20 @@ struct Parcel {
     bool cell_bounds(int edge_cells, int& min_x, int& min_y, int& max_x, int& max_y) const;
 };
 
+// Policy predicates. `region_owner` (the estate/region owner) is always permitted;
+// pass an empty string when the region has no recorded owner. Group membership is
+// not yet modelled, so group-scoped flags fall back to owner-only behaviour.
+
+// May `agent` create/rez objects on this parcel? (ParcelFlags CreateObjects.)
+bool can_build(const Parcel& parcel, std::string_view agent, std::string_view region_owner);
+
+// May `agent` enter this parcel? (ban list, then access list / access group.)
+bool can_enter(const Parcel& parcel, std::string_view agent, std::string_view region_owner);
+
+// May a script whose object is owned by `owner` run on this parcel?
+// (ParcelFlags AllowOtherScripts / AllowGroupScripts.)
+bool can_run_scripts(const Parcel& parcel, std::string_view owner, std::string_view region_owner);
+
 // A region's complete set of parcels plus the derived per-cell ownership grid.
 // Cell resolution is fixed at 4 m; edge_cells = region_size_metres / 4.
 class ParcelSet {
