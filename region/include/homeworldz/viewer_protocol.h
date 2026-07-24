@@ -693,6 +693,46 @@ struct ParcelAccessListReply {
     std::vector<ParcelAccessListEntry> entries;
 };
 
+// ParcelObjectOwnersRequest (Low 56).
+struct ParcelObjectOwnersRequest {
+    Uuid agent_id{};
+    Uuid session_id{};
+    std::int32_t local_id{};
+};
+
+// ParcelObjectOwnersReply (Low 57): one entry per distinct object owner on a parcel.
+struct ParcelObjectOwner {
+    Uuid owner_id{};
+    bool is_group_owned{};
+    std::int32_t count{};
+    bool online{};
+};
+
+// ParcelSelectObjects (Low 202): highlight owner/group/other/listed objects.
+struct ParcelSelectObjects {
+    Uuid agent_id{};
+    Uuid session_id{};
+    std::int32_t local_id{};
+    std::uint32_t return_type{};
+    std::vector<Uuid> return_ids;
+};
+
+// ParcelReturnObjects (Low 199): return objects on a parcel by type or explicit list.
+struct ParcelReturnObjects {
+    Uuid agent_id{};
+    Uuid session_id{};
+    std::int32_t local_id{};
+    std::uint32_t return_type{};
+    std::vector<Uuid> task_ids;
+    std::vector<Uuid> owner_ids;
+};
+
+// ObjectReturnType bitfield (OpenMetaverse ObjectReturnType).
+inline constexpr std::uint32_t object_return_owner = 1U << 1;
+inline constexpr std::uint32_t object_return_group = 1U << 2;
+inline constexpr std::uint32_t object_return_other = 1U << 3;
+inline constexpr std::uint32_t object_return_list = 1U << 4;
+
 struct AgentMovementComplete : AgentMessage {
     std::array<float, 3> position{128.0F, 128.0F, 25.0F};
     std::array<float, 3> look_at{1.0F, 0.0F, 0.0F};
@@ -935,6 +975,13 @@ std::vector<std::byte> encode_parcel_access_list_reply(const ParcelAccessListRep
 // Pack per-cell overlay bytes (row-major, x inner) into ParcelOverlay packets,
 // 1024 cells per packet, with an incrementing SequenceID. One or more packets.
 std::vector<std::vector<std::byte>> encode_parcel_overlay(std::span<const std::uint8_t> cells);
+std::optional<ParcelObjectOwnersRequest> decode_parcel_object_owners_request(
+    std::span<const std::byte> payload);
+std::vector<std::byte> encode_parcel_object_owners_reply(
+    std::span<const ParcelObjectOwner> owners);
+std::optional<ParcelSelectObjects> decode_parcel_select_objects(std::span<const std::byte> payload);
+std::vector<std::vector<std::byte>> encode_force_object_select(std::span<const std::uint32_t> local_ids);
+std::optional<ParcelReturnObjects> decode_parcel_return_objects(std::span<const std::byte> payload);
 std::optional<ChatFromViewer> decode_chat_from_viewer(std::span<const std::byte> payload);
 std::vector<std::byte> encode_chat_from_simulator(const ChatFromSimulator& message);
 std::vector<std::byte> encode_flat_terrain(std::span<const TerrainPatch> patches, float height);

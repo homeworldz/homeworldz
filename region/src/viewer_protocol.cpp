@@ -42,6 +42,16 @@ constexpr std::array<std::byte, 4> chat_from_viewer_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x50}};
 constexpr std::array<std::byte, 4> modify_land_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x7c}};
+constexpr std::array<std::byte, 4> parcel_object_owners_request_id{ // Low 56
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x38}};
+constexpr std::array<std::byte, 4> parcel_object_owners_reply_id{ // Low 57
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x39}};
+constexpr std::array<std::byte, 4> parcel_return_objects_id{ // Low 199
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0xc7}};
+constexpr std::array<std::byte, 4> parcel_select_objects_id{ // Low 202
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0xca}};
+constexpr std::array<std::byte, 4> force_object_select_id{ // Low 205
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0xcd}};
 constexpr std::array<std::byte, 4> parcel_overlay_id{ // Low 196
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0xc4}};
 constexpr std::array<std::byte, 2> parcel_properties_request_id{ // Medium 11
@@ -2538,6 +2548,112 @@ std::vector<std::vector<std::byte>> encode_parcel_overlay(std::span<const std::u
         packets.push_back(std::move(output));
     }
     return packets;
+}
+
+std::optional<ParcelObjectOwnersRequest> decode_parcel_object_owners_request(
+    std::span<const std::byte> payload) {
+    constexpr std::size_t id = 4;
+    constexpr std::size_t size = id + 32 + 4;
+    if (payload.size() < size ||
+        !std::equal(parcel_object_owners_request_id.begin(), parcel_object_owners_request_id.end(),
+                    payload.begin()))
+        return std::nullopt;
+    ParcelObjectOwnersRequest result;
+    result.agent_id = read_uuid(payload, id);
+    result.session_id = read_uuid(payload, id + 16);
+    result.local_id = static_cast<std::int32_t>(read_le_u32(payload, id + 32));
+    return result;
+}
+
+std::vector<std::byte> encode_parcel_object_owners_reply(
+    std::span<const ParcelObjectOwner> owners) {
+    std::vector<std::byte> output(parcel_object_owners_reply_id.begin(),
+                                  parcel_object_owners_reply_id.end());
+    output.push_back(static_cast<std::byte>(std::min<std::size_t>(owners.size(), 255)));
+    std::size_t emitted = 0;
+    for (const auto& owner : owners) {
+        if (emitted++ >= 255) break;
+        append_uuid(output, owner.owner_id);
+        output.push_back(static_cast<std::byte>(owner.is_group_owned ? 1 : 0));
+        append_le_u32(output, static_cast<std::uint32_t>(owner.count));
+        output.push_back(static_cast<std::byte>(owner.online ? 1 : 0));
+    }
+    return output;
+}
+
+namespace {
+std::optional<std::pair<std::vector<Uuid>, std::size_t>> read_uuid_list(
+    std::span<const std::byte> payload, std::size_t offset) {
+    if (offset + 1 > payload.size()) return std::nullopt;
+    const auto count = std::to_integer<std::size_t>(payload[offset++]);
+    if (offset + count * 16 > payload.size()) return std::nullopt;
+    std::vector<Uuid> ids;
+    ids.reserve(count);
+    for (std::size_t index = 0; index < count; ++index) {
+        ids.push_back(read_uuid(payload, offset));
+        offset += 16;
+    }
+    return std::pair{std::move(ids), offset};
+}
+} // namespace
+
+std::optional<ParcelSelectObjects> decode_parcel_select_objects(std::span<const std::byte> payload) {
+    constexpr std::size_t id = 4;
+    constexpr std::size_t header = id + 32 + 4 + 4;
+    if (payload.size() < header + 1 ||
+        !std::equal(parcel_select_objects_id.begin(), parcel_select_objects_id.end(),
+                    payload.begin()))
+        return std::nullopt;
+    ParcelSelectObjects result;
+    result.agent_id = read_uuid(payload, id);
+    result.session_id = read_uuid(payload, id + 16);
+    result.local_id = static_cast<std::int32_t>(read_le_u32(payload, id + 32));
+    result.return_type = read_le_u32(payload, id + 36);
+    const auto ids = read_uuid_list(payload, header);
+    if (!ids) return std::nullopt;
+    result.return_ids = std::move(ids->first);
+    return result;
+}
+
+std::vector<std::vector<std::byte>> encode_force_object_select(
+    std::span<const std::uint32_t> local_ids) {
+    constexpr std::size_t per_packet = 251;
+    std::vector<std::vector<std::byte>> packets;
+    std::size_t offset = 0;
+    bool reset = true;
+    do {
+        const std::size_t chunk = std::min(per_packet, local_ids.size() - offset);
+        std::vector<std::byte> output(force_object_select_id.begin(), force_object_select_id.end());
+        output.push_back(static_cast<std::byte>(reset ? 1 : 0)); // Header.ResetList
+        output.push_back(static_cast<std::byte>(chunk));         // Data block count
+        for (std::size_t index = 0; index < chunk; ++index)
+            append_le_u32(output, local_ids[offset + index]);
+        packets.push_back(std::move(output));
+        offset += chunk;
+        reset = false;
+    } while (offset < local_ids.size());
+    return packets;
+}
+
+std::optional<ParcelReturnObjects> decode_parcel_return_objects(std::span<const std::byte> payload) {
+    constexpr std::size_t id = 4;
+    constexpr std::size_t header = id + 32 + 4 + 4;
+    if (payload.size() < header + 2 ||
+        !std::equal(parcel_return_objects_id.begin(), parcel_return_objects_id.end(),
+                    payload.begin()))
+        return std::nullopt;
+    ParcelReturnObjects result;
+    result.agent_id = read_uuid(payload, id);
+    result.session_id = read_uuid(payload, id + 16);
+    result.local_id = static_cast<std::int32_t>(read_le_u32(payload, id + 32));
+    result.return_type = read_le_u32(payload, id + 36);
+    const auto tasks = read_uuid_list(payload, header);
+    if (!tasks) return std::nullopt;
+    result.task_ids = std::move(tasks->first);
+    const auto owners = read_uuid_list(payload, tasks->second);
+    if (!owners) return std::nullopt;
+    result.owner_ids = std::move(owners->first);
+    return result;
 }
 
 std::optional<ChatFromViewer> decode_chat_from_viewer(std::span<const std::byte> payload) {

@@ -1478,6 +1478,60 @@ bool parcel_codecs() {
         // prefix(4)+agent(16)+seq(4)+flags(4)+local(4) = 32, then the count byte.
         if (encoded[32] != std::byte{1}) return false; // count == 1 (the zero entry)
     }
+    // ParcelObjectOwnersRequest (Low 56) and Reply (Low 57).
+    {
+        std::vector<std::byte> payload(40, std::byte{0});
+        payload[0] = std::byte{0xff}; payload[1] = std::byte{0xff};
+        payload[2] = std::byte{0x00}; payload[3] = std::byte{0x38};
+        write_u32(payload, 36, 4);
+        const auto request = decode_parcel_object_owners_request(payload);
+        if (!request || request->local_id != 4) return false;
+
+        std::vector<ParcelObjectOwner> owners(1);
+        owners[0].count = 12;
+        owners[0].online = true;
+        const auto reply = encode_parcel_object_owners_reply(owners);
+        // prefix(4) + count(1) + one entry(16+1+4+1 = 22)
+        if (reply.size() != 4 + 1 + 22 || reply[3] != std::byte{0x39} ||
+            reply[4] != std::byte{1})
+            return false;
+    }
+    // ParcelSelectObjects (Low 202) with one return id, and ForceObjectSelect encode.
+    {
+        std::vector<std::byte> payload(4 + 32 + 4 + 4 + 1 + 16, std::byte{0});
+        payload[0] = std::byte{0xff}; payload[1] = std::byte{0xff};
+        payload[2] = std::byte{0x00}; payload[3] = std::byte{0xca};
+        write_u32(payload, 36, 6);   // local id
+        write_u32(payload, 40, 8);   // return type = Other (1<<3)
+        payload[44] = std::byte{1};  // one return id
+        const auto select = decode_parcel_select_objects(payload);
+        if (!select || select->local_id != 6 || select->return_type != 8 ||
+            select->return_ids.size() != 1)
+            return false;
+
+        const std::array<std::uint32_t, 2> ids{7, 9};
+        const auto packets = encode_force_object_select(ids);
+        if (packets.size() != 1) return false;
+        const auto& first = packets[0];
+        // prefix(4) + reset(1) + count(1) + 2*4
+        if (first.size() != 4 + 1 + 1 + 8 || first[3] != std::byte{0xcd} ||
+            first[4] != std::byte{1} /*ResetList*/ || first[5] != std::byte{2} /*count*/)
+            return false;
+    }
+    // ParcelReturnObjects (Low 199): return type + one task id + no owner ids.
+    {
+        std::vector<std::byte> payload(4 + 32 + 4 + 4 + 1 + 16 + 1, std::byte{0});
+        payload[0] = std::byte{0xff}; payload[1] = std::byte{0xff};
+        payload[2] = std::byte{0x00}; payload[3] = std::byte{0xc7};
+        write_u32(payload, 36, 5);    // local id
+        write_u32(payload, 40, 16);   // return type = List (1<<4)
+        payload[44] = std::byte{1};   // one task id
+        // owner id list count byte is at 44 + 1 + 16 = 61, left zero
+        const auto ret = decode_parcel_return_objects(payload);
+        if (!ret || ret->local_id != 5 || ret->return_type != 16 ||
+            ret->task_ids.size() != 1 || !ret->owner_ids.empty())
+            return false;
+    }
     return true;
 }
 

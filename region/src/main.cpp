@@ -1959,6 +1959,66 @@ int main(int argc, char* argv[]) {
         for (const auto& [recipient_endpoint, recipient] : avatars)
             send_parcel_overlay(recipient_endpoint, recipient.user_id, when);
     };
+    // Return one root object (and its linkset) to its owner's inventory: serialize
+    // the linkset, store and register the asset, create an object item in the
+    // owner's Lost and Found (or Objects) folder, and remove the parts from the
+    // scene. Appends the removed part local ids for KillObject broadcasting. Used
+    // by parcel object return and OtherCleanTime auto-return; the owner is not
+    // necessarily the requester and may be offline.
+    const auto return_object_to_owner = [&](homeworldz::scene::EntityId root_id,
+                                            std::vector<std::uint32_t>& removed_ids) {
+        if (!viewer_grid) return;
+        auto* entity = scene.find(root_id);
+        if (entity == nullptr || entity->object_id.empty() || entity->parent_id != 0) return;
+        const auto owner_id = entity->owner_id;
+        if (owner_id.empty()) return;
+        std::vector<const homeworldz::scene::Entity*> children;
+        std::vector<homeworldz::scene::EntityId> part_ids{root_id};
+        for (const auto& [child_id, child] : scene.entities()) {
+            if (child.parent_id != root_id) continue;
+            children.push_back(&child);
+            part_ids.push_back(child_id);
+        }
+        const auto folded = homeworldz::scene::effective_permissions(scene, *entity);
+        auto base_permissions = entity->base_permissions;
+        auto owner_permissions = folded.owner;
+        auto everyone_permissions = entity->everyone_permissions;
+        const auto next_owner_permissions = folded.next_owner;
+        for (const auto* child : children) {
+            base_permissions &= child->base_permissions;
+            everyone_permissions &= child->everyone_permissions;
+        }
+        everyone_permissions &= owner_permissions;
+        std::string folder;
+        if (const auto lost = viewer_grid->find_system_inventory_folder(owner_id, 16))
+            folder = *lost;
+        else if (const auto objects = viewer_grid->find_system_inventory_folder(owner_id, 6))
+            folder = *objects;
+        if (folder.empty()) return;
+        const auto asset_id = homeworldz::viewer::random_uuid();
+        const auto item_id = homeworldz::viewer::random_uuid();
+        const auto content_text = homeworldz::asset::serialize_linkset_asset(*entity, children);
+        const auto content = std::span(
+            reinterpret_cast<const std::byte*>(content_text.data()), content_text.size());
+        bool item_created = false;
+        try {
+            const auto metadata = storage->store_asset(asset_id, entity->creator_id, content);
+            const bool asset_registered = viewer_grid->register_asset(
+                metadata.viewer_id, metadata.creator_id, metadata.sha256, metadata.size,
+                region_public_endpoint, true);
+            item_created = asset_registered && viewer_grid->create_object_inventory_item(
+                owner_id, homeworldz::grid::ObjectInventoryItem{
+                    item_id, entity->creator_id, folder, asset_id, entity->name,
+                    entity->description, base_permissions, owner_permissions,
+                    everyone_permissions, next_owner_permissions});
+        } catch (const std::exception& error) {
+            std::cout << "{\"level\":\"error\",\"message\":\"parcel return inventory failed\",\"error\":"
+                      << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+        }
+        if (!item_created) return;
+        for (auto part = part_ids.rbegin(); part != part_ids.rend(); ++part)
+            if (scene.remove(*part)) removed_ids.push_back(static_cast<std::uint32_t>(*part));
+    };
 
     std::cout << "{\"level\":\"info\",\"message\":\"region service listening\",\"httpPort\":"
               << configured_port() << ",\"viewerPort\":" << region_viewer_port << "}" << std::endl;
@@ -2953,6 +3013,140 @@ int main(int argc, char* argv[]) {
                                     parcel->access.push_back({id, wire.time, which});
                                 }
                                 persist_parcels();
+                            }
+                        }
+                        if (const auto request =
+                                homeworldz::viewer::decode_parcel_object_owners_request(packet->payload);
+                            request && request->agent_id == identity->agent_id &&
+                            request->session_id == identity->session_id) {
+                            const auto* parcel = parcels->find_by_local_id(request->local_id);
+                            if (parcel != nullptr) {
+                                std::unordered_set<std::string> online;
+                                for (const auto& [candidate_endpoint, candidate] : avatars) {
+                                    static_cast<void>(candidate_endpoint);
+                                    online.insert(candidate.user_id);
+                                }
+                                // owner id -> prim count
+                                std::unordered_map<std::string, std::int32_t> counts;
+                                for (const auto& [root_id, entity] : scene.entities()) {
+                                    if (entity.object_id.empty() || entity.temporary ||
+                                        entity.parent_id != 0)
+                                        continue;
+                                    const auto* at = parcels->parcel_at(
+                                        static_cast<float>(entity.position.x),
+                                        static_cast<float>(entity.position.y));
+                                    if (at == nullptr || at->local_id != parcel->local_id) continue;
+                                    std::int32_t prims = 1;
+                                    for (const auto& [child_id, child] : scene.entities()) {
+                                        static_cast<void>(child_id);
+                                        if (child.parent_id == root_id) ++prims;
+                                    }
+                                    counts[entity.owner_id] += prims;
+                                }
+                                std::vector<homeworldz::viewer::ParcelObjectOwner> owners;
+                                for (const auto& [owner_id, count] : counts) {
+                                    homeworldz::viewer::ParcelObjectOwner owner;
+                                    if (const auto id = homeworldz::viewer::parse_uuid(owner_id))
+                                        owner.owner_id = *id;
+                                    owner.count = count;
+                                    owner.online = online.count(owner_id) != 0;
+                                    owners.push_back(owner);
+                                }
+                                auto response =
+                                    homeworldz::viewer::encode_parcel_object_owners_reply(owners);
+                                if (const auto outgoing = circuits.send(
+                                        endpoint, std::move(response), true, now, true))
+                                    static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
+                            }
+                        }
+                        if (const auto select =
+                                homeworldz::viewer::decode_parcel_select_objects(packet->payload);
+                            select && select->agent_id == identity->agent_id &&
+                            select->session_id == identity->session_id) {
+                            const auto* parcel = parcels->find_by_local_id(select->local_id);
+                            if (parcel != nullptr) {
+                                std::vector<std::uint32_t> selected;
+                                for (const auto& [root_id, entity] : scene.entities()) {
+                                    if (entity.object_id.empty() || entity.temporary ||
+                                        entity.parent_id != 0)
+                                        continue;
+                                    const auto* at = parcels->parcel_at(
+                                        static_cast<float>(entity.position.x),
+                                        static_cast<float>(entity.position.y));
+                                    if (at == nullptr || at->local_id != parcel->local_id) continue;
+                                    const bool owned_by_parcel = entity.owner_id == parcel->owner_id;
+                                    const bool match =
+                                        ((select->return_type & homeworldz::viewer::object_return_owner) &&
+                                         owned_by_parcel) ||
+                                        ((select->return_type & homeworldz::viewer::object_return_other) &&
+                                         !owned_by_parcel);
+                                    if (match) selected.push_back(static_cast<std::uint32_t>(root_id));
+                                }
+                                for (auto& packet_bytes :
+                                     homeworldz::viewer::encode_force_object_select(selected))
+                                    if (const auto outgoing = circuits.send(
+                                            endpoint, std::move(packet_bytes), true, now, true))
+                                        static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
+                            }
+                        }
+                        if (const auto ret =
+                                homeworldz::viewer::decode_parcel_return_objects(packet->payload);
+                            ret && ret->agent_id == identity->agent_id &&
+                            ret->session_id == identity->session_id) {
+                            auto* parcel = parcels->find_by_local_id(ret->local_id);
+                            const auto agent = homeworldz::viewer::format_uuid(identity->agent_id);
+                            const bool authorized = parcel != nullptr &&
+                                (parcel->owner_id == agent ||
+                                 (!region_owner_id.empty() && region_owner_id == agent));
+                            if (authorized) {
+                                std::unordered_set<std::string> listed_tasks;
+                                for (const auto& id : ret->task_ids)
+                                    listed_tasks.insert(homeworldz::viewer::format_uuid(id));
+                                std::vector<homeworldz::scene::EntityId> roots;
+                                for (const auto& [root_id, entity] : scene.entities()) {
+                                    if (entity.object_id.empty() || entity.temporary ||
+                                        entity.parent_id != 0)
+                                        continue;
+                                    const auto* at = parcels->parcel_at(
+                                        static_cast<float>(entity.position.x),
+                                        static_cast<float>(entity.position.y));
+                                    if (at == nullptr || at->local_id != parcel->local_id) continue;
+                                    const bool owned_by_parcel = entity.owner_id == parcel->owner_id;
+                                    const bool match =
+                                        ((ret->return_type & homeworldz::viewer::object_return_owner) &&
+                                         owned_by_parcel) ||
+                                        ((ret->return_type & homeworldz::viewer::object_return_other) &&
+                                         !owned_by_parcel) ||
+                                        ((ret->return_type & homeworldz::viewer::object_return_list) &&
+                                         listed_tasks.count(entity.object_id) != 0);
+                                    if (match) roots.push_back(root_id);
+                                }
+                                std::vector<std::uint32_t> removed_ids;
+                                for (const auto root_id : roots)
+                                    return_object_to_owner(root_id, removed_ids);
+                                if (!removed_ids.empty()) {
+                                    try {
+                                        storage->save_snapshot(scene);
+                                    } catch (const std::exception& error) {
+                                        std::cout << "{\"level\":\"error\",\"message\":"
+                                                     "\"parcel return persistence failed\",\"error\":"
+                                                  << homeworldz::api::json_string(error.what()) << "}"
+                                                  << std::endl;
+                                    }
+                                    for (const auto entity_id : removed_ids)
+                                        remove_physics_object(entity_id);
+                                    const auto kill = homeworldz::viewer::encode_kill_object(removed_ids);
+                                    for (const auto& [recipient_endpoint, recipient] : avatars) {
+                                        static_cast<void>(recipient);
+                                        if (const auto outgoing = circuits.send(
+                                                recipient_endpoint, kill, true, now))
+                                            static_cast<void>(send_udp(
+                                                viewer_server, recipient_endpoint, *outgoing));
+                                    }
+                                    std::cout << "{\"level\":\"info\",\"message\":\"parcel objects returned\","
+                                                 "\"parcel\":" << ret->local_id << ",\"removed\":"
+                                              << removed_ids.size() << "}" << std::endl;
+                                }
                             }
                         }
                         if (const auto requested_names =

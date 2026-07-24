@@ -204,9 +204,12 @@ Falcon LSL scripting foundation.
   WindLight environment is deferred to the estate/region settings work below.
 - [ ] Enforce build, rez, entry, script, damage, push, and object-return policy
   at authoritative boundaries. Build/rez (CreateObjects), script execution
-  (AllowOtherScripts), and teleport entry (ban/access lists plus landing-point
-  routing) are now enforced authoritatively; continuous walk-in ejection,
-  `OtherCleanTime` auto-return, and damage/push policy remain.
+  (AllowOtherScripts), teleport entry (ban/access lists plus landing-point
+  routing), and viewer-initiated object return (`ParcelReturnObjects` returns
+  objects to their owners' Lost and Found, with the About Land Objects tab backed
+  by `ParcelObjectOwnersReply`/`ForceObjectSelect`) are now enforced
+  authoritatively; continuous walk-in ejection, `OtherCleanTime` auto-return, and
+  damage/push policy remain.
 - [ ] Implement estate and region settings needed for terrain, access, maturity,
   restart, and emergency administration.
 - [ ] Apply permissions recursively and consistently to linksets, object
