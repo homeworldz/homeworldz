@@ -301,6 +301,8 @@ public:
                            const std::array<float, 3>& position,
                            const std::array<float, 3>& look_at);
     std::optional<HomeLocation> home_location(std::string_view user_id);
+    bool set_gesture_active(std::string_view user_id, std::string_view item_id,
+                            std::string_view asset_id, bool active);
 
 private:
     std::shared_ptr<Transport> transport_;

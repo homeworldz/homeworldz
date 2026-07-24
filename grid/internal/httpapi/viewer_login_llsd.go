@@ -86,7 +86,14 @@ func (a *API) llsdLoginResponse(f *loginFields) string {
 	llsdFolderArray(&b, f.libFolders)
 
 	b.WriteString("<key>login-flags</key><array></array>")
-	b.WriteString("<key>gestures</key><array></array>")
+	b.WriteString("<key>gestures</key><array>")
+	for _, g := range f.gestures {
+		b.WriteString("<map>")
+		llsdKeyUUID(&b, "item_id", g.ItemID)
+		llsdKeyUUID(&b, "asset_id", g.AssetID)
+		b.WriteString("</map>")
+	}
+	b.WriteString("</array>")
 	b.WriteString("<key>buddy-list</key><array></array>")
 	b.WriteString("</map></llsd>")
 	return b.String()

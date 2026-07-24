@@ -65,6 +65,20 @@ struct SetStartLocationRequest : AgentMessage {
     std::array<float, 3> look_at{};
 };
 
+// ActivateGestures (Low 316) / DeactivateGestures (Low 317). The viewer sends
+// these when the user (de)activates gestures in inventory; the active set is
+// persisted on the grid and replayed in the login response.
+struct GestureActivation {
+    Uuid item_id{};
+    Uuid asset_id{};
+};
+struct ActivateGestures : AgentMessage {
+    std::vector<GestureActivation> gestures;
+};
+struct DeactivateGestures : AgentMessage {
+    std::vector<Uuid> item_ids;
+};
+
 struct TeleportStart {
     std::uint32_t flags{};
 };
@@ -713,6 +727,8 @@ std::optional<TeleportLandmarkRequest> decode_teleport_landmark_request(
     std::span<const std::byte> payload);
 std::optional<SetStartLocationRequest> decode_set_start_location_request(
     std::span<const std::byte> payload);
+std::optional<ActivateGestures> decode_activate_gestures(std::span<const std::byte> payload);
+std::optional<DeactivateGestures> decode_deactivate_gestures(std::span<const std::byte> payload);
 std::vector<std::byte> encode_teleport_start(const TeleportStart& message);
 std::vector<std::byte> encode_teleport_local(const TeleportLocal& message);
 std::vector<std::byte> encode_teleport_failed(const TeleportFailed& message);

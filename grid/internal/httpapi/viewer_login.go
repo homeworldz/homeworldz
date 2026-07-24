@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/homeworldz/homeworldz/grid/internal/gestures"
 	"github.com/homeworldz/homeworldz/grid/internal/identity"
 	"github.com/homeworldz/homeworldz/grid/internal/inventory"
 	"github.com/homeworldz/homeworldz/grid/internal/regions"
@@ -201,6 +202,7 @@ type loginFields struct {
 	seedCapability               string
 	folders                      []inventory.Folder
 	libFolders                   []inventory.Folder
+	gestures                     []gestures.Gesture
 }
 
 // resolveViewerLogin performs authentication, region resolution, circuit
@@ -298,6 +300,12 @@ func (a *API) resolveViewerLogin(r *http.Request, firstRaw, lastRaw, passwd, sta
 			regionSizeY = provisioned.Size * 256
 		}
 	}
+	var activeGestures []gestures.Gesture
+	if a.gestures != nil {
+		if set, gestureErr := a.gestures.ListActive(r.Context(), session.UserID); gestureErr == nil {
+			activeGestures = set
+		}
+	}
 	return &loginFields{
 		agentID: session.UserID, sessionID: session.ID, secureID: session.SecureID,
 		first: first, last: last, circuit: circuit,
@@ -308,6 +316,7 @@ func (a *API) resolveViewerLogin(r *http.Request, firstRaw, lastRaw, passwd, sta
 		seedCapability: strings.TrimRight(region.PublicEndpoint, "/") + "/caps/seed/" + session.ID,
 		folders:        folders,
 		libFolders:     inventory.LibraryFolders(),
+		gestures:       activeGestures,
 	}, "", ""
 }
 
@@ -319,6 +328,11 @@ func (a *API) xmlrpcLoginResponse(f *loginFields) rpcOutputValue {
 	libraryRoot := rpcStructValue(rpcField("folder_id", rpcString(inventory.LibraryRootID)))
 	libraryOwner := rpcStructValue(rpcField("agent_id", rpcString(inventory.LibraryOwnerID)))
 	_, librarySkeleton := inventorySkeleton(f.libFolders)
+	gestureValues := make([]rpcOutputValue, 0, len(f.gestures))
+	for _, g := range f.gestures {
+		gestureValues = append(gestureValues, rpcStructValue(
+			rpcField("item_id", rpcString(g.ItemID)), rpcField("asset_id", rpcString(g.AssetID))))
+	}
 	return rpcStructValue(
 		rpcField("login", rpcString("true")), rpcField("message", rpcString("Welcome to "+a.gridName)),
 		rpcField("agent_id", rpcString(f.agentID)), rpcField("session_id", rpcString(f.sessionID)),
@@ -334,7 +348,7 @@ func (a *API) xmlrpcLoginResponse(f *loginFields) rpcOutputValue {
 		rpcField("inventory-root", rpcArrayValue(root)), rpcField("inventory-skeleton", rpcArrayValue(skeleton...)),
 		rpcField("inventory-lib-root", rpcArrayValue(libraryRoot)), rpcField("inventory-lib-owner", rpcArrayValue(libraryOwner)),
 		rpcField("inventory-skel-lib", rpcArrayValue(librarySkeleton...)), rpcField("login-flags", rpcArrayValue()),
-		rpcField("gestures", rpcArrayValue()), rpcField("buddy-list", rpcArrayValue()),
+		rpcField("gestures", rpcArrayValue(gestureValues...)), rpcField("buddy-list", rpcArrayValue()),
 	)
 }
 

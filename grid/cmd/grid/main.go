@@ -15,6 +15,7 @@ import (
 
 	"github.com/homeworldz/homeworldz/grid/internal/assetmeta"
 	"github.com/homeworldz/homeworldz/grid/internal/config"
+	"github.com/homeworldz/homeworldz/grid/internal/gestures"
 	"github.com/homeworldz/homeworldz/grid/internal/httpapi"
 	"github.com/homeworldz/homeworldz/grid/internal/identity"
 	"github.com/homeworldz/homeworldz/grid/internal/inventory"
@@ -85,6 +86,7 @@ func main() {
 			Transits:          transitStore(db),
 			TaskTransfers:     taskTransferStore(db),
 			Locations:         locationStore(db),
+			Gestures:          gestureStore(db),
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
@@ -133,6 +135,13 @@ func locationStore(db *sql.DB) locations.Store {
 		return nil
 	}
 	return locations.NewPostgresStore(db)
+}
+
+func gestureStore(db *sql.DB) gestures.Store {
+	if db == nil {
+		return nil
+	}
+	return gestures.NewPostgresStore(db)
 }
 
 func inventoryStore(db *sql.DB) inventory.Store {

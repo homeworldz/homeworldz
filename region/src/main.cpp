@@ -2913,6 +2913,33 @@ int main(int argc, char* argv[]) {
                                       << (ok ? "stored" : "rejected") << "\",\"userId\":"
                                       << homeworldz::api::json_string(user_id) << "}" << std::endl;
                         }
+                        if (const auto activate =
+                                homeworldz::viewer::decode_activate_gestures(packet->payload);
+                            activate && activate->agent_id == identity->agent_id &&
+                            activate->session_id == identity->session_id && viewer_grid) {
+                            const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
+                            for (const auto& gesture : activate->gestures) {
+                                try {
+                                    static_cast<void>(viewer_grid->set_gesture_active(
+                                        user_id, homeworldz::viewer::format_uuid(gesture.item_id),
+                                        homeworldz::viewer::format_uuid(gesture.asset_id), true));
+                                } catch (const std::exception&) {
+                                }
+                            }
+                        }
+                        if (const auto deactivate =
+                                homeworldz::viewer::decode_deactivate_gestures(packet->payload);
+                            deactivate && deactivate->agent_id == identity->agent_id &&
+                            deactivate->session_id == identity->session_id && viewer_grid) {
+                            const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
+                            for (const auto& item_id : deactivate->item_ids) {
+                                try {
+                                    static_cast<void>(viewer_grid->set_gesture_active(
+                                        user_id, homeworldz::viewer::format_uuid(item_id), "", false));
+                                } catch (const std::exception&) {
+                                }
+                            }
+                        }
                         const auto logout = homeworldz::viewer::decode_logout_request(packet->payload);
                         if (logout && logout->agent_id == identity->agent_id &&
                             logout->session_id == identity->session_id) {

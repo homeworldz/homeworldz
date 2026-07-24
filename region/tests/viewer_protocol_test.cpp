@@ -1330,6 +1330,63 @@ bool transfer_codecs() {
 }
 }
 
+bool home_and_gesture_codecs() {
+    const auto agent = *parse_uuid("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");
+    const auto session = *parse_uuid("11111111-2222-4333-8444-555555555555");
+
+    // SetStartLocationRequest (Low 324): SimName "Sandbox", LocationID, pos, lookAt.
+    auto set_home = bytes({0xff, 0xff, 0x01, 0x44});
+    set_home.insert(set_home.end(), agent.begin(), agent.end());
+    set_home.insert(set_home.end(), session.begin(), session.end());
+    set_home.push_back(std::byte{7});
+    for (const char value : std::string("Sandbox")) set_home.push_back(static_cast<std::byte>(value));
+    set_home.insert(set_home.end(), 4, std::byte{}); // LocationID = 0
+    const std::size_t pos_offset = set_home.size();
+    set_home.insert(set_home.end(), 24, std::byte{}); // LocationPos(12) + LocationLookAt(12)
+    write_f32(set_home, pos_offset, 128.0F);
+    write_f32(set_home, pos_offset + 4, 64.0F);
+    write_f32(set_home, pos_offset + 8, 25.0F);
+    write_f32(set_home, pos_offset + 12, 1.0F);
+    const auto home = decode_set_start_location_request(set_home);
+    if (!home || home->agent_id != agent || home->session_id != session ||
+        home->position != std::array<float, 3>{128.0F, 64.0F, 25.0F}) return false;
+
+    const auto item1 = *parse_uuid("00000000-0000-4000-8000-000000000001");
+    const auto asset1 = *parse_uuid("00000000-0000-4000-8000-0000000000a1");
+    const auto item2 = *parse_uuid("00000000-0000-4000-8000-000000000002");
+    const auto asset2 = *parse_uuid("00000000-0000-4000-8000-0000000000a2");
+
+    // ActivateGestures (Low 316): Flags(U32), count byte, two {ItemID, AssetID, GestureFlags}.
+    auto activate = bytes({0xff, 0xff, 0x01, 0x3c});
+    activate.insert(activate.end(), agent.begin(), agent.end());
+    activate.insert(activate.end(), session.begin(), session.end());
+    activate.insert(activate.end(), 4, std::byte{}); // Flags
+    activate.push_back(std::byte{2});                 // Data count
+    activate.insert(activate.end(), item1.begin(), item1.end());
+    activate.insert(activate.end(), asset1.begin(), asset1.end());
+    activate.insert(activate.end(), 4, std::byte{});
+    activate.insert(activate.end(), item2.begin(), item2.end());
+    activate.insert(activate.end(), asset2.begin(), asset2.end());
+    activate.insert(activate.end(), 4, std::byte{});
+    const auto activated = decode_activate_gestures(activate);
+    if (!activated || activated->agent_id != agent || activated->session_id != session ||
+        activated->gestures.size() != 2 ||
+        activated->gestures[0].item_id != item1 || activated->gestures[0].asset_id != asset1 ||
+        activated->gestures[1].item_id != item2 || activated->gestures[1].asset_id != asset2) return false;
+
+    // DeactivateGestures (Low 317): Flags(U32), count byte, one {ItemID, GestureFlags}.
+    auto deactivate = bytes({0xff, 0xff, 0x01, 0x3d});
+    deactivate.insert(deactivate.end(), agent.begin(), agent.end());
+    deactivate.insert(deactivate.end(), session.begin(), session.end());
+    deactivate.insert(deactivate.end(), 4, std::byte{}); // Flags
+    deactivate.push_back(std::byte{1});                   // Data count
+    deactivate.insert(deactivate.end(), item1.begin(), item1.end());
+    deactivate.insert(deactivate.end(), 4, std::byte{});
+    const auto deactivated = decode_deactivate_gestures(deactivate);
+    return deactivated && deactivated->agent_id == agent && deactivated->session_id == session &&
+           deactivated->item_ids.size() == 1 && deactivated->item_ids[0] == item1;
+}
+
 int main() {
     if (!packet_round_trip()) return 1;
     if (!message_codecs()) return 2;
@@ -1353,6 +1410,7 @@ int main() {
     if (!task_inventory_codecs()) return 20;
     if (!transfer_codecs()) return 22;
     if (!baked_texture_entry_roundtrip()) return 23;
+    if (!home_and_gesture_codecs()) return 24;
     if (decode_packet(std::array<std::byte, 2>{})) return 12;
     return 0;
 }

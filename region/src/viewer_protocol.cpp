@@ -20,6 +20,10 @@ constexpr std::array<std::byte, 4> teleport_landmark_request_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x41}};
 constexpr std::array<std::byte, 4> set_start_location_request_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x44}};
+constexpr std::array<std::byte, 4> activate_gestures_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x3c}};
+constexpr std::array<std::byte, 4> deactivate_gestures_id{
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x3d}};
 constexpr std::array<std::byte, 4> teleport_start_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x49}};
 constexpr std::array<std::byte, 4> teleport_failed_id{
@@ -649,6 +653,53 @@ std::optional<SetStartLocationRequest> decode_set_start_location_request(
                            [](float component) { return std::isfinite(component); });
     };
     return finite(result.position) ? std::optional<SetStartLocationRequest>{result} : std::nullopt;
+}
+
+std::optional<ActivateGestures> decode_activate_gestures(std::span<const std::byte> payload) {
+    // AgentID(16), SessionID(16), Flags(U32); then a 1-byte Data count and that
+    // many {ItemID(16), AssetID(16), GestureFlags(U32)} blocks.
+    constexpr std::size_t header = 4 + 16 + 16 + 4;
+    constexpr std::size_t block = 16 + 16 + 4;
+    if (payload.size() < header + 1 ||
+        !std::equal(activate_gestures_id.begin(), activate_gestures_id.end(), payload.begin()))
+        return std::nullopt;
+    ActivateGestures result;
+    std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
+    const auto count = std::to_integer<std::size_t>(payload[header]);
+    std::size_t offset = header + 1;
+    if (payload.size() < offset + count * block) return std::nullopt;
+    for (std::size_t index = 0; index < count; ++index) {
+        GestureActivation gesture;
+        std::copy_n(payload.begin() + offset, 16, gesture.item_id.begin());
+        std::copy_n(payload.begin() + offset + 16, 16, gesture.asset_id.begin());
+        result.gestures.push_back(gesture);
+        offset += block;
+    }
+    return result;
+}
+
+std::optional<DeactivateGestures> decode_deactivate_gestures(std::span<const std::byte> payload) {
+    // AgentID(16), SessionID(16), Flags(U32); then a 1-byte Data count and that
+    // many {ItemID(16), GestureFlags(U32)} blocks.
+    constexpr std::size_t header = 4 + 16 + 16 + 4;
+    constexpr std::size_t block = 16 + 4;
+    if (payload.size() < header + 1 ||
+        !std::equal(deactivate_gestures_id.begin(), deactivate_gestures_id.end(), payload.begin()))
+        return std::nullopt;
+    DeactivateGestures result;
+    std::copy_n(payload.begin() + 4, 16, result.agent_id.begin());
+    std::copy_n(payload.begin() + 20, 16, result.session_id.begin());
+    const auto count = std::to_integer<std::size_t>(payload[header]);
+    std::size_t offset = header + 1;
+    if (payload.size() < offset + count * block) return std::nullopt;
+    for (std::size_t index = 0; index < count; ++index) {
+        Uuid item_id{};
+        std::copy_n(payload.begin() + offset, 16, item_id.begin());
+        result.item_ids.push_back(item_id);
+        offset += block;
+    }
+    return result;
 }
 
 std::vector<std::byte> encode_teleport_start(const TeleportStart& message) {

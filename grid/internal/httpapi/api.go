@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/homeworldz/homeworldz/grid/internal/assetmeta"
+	"github.com/homeworldz/homeworldz/grid/internal/gestures"
 	"github.com/homeworldz/homeworldz/grid/internal/identity"
 	"github.com/homeworldz/homeworldz/grid/internal/inventory"
 	"github.com/homeworldz/homeworldz/grid/internal/locations"
@@ -43,6 +44,7 @@ type API struct {
 	transits      transit.Store
 	taskTransfers tasktransfer.Store
 	locations     locations.Store
+	gestures      gestures.Store
 }
 
 func (a *API) regionExtent(ctx context.Context, id string) float32 {
@@ -69,6 +71,7 @@ type Options struct {
 	Transits          transit.Store
 	TaskTransfers     tasktransfer.Store
 	Locations         locations.Store
+	Gestures          gestures.Store
 }
 
 func New(ready ReadinessChecker, version string, options Options) http.Handler {
@@ -78,7 +81,8 @@ func New(ready ReadinessChecker, version string, options Options) http.Handler {
 		inventory: options.Inventory, assets: options.Assets, serviceToken: options.ServiceToken,
 		provisioned: options.Provisioned, terrainHTTP: options.TerrainHTTPClient,
 		terrainCache: newTerrainTileCache(), transits: options.Transits,
-		taskTransfers: options.TaskTransfers, locations: options.Locations}
+		taskTransfers: options.TaskTransfers, locations: options.Locations,
+		gestures: options.Gestures}
 	if a.publicURL == "" {
 		a.publicURL = "http://127.0.0.1:42000"
 	}
@@ -111,6 +115,7 @@ func New(ready ReadinessChecker, version string, options Options) http.Handler {
 	mux.HandleFunc("/api/v1/presence", a.presenceRoot)
 	mux.HandleFunc("/api/v1/presence/", a.presenceByUser)
 	mux.HandleFunc("/api/v1/locations/", a.locationByUser)
+	mux.HandleFunc("/api/v1/gestures/", a.gesturesByUser)
 	mux.HandleFunc("/api/v1/inventory/", a.inventoryByUser)
 	mux.HandleFunc("/api/v1/assets", a.assetsRoot)
 	mux.HandleFunc("/api/v1/assets/", a.assetByID)

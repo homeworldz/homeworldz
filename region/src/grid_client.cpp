@@ -1022,6 +1022,16 @@ std::optional<HomeLocation> Client::home_location(std::string_view user_id) {
     return home;
 }
 
+bool Client::set_gesture_active(std::string_view user_id, std::string_view item_id,
+                                std::string_view asset_id, bool active) {
+    const auto body = "{\"itemId\":" + api::json_string(item_id) +
+                      ",\"assetId\":" + api::json_string(asset_id) +
+                      ",\"active\":" + (active ? "true" : "false") + '}';
+    const auto status = transport_->send(
+        "PUT", "/api/v1/gestures/" + std::string(user_id), body).status_code;
+    return status == 200 || status == 204;
+}
+
 RegistrationLifecycle::RegistrationLifecycle(Client client, RegionSettings settings,
                                                std::string registered_region_id)
     : client_(std::move(client)), settings_(std::move(settings)),
