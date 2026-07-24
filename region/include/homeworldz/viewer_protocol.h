@@ -599,6 +599,98 @@ struct RegionHandshake {
     Uuid owner_id{};
     float water_height{20.0F};
     std::array<Uuid, 4> terrain_textures{};
+    bool is_estate_owner{};
+};
+
+// ParcelPropertiesRequest (Medium 11): a (west,south,east,north) metre rectangle query.
+struct ParcelPropertiesRequest {
+    Uuid agent_id{};
+    Uuid session_id{};
+    std::int32_t sequence_id{};
+    float west{};
+    float south{};
+    float east{};
+    float north{};
+    bool snap_selection{};
+};
+
+// ParcelPropertiesRequestByID (Low 197): request a specific parcel by LocalID.
+struct ParcelPropertiesRequestById {
+    Uuid agent_id{};
+    Uuid session_id{};
+    std::int32_t sequence_id{};
+    std::int32_t local_id{};
+};
+
+// ParcelPropertiesUpdate (Low 198): viewer edit of a parcel's About Land options.
+struct ParcelPropertiesUpdate {
+    Uuid agent_id{};
+    Uuid session_id{};
+    std::int32_t local_id{};
+    std::uint32_t flags{}; // 1 = want ParcelProperties reply
+    std::uint32_t parcel_flags{};
+    std::int32_t sale_price{};
+    std::string name;
+    std::string description;
+    std::string music_url;
+    std::string media_url;
+    Uuid media_id{};
+    std::uint8_t media_auto_scale{};
+    Uuid group_id{};
+    std::int32_t pass_price{};
+    float pass_hours{};
+    std::uint8_t category{};
+    Uuid auth_buyer_id{};
+    Uuid snapshot_id{};
+    std::array<float, 3> user_location{};
+    std::array<float, 3> user_look_at{};
+    std::uint8_t landing_type{};
+};
+
+// ParcelDivide (Low 211) / ParcelJoin (Low 210): metre rectangle plus agent identity.
+struct ParcelRectRequest {
+    Uuid agent_id{};
+    Uuid session_id{};
+    float west{};
+    float south{};
+    float east{};
+    float north{};
+};
+
+// ParcelAccessListRequest (Low 215).
+struct ParcelAccessListRequest {
+    Uuid agent_id{};
+    Uuid session_id{};
+    std::int32_t sequence_id{};
+    std::uint32_t flags{};
+    std::int32_t local_id{};
+};
+
+struct ParcelAccessListEntry {
+    Uuid id{};
+    std::int32_t time{};
+    std::uint32_t flags{};
+};
+
+// ParcelAccessListUpdate (Low 217).
+struct ParcelAccessListUpdate {
+    Uuid agent_id{};
+    Uuid session_id{};
+    std::uint32_t flags{};
+    std::int32_t local_id{};
+    Uuid transaction_id{};
+    std::int32_t sequence_id{};
+    std::int32_t sections{};
+    std::vector<ParcelAccessListEntry> entries;
+};
+
+// ParcelAccessListReply (Low 216): sim -> viewer.
+struct ParcelAccessListReply {
+    Uuid agent_id{};
+    std::int32_t sequence_id{};
+    std::uint32_t flags{};
+    std::int32_t local_id{};
+    std::vector<ParcelAccessListEntry> entries;
 };
 
 struct AgentMovementComplete : AgentMessage {
@@ -827,6 +919,19 @@ std::vector<std::vector<std::byte>> encode_image_transfer(
     const Uuid& image_id, std::span<const std::byte> content, std::uint32_t start_packet = 0);
 std::optional<AgentUpdate> decode_agent_update(std::span<const std::byte> payload);
 std::optional<ModifyLand> decode_modify_land(std::span<const std::byte> payload);
+std::optional<ParcelPropertiesRequest> decode_parcel_properties_request(
+    std::span<const std::byte> payload);
+std::optional<ParcelPropertiesRequestById> decode_parcel_properties_request_by_id(
+    std::span<const std::byte> payload);
+std::optional<ParcelPropertiesUpdate> decode_parcel_properties_update(
+    std::span<const std::byte> payload);
+std::optional<ParcelRectRequest> decode_parcel_divide(std::span<const std::byte> payload);
+std::optional<ParcelRectRequest> decode_parcel_join(std::span<const std::byte> payload);
+std::optional<ParcelAccessListRequest> decode_parcel_access_list_request(
+    std::span<const std::byte> payload);
+std::optional<ParcelAccessListUpdate> decode_parcel_access_list_update(
+    std::span<const std::byte> payload);
+std::vector<std::byte> encode_parcel_access_list_reply(const ParcelAccessListReply& message);
 std::optional<ChatFromViewer> decode_chat_from_viewer(std::span<const std::byte> payload);
 std::vector<std::byte> encode_chat_from_simulator(const ChatFromSimulator& message);
 std::vector<std::byte> encode_flat_terrain(std::span<const TerrainPatch> patches, float height);

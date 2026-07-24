@@ -182,7 +182,7 @@ func (a *API) provisionedRegionRuntime(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusOK, ProvisionedRegionRuntimeResult{
 				Region: region, GridName: a.gridName, GridPublicURL: a.publicURL,
 				SizeX: provisioned.Size * 256, SizeY: provisioned.Size * 256,
-				Maturity: provisioned.Maturity})
+				Maturity: provisioned.Maturity, OwnerUserID: provisioned.OwnerUserID})
 		}
 		return
 	}

@@ -35,6 +35,7 @@
 #include "homeworldz/http_response.h"
 #include "homeworldz/inventory_asset.h"
 #include "homeworldz/object_asset.h"
+#include "homeworldz/parcel.h"
 #include "homeworldz/physics_adapters.h"
 #include "homeworldz/physics_scene.h"
 #include "homeworldz/region_config.h"
@@ -843,6 +844,7 @@ int main(int argc, char* argv[]) {
     }
 
     std::string region_name;
+    std::string region_owner_id;
     int region_grid_x{};
     int region_grid_y{};
 	int region_size_x{256};
@@ -954,6 +956,7 @@ int main(int argc, char* argv[]) {
                 return 1;
             }
             region_name = provisioned->name;
+            region_owner_id = provisioned->owner_id;
             region_grid_x = provisioned->grid_x;
             region_grid_y = provisioned->grid_y;
 			region_size_x = provisioned->size_x;
@@ -1066,6 +1069,35 @@ int main(int argc, char* argv[]) {
         }
     } catch (const std::exception& error) {
         std::cerr << "{\"level\":\"error\",\"message\":\"open region storage failed\",\"error\":"
+                  << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+        if (registration) registration->stop();
+#ifdef _WIN32
+        WSACleanup();
+#endif
+        return 1;
+    }
+
+    // Parcels: restore persisted land, or create a single region-wide parcel owned
+    // by the region owner. The owner comes from the authoritative grid record; when
+    // the record has no owner (older provisioning) the default parcel is public land.
+    std::optional<homeworldz::parcel::ParcelSet> parcels;
+    try {
+        if (auto restored = storage->load_parcels()) {
+            parcels.emplace(region_size_x, std::move(*restored));
+            std::cout << "{\"level\":\"info\",\"message\":\"parcels restored\",\"count\":"
+                      << parcels->parcels().size() << "}" << std::endl;
+        } else {
+            const auto claim_date = static_cast<std::int32_t>(
+                std::chrono::duration_cast<std::chrono::seconds>(
+                    std::chrono::system_clock::now().time_since_epoch()).count());
+            parcels.emplace(region_size_x, homeworldz::viewer::random_uuid(), region_owner_id,
+                            claim_date);
+            storage->save_parcels(parcels->parcels());
+            std::cout << "{\"level\":\"info\",\"message\":\"default parcel created\",\"owner\":"
+                      << homeworldz::api::json_string(region_owner_id) << "}" << std::endl;
+        }
+    } catch (const std::exception& error) {
+        std::cerr << "{\"level\":\"error\",\"message\":\"open region parcels failed\",\"error\":"
                   << homeworldz::api::json_string(error.what()) << "}" << std::endl;
         if (registration) registration->stop();
 #ifdef _WIN32
@@ -1823,6 +1855,85 @@ int main(int argc, char* argv[]) {
         flush_pending_viewer_events(session_id);
     };
 
+    // Region-wide simulator prim capacity, scaled by the number of 256 m tiles.
+    const auto region_prim_limit = [&]() {
+        const long long tiles = static_cast<long long>(region_size_x / 256) *
+                                static_cast<long long>(region_size_y / 256);
+        return static_cast<std::int32_t>(15000LL * (std::max)(1LL, tiles));
+    };
+    const auto persist_parcels = [&]() {
+        try {
+            storage->save_parcels(parcels->parcels());
+        } catch (const std::exception& error) {
+            std::cout << "{\"level\":\"error\",\"message\":\"parcel persist failed\",\"error\":"
+                      << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+        }
+    };
+    // Build and enqueue a ParcelProperties event for one parcel over the Event Queue.
+    const auto send_parcel_properties = [&](const std::string& session_id,
+                                            const homeworldz::parcel::Parcel& parcel,
+                                            std::int32_t request_result, std::int32_t sequence_id,
+                                            bool snap_selection) {
+        const int edge = parcels->edge_cells();
+        homeworldz::viewer::ParcelPropertiesEvent event;
+        event.request_result = request_result;
+        event.sequence_id = sequence_id;
+        event.snap_selection = snap_selection;
+        event.local_id = parcel.local_id;
+        event.owner_id = parcel.owner_id;
+        event.is_group_owned = parcel.is_group_owned;
+        event.claim_date = parcel.claim_date;
+        event.bitmap = parcel.bitmap;
+        event.area = parcel.area(edge);
+        event.status = 0; // Leased
+        event.parcel_flags = parcel.flags;
+        event.sale_price = parcel.sale_price;
+        event.name = parcel.name;
+        event.description = parcel.description;
+        event.music_url = parcel.music_url;
+        event.media_url = parcel.media_url;
+        event.media_id = parcel.media_id;
+        event.media_auto_scale = parcel.media_auto_scale;
+        event.group_id = parcel.group_id;
+        event.pass_price = parcel.pass_price;
+        event.pass_hours = parcel.pass_hours;
+        event.category = static_cast<std::uint8_t>(parcel.category);
+        event.auth_buyer_id = parcel.auth_buyer_id;
+        event.snapshot_id = parcel.snapshot_id;
+        event.user_location = {parcel.user_location.x, parcel.user_location.y, parcel.user_location.z};
+        event.user_look_at = {parcel.user_look_at.x, parcel.user_look_at.y, parcel.user_look_at.z};
+        event.landing_type = parcel.landing_type;
+        event.other_clean_time = parcel.other_clean_time;
+        event.parcel_prim_bonus = 1.0F;
+        int min_x = 0, min_y = 0, max_x = 0, max_y = 0;
+        if (parcel.cell_bounds(edge, min_x, min_y, max_x, max_y)) {
+            event.aabb_min = {static_cast<float>(min_x * 4), static_cast<float>(min_y * 4), 0.0F};
+            event.aabb_max = {static_cast<float>(max_x * 4), static_cast<float>(max_y * 4), 0.0F};
+        }
+        std::int32_t owner_prims = 0, group_prims = 0, other_prims = 0, region_prims = 0;
+        for (const auto& [entity_id, entity] : scene.entities()) {
+            if (entity.object_id.empty() || entity.temporary) continue;
+            ++region_prims;
+            const auto* here = parcels->parcel_at(static_cast<float>(entity.position.x),
+                                                  static_cast<float>(entity.position.y));
+            if (here == nullptr || here->local_id != parcel.local_id) continue;
+            if (entity.owner_id == parcel.owner_id) ++owner_prims;
+            else if (!parcel.group_id.empty() && entity.owner_id == parcel.group_id) ++group_prims;
+            else ++other_prims;
+        }
+        event.owner_prims = owner_prims;
+        event.group_prims = group_prims;
+        event.other_prims = other_prims;
+        event.total_prims = owner_prims + group_prims + other_prims;
+        event.sim_wide_total_prims = region_prims;
+        event.sim_wide_max_prims = region_prim_limit();
+        const long long region_area =
+            static_cast<long long>(region_size_x) * static_cast<long long>(region_size_y);
+        event.max_prims = region_area > 0 ? static_cast<std::int32_t>(
+            static_cast<long long>(event.area) * region_prim_limit() / region_area) : 0;
+        enqueue_viewer_event(session_id, homeworldz::viewer::parcel_properties_event_xml(event));
+    };
+
     std::cout << "{\"level\":\"info\",\"message\":\"region service listening\",\"httpPort\":"
               << configured_port() << ",\"viewerPort\":" << region_viewer_port << "}" << std::endl;
     while (running) {
@@ -2541,7 +2652,13 @@ int main(int argc, char* argv[]) {
                             homeworldz::viewer::RegionHandshake handshake;
                             handshake.name = region_name;
                             handshake.region_id = *region_id;
-                            handshake.owner_id = identity->agent_id;
+                            // The region/estate owner is authoritative from the grid record;
+                            // fall back to the connecting agent only when the grid supplied no
+                            // owner (older records), preserving prior single-user behavior.
+                            const auto region_owner = homeworldz::viewer::parse_uuid(region_owner_id);
+                            handshake.owner_id = region_owner ? *region_owner : identity->agent_id;
+                            handshake.is_estate_owner =
+                                region_owner && *region_owner == identity->agent_id;
                             constexpr std::array<std::string_view, 4> terrain_texture_ids{
                                 "b8d3965a-ad78-bf43-699b-bff8eca6c975",
                                 "abb783e6-3e93-26c0-248a-247666855da3",
@@ -2642,6 +2759,167 @@ int main(int argc, char* argv[]) {
                                 if (const auto outgoing = circuits.send(
                                         endpoint, std::move(response), true, now))
                                     static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
+                        }
+                        if (const auto request =
+                                homeworldz::viewer::decode_parcel_properties_request(packet->payload);
+                            request && request->agent_id == identity->agent_id &&
+                            request->session_id == identity->session_id) {
+                            const float mid_x = (request->west + request->east) / 2.0F;
+                            const float mid_y = (request->south + request->north) / 2.0F;
+                            const auto* parcel = parcels->parcel_at(mid_x, mid_y);
+                            if (parcel == nullptr) parcel = parcels->parcel_at(request->west, request->south);
+                            const auto session_id = homeworldz::viewer::format_uuid(identity->session_id);
+                            if (parcel != nullptr)
+                                send_parcel_properties(session_id, *parcel,
+                                    homeworldz::parcel::result_single, request->sequence_id,
+                                    request->snap_selection);
+                        }
+                        if (const auto request =
+                                homeworldz::viewer::decode_parcel_properties_request_by_id(packet->payload);
+                            request && request->agent_id == identity->agent_id &&
+                            request->session_id == identity->session_id) {
+                            const auto* parcel = parcels->find_by_local_id(request->local_id);
+                            const auto session_id = homeworldz::viewer::format_uuid(identity->session_id);
+                            if (parcel != nullptr)
+                                send_parcel_properties(session_id, *parcel,
+                                    homeworldz::parcel::result_single, request->sequence_id, false);
+                        }
+                        if (const auto update =
+                                homeworldz::viewer::decode_parcel_properties_update(packet->payload);
+                            update && update->agent_id == identity->agent_id &&
+                            update->session_id == identity->session_id) {
+                            auto* parcel = parcels->find_by_local_id(update->local_id);
+                            const auto agent = homeworldz::viewer::format_uuid(identity->agent_id);
+                            const bool authorized = parcel != nullptr &&
+                                (parcel->owner_id == agent ||
+                                 (!region_owner_id.empty() && region_owner_id == agent));
+                            if (authorized) {
+                                // Preserve server-managed flags the viewer must not toggle.
+                                constexpr std::uint32_t preserved =
+                                    homeworldz::parcel::flag_linden_home |
+                                    homeworldz::parcel::flag_for_sale_objects;
+                                parcel->flags = (update->parcel_flags & ~preserved) |
+                                                (parcel->flags & preserved);
+                                parcel->sale_price = update->sale_price;
+                                parcel->name = update->name;
+                                parcel->description = update->description;
+                                parcel->music_url = update->music_url;
+                                parcel->media_url = update->media_url;
+                                parcel->media_id = homeworldz::viewer::format_uuid(update->media_id);
+                                parcel->media_auto_scale = update->media_auto_scale;
+                                parcel->group_id = homeworldz::viewer::format_uuid(update->group_id);
+                                parcel->pass_price = update->pass_price;
+                                parcel->pass_hours = update->pass_hours;
+                                parcel->category = static_cast<std::int8_t>(update->category);
+                                parcel->auth_buyer_id =
+                                    homeworldz::viewer::format_uuid(update->auth_buyer_id);
+                                parcel->snapshot_id =
+                                    homeworldz::viewer::format_uuid(update->snapshot_id);
+                                parcel->user_location = {update->user_location[0],
+                                    update->user_location[1], update->user_location[2]};
+                                parcel->user_look_at = {update->user_look_at[0],
+                                    update->user_look_at[1], update->user_look_at[2]};
+                                parcel->landing_type = update->landing_type;
+                                persist_parcels();
+                                const auto session_id =
+                                    homeworldz::viewer::format_uuid(identity->session_id);
+                                send_parcel_properties(session_id, *parcel,
+                                    homeworldz::parcel::result_single,
+                                    homeworldz::parcel::selected_parcel_sequence_id, false);
+                            }
+                        }
+                        if (const auto divide = homeworldz::viewer::decode_parcel_divide(packet->payload);
+                            divide && divide->agent_id == identity->agent_id &&
+                            divide->session_id == identity->session_id) {
+                            const auto agent = homeworldz::viewer::format_uuid(identity->agent_id);
+                            const auto* covered = parcels->parcel_covering(
+                                divide->west, divide->south, divide->east, divide->north);
+                            const bool authorized = covered != nullptr &&
+                                (covered->owner_id == agent ||
+                                 (!region_owner_id.empty() && region_owner_id == agent));
+                            if (authorized) {
+                                const auto carved = parcels->divide(divide->west, divide->south,
+                                    divide->east, divide->north, homeworldz::viewer::random_uuid(),
+                                    agent, covered->claim_date);
+                                if (carved) {
+                                    persist_parcels();
+                                    const auto session_id =
+                                        homeworldz::viewer::format_uuid(identity->session_id);
+                                    if (const auto* fresh = parcels->find_by_local_id(*carved))
+                                        send_parcel_properties(session_id, *fresh,
+                                            homeworldz::parcel::result_single,
+                                            homeworldz::parcel::selected_parcel_sequence_id, true);
+                                }
+                            }
+                        }
+                        if (const auto join = homeworldz::viewer::decode_parcel_join(packet->payload);
+                            join && join->agent_id == identity->agent_id &&
+                            join->session_id == identity->session_id) {
+                            const auto agent = homeworldz::viewer::format_uuid(identity->agent_id);
+                            const bool region_owner = !region_owner_id.empty() && region_owner_id == agent;
+                            const auto merged = parcels->join(join->west, join->south, join->east,
+                                join->north, region_owner ? std::string_view{region_owner_id} :
+                                                            std::string_view{agent});
+                            if (merged) {
+                                persist_parcels();
+                                const auto session_id =
+                                    homeworldz::viewer::format_uuid(identity->session_id);
+                                if (const auto* fresh = parcels->find_by_local_id(*merged))
+                                    send_parcel_properties(session_id, *fresh,
+                                        homeworldz::parcel::result_single,
+                                        homeworldz::parcel::selected_parcel_sequence_id, true);
+                            }
+                        }
+                        if (const auto request =
+                                homeworldz::viewer::decode_parcel_access_list_request(packet->payload);
+                            request && request->agent_id == identity->agent_id &&
+                            request->session_id == identity->session_id) {
+                            const auto* parcel = parcels->find_by_local_id(request->local_id);
+                            if (parcel != nullptr) {
+                                homeworldz::viewer::ParcelAccessListReply reply;
+                                reply.agent_id = identity->agent_id;
+                                reply.sequence_id = request->sequence_id;
+                                reply.flags = request->flags;
+                                reply.local_id = request->local_id;
+                                for (const auto& entry : parcel->access) {
+                                    if ((entry.flags & request->flags) == 0) continue;
+                                    homeworldz::viewer::ParcelAccessListEntry wire;
+                                    if (const auto id = homeworldz::viewer::parse_uuid(entry.agent_id))
+                                        wire.id = *id;
+                                    wire.time = entry.time;
+                                    wire.flags = entry.flags;
+                                    reply.entries.push_back(wire);
+                                }
+                                auto response =
+                                    homeworldz::viewer::encode_parcel_access_list_reply(reply);
+                                if (const auto outgoing = circuits.send(
+                                        endpoint, std::move(response), true, now))
+                                    static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
+                            }
+                        }
+                        if (const auto update =
+                                homeworldz::viewer::decode_parcel_access_list_update(packet->payload);
+                            update && update->agent_id == identity->agent_id &&
+                            update->session_id == identity->session_id) {
+                            auto* parcel = parcels->find_by_local_id(update->local_id);
+                            const auto agent = homeworldz::viewer::format_uuid(identity->agent_id);
+                            const bool authorized = parcel != nullptr &&
+                                (parcel->owner_id == agent ||
+                                 (!region_owner_id.empty() && region_owner_id == agent));
+                            if (authorized) {
+                                // Replace the entries carrying the requested access flags.
+                                const std::uint32_t which = update->flags &
+                                    (homeworldz::parcel::access_allowed | homeworldz::parcel::access_ban);
+                                std::erase_if(parcel->access, [&](const auto& entry) {
+                                    return (entry.flags & which) != 0;
+                                });
+                                for (const auto& wire : update->entries) {
+                                    const auto id = homeworldz::viewer::format_uuid(wire.id);
+                                    if (id == "00000000-0000-0000-0000-000000000000") continue;
+                                    parcel->access.push_back({id, wire.time, which});
+                                }
+                                persist_parcels();
+                            }
                         }
                         if (const auto requested_names =
                                 homeworldz::viewer::decode_uuid_name_request(packet->payload)) {

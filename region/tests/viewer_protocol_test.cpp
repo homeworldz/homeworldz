@@ -1387,8 +1387,103 @@ bool home_and_gesture_codecs() {
            deactivated->item_ids.size() == 1 && deactivated->item_ids[0] == item1;
 }
 
+bool parcel_codecs() {
+    // ParcelPropertiesRequest (Medium 11): [ff 0b][agent 16][session 16][seq][w][s][e][n][snap]
+    {
+        std::vector<std::byte> payload(55, std::byte{0});
+        payload[0] = std::byte{0xff};
+        payload[1] = std::byte{0x0b};
+        payload[2] = std::byte{0x11}; // agent id first byte
+        payload[18] = std::byte{0x22}; // session id first byte
+        write_u32(payload, 34, static_cast<std::uint32_t>(-1));
+        write_f32(payload, 38, 32.0F);
+        write_f32(payload, 42, 48.0F);
+        write_f32(payload, 46, 64.0F);
+        write_f32(payload, 50, 80.0F);
+        payload[54] = std::byte{1};
+        const auto request = decode_parcel_properties_request(payload);
+        if (!request || request->sequence_id != -1 || request->west != 32.0F ||
+            request->north != 80.0F || !request->snap_selection ||
+            std::to_integer<int>(request->agent_id[0]) != 0x11 ||
+            std::to_integer<int>(request->session_id[0]) != 0x22)
+            return false;
+    }
+    // ParcelPropertiesRequestByID (Low 197): [ff ff 00 c5][agent][session][seq][local]
+    {
+        std::vector<std::byte> payload(44, std::byte{0});
+        payload[0] = std::byte{0xff}; payload[1] = std::byte{0xff};
+        payload[2] = std::byte{0x00}; payload[3] = std::byte{0xc5};
+        write_u32(payload, 36, static_cast<std::uint32_t>(-2));
+        write_u32(payload, 40, 7);
+        const auto request = decode_parcel_properties_request_by_id(payload);
+        if (!request || request->sequence_id != -2 || request->local_id != 7) return false;
+    }
+    // ParcelDivide (Low 211) and ParcelJoin (Low 210).
+    {
+        std::vector<std::byte> payload(52, std::byte{0});
+        payload[0] = std::byte{0xff}; payload[1] = std::byte{0xff};
+        payload[2] = std::byte{0x00}; payload[3] = std::byte{0xd3};
+        write_f32(payload, 36, 4.0F);
+        write_f32(payload, 40, 8.0F);
+        write_f32(payload, 44, 12.0F);
+        write_f32(payload, 48, 16.0F);
+        const auto divide = decode_parcel_divide(payload);
+        if (!divide || divide->west != 4.0F || divide->north != 16.0F) return false;
+        if (decode_parcel_join(payload)) return false; // wrong message number
+        payload[3] = std::byte{0xd2};
+        const auto join = decode_parcel_join(payload);
+        if (!join || join->east != 12.0F) return false;
+    }
+    // ParcelAccessListRequest (Low 215): [id][agent][session][seq][flags][local]
+    {
+        std::vector<std::byte> payload(48, std::byte{0});
+        payload[0] = std::byte{0xff}; payload[1] = std::byte{0xff};
+        payload[2] = std::byte{0x00}; payload[3] = std::byte{0xd7};
+        write_u32(payload, 36, 3);   // sequence
+        write_u32(payload, 40, 2);   // flags = Ban
+        write_u32(payload, 44, 5);   // local id
+        const auto request = decode_parcel_access_list_request(payload);
+        if (!request || request->sequence_id != 3 || request->flags != 2 || request->local_id != 5)
+            return false;
+    }
+    // ParcelAccessListUpdate (Low 217) with one entry.
+    {
+        std::vector<std::byte> payload(68 + 1 + 24, std::byte{0});
+        payload[0] = std::byte{0xff}; payload[1] = std::byte{0xff};
+        payload[2] = std::byte{0x00}; payload[3] = std::byte{0xd9};
+        write_u32(payload, 36, 1);   // flags = Access
+        write_u32(payload, 40, 9);   // local id
+        write_u32(payload, 60, 0);   // sequence
+        write_u32(payload, 64, 1);   // sections
+        payload[68] = std::byte{1};  // one entry
+        payload[69] = std::byte{0xab}; // entry id first byte
+        write_u32(payload, 69 + 16, 42);   // time
+        write_u32(payload, 69 + 20, 1);    // flags
+        const auto update = decode_parcel_access_list_update(payload);
+        if (!update || update->flags != 1 || update->local_id != 9 || update->entries.size() != 1 ||
+            update->entries[0].time != 42 ||
+            std::to_integer<int>(update->entries[0].id[0]) != 0xab)
+            return false;
+    }
+    // ParcelAccessListReply encoder: empty list emits one zero-UUID entry.
+    {
+        ParcelAccessListReply reply;
+        reply.sequence_id = 0;
+        reply.flags = 1;
+        reply.local_id = 3;
+        const auto encoded = encode_parcel_access_list_reply(reply);
+        // prefix(4) + agent(16) + seq(4) + flags(4) + local(4) + count(1) + one entry(24)
+        if (encoded.size() != 4 + 16 + 12 + 1 + 24) return false;
+        if (encoded[0] != std::byte{0xff} || encoded[3] != std::byte{0xd8}) return false;
+        // prefix(4)+agent(16)+seq(4)+flags(4)+local(4) = 32, then the count byte.
+        if (encoded[32] != std::byte{1}) return false; // count == 1 (the zero entry)
+    }
+    return true;
+}
+
 int main() {
     if (!packet_round_trip()) return 1;
+    if (!parcel_codecs()) return 25;
     if (!message_codecs()) return 2;
     if (!teleport_codecs()) return 18;
     if (!map_codecs()) return 17;

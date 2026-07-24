@@ -4,6 +4,7 @@
 
 #include <array>
 #include <charconv>
+#include <ctime>
 #include <random>
 #include <span>
 
@@ -223,6 +224,119 @@ std::string crossed_region_event_xml(const CrossedRegion& event) {
            "</integer><key>RegionSizeX</key><binary>" + u32_binary(event.region_size_x) +
            "</binary><key>RegionSizeY</key><binary>" + u32_binary(event.region_size_y) +
            "</binary></map></array></map></map>";
+}
+
+namespace {
+
+std::string llsd_boolean(bool value) {
+    return value ? "<boolean>1</boolean>" : "<boolean>0</boolean>";
+}
+
+std::string llsd_vector3(const std::array<float, 3>& value) {
+    return "<array><real>" + std::to_string(value[0]) + "</real><real>" +
+           std::to_string(value[1]) + "</real><real>" + std::to_string(value[2]) +
+           "</real></array>";
+}
+
+std::string llsd_iso8601(std::int32_t unix_seconds) {
+    const std::time_t time = unix_seconds;
+    std::tm utc{};
+#ifdef _WIN32
+    gmtime_s(&utc, &time);
+#else
+    gmtime_r(&time, &utc);
+#endif
+    char buffer[32] = {};
+    std::strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", &utc);
+    return std::string("<date>") + buffer + "</date>";
+}
+
+} // namespace
+
+std::string parcel_properties_event_xml(const ParcelPropertiesEvent& event) {
+    const auto integer = [](std::int32_t value) {
+        return "<integer>" + std::to_string(value) + "</integer>";
+    };
+    const auto real = [](double value) { return "<real>" + std::to_string(value) + "</real>"; };
+    const auto uuid = [](std::string_view value) {
+        return "<uuid>" + xml_escape(value.empty() ? "00000000-0000-0000-0000-000000000000" : value) +
+               "</uuid>";
+    };
+    const auto str = [](std::string_view value) {
+        return "<string>" + xml_escape(value) + "</string>";
+    };
+    const auto key = [](std::string_view name) { return "<key>" + std::string(name) + "</key>"; };
+    const auto bitmap_base64 = base64(std::span<const std::uint8_t>(event.bitmap.data(), event.bitmap.size()));
+
+    std::string parcel_data = "<array><map>";
+    parcel_data += key("LocalID") + integer(event.local_id);
+    parcel_data += key("AABBMax") + llsd_vector3(event.aabb_max);
+    parcel_data += key("AABBMin") + llsd_vector3(event.aabb_min);
+    parcel_data += key("Area") + integer(event.area);
+    parcel_data += key("AuctionID") + integer(static_cast<std::int32_t>(event.auction_id));
+    parcel_data += key("AuthBuyerID") + uuid(event.auth_buyer_id);
+    parcel_data += key("Bitmap") + "<binary>" + bitmap_base64 + "</binary>";
+    parcel_data += key("Category") + integer(event.category);
+    parcel_data += key("ClaimDate") + llsd_iso8601(event.claim_date);
+    parcel_data += key("ClaimPrice") + integer(event.claim_price);
+    parcel_data += key("Desc") + str(event.description);
+    parcel_data += key("ParcelFlags") + "<binary>" + u32_binary(event.parcel_flags) + "</binary>";
+    parcel_data += key("GroupID") + uuid(event.group_id);
+    parcel_data += key("GroupPrims") + integer(event.group_prims);
+    parcel_data += key("IsGroupOwned") + llsd_boolean(event.is_group_owned);
+    parcel_data += key("LandingType") + integer(event.landing_type);
+    parcel_data += key("MaxPrims") + integer(event.max_prims);
+    parcel_data += key("MediaID") + uuid(event.media_id);
+    parcel_data += key("MediaURL") + str(event.media_url);
+    parcel_data += key("MediaAutoScale") + llsd_boolean(event.media_auto_scale != 0);
+    parcel_data += key("MusicURL") + str(event.music_url);
+    parcel_data += key("Name") + str(event.name);
+    parcel_data += key("OtherCleanTime") + integer(event.other_clean_time);
+    parcel_data += key("OtherCount") + integer(event.other_count);
+    parcel_data += key("OtherPrims") + integer(event.other_prims);
+    parcel_data += key("OwnerID") + uuid(event.owner_id);
+    parcel_data += key("OwnerPrims") + integer(event.owner_prims);
+    parcel_data += key("ParcelPrimBonus") + real(event.parcel_prim_bonus);
+    parcel_data += key("PassHours") + real(event.pass_hours);
+    parcel_data += key("PassPrice") + integer(event.pass_price);
+    parcel_data += key("PublicCount") + integer(event.public_count);
+    parcel_data += key("RegionDenyAnonymous") + llsd_boolean(event.region_deny_anonymous);
+    parcel_data += key("RegionDenyIdentified") + llsd_boolean(event.region_deny_identified);
+    parcel_data += key("RegionDenyTransacted") + llsd_boolean(event.region_deny_transacted);
+    parcel_data += key("RegionPushOverride") + llsd_boolean(event.region_push_override);
+    parcel_data += key("RentPrice") + integer(event.rent_price);
+    parcel_data += key("RequestResult") + integer(event.request_result);
+    parcel_data += key("SalePrice") + integer(event.sale_price);
+    parcel_data += key("SelectedPrims") + integer(event.selected_prims);
+    parcel_data += key("SelfCount") + integer(event.self_count);
+    parcel_data += key("SequenceID") + integer(event.sequence_id);
+    parcel_data += key("SimWideMaxPrims") + integer(event.sim_wide_max_prims);
+    parcel_data += key("SimWideTotalPrims") + integer(event.sim_wide_total_prims);
+    parcel_data += key("SnapSelection") + llsd_boolean(event.snap_selection);
+    parcel_data += key("SnapshotID") + uuid(event.snapshot_id);
+    parcel_data += key("Status") + integer(event.status);
+    parcel_data += key("TotalPrims") + integer(event.total_prims);
+    parcel_data += key("UserLocation") + llsd_vector3(event.user_location);
+    parcel_data += key("UserLookAt") + llsd_vector3(event.user_look_at);
+    parcel_data += "</map></array>";
+
+    std::string media_data = "<array><map>";
+    media_data += key("MediaDesc") + str(event.media_desc);
+    media_data += key("MediaHeight") + integer(event.media_height);
+    media_data += key("MediaWidth") + integer(event.media_width);
+    media_data += key("MediaLoop") + llsd_boolean(event.media_loop);
+    media_data += key("MediaType") + str(event.media_type);
+    media_data += key("ObscureMedia") + llsd_boolean(event.obscure_media);
+    media_data += key("ObscureMusic") + llsd_boolean(event.obscure_music);
+    media_data += "</map></array>";
+
+    std::string age = "<array><map>";
+    age += key("RegionDenyAgeUnverified") + llsd_boolean(event.region_deny_age_unverified);
+    age += "</map></array>";
+
+    return "<map><key>message</key><string>ParcelProperties</string><key>body</key><map>" +
+           key("ParcelData") + parcel_data + key("MediaData") + media_data +
+           key("AgeVerificationBlock") + age + "</map></map>";
 }
 
 std::string event_queue_xml(std::uint64_t id, const std::vector<std::string>& events) {

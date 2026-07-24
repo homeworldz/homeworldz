@@ -54,6 +54,7 @@ type ProvisionedRegionRuntimeResult struct {
 	SizeX         int    `json:"sizeX"`
 	SizeY         int    `json:"sizeY"`
 	Maturity      int    `json:"maturity"`
+	OwnerUserID   string `json:"ownerUserId"`
 }
 
 type RegionList struct {

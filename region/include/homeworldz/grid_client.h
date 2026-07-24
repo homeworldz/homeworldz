@@ -48,6 +48,7 @@ struct RegisteredRegion {
 	int size_x{256};
 	int size_y{256};
 	int maturity{};
+	std::string owner_id;
 };
 
 struct RegionNeighbor {

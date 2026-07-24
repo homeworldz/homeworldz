@@ -9,6 +9,7 @@ add_library(homeworldz-region-core
   src/image.cpp
   src/inventory_asset.cpp
   src/object_asset.cpp
+  src/parcel.cpp
   src/physics_scene.cpp
   src/physics_scenarios.cpp
   src/region_config.cpp
@@ -95,6 +96,10 @@ add_test(NAME region-transit COMMAND homeworldz-region-transit-tests)
 add_executable(homeworldz-object-asset-tests tests/object_asset_test.cpp)
 target_link_libraries(homeworldz-object-asset-tests PRIVATE homeworldz-region-core)
 add_test(NAME region-object-asset COMMAND homeworldz-object-asset-tests)
+
+add_executable(homeworldz-parcel-tests tests/parcel_test.cpp)
+target_link_libraries(homeworldz-parcel-tests PRIVATE homeworldz-region-core)
+add_test(NAME region-parcel COMMAND homeworldz-parcel-tests)
 
 add_executable(homeworldz-region-config-tests tests/region_config_test.cpp)
 target_link_libraries(homeworldz-region-config-tests PRIVATE homeworldz-region-core)

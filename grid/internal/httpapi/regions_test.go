@@ -301,7 +301,7 @@ func TestProvisionedRegionRegistrationUsesPerRegionCredentials(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "regions.json")
 	if err := os.WriteFile(path, []byte(`[
   {"id":"11111111-1111-4111-8111-111111111111","name":"Welcome","mapX":1000,"mapY":1000,"accessKey":"welcome-key"},
-  {"id":"22222222-2222-4222-8222-222222222222","name":"Sandbox","mapX":1001,"mapY":1000,"publicEndpoint":"https://sandbox.example/region","viewerPort":43002,"accessKey":"sandbox-key"}
+  {"id":"22222222-2222-4222-8222-222222222222","name":"Sandbox","ownerUserId":"33333333-3333-4333-8333-333333333333","mapX":1001,"mapY":1000,"publicEndpoint":"https://sandbox.example/region","viewerPort":43002,"accessKey":"sandbox-key"}
 ]`), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -331,7 +331,8 @@ func TestProvisionedRegionRegistrationUsesPerRegionCredentials(t *testing.T) {
 		registered.GridX != 1001 || registered.GridY != 1000 ||
 		registered.SizeX != 256 || registered.SizeY != 256 || registered.Maturity != 0 ||
 		registered.PublicEndpoint != "https://sandbox.example/region" || registered.ViewerPort != 43002 ||
-		registered.GridName != "HomeWorldz Test" || registered.GridPublicURL != "https://grid.example" {
+		registered.GridName != "HomeWorldz Test" || registered.GridPublicURL != "https://grid.example" ||
+		registered.OwnerUserID != "33333333-3333-4333-8333-333333333333" {
 		t.Fatalf("unexpected registered region: %#v", registered)
 	}
 

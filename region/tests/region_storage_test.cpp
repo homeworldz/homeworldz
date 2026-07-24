@@ -276,6 +276,45 @@ int main() {
                 corruption_detected = true;
             }
             if (!corruption_detected) return 1;
+
+            // Parcel persistence round-trip: a divided region with an access entry.
+            if (storage.load_parcels()) return 1; // none stored yet
+            homeworldz::parcel::ParcelSet set(256, "aaaa0000-0000-4000-8000-000000000001",
+                                              "0b0b0b0b-0000-4000-8000-000000000002", 555);
+            const auto carved = set.divide(0.0F, 0.0F, 64.0F, 64.0F,
+                                           "aaaa0000-0000-4000-8000-000000000003",
+                                           "0c0c0c0c-0000-4000-8000-000000000004", 777);
+            if (!carved) return 1;
+            auto* edited = set.find_by_local_id(1);
+            if (edited == nullptr) return 1;
+            edited->name = "Storage Parcel";
+            edited->description = "round trip \"desc\"";
+            edited->flags = homeworldz::parcel::default_parcel_flags |
+                            homeworldz::parcel::flag_use_ban_list;
+            edited->landing_type = static_cast<std::uint8_t>(homeworldz::parcel::LandingType::landing_point);
+            edited->user_location = {12.0F, 34.0F, 25.0F};
+            edited->access.push_back({"0d0d0d0d-0000-4000-8000-000000000005", 0,
+                                      homeworldz::parcel::access_ban});
+            storage.save_parcels(set.parcels());
+            const auto restored_parcels = storage.load_parcels();
+            if (!restored_parcels || restored_parcels->size() != 2) return 1;
+            const homeworldz::parcel::ParcelSet reopened(256, *restored_parcels);
+            const auto* whole = reopened.find_by_local_id(1);
+            const auto* small = reopened.find_by_local_id(*carved);
+            if (whole == nullptr || small == nullptr) return 1;
+            if (whole->name != "Storage Parcel" || whole->description != "round trip \"desc\"" ||
+                whole->owner_id != "0b0b0b0b-0000-4000-8000-000000000002" ||
+                (whole->flags & homeworldz::parcel::flag_use_ban_list) == 0 ||
+                whole->landing_type !=
+                    static_cast<std::uint8_t>(homeworldz::parcel::LandingType::landing_point) ||
+                whole->user_location.x != 12.0F || whole->user_location.z != 25.0F ||
+                whole->access.size() != 1 ||
+                whole->access[0].agent_id != "0d0d0d0d-0000-4000-8000-000000000005" ||
+                whole->access[0].flags != homeworldz::parcel::access_ban) return 1;
+            if (small->owner_id != "0c0c0c0c-0000-4000-8000-000000000004" ||
+                small->area(reopened.edge_cells()) != 64 * 64) return 1;
+            if (reopened.parcel_at(10.0F, 10.0F) != small ||
+                reopened.parcel_at(200.0F, 200.0F) != whole) return 1;
         }
         std::filesystem::remove_all(path);
         return 0;

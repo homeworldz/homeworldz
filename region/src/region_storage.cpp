@@ -632,7 +632,27 @@ RegionStorage::RegionStorage(std::filesystem::path data_path) : data_path_(std::
                        "cache_id TEXT NOT NULL, texture_index INTEGER NOT NULL, asset_id TEXT NOT NULL,"
                        "updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,"
                        "PRIMARY KEY (cache_id, texture_index),"
-                       "FOREIGN KEY (asset_id) REFERENCES asset_mappings(viewer_id));");
+                       "FOREIGN KEY (asset_id) REFERENCES asset_mappings(viewer_id));"
+                       "CREATE TABLE IF NOT EXISTS parcels ("
+                       "global_id TEXT PRIMARY KEY, local_id INTEGER NOT NULL,"
+                       "name TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '',"
+                       "owner_id TEXT NOT NULL DEFAULT '', group_id TEXT NOT NULL DEFAULT '',"
+                       "is_group_owned INTEGER NOT NULL DEFAULT 0, flags INTEGER NOT NULL DEFAULT 0,"
+                       "category INTEGER NOT NULL DEFAULT 0, sale_price INTEGER NOT NULL DEFAULT 0,"
+                       "auth_buyer_id TEXT NOT NULL DEFAULT '', snapshot_id TEXT NOT NULL DEFAULT '',"
+                       "media_id TEXT NOT NULL DEFAULT '', media_url TEXT NOT NULL DEFAULT '',"
+                       "music_url TEXT NOT NULL DEFAULT '', media_auto_scale INTEGER NOT NULL DEFAULT 0,"
+                       "pass_price INTEGER NOT NULL DEFAULT 0, pass_hours REAL NOT NULL DEFAULT 0,"
+                       "user_location_x REAL NOT NULL DEFAULT 0, user_location_y REAL NOT NULL DEFAULT 0,"
+                       "user_location_z REAL NOT NULL DEFAULT 0, user_look_at_x REAL NOT NULL DEFAULT 0,"
+                       "user_look_at_y REAL NOT NULL DEFAULT 0, user_look_at_z REAL NOT NULL DEFAULT 0,"
+                       "other_clean_time INTEGER NOT NULL DEFAULT 0, claim_date INTEGER NOT NULL DEFAULT 0,"
+                       "landing_type INTEGER NOT NULL DEFAULT 2, bitmap TEXT NOT NULL DEFAULT '');"
+                       "CREATE TABLE IF NOT EXISTS parcel_access ("
+                       "parcel_global_id TEXT NOT NULL, agent_id TEXT NOT NULL,"
+                       "flags INTEGER NOT NULL, time INTEGER NOT NULL DEFAULT 0,"
+                       "PRIMARY KEY (parcel_global_id, agent_id, flags),"
+                       "FOREIGN KEY (parcel_global_id) REFERENCES parcels(global_id) ON DELETE CASCADE);");
     if (!has_column(database_, "asset_mappings", "creator_id"))
         execute(database_, "ALTER TABLE asset_mappings ADD COLUMN creator_id TEXT NOT NULL "
                            "DEFAULT '00000000-0000-0000-0000-000000000000' CHECK(length(creator_id) = 36);");
@@ -898,6 +918,172 @@ std::vector<std::byte> RegionStorage::read_asset(std::string_view viewer_id) con
         throw std::runtime_error("asset blob failed content hash verification");
     }
     return content;
+}
+
+namespace {
+
+std::string parcel_bitmap_hex(const std::vector<std::uint8_t>& bitmap) {
+    return bytes_to_hex(std::span(reinterpret_cast<const std::byte*>(bitmap.data()), bitmap.size()));
+}
+
+std::vector<std::uint8_t> parcel_bitmap_from_hex(std::string_view hex) {
+    const auto bytes = bytes_from_hex(hex);
+    std::vector<std::uint8_t> result(bytes.size());
+    for (std::size_t index = 0; index < bytes.size(); ++index)
+        result[index] = std::to_integer<std::uint8_t>(bytes[index]);
+    return result;
+}
+
+void bind_text(sqlite3_stmt* statement, int column, std::string_view value) {
+    sqlite3_bind_text(statement, column, value.data(), static_cast<int>(value.size()), SQLITE_TRANSIENT);
+}
+
+} // namespace
+
+void RegionStorage::save_parcels(const std::vector<parcel::Parcel>& parcels) {
+    execute(database_, "BEGIN IMMEDIATE;");
+    try {
+        execute(database_, "DELETE FROM parcel_access; DELETE FROM parcels;");
+        const char* parcel_sql =
+            "INSERT INTO parcels (global_id, local_id, name, description, owner_id, group_id,"
+            "is_group_owned, flags, category, sale_price, auth_buyer_id, snapshot_id, media_id,"
+            "media_url, music_url, media_auto_scale, pass_price, pass_hours, user_location_x,"
+            "user_location_y, user_location_z, user_look_at_x, user_look_at_y, user_look_at_z,"
+            "other_clean_time, claim_date, landing_type, bitmap) VALUES "
+            "(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+        const char* access_sql =
+            "INSERT OR REPLACE INTO parcel_access (parcel_global_id, agent_id, flags, time)"
+            " VALUES (?,?,?,?)";
+        for (const auto& parcel : parcels) {
+            sqlite3_stmt* statement = nullptr;
+            if (sqlite3_prepare_v2(database_, parcel_sql, -1, &statement, nullptr) != SQLITE_OK)
+                throw std::runtime_error(sqlite3_errmsg(database_));
+            int column = 1;
+            bind_text(statement, column++, parcel.global_id);
+            sqlite3_bind_int(statement, column++, parcel.local_id);
+            bind_text(statement, column++, parcel.name);
+            bind_text(statement, column++, parcel.description);
+            bind_text(statement, column++, parcel.owner_id);
+            bind_text(statement, column++, parcel.group_id);
+            sqlite3_bind_int(statement, column++, parcel.is_group_owned ? 1 : 0);
+            sqlite3_bind_int64(statement, column++, static_cast<sqlite3_int64>(parcel.flags));
+            sqlite3_bind_int(statement, column++, parcel.category);
+            sqlite3_bind_int(statement, column++, parcel.sale_price);
+            bind_text(statement, column++, parcel.auth_buyer_id);
+            bind_text(statement, column++, parcel.snapshot_id);
+            bind_text(statement, column++, parcel.media_id);
+            bind_text(statement, column++, parcel.media_url);
+            bind_text(statement, column++, parcel.music_url);
+            sqlite3_bind_int(statement, column++, parcel.media_auto_scale);
+            sqlite3_bind_int(statement, column++, parcel.pass_price);
+            sqlite3_bind_double(statement, column++, parcel.pass_hours);
+            sqlite3_bind_double(statement, column++, parcel.user_location.x);
+            sqlite3_bind_double(statement, column++, parcel.user_location.y);
+            sqlite3_bind_double(statement, column++, parcel.user_location.z);
+            sqlite3_bind_double(statement, column++, parcel.user_look_at.x);
+            sqlite3_bind_double(statement, column++, parcel.user_look_at.y);
+            sqlite3_bind_double(statement, column++, parcel.user_look_at.z);
+            sqlite3_bind_int(statement, column++, parcel.other_clean_time);
+            sqlite3_bind_int(statement, column++, parcel.claim_date);
+            sqlite3_bind_int(statement, column++, parcel.landing_type);
+            const auto bitmap = parcel_bitmap_hex(parcel.bitmap);
+            bind_text(statement, column++, bitmap);
+            const auto result = sqlite3_step(statement);
+            sqlite3_finalize(statement);
+            if (result != SQLITE_DONE) throw std::runtime_error(sqlite3_errmsg(database_));
+            for (const auto& entry : parcel.access) {
+                sqlite3_stmt* access_statement = nullptr;
+                if (sqlite3_prepare_v2(database_, access_sql, -1, &access_statement, nullptr) != SQLITE_OK)
+                    throw std::runtime_error(sqlite3_errmsg(database_));
+                bind_text(access_statement, 1, parcel.global_id);
+                bind_text(access_statement, 2, entry.agent_id);
+                sqlite3_bind_int64(access_statement, 3, static_cast<sqlite3_int64>(entry.flags));
+                sqlite3_bind_int(access_statement, 4, entry.time);
+                const auto access_result = sqlite3_step(access_statement);
+                sqlite3_finalize(access_statement);
+                if (access_result != SQLITE_DONE) throw std::runtime_error(sqlite3_errmsg(database_));
+            }
+        }
+        execute(database_, "COMMIT;");
+    } catch (...) {
+        execute(database_, "ROLLBACK;");
+        throw;
+    }
+}
+
+std::optional<std::vector<parcel::Parcel>> RegionStorage::load_parcels() const {
+    sqlite3_stmt* statement = nullptr;
+    const char* sql =
+        "SELECT global_id, local_id, name, description, owner_id, group_id, is_group_owned, flags,"
+        "category, sale_price, auth_buyer_id, snapshot_id, media_id, media_url, music_url,"
+        "media_auto_scale, pass_price, pass_hours, user_location_x, user_location_y, user_location_z,"
+        "user_look_at_x, user_look_at_y, user_look_at_z, other_clean_time, claim_date, landing_type,"
+        "bitmap FROM parcels ORDER BY local_id";
+    if (sqlite3_prepare_v2(database_, sql, -1, &statement, nullptr) != SQLITE_OK)
+        throw std::runtime_error(sqlite3_errmsg(database_));
+    const auto text = [](sqlite3_stmt* row, int column) {
+        const auto* value = reinterpret_cast<const char*>(sqlite3_column_text(row, column));
+        return value == nullptr ? std::string{} : std::string(value);
+    };
+    std::vector<parcel::Parcel> parcels;
+    int result = SQLITE_ROW;
+    while ((result = sqlite3_step(statement)) == SQLITE_ROW) {
+        parcel::Parcel parcel;
+        int column = 0;
+        parcel.global_id = text(statement, column++);
+        parcel.local_id = sqlite3_column_int(statement, column++);
+        parcel.name = text(statement, column++);
+        parcel.description = text(statement, column++);
+        parcel.owner_id = text(statement, column++);
+        parcel.group_id = text(statement, column++);
+        parcel.is_group_owned = sqlite3_column_int(statement, column++) != 0;
+        parcel.flags = static_cast<std::uint32_t>(sqlite3_column_int64(statement, column++));
+        parcel.category = static_cast<std::int8_t>(sqlite3_column_int(statement, column++));
+        parcel.sale_price = sqlite3_column_int(statement, column++);
+        parcel.auth_buyer_id = text(statement, column++);
+        parcel.snapshot_id = text(statement, column++);
+        parcel.media_id = text(statement, column++);
+        parcel.media_url = text(statement, column++);
+        parcel.music_url = text(statement, column++);
+        parcel.media_auto_scale = static_cast<std::uint8_t>(sqlite3_column_int(statement, column++));
+        parcel.pass_price = sqlite3_column_int(statement, column++);
+        parcel.pass_hours = static_cast<float>(sqlite3_column_double(statement, column++));
+        parcel.user_location.x = static_cast<float>(sqlite3_column_double(statement, column++));
+        parcel.user_location.y = static_cast<float>(sqlite3_column_double(statement, column++));
+        parcel.user_location.z = static_cast<float>(sqlite3_column_double(statement, column++));
+        parcel.user_look_at.x = static_cast<float>(sqlite3_column_double(statement, column++));
+        parcel.user_look_at.y = static_cast<float>(sqlite3_column_double(statement, column++));
+        parcel.user_look_at.z = static_cast<float>(sqlite3_column_double(statement, column++));
+        parcel.other_clean_time = sqlite3_column_int(statement, column++);
+        parcel.claim_date = sqlite3_column_int(statement, column++);
+        parcel.landing_type = static_cast<std::uint8_t>(sqlite3_column_int(statement, column++));
+        parcel.bitmap = parcel_bitmap_from_hex(text(statement, column++));
+        parcels.push_back(std::move(parcel));
+    }
+    sqlite3_finalize(statement);
+    if (result != SQLITE_DONE) throw std::runtime_error(sqlite3_errmsg(database_));
+    if (parcels.empty()) return std::nullopt;
+
+    sqlite3_stmt* access_statement = nullptr;
+    if (sqlite3_prepare_v2(database_,
+                           "SELECT agent_id, flags, time FROM parcel_access WHERE parcel_global_id = ?",
+                           -1, &access_statement, nullptr) != SQLITE_OK)
+        throw std::runtime_error(sqlite3_errmsg(database_));
+    for (auto& parcel : parcels) {
+        sqlite3_reset(access_statement);
+        sqlite3_clear_bindings(access_statement);
+        sqlite3_bind_text(access_statement, 1, parcel.global_id.c_str(), -1, SQLITE_TRANSIENT);
+        while (sqlite3_step(access_statement) == SQLITE_ROW) {
+            parcel::AccessEntry entry;
+            const auto* agent = reinterpret_cast<const char*>(sqlite3_column_text(access_statement, 0));
+            entry.agent_id = agent == nullptr ? std::string{} : agent;
+            entry.flags = static_cast<std::uint32_t>(sqlite3_column_int64(access_statement, 1));
+            entry.time = sqlite3_column_int(access_statement, 2);
+            parcel.access.push_back(std::move(entry));
+        }
+    }
+    sqlite3_finalize(access_statement);
+    return parcels;
 }
 
 } // namespace homeworldz::storage

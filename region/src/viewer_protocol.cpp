@@ -42,6 +42,22 @@ constexpr std::array<std::byte, 4> chat_from_viewer_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x50}};
 constexpr std::array<std::byte, 4> modify_land_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x7c}};
+constexpr std::array<std::byte, 2> parcel_properties_request_id{ // Medium 11
+    std::byte{0xff}, std::byte{0x0b}};
+constexpr std::array<std::byte, 4> parcel_properties_request_by_id_id{ // Low 197
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0xc5}};
+constexpr std::array<std::byte, 4> parcel_properties_update_id{ // Low 198
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0xc6}};
+constexpr std::array<std::byte, 4> parcel_join_id{ // Low 210
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0xd2}};
+constexpr std::array<std::byte, 4> parcel_divide_id{ // Low 211
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0xd3}};
+constexpr std::array<std::byte, 4> parcel_access_list_request_id{ // Low 215
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0xd7}};
+constexpr std::array<std::byte, 4> parcel_access_list_reply_id{ // Low 216
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0xd8}};
+constexpr std::array<std::byte, 4> parcel_access_list_update_id{ // Low 217
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0xd9}};
 constexpr std::array<std::byte, 4> chat_from_simulator_id{
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x8b}};
 constexpr std::array<std::byte, 4> logout_request_id{
@@ -391,6 +407,25 @@ std::optional<std::pair<std::string, std::size_t>> read_variable2(
     return std::pair{std::string(begin, size - 1), offset + 2 + size};
 }
 
+// Variable-1 string: 1-byte length prefix (including trailing NUL), NUL-terminated.
+// A zero length is valid and yields an empty string.
+std::optional<std::pair<std::string, std::size_t>> read_variable1(
+    std::span<const std::byte> data, std::size_t offset) {
+    if (offset + 1 > data.size()) return std::nullopt;
+    const auto size = std::to_integer<std::size_t>(data[offset]);
+    if (offset + 1 + size > data.size()) return std::nullopt;
+    if (size == 0) return std::pair{std::string{}, offset + 1};
+    if (data[offset + size] != std::byte{}) return std::nullopt;
+    const auto begin = reinterpret_cast<const char*>(data.data() + offset + 1);
+    return std::pair{std::string(begin, size - 1), offset + 1 + size};
+}
+
+Uuid read_uuid(std::span<const std::byte> data, std::size_t offset) {
+    Uuid value{};
+    if (offset + 16 <= data.size()) std::copy_n(data.begin() + offset, 16, value.begin());
+    return value;
+}
+
 void append_le_u32(std::vector<std::byte>& output, std::uint32_t value) {
     output.push_back(static_cast<std::byte>(value & 0xff));
     output.push_back(static_cast<std::byte>((value >> 8) & 0xff));
@@ -737,7 +772,7 @@ std::vector<std::byte> encode_region_handshake(const RegionHandshake& message) {
     output.push_back(std::byte{13}); // PG access
     if (!append_variable1(output, message.name)) return {};
     append_uuid(output, message.owner_id);
-    output.push_back(std::byte{}); // estate manager
+    output.push_back(static_cast<std::byte>(message.is_estate_owner ? 1 : 0)); // IsEstateManager
     append_f32(output, message.water_height);
     append_f32(output, 1.0F); // billable factor
     Uuid zero{};
@@ -2295,6 +2330,193 @@ std::optional<ModifyLand> decode_modify_land(std::span<const std::byte> payload)
         offset += sizeof(float);
     }
     return result;
+}
+
+std::optional<ParcelPropertiesRequest> decode_parcel_properties_request(
+    std::span<const std::byte> payload) {
+    constexpr std::size_t id = 2; // Medium-frequency 2-byte message number
+    constexpr std::size_t size = id + 32 + 4 + 16 + 1;
+    if (payload.size() < size ||
+        !std::equal(parcel_properties_request_id.begin(), parcel_properties_request_id.end(),
+                    payload.begin()))
+        return std::nullopt;
+    ParcelPropertiesRequest result;
+    result.agent_id = read_uuid(payload, id);
+    result.session_id = read_uuid(payload, id + 16);
+    std::size_t offset = id + 32;
+    result.sequence_id = static_cast<std::int32_t>(read_le_u32(payload, offset));
+    result.west = read_f32(payload, offset + 4);
+    result.south = read_f32(payload, offset + 8);
+    result.east = read_f32(payload, offset + 12);
+    result.north = read_f32(payload, offset + 16);
+    result.snap_selection = payload[offset + 20] != std::byte{};
+    if (!std::isfinite(result.west) || !std::isfinite(result.south) ||
+        !std::isfinite(result.east) || !std::isfinite(result.north))
+        return std::nullopt;
+    return result;
+}
+
+std::optional<ParcelPropertiesRequestById> decode_parcel_properties_request_by_id(
+    std::span<const std::byte> payload) {
+    constexpr std::size_t id = 4;
+    constexpr std::size_t size = id + 32 + 4 + 4;
+    if (payload.size() < size ||
+        !std::equal(parcel_properties_request_by_id_id.begin(),
+                    parcel_properties_request_by_id_id.end(), payload.begin()))
+        return std::nullopt;
+    ParcelPropertiesRequestById result;
+    result.agent_id = read_uuid(payload, id);
+    result.session_id = read_uuid(payload, id + 16);
+    result.sequence_id = static_cast<std::int32_t>(read_le_u32(payload, id + 32));
+    result.local_id = static_cast<std::int32_t>(read_le_u32(payload, id + 36));
+    return result;
+}
+
+std::optional<ParcelPropertiesUpdate> decode_parcel_properties_update(
+    std::span<const std::byte> payload) {
+    constexpr std::size_t id = 4;
+    if (payload.size() < id + 32 + 12 ||
+        !std::equal(parcel_properties_update_id.begin(), parcel_properties_update_id.end(),
+                    payload.begin()))
+        return std::nullopt;
+    ParcelPropertiesUpdate result;
+    result.agent_id = read_uuid(payload, id);
+    result.session_id = read_uuid(payload, id + 16);
+    std::size_t offset = id + 32;
+    result.local_id = static_cast<std::int32_t>(read_le_u32(payload, offset)); offset += 4;
+    result.flags = read_le_u32(payload, offset); offset += 4;
+    result.parcel_flags = read_le_u32(payload, offset); offset += 4;
+    result.sale_price = static_cast<std::int32_t>(read_le_u32(payload, offset)); offset += 4;
+    const auto name = read_variable1(payload, offset);
+    if (!name) return std::nullopt;
+    result.name = name->first; offset = name->second;
+    const auto description = read_variable1(payload, offset);
+    if (!description) return std::nullopt;
+    result.description = description->first; offset = description->second;
+    const auto music = read_variable1(payload, offset);
+    if (!music) return std::nullopt;
+    result.music_url = music->first; offset = music->second;
+    const auto media = read_variable1(payload, offset);
+    if (!media) return std::nullopt;
+    result.media_url = media->first; offset = media->second;
+    if (offset + 16 + 1 + 16 + 4 + 4 + 1 + 16 + 16 + 12 + 12 + 1 > payload.size())
+        return std::nullopt;
+    result.media_id = read_uuid(payload, offset); offset += 16;
+    result.media_auto_scale = std::to_integer<std::uint8_t>(payload[offset]); offset += 1;
+    result.group_id = read_uuid(payload, offset); offset += 16;
+    result.pass_price = static_cast<std::int32_t>(read_le_u32(payload, offset)); offset += 4;
+    result.pass_hours = read_f32(payload, offset); offset += 4;
+    result.category = std::to_integer<std::uint8_t>(payload[offset]); offset += 1;
+    result.auth_buyer_id = read_uuid(payload, offset); offset += 16;
+    result.snapshot_id = read_uuid(payload, offset); offset += 16;
+    result.user_location = read_vector3(payload, offset); offset += 12;
+    result.user_look_at = read_vector3(payload, offset); offset += 12;
+    result.landing_type = std::to_integer<std::uint8_t>(payload[offset]);
+    return result;
+}
+
+namespace {
+std::optional<ParcelRectRequest> decode_parcel_rect(std::span<const std::byte> payload,
+                                                    const std::array<std::byte, 4>& id) {
+    constexpr std::size_t offset = 4;
+    constexpr std::size_t size = offset + 32 + 16;
+    if (payload.size() < size || !std::equal(id.begin(), id.end(), payload.begin()))
+        return std::nullopt;
+    ParcelRectRequest result;
+    result.agent_id = read_uuid(payload, offset);
+    result.session_id = read_uuid(payload, offset + 16);
+    result.west = read_f32(payload, offset + 32);
+    result.south = read_f32(payload, offset + 36);
+    result.east = read_f32(payload, offset + 40);
+    result.north = read_f32(payload, offset + 44);
+    if (!std::isfinite(result.west) || !std::isfinite(result.south) ||
+        !std::isfinite(result.east) || !std::isfinite(result.north))
+        return std::nullopt;
+    return result;
+}
+} // namespace
+
+std::optional<ParcelRectRequest> decode_parcel_divide(std::span<const std::byte> payload) {
+    return decode_parcel_rect(payload, parcel_divide_id);
+}
+
+std::optional<ParcelRectRequest> decode_parcel_join(std::span<const std::byte> payload) {
+    return decode_parcel_rect(payload, parcel_join_id);
+}
+
+std::optional<ParcelAccessListRequest> decode_parcel_access_list_request(
+    std::span<const std::byte> payload) {
+    constexpr std::size_t id = 4;
+    constexpr std::size_t size = id + 32 + 4 + 4 + 4;
+    if (payload.size() < size ||
+        !std::equal(parcel_access_list_request_id.begin(), parcel_access_list_request_id.end(),
+                    payload.begin()))
+        return std::nullopt;
+    ParcelAccessListRequest result;
+    result.agent_id = read_uuid(payload, id);
+    result.session_id = read_uuid(payload, id + 16);
+    result.sequence_id = static_cast<std::int32_t>(read_le_u32(payload, id + 32));
+    result.flags = read_le_u32(payload, id + 36);
+    result.local_id = static_cast<std::int32_t>(read_le_u32(payload, id + 40));
+    return result;
+}
+
+std::optional<ParcelAccessListUpdate> decode_parcel_access_list_update(
+    std::span<const std::byte> payload) {
+    constexpr std::size_t id = 4;
+    constexpr std::size_t header = id + 32 + 4 + 4 + 16 + 4 + 4;
+    if (payload.size() < header + 1 ||
+        !std::equal(parcel_access_list_update_id.begin(), parcel_access_list_update_id.end(),
+                    payload.begin()))
+        return std::nullopt;
+    ParcelAccessListUpdate result;
+    result.agent_id = read_uuid(payload, id);
+    result.session_id = read_uuid(payload, id + 16);
+    std::size_t offset = id + 32;
+    result.flags = read_le_u32(payload, offset); offset += 4;
+    result.local_id = static_cast<std::int32_t>(read_le_u32(payload, offset)); offset += 4;
+    result.transaction_id = read_uuid(payload, offset); offset += 16;
+    result.sequence_id = static_cast<std::int32_t>(read_le_u32(payload, offset)); offset += 4;
+    result.sections = static_cast<std::int32_t>(read_le_u32(payload, offset)); offset += 4;
+    const auto count = std::to_integer<std::size_t>(payload[offset++]);
+    if (offset + count * 24 > payload.size()) return std::nullopt;
+    result.entries.reserve(count);
+    for (std::size_t index = 0; index < count; ++index) {
+        ParcelAccessListEntry entry;
+        entry.id = read_uuid(payload, offset); offset += 16;
+        entry.time = static_cast<std::int32_t>(read_le_u32(payload, offset)); offset += 4;
+        entry.flags = read_le_u32(payload, offset); offset += 4;
+        result.entries.push_back(entry);
+    }
+    return result;
+}
+
+std::vector<std::byte> encode_parcel_access_list_reply(const ParcelAccessListReply& message) {
+    std::vector<std::byte> output(parcel_access_list_reply_id.begin(),
+                                  parcel_access_list_reply_id.end());
+    append_uuid(output, message.agent_id);
+    append_le_u32(output, static_cast<std::uint32_t>(message.sequence_id));
+    append_le_u32(output, message.flags);
+    append_le_u32(output, static_cast<std::uint32_t>(message.local_id));
+    // Variable list: a single-byte count. An empty list is transmitted as one
+    // zero-UUID entry so the viewer clears its cached list (indra behaviour).
+    if (message.entries.empty()) {
+        output.push_back(std::byte{1});
+        Uuid zero{};
+        append_uuid(output, zero);
+        append_le_u32(output, 0);
+        append_le_u32(output, message.flags);
+    } else {
+        output.push_back(static_cast<std::byte>(std::min<std::size_t>(message.entries.size(), 255)));
+        std::size_t emitted = 0;
+        for (const auto& entry : message.entries) {
+            if (emitted++ >= 255) break;
+            append_uuid(output, entry.id);
+            append_le_u32(output, static_cast<std::uint32_t>(entry.time));
+            append_le_u32(output, entry.flags);
+        }
+    }
+    return output;
 }
 
 std::optional<ChatFromViewer> decode_chat_from_viewer(std::span<const std::byte> payload) {

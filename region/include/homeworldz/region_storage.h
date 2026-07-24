@@ -1,5 +1,6 @@
 #pragma once
 
+#include "homeworldz/parcel.h"
 #include "homeworldz/scene.h"
 
 #include <cstdint>
@@ -47,6 +48,11 @@ public:
     std::vector<AssetMetadata> list_assets() const;
     std::optional<AssetMetadata> find_asset(std::string_view viewer_id) const;
     std::vector<std::byte> read_asset(std::string_view viewer_id) const;
+
+    // Replace all persisted parcels (and their access lists) atomically.
+    void save_parcels(const std::vector<parcel::Parcel>& parcels);
+    // Load persisted parcels; nullopt when the region has never stored any.
+    std::optional<std::vector<parcel::Parcel>> load_parcels() const;
 
 private:
     std::filesystem::path data_path_;

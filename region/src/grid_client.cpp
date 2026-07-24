@@ -500,6 +500,7 @@ std::optional<RegisteredRegion> Client::register_provisioned_region(
     region.public_endpoint = json_field(response.body, "publicEndpoint");
     region.grid_name = json_field(response.body, "gridName");
     region.grid_public_url = json_field(response.body, "gridPublicUrl");
+    region.owner_id = json_field(response.body, "ownerUserId");
 	if (region.id.empty() || region.name.empty() || !grid_x || !grid_y || !size_x || !size_y ||
 		(*size_x != 256 && *size_x != 512 && *size_x != 1024) || *size_x != *size_y ||
 		!maturity || *maturity < 0 || *maturity > 2 ||
