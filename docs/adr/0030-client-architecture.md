@@ -2,11 +2,7 @@
 
 Status: Accepted
 
-This ADR records **current expectation and intent**, not a commitment. No
-implementation work has started, and the choices below are expected to be revised
-as evidence arrives.
-
-HomeWorldz expects to build a first-party open-source client. This is **additive**:
+HomeWorldz will build a first-party open-source client. This is **additive**:
 ADR 0016's Firestorm/Second Life protocol compatibility target stands, legacy
 viewers stay first-class, and the new client is a second front door to the same
 regions rather than a replacement. The region-side extensions it relies on are

@@ -301,8 +301,8 @@ identifiers, to be aligned as it graduates:
 ## References
 
 - [ADR 0021: Script Runtime Boundary](adr/0021-script-runtime-boundary.md)
-- [ADR 0031: Sandboxed Lua Scripting and SLua Compatibility](adr/0031-lua-scripting-subset.md)
-  — a planned second script runtime behind the same boundary
+- [ADR 0031: Sandboxed Lua Subset and Second P-Code Machine](adr/0031-lua-scripting-subset.md)
+  — a planned second p-code machine behind the same boundary
 - [SCRIPTING.md](SCRIPTING.md) — scheduling, resource, compatibility, and
   crossing requirements
 - [ROADMAP.md](ROADMAP.md) — Phase 4: LSL Scripting
