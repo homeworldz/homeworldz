@@ -2053,8 +2053,11 @@ int main(int argc, char* argv[]) {
         }
         int min_x = 0, min_y = 0, max_x = 0, max_y = 0;
         if (parcel.cell_bounds(edge, min_x, min_y, max_x, max_y)) {
+            // A parcel AABB spans the full buildable Z range so the viewer's
+            // "are you standing inside this parcel" test (which considers Z) passes
+            // for an avatar at terrain height.
             event.aabb_min = {static_cast<float>(min_x * 4), static_cast<float>(min_y * 4), 0.0F};
-            event.aabb_max = {static_cast<float>(max_x * 4), static_cast<float>(max_y * 4), 0.0F};
+            event.aabb_max = {static_cast<float>(max_x * 4), static_cast<float>(max_y * 4), 4096.0F};
         }
         std::int32_t owner_prims = 0, group_prims = 0, other_prims = 0, region_prims = 0;
         for (const auto& [entity_id, entity] : scene.entities()) {
@@ -2388,6 +2391,13 @@ int main(int argc, char* argv[]) {
                         environment_session = capability_session(response.path, "/caps/environment/");
                     const bool environment_settings = !environment_session.empty();
                     if (environment_settings) session_id = environment_session;
+                    std::string remote_parcel_session;
+                    if (!seed && !event_queue && !texture && !viewer_asset && !simulator_features &&
+                        !environment_settings)
+                        remote_parcel_session =
+                            capability_session(response.path, "/caps/remote-parcel/");
+                    const bool remote_parcel = !remote_parcel_session.empty();
+                    if (remote_parcel) session_id = remote_parcel_session;
                     const auto baked_upload_session =
                         capability_session(response.path, "/caps/upload-baked/");
                     const bool baked_upload = !baked_upload_session.empty();
@@ -2424,6 +2434,7 @@ int main(int argc, char* argv[]) {
                         inventory_asset_update_data_request(response.path);
                     if (inventory_asset_update_data) session_id = inventory_asset_update_data->first;
                     if (seed || event_queue || texture || viewer_asset || simulator_features || environment_settings ||
+                        remote_parcel ||
                         baked_upload || baked_upload_data || file_upload || file_upload_data ||
                         notecard_update || script_update || gesture_update ||
                         task_notecard_update || task_script_update || inventory_asset_update_data) {
@@ -2511,6 +2522,25 @@ int main(int argc, char* argv[]) {
                             response = homeworldz::http::response_for_content(
                                 request, 200, "application/llsd+xml",
                                 homeworldz::viewer::environment_settings_xml(registration->region_id()));
+                        } else if (authorized && remote_parcel) {
+                            // Resolve the global parcel UUID at the requested location so
+                            // the viewer can show the parcel ID and create landmarks.
+                            const auto body = http_request_body(request);
+                            std::string parcel_id;
+                            if (parcels) {
+                                if (const auto location =
+                                        homeworldz::viewer::parse_remote_parcel_location(body)) {
+                                    if (const auto* parcel = parcels->parcel_at(
+                                            static_cast<float>((*location)[0]),
+                                            static_cast<float>((*location)[1])))
+                                        parcel_id = parcel->global_id;
+                                }
+                                if (parcel_id.empty() && !parcels->parcels().empty())
+                                    parcel_id = parcels->parcels().front().global_id;
+                            }
+                            response = homeworldz::http::response_for_content(
+                                request, 200, "application/llsd+xml",
+                                homeworldz::viewer::remote_parcel_reply_xml(parcel_id));
                         } else if (authorized && baked_upload) {
                             static std::atomic<std::uint64_t> upload_id{0};
                             auto base = region_public_endpoint;
@@ -3314,6 +3344,22 @@ int main(int argc, char* argv[]) {
                                 if (const auto outgoing = circuits.send(
                                         endpoint, std::move(response), true, now, true))
                                     static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
+                        }
+                        if (const auto covenant =
+                                homeworldz::viewer::decode_estate_covenant_request(packet->payload);
+                            covenant && covenant->agent_id == identity->agent_id &&
+                            covenant->session_id == identity->session_id) {
+                            homeworldz::viewer::EstateCovenantReply reply;
+                            reply.estate_name = region_estate && !region_estate->name.empty()
+                                ? region_estate->name : region_name;
+                            const auto owner_id = region_estate && !region_estate->owner_id.empty()
+                                ? region_estate->owner_id : region_owner_id;
+                            if (const auto owner = homeworldz::viewer::parse_uuid(owner_id))
+                                reply.estate_owner_id = *owner;
+                            auto response = homeworldz::viewer::encode_estate_covenant_reply(reply);
+                            if (const auto outgoing = circuits.send(
+                                    endpoint, std::move(response), true, now, true))
+                                static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
                         }
                         if (const auto estate_message =
                                 homeworldz::viewer::decode_estate_owner_message(packet->payload);

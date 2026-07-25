@@ -127,6 +127,7 @@ std::string seed_capability_xml(std::string_view public_endpoint, std::string_vi
     const auto simulator_features_url =
         xml_escape(base + "/caps/simulator-features/" + std::string(session_id));
     const auto environment_url = xml_escape(base + "/caps/environment/" + std::string(session_id));
+    const auto remote_parcel_url = xml_escape(base + "/caps/remote-parcel/" + std::string(session_id));
     const auto baked_upload_url = xml_escape(base + "/caps/upload-baked/" + std::string(session_id));
     const auto file_upload_url = xml_escape(base + "/caps/upload-file/" + std::string(session_id));
     const auto notecard_update_url = xml_escape(base + "/caps/update-notecard/" + std::string(session_id));
@@ -151,6 +152,7 @@ std::string seed_capability_xml(std::string_view public_endpoint, std::string_vi
            "</uri><key>ViewerAsset</key><uri>" + asset_url +
            "</uri><key>SimulatorFeatures</key><uri>" + simulator_features_url +
            "</uri><key>EnvironmentSettings</key><uri>" + environment_url +
+           "</uri><key>RemoteParcelRequest</key><uri>" + remote_parcel_url +
            "</uri><key>UploadBakedTexture</key><uri>" + baked_upload_url +
            "</uri><key>NewFileAgentInventory</key><uri>" + file_upload_url +
            "</uri><key>UpdateNotecardAgentInventory</key><uri>" + notecard_update_url +
@@ -352,6 +354,37 @@ std::string simulator_features_xml(std::string_view currency, std::string_view m
            "<key>currency</key><string>" + xml_escape(currency) +
            "</string><key>map-server-url</key><string>" + xml_escape(map_server_url) +
            "</string></map></map></llsd>";
+}
+
+std::string remote_parcel_reply_xml(std::string_view parcel_id) {
+    return "<?xml version=\"1.0\"?><llsd><map><key>parcel_id</key><uuid>" +
+           xml_escape(parcel_id.empty() ? "00000000-0000-0000-0000-000000000000" : parcel_id) +
+           "</uuid></map></llsd>";
+}
+
+std::optional<std::array<double, 3>> parse_remote_parcel_location(std::string_view xml) {
+    const auto key = xml.find("<key>location</key>");
+    if (key == std::string_view::npos) return std::nullopt;
+    const auto array_start = xml.find("<array>", key);
+    if (array_start == std::string_view::npos) return std::nullopt;
+    const auto array_end = xml.find("</array>", array_start);
+    if (array_end == std::string_view::npos) return std::nullopt;
+    std::array<double, 3> location{};
+    std::size_t found = 0;
+    std::size_t position = array_start;
+    while (found < 3) {
+        const auto real_open = xml.find("<real>", position);
+        if (real_open == std::string_view::npos || real_open > array_end) break;
+        const auto real_close = xml.find("</real>", real_open);
+        if (real_close == std::string_view::npos || real_close > array_end) break;
+        const auto text = xml.substr(real_open + 6, real_close - (real_open + 6));
+        double value = 0.0;
+        std::from_chars(text.data(), text.data() + text.size(), value);
+        location[found++] = value;
+        position = real_close + 7;
+    }
+    if (found < 2) return std::nullopt;
+    return location;
 }
 
 std::string environment_settings_xml(std::string_view region_id) {

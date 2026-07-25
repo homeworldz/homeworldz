@@ -141,6 +141,10 @@ std::string event_queue_xml(std::uint64_t id, const std::vector<std::string>& ev
 std::string simulator_features_xml(std::string_view currency = "C$",
                                    std::string_view map_server_url = {});
 std::string environment_settings_xml(std::string_view region_id);
+// Build the RemoteParcelRequest reply carrying a parcel's global UUID.
+std::string remote_parcel_reply_xml(std::string_view parcel_id);
+// Extract the {x,y,z} location from a RemoteParcelRequest LLSD body, if present.
+std::optional<std::array<double, 3>> parse_remote_parcel_location(std::string_view xml);
 std::string baked_texture_upload_xml(std::string_view uploader);
 std::string baked_texture_complete_xml(std::string_view asset_id);
 std::optional<NewFileInventoryUpload> parse_new_file_inventory_upload(std::string_view xml);

@@ -46,6 +46,10 @@ constexpr std::array<std::byte, 4> request_region_info_id{ // Low 141
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x8d}};
 constexpr std::array<std::byte, 4> region_info_id{ // Low 142
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x8e}};
+constexpr std::array<std::byte, 4> estate_covenant_request_id{ // Low 203
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0xcb}};
+constexpr std::array<std::byte, 4> estate_covenant_reply_id{ // Low 204
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0xcc}};
 constexpr std::array<std::byte, 4> estate_owner_message_id{ // Low 260 (0x0104)
     std::byte{0xff}, std::byte{0xff}, std::byte{0x01}, std::byte{0x04}};
 constexpr std::array<std::byte, 4> parcel_object_owners_request_id{ // Low 56
@@ -2668,6 +2672,26 @@ std::optional<RequestRegionInfo> decode_request_region_info(std::span<const std:
     result.agent_id = read_uuid(payload, 4);
     result.session_id = read_uuid(payload, 20);
     return result;
+}
+
+std::optional<AgentMessage> decode_estate_covenant_request(std::span<const std::byte> payload) {
+    if (payload.size() < 4 + 32 ||
+        !std::equal(estate_covenant_request_id.begin(), estate_covenant_request_id.end(),
+                    payload.begin()))
+        return std::nullopt;
+    AgentMessage result;
+    result.agent_id = read_uuid(payload, 4);
+    result.session_id = read_uuid(payload, 20);
+    return result;
+}
+
+std::vector<std::byte> encode_estate_covenant_reply(const EstateCovenantReply& message) {
+    std::vector<std::byte> output(estate_covenant_reply_id.begin(), estate_covenant_reply_id.end());
+    append_uuid(output, message.covenant_id);
+    append_le_u32(output, message.timestamp);
+    if (!append_variable1(output, message.estate_name)) return {};
+    append_uuid(output, message.estate_owner_id);
+    return output;
 }
 
 std::vector<std::byte> encode_region_info(const RegionInfoReply& message) {
