@@ -2123,7 +2123,8 @@ int main(int argc, char* argv[]) {
     // by parcel object return and OtherCleanTime auto-return; the owner is not
     // necessarily the requester and may be offline.
     const auto return_object_to_owner = [&](homeworldz::scene::EntityId root_id,
-                                            std::vector<std::uint32_t>& removed_ids) {
+                                            std::vector<std::uint32_t>& removed_ids,
+                                            std::chrono::steady_clock::time_point when) {
         if (!viewer_grid) return;
         auto* entity = scene.find(root_id);
         if (entity == nullptr || entity->object_id.empty() || entity->parent_id != 0) return;
@@ -2173,8 +2174,43 @@ int main(int argc, char* argv[]) {
                       << homeworldz::api::json_string(error.what()) << "}" << std::endl;
         }
         if (!item_created) return;
+        // Capture the fields needed for the viewer notice before the entity is removed.
+        const std::string item_name = entity->name;
+        const std::string item_description = entity->description;
+        const std::string creator_id = entity->creator_id;
         for (auto part = part_ids.rbegin(); part != part_ids.rend(); ++part)
             if (scene.remove(*part)) removed_ids.push_back(static_cast<std::uint32_t>(*part));
+        // If the owner is connected, tell their viewer about the new item so it
+        // appears in inventory without a relog (About Land return previously only
+        // showed up after re-fetching Lost and Found).
+        for (const auto& [owner_endpoint, owner_avatar] : avatars) {
+            if (owner_avatar.user_id != owner_id) continue;
+            const auto owner_agent = homeworldz::viewer::parse_uuid(owner_id);
+            const auto owner_session = homeworldz::viewer::parse_uuid(owner_avatar.session_id);
+            if (!owner_agent || !owner_session) break;
+            homeworldz::viewer::InventoryItem item;
+            if (const auto value = homeworldz::viewer::parse_uuid(item_id)) item.item_id = *value;
+            if (const auto value = homeworldz::viewer::parse_uuid(creator_id)) item.creator_id = *value;
+            item.owner_id = *owner_agent;
+            if (const auto value = homeworldz::viewer::parse_uuid(folder)) item.folder_id = *value;
+            if (const auto value = homeworldz::viewer::parse_uuid(asset_id)) item.asset_id = *value;
+            item.asset_type = 6;
+            item.inventory_type = 6;
+            item.name = item_name;
+            item.description = item_description;
+            item.base_permissions = base_permissions;
+            item.current_permissions = owner_permissions;
+            item.everyone_permissions = everyone_permissions;
+            item.next_permissions = next_owner_permissions;
+            item.creation_date = static_cast<std::int32_t>(
+                std::chrono::duration_cast<std::chrono::seconds>(
+                    std::chrono::system_clock::now().time_since_epoch()).count());
+            const homeworldz::viewer::AgentMessage reply{*owner_agent, *owner_session};
+            auto update = homeworldz::viewer::encode_update_create_inventory_item(reply, 0, item);
+            if (const auto outgoing = circuits.send(owner_endpoint, std::move(update), true, when, true))
+                static_cast<void>(send_udp(viewer_server, owner_endpoint, *outgoing));
+            break;
+        }
     };
 
     std::cout << "{\"level\":\"info\",\"message\":\"region service listening\",\"httpPort\":"
@@ -3310,7 +3346,7 @@ int main(int argc, char* argv[]) {
                                 }
                                 std::vector<std::uint32_t> removed_ids;
                                 for (const auto root_id : roots)
-                                    return_object_to_owner(root_id, removed_ids);
+                                    return_object_to_owner(root_id, removed_ids, now);
                                 if (!removed_ids.empty()) {
                                     try {
                                         storage->save_snapshot(scene);
@@ -7582,7 +7618,7 @@ int main(int argc, char* argv[]) {
             });
             std::vector<std::uint32_t> auto_removed;
             for (const auto root_id : to_return) {
-                return_object_to_owner(root_id, auto_removed);
+                return_object_to_owner(root_id, auto_removed, now);
                 object_clean_since.erase(root_id);
             }
             if (!auto_removed.empty()) {
