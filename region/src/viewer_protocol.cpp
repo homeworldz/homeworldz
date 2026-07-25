@@ -46,6 +46,8 @@ constexpr std::array<std::byte, 4> request_region_info_id{ // Low 141
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x8d}};
 constexpr std::array<std::byte, 4> region_info_id{ // Low 142
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x8e}};
+constexpr std::array<std::byte, 4> agent_alert_message_id{ // Low 135
+    std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0x87}};
 constexpr std::array<std::byte, 4> estate_covenant_request_id{ // Low 203
     std::byte{0xff}, std::byte{0xff}, std::byte{0x00}, std::byte{0xcb}};
 constexpr std::array<std::byte, 4> estate_covenant_reply_id{ // Low 204
@@ -2672,6 +2674,15 @@ std::optional<RequestRegionInfo> decode_request_region_info(std::span<const std:
     result.agent_id = read_uuid(payload, 4);
     result.session_id = read_uuid(payload, 20);
     return result;
+}
+
+std::vector<std::byte> encode_agent_alert_message(const Uuid& agent_id, bool modal,
+                                                  std::string_view message) {
+    std::vector<std::byte> output(agent_alert_message_id.begin(), agent_alert_message_id.end());
+    append_uuid(output, agent_id);
+    output.push_back(static_cast<std::byte>(modal ? 1 : 0));
+    if (!append_variable1(output, message)) return {};
+    return output;
 }
 
 std::optional<AgentMessage> decode_estate_covenant_request(std::span<const std::byte> payload) {

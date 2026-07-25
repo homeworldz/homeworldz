@@ -3735,6 +3735,12 @@ int main(int argc, char* argv[]) {
                                     user_id, registration->region_id(), position, look);
                             } catch (const std::exception&) {
                             }
+                            // Confirm to the viewer, matching Halcyon/SL behaviour.
+                            const auto alert = homeworldz::viewer::encode_agent_alert_message(
+                                identity->agent_id, false,
+                                ok ? "Home position set." : "Couldn't set home position here.");
+                            if (const auto outgoing = circuits.send(endpoint, alert, true, now, true))
+                                static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
                             std::cout << "{\"level\":\"" << (ok ? "info" : "warn")
                                       << "\",\"message\":\"set home location "
                                       << (ok ? "stored" : "rejected") << "\",\"userId\":"

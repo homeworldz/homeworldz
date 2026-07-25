@@ -1062,6 +1062,8 @@ std::optional<ParcelSelectObjects> decode_parcel_select_objects(std::span<const 
 std::vector<std::vector<std::byte>> encode_force_object_select(std::span<const std::uint32_t> local_ids);
 std::optional<ParcelReturnObjects> decode_parcel_return_objects(std::span<const std::byte> payload);
 std::optional<RequestRegionInfo> decode_request_region_info(std::span<const std::byte> payload);
+std::vector<std::byte> encode_agent_alert_message(const Uuid& agent_id, bool modal,
+                                                  std::string_view message);
 std::optional<AgentMessage> decode_estate_covenant_request(std::span<const std::byte> payload);
 std::vector<std::byte> encode_estate_covenant_reply(const EstateCovenantReply& message);
 std::vector<std::byte> encode_region_info(const RegionInfoReply& message);
