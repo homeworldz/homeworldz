@@ -3428,7 +3428,7 @@ int main(int argc, char* argv[]) {
                                 return parsed;
                             };
                             const bool manager = is_estate_manager(agent);
-                            const bool owner = !region_owner_id.empty() && region_owner_id == agent ||
+                            const bool owner = (!region_owner_id.empty() && region_owner_id == agent) ||
                                 (region_estate && region_estate->owner_id == agent);
                             const auto& method = estate_message->method;
                             if (method == "getinfo") {

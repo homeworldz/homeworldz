@@ -204,6 +204,11 @@ Falcon LSL scripting foundation.
   join with `ParcelDivide`/`ParcelJoin`, and manage access/ban lists via
   `ParcelAccessListRequest`/`Update`, all persisted in region SQLite. Per-parcel
   WindLight environment is deferred to the estate/region settings work below.
+  Live Firestorm acceptance on the Sandbox Region (2026-07-25): About Land shows
+  the owner, area, and resolved Parcel ID (`RemoteParcelRequest`); "Landmark This
+  Place", Set Landing Point (with snapshot and teleport), subdivide/join with the
+  boundary overlay, the Objects tab with live object return, and Set Home to Here
+  (with confirmation) all work.
 - [x] Enforce build, rez, entry, script, and object-return policy at authoritative
   boundaries. Build/rez (CreateObjects), script execution (AllowOtherScripts),
   teleport entry and continuous walk-in ejection (ban/access lists plus
@@ -225,7 +230,9 @@ Falcon LSL scripting foundation.
   flags. Estate bans and private-estate access gate region entry; estate owner and
   managers bypass parcel and estate restrictions. Viewer-driven terrain-texture
   settings (`setregionterrain`), region restart, and estate kick/teleport-home
-  admin actions remain.
+  admin actions remain. Live Firestorm acceptance on the Sandbox Region
+  (2026-07-25): the Region tab, Estate tab (My Estate / owner Jim Tarber), and
+  Covenant tab populate correctly.
 - [ ] Apply permissions recursively and consistently to linksets, object
   contents, attachments, and inventory transfers.
 
