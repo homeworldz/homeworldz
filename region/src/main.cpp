@@ -90,6 +90,8 @@ struct LiveAvatar {
     homeworldz::viewer::AvatarController controller;
     homeworldz::scene::EntityId entity_id{};
     std::string user_id;
+    std::string session_id;              // formatted UUID, for Event Queue delivery
+    std::int32_t last_agent_parcel{};    // local id of the parcel last reported to this viewer
     std::chrono::steady_clock::time_point next_ping{};
     std::chrono::steady_clock::time_point next_presence{};
     std::chrono::steady_clock::time_point next_transform{};
@@ -1545,6 +1547,10 @@ int main(int argc, char* argv[]) {
     auto previous_tick = std::chrono::steady_clock::now();
     auto next_snapshot = previous_tick + std::chrono::seconds(30);
     auto next_parcel_sweep = previous_tick + std::chrono::seconds(30);
+    // Monotonic sequence id for "agent parcel" ParcelProperties updates. The viewer
+    // uses a positive, increasing sequence to know which parcel the avatar stands in
+    // (distinct from the negative sentinels used for explicit About Land selection).
+    std::uint32_t agent_parcel_sequence = 0;
     // When each auto-return-eligible object was first seen on its parcel.
     std::unordered_map<homeworldz::scene::EntityId, std::chrono::steady_clock::time_point>
         object_clean_since;
@@ -2081,6 +2087,20 @@ int main(int argc, char* argv[]) {
         event.max_prims = region_area > 0 ? static_cast<std::int32_t>(
             static_cast<long long>(event.area) * region_prim_limit() / region_area) : 0;
         enqueue_viewer_event(session_id, homeworldz::viewer::parcel_properties_event_xml(event));
+    };
+    // Tell a viewer which parcel its avatar is standing in (the "agent parcel"),
+    // using a positive incrementing sequence. The viewer needs this to allow
+    // parcel actions such as setting the landing point; it is re-sent when the
+    // avatar crosses into a different parcel.
+    const auto push_agent_parcel = [&](LiveAvatar& avatar) {
+        if (!parcels || avatar.session_id.empty()) return;
+        const auto& position = avatar.controller.state().position;
+        const auto* parcel = parcels->parcel_at(
+            static_cast<float>(position.x), static_cast<float>(position.y));
+        if (parcel == nullptr || parcel->local_id == avatar.last_agent_parcel) return;
+        send_parcel_properties(avatar.session_id, *parcel, homeworldz::parcel::result_single,
+            static_cast<std::int32_t>(++agent_parcel_sequence), false);
+        avatar.last_agent_parcel = parcel->local_id;
     };
     // Send ParcelOverlay (coloured parcel boundaries) to one viewer over UDP.
     const auto send_parcel_overlay = [&](const std::string& viewer_endpoint,
@@ -5289,6 +5309,9 @@ int main(int argc, char* argv[]) {
                                     now + std::chrono::milliseconds(100), initial_viewer_position});
                                 static_cast<void>(inserted);
                                 avatar_iterator->second.last_pong = now;
+                                avatar_iterator->second.session_id =
+                                    homeworldz::viewer::format_uuid(identity->session_id);
+                                push_agent_parcel(avatar_iterator->second);
                                 avatar_iterator->second.restored_flying_until =
                                     avatar_iterator->second.controller.state().flying ?
                                         now + std::chrono::seconds(2) : now;
@@ -7578,6 +7601,8 @@ int main(int argc, char* argv[]) {
             // or access-restricts it to the nearest parcel that admits it. Avoids a
             // teleport loop because the destination parcel admits the avatar.
             for (auto& [viewer_endpoint, avatar] : avatars) {
+                // Refresh the viewer's agent parcel if it has crossed a boundary.
+                push_agent_parcel(avatar);
                 const auto& position = avatar.controller.state().position;
                 const auto* parcel = parcels->parcel_at(
                     static_cast<float>(position.x), static_cast<float>(position.y));
