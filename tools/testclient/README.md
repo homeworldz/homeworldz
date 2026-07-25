@@ -10,32 +10,36 @@ probe. Its `ClientManager` can drive many bots at once (mass login via
 - Upstream: <https://github.com/cinderblocks/libremetaverse> (BSD-3-Clause).
 - The clone lives at `tools/libremetaverse/` and is **gitignored** (reproducible
   external dependency, not vendored):
-  `git clone --depth 1 https://github.com/cinderblocks/libremetaverse.git tools/libremetaverse`
+  `git clone https://github.com/cinderblocks/libremetaverse.git tools/libremetaverse`
+- The local clone is checked out at tag **`v3.1.3`**. That release fixes the
+  Roslyn source-generator pin (below) and the `Baker.ApplyTint`
+  `IndexOutOfRangeException` we reported (plus the same guard in
+  `MultiplyLayerFromAlpha` and a bake-mask TGA path fix), so the LMV
+  client-side baker that previously crashed on the default outfit should now
+  work — re-test before assuming a bot exercises the server bake.
 
 ## Build requirement: .NET 10 SDK
 
 LMV's build uses Roslyn **source generators** (`SourceGenerators/*`) that emit
 `PacketType`, `ObjectUpdatePacket`, `VisualParam`, grass/tree/skeleton types,
-etc. from `data/message_template.msg` and the `linden/**` XML. Those generator
-projects pin **`Microsoft.CodeAnalysis.CSharp` 5.6.0** (Roslyn 5.x).
+etc. from `data/message_template.msg` and the `linden/**` XML.
 
-- Under **.NET SDK 9** the bundled compiler is Roslyn 4.x, which **silently
-  skips** analyzers built against the newer Roslyn — so nothing is generated and
-  the build fails with ~74 `CS0246` "type not found" errors. This is **not**
-  fixable by trimming target frameworks (that was a dead end).
-- **Use the .NET 10 SDK** (matching Roslyn 5.x). Then the generators run and the
-  build succeeds. Install machine-wide, or per-user without admin:
+- Before v3.1.3, the generator projects pinned `Microsoft.CodeAnalysis.CSharp`
+  **5.6.0** (Roslyn 5.x); a Roslyn 4.x host (e.g. .NET SDK 9) **silently
+  skipped** them and the build failed with ~74 `CS0246` "type not found"
+  errors. v3.1.3 pins **4.14.0** instead (matching VS 2022 17.14 / current
+  SDK compilers), so the silent-skip trap is gone.
+- The projects still multi-target **`net10.0`**, so building the pristine tree
+  needs the **.NET 10 SDK** — but the failure without it is now an explicit
+  `NETSDK1045`, not silently missing generated types. Install machine-wide, or
+  per-user without admin:
   `Invoke-WebRequest https://dot.net/v1/dotnet-install.ps1 -OutFile dotnet-install.ps1; ./dotnet-install.ps1 -Channel 10.0` (installs to `~/.dotnet`).
 
-Build (with a .NET 10 `dotnet`):
+Build (with a .NET 10 `dotnet`, e.g. `~/.dotnet/dotnet`):
 
 ```sh
 dotnet build -c Release tools/libremetaverse/Programs/examples/TestClient/TestClient.csproj
 ```
-
-Note: this clone's `.csproj` files had `net10.0` and `net481` removed from
-`<TargetFrameworks>` during SDK-9 investigation; harmless under .NET 10 (net9.0
-still builds). Re-clone for a pristine tree.
 
 ## Local HomeWorldz stack (verified working)
 

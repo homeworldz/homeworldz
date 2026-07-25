@@ -146,10 +146,13 @@ with skin hands, reddish pants with skin feet — entirely from the server seed.
 - Earlier a "204-byte empty body bake" was misdiagnosed as a bug and the bake
   briefly skipped Blank textures; that was reverted — Blank is opaque *white*,
   not "no layer", and the correct result comes from tint + masks above.
-- LibreMetaverse's baker throws `IndexOutOfRangeException` in
+- LibreMetaverse's baker threw `IndexOutOfRangeException` in
   `Baker.ApplyTint` (`BakeLayer.cs`) on the default outfit — a real LMV bug
-  (reported to Cinder). It is why the bot falls back to the server bake; useful
-  as a pure server-side-bake test.
+  (reported to Cinder, **fixed in LMV v3.1.3**, 2026-07-24, along with the same
+  guard in `MultiplyLayerFromAlpha`). While it crashed it forced the bot onto
+  the server bake, making it a pure server-side-bake test; with v3.1.3 the bot
+  baker works again, so testing the server bake alone needs the bot's baking
+  disabled or a client that never bakes.
 - Only the default six-wearable outfit is exercised end-to-end. Stacked
   clothing, tattoos/alpha wearables, jacket/glove/shoe masks, skin tone params,
   and re-bake on outfit change remain future work.
