@@ -140,6 +140,8 @@ std::string seed_capability_xml(std::string_view public_endpoint, std::string_vi
     auto grid_base = std::string(grid_public_endpoint);
     while (!grid_base.empty() && grid_base.back() == '/') grid_base.pop_back();
     const auto inventory_url = xml_escape(grid_base + "/caps/inventory/descendents/" + std::string(session_id));
+    const auto library_descendents_url =
+        xml_escape(grid_base + "/caps/inventory/library-descendents/" + std::string(session_id));
     const auto inventory_items_url = xml_escape(grid_base + "/caps/inventory/items/" + std::string(session_id));
     const auto create_inventory_folder_url =
         xml_escape(grid_base + "/caps/inventory/create-folder/" + std::string(session_id));
@@ -162,6 +164,7 @@ std::string seed_capability_xml(std::string_view public_endpoint, std::string_vi
            "</uri><key>UpdateNotecardTaskInventory</key><uri>" + task_notecard_update_url +
            "</uri><key>UpdateScriptTask</key><uri>" + task_script_update_url +
            "</uri><key>FetchInventoryDescendents2</key><uri>" + inventory_url +
+           "</uri><key>FetchLibDescendents2</key><uri>" + library_descendents_url +
            "</uri><key>FetchInventory2</key><uri>" + inventory_items_url +
            "</uri><key>CreateInventoryCategory</key><uri>" + create_inventory_folder_url +
            "</uri><key>InventoryAPIv3</key><uri>" + inventory_ais_url +

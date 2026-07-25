@@ -146,19 +146,26 @@ same grid (as clouds). (An earlier "bots invisible" scare was purely
 
 **Gaps to reach full LMV parity (HomeWorldz-side, share-ready for Cinder):**
 
-1. **Inventory-descendents capabilities not advertised** —
-   `FetchInventoryDescendents2` / `FetchLibDescendents2` are absent from the
-   region seed caps, so LMV's `AppearanceManager` can't enumerate the agent's
-   wearables (→ no bake → avatar stays a cloud). HomeWorldz implements **AIS v3**
-   (`/caps/inventory/ais/`), which Firestorm uses, but not the older per-region
-   descendents caps LMV relies on.
+1. **Inventory-descendents capabilities** — RESOLVED (2026-07-25).
+   `FetchInventoryDescendents2` was already advertised (grid-hosted), but its
+   category maps omitted `agent_id`, so LMV recorded scanned folders (including
+   the COF) with owner `UUID.Zero`; since LMV picks the fetch capability by
+   `ownerID == AgentID`, the COF contents fetch was misrouted to
+   `FetchLibDescendents2` — which didn't exist — and the wearables fetch came
+   back empty (→ no client bake). Fixed by emitting `agent_id` + `version` in
+   every category map and implementing + advertising `FetchLibDescendents2`
+   (grid `/caps/inventory/library-descendents/{session}`, serving the fixed
+   Library catalog). Verified by replaying LMV's exact LLSD requests against
+   the live grid.
 2. **HTTP asset fetch fails for LMV** — `RequestAssetHTTP` throws in a loop; LMV
    can't download wearable/texture assets. The `GetTexture`/`ViewerAsset` cap
    flow doesn't match LMV's expectations.
-3. **Logout not handled → ghost avatars** — the region never detects a viewer
-   logout/disconnect (0 "departed" events) and never broadcasts `KillObject`, so
-   a logged-out avatar lingers, rezzed, in others' views and the People list.
-   Affects **all** viewers, not just LMV.
+3. **Logout not handled → ghost avatars** — RESOLVED (2026-07-24). Every
+   avatar-removal path (clean logout, session invalidation, duplicate-login
+   replacement, teleport/crossing retirement) now broadcasts `KillObject`, and
+   lost connections are retired by missed ping replies
+   (`region.connection_timeout_seconds`, default 60 s). Verified live in
+   Firestorm and by force-killing a bot.
 
 **Recommended direction (Cinder Roxley, LMV maintainer):** implement
 **server-side (region) appearance baking**. If the region composites the bake

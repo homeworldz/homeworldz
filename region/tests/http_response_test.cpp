@@ -153,6 +153,7 @@ int main() {
     passed &= contains(seed, "<key>UpdateNotecardTaskInventory</key><uri>http://region.example:42001/caps/update-task-notecard/session-id</uri>");
     passed &= contains(seed, "<key>UpdateScriptTask</key><uri>http://region.example:42001/caps/update-task-script/session-id</uri>");
     passed &= contains(seed, "<key>FetchInventoryDescendents2</key><uri>http://grid.example:42000/caps/inventory/descendents/session-id</uri>");
+    passed &= contains(seed, "<key>FetchLibDescendents2</key><uri>http://grid.example:42000/caps/inventory/library-descendents/session-id</uri>");
     passed &= contains(seed, "<key>FetchInventory2</key><uri>http://grid.example:42000/caps/inventory/items/session-id</uri>");
     passed &= contains(seed, "<key>CreateInventoryCategory</key><uri>http://grid.example:42000/caps/inventory/create-folder/session-id</uri>");
     passed &= contains(seed, "<key>InventoryAPIv3</key><uri>http://grid.example:42000/caps/inventory/ais/session-id</uri>");

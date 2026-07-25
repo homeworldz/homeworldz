@@ -65,6 +65,45 @@ func (a *API) inventoryDescendentsCapability(w http.ResponseWriter, r *http.Requ
 	_, _ = io.WriteString(w, inventoryDescendentsXML(session.UserID, folderIDs, folders, items))
 }
 
+// libraryDescendentsCapability is the FetchLibDescendents2 capability: the
+// read-only system Library served in the same LLSD shape as personal
+// inventory descendents, owned by the fixed Library owner identity.
+func (a *API) libraryDescendentsCapability(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		writeLLSDError(w, http.StatusMethodNotAllowed, "only POST is supported")
+		return
+	}
+	if a.identity == nil {
+		writeLLSDError(w, http.StatusServiceUnavailable, "inventory is unavailable")
+		return
+	}
+	sessionID := strings.TrimPrefix(r.URL.Path, "/caps/inventory/library-descendents/")
+	if !validUUID(sessionID) || strings.Contains(sessionID, "/") {
+		writeLLSDError(w, http.StatusNotFound, "inventory capability was not found")
+		return
+	}
+	session, err := a.identity.ValidateSession(r.Context(), sessionID)
+	if errors.Is(err, identity.ErrSessionNotFound) ||
+		(err == nil && (session.ViewerCircuitCode == 0 || session.DestinationRegionID == "")) {
+		writeLLSDError(w, http.StatusNotFound, "inventory capability expired")
+		return
+	}
+	if err != nil {
+		writeLLSDError(w, http.StatusServiceUnavailable, "session validation failed")
+		return
+	}
+	folderIDs, err := parseInventoryFolderRequest(http.MaxBytesReader(w, r.Body, 1024*1024))
+	if err != nil {
+		writeLLSDError(w, http.StatusBadRequest, "invalid inventory folder request")
+		return
+	}
+	w.Header().Set("Content-Type", "application/llsd+xml; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.WriteString(w, inventoryDescendentsXML(
+		inventory.LibraryOwnerID, folderIDs, inventory.LibraryFolders(), inventory.LibraryItems()))
+}
+
 func parseInventoryFolderRequest(reader io.Reader) ([]string, error) {
 	return parseInventoryUUIDRequest(reader, "folder_id")
 }
@@ -159,9 +198,15 @@ func inventoryDescendentsXML(ownerID string, requested []string, folders []inven
 			"<key>categories</key><array>", html.EscapeString(folder.ID), html.EscapeString(ownerID),
 			folder.Version, len(descendents)+len(folderItems))
 		for _, child := range descendents {
+			// agent_id and version are required: LibreMetaverse takes a category's
+			// owner from agent_id, and a missing key deserializes as a zero UUID,
+			// which routes that folder's later contents fetch to FetchLibDescendents2
+			// instead of FetchInventoryDescendents2.
 			fmt.Fprintf(&good, "<map><key>folder_id</key><uuid>%s</uuid><key>parent_id</key><uuid>%s</uuid>"+
+				"<key>agent_id</key><uuid>%s</uuid><key>version</key><integer>%d</integer>"+
 				"<key>type_default</key><integer>%d</integer><key>name</key><string>%s</string></map>",
-				html.EscapeString(child.ID), html.EscapeString(child.ParentID), child.TypeDefault,
+				html.EscapeString(child.ID), html.EscapeString(child.ParentID),
+				html.EscapeString(child.OwnerUserID), child.Version, child.TypeDefault,
 				html.EscapeString(child.Name))
 		}
 		good.WriteString("</array><key>items</key><array>")

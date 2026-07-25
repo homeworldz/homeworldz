@@ -119,10 +119,63 @@ func TestInventoryDescendentsCapability(t *testing.T) {
 		!strings.Contains(content, "<key>items</key><array></array>") {
 		t.Fatalf("inventory response = %s", content)
 	}
+	// Category maps must carry the owner as agent_id (plus a version):
+	// LibreMetaverse reads a folder's owner from agent_id, and a missing key
+	// becomes a zero UUID that misroutes the folder's contents fetch to
+	// FetchLibDescendents2.
+	if !strings.Contains(content, "<key>agent_id</key><uuid>"+user.ID+"</uuid><key>version</key>") {
+		t.Fatalf("categories are missing agent_id/version: %s", content)
+	}
 	nullResponse := inventoryDescendentsXML(user.ID, []string{nullInventoryFolderID}, folders, nil)
 	if strings.Contains(nullResponse, "unknown folder") ||
 		!strings.Contains(nullResponse, "<key>folder_id</key><uuid>"+nullInventoryFolderID+"</uuid>") {
 		t.Fatalf("null inventory folder response = %s", nullResponse)
+	}
+}
+
+func TestLibraryDescendentsCapability(t *testing.T) {
+	identities := newMemoryIdentityStore()
+	if _, err := identities.CreateUser(context.Background(), "library.user", "development-password"); err != nil {
+		t.Fatal(err)
+	}
+	session, err := identities.CreateSession(context.Background(), "library.user", "development-password", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.AssignViewerDestination(context.Background(), session.ID, 123456,
+		"30000000-0000-4000-8000-000000000001"); err != nil {
+		t.Fatal(err)
+	}
+	handler := New(checker{}, "test", Options{Identity: identities})
+	body := `<?xml version="1.0"?><llsd><map><key>folders</key><array><map>` +
+		`<key>folder_id</key><uuid>` + inventory.LibraryRootID + `</uuid><key>owner_id</key><uuid>` +
+		inventory.LibraryOwnerID + `</uuid><key>fetch_folders</key><boolean>true</boolean>` +
+		`<key>fetch_items</key><boolean>true</boolean></map><map>` +
+		`<key>folder_id</key><uuid>` + inventory.LibraryTerrainID + `</uuid><key>owner_id</key><uuid>` +
+		inventory.LibraryOwnerID + `</uuid><key>fetch_folders</key><boolean>true</boolean>` +
+		`<key>fetch_items</key><boolean>true</boolean></map></array></map></llsd>`
+	r := httptest.NewRequest(http.MethodPost, "/caps/inventory/library-descendents/"+session.ID,
+		bytes.NewBufferString(body))
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+	if w.Code != http.StatusOK || !strings.HasPrefix(w.Header().Get("Content-Type"), "application/llsd+xml") {
+		t.Fatalf("status = %d, content type = %q, body = %s", w.Code, w.Header().Get("Content-Type"), w.Body.String())
+	}
+	content := w.Body.String()
+	if !strings.Contains(content, "<key>name</key><string>Clothing</string>") ||
+		!strings.Contains(content, "<key>name</key><string>Body Parts</string>") ||
+		!strings.Contains(content, "<key>agent_id</key><uuid>"+inventory.LibraryOwnerID+"</uuid><key>version</key>") ||
+		!strings.Contains(content, "<key>name</key><string>Terrain Sand and Dirt</string>") ||
+		!strings.Contains(content, "<key>owner_id</key><uuid>"+inventory.LibraryOwnerID+"</uuid>") {
+		t.Fatalf("library response = %s", content)
+	}
+	unauthenticated := httptest.NewRequest(http.MethodPost,
+		"/caps/inventory/library-descendents/30000000-0000-4000-8000-0000000000ff",
+		bytes.NewBufferString(body))
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, unauthenticated)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("unauthenticated library fetch status = %d", w.Code)
 	}
 }
 

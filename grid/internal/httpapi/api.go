@@ -102,6 +102,7 @@ func New(ready ReadinessChecker, version string, options Options) http.Handler {
 	mux.HandleFunc("/version", getOnly(a.buildVersion))
 	mux.HandleFunc("/login", a.viewerLogin)
 	mux.HandleFunc("/caps/inventory/descendents/", a.inventoryDescendentsCapability)
+	mux.HandleFunc("/caps/inventory/library-descendents/", a.libraryDescendentsCapability)
 	mux.HandleFunc("/caps/inventory/items/", a.inventoryItemsCapability)
 	mux.HandleFunc("/caps/inventory/create-folder/", a.createInventoryFolderCapability)
 	mux.HandleFunc("/caps/inventory/ais/", a.inventoryAISCapability)
