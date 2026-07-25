@@ -5,7 +5,7 @@ content: region-local storage, inventory-referenced assets, what happens to an
 avatar's attachments during a teleport or border crossing, and how viewers will
 observe content across a region border. It is the implementation-level
 companion to the asset sections of [ARCHITECTURE.md](ARCHITECTURE.md) and to
-six ADRs:
+seven ADRs:
 
 - [ADR 0014: Content-Addressed Region Assets](adr/0014-content-addressed-assets.md)
 - [ADR 0017: Central Inventory Metadata](adr/0017-central-inventory-metadata.md)
@@ -13,6 +13,7 @@ six ADRs:
 - [ADR 0020: Asset Origin And Replication](adr/0020-asset-origin-and-replication.md)
 - [ADR 0026: Vault-Authoritative Inventory Assets](adr/0026-vault-authoritative-inventory-assets.md)
 - [ADR 0027: Asset, Blob, and Instance Separation](adr/0027-asset-blob-instance-separation.md)
+- [ADR 0032: Region Extensions for the First-Party Client](adr/0032-region-extensions-for-new-client.md)
 
 Sections are labeled **Implemented** (in the tree today), **Partially
 implemented**, or **Planned** (accepted direction, not yet built). Planned

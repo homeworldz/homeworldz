@@ -21,6 +21,13 @@ The current preferred split is:
 - A grid-side, replica-only asset vault for durable storage of the bytes behind
   inventory-referenced assets (ADR 0026), never in the viewer fetch path.
 
+A first-party open-source client is an additive direction alongside Firestorm
+compatibility: an engine-neutral C++ core with a Godot/GDExtension frontend and
+a browser frontend ([ADR 0030](adr/0030-client-architecture.md)), reached
+through additive, negotiated region extensions
+([ADR 0032](adr/0032-region-extensions-for-new-client.md)). Firestorm and
+compatible viewers stay first-class.
+
 ## Goals
 
 - Preserve practical Firestorm viewer compatibility.
