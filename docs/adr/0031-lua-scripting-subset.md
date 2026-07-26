@@ -1,146 +1,189 @@
-# ADR 0031: Sandboxed Lua Subset and Second P-Code Machine
+# ADR 0031: Sandboxed Lua Scripting and SLua Compatibility
 
 Status: Accepted
 
-HomeWorldz will offer a **restricted, sandboxed Lua** as a second scripting
-language alongside LSL. Lua is compiled to p-code and runs behind the same
-script-runtime boundary as LSL
-([ADR 0021](0021-script-runtime-boundary.md)), so it inherits the scheduler,
-resource accounting, and — critically — the crossing snapshot.
+This ADR records intent for work that has not started. Two things in it carry
+different weight, and the distinction matters:
 
-Lua is **not second-class**. A Lua-scripted attachment or vehicle crosses a
-region border exactly as an LSL one does, with the same
-suspend-after-any-instruction guarantee. Embedding a stock Lua interpreter would
-not achieve this: there is no supported way to serialize a mid-execution
-`lua_State`, so Lua objects could not cross while running. That, not any
-licensing or dependency rule, is why Lua gets its own p-code machine.
+- **SLua compatibility is the baseline.** HomeWorldz targets everything SLua
+  supports and does not define a HomeWorldz-specific Lua dialect. This is a
+  decision, not an expectation.
+- **Adopting the SLua implementation is the expected means.** It is the obvious
+  way to deliver that baseline and to leverage problems Linden Lab has already
+  solved, but it is subject to the verification gates below.
 
-**Neither language is a subset of the other.** Features may exist in LSL and not
-Lua, or in Lua and not LSL, by design. Lua is not a compatibility surface.
+If a gate fails, the baseline does not move — only the means of delivering it
+does. That is the relationship Falcon already has with LSL: the compatibility
+target is fixed, the implementation is ours to choose.
 
-## A second backend, not a superset VM
+HomeWorldz will support **Lua** as a second scripting language alongside LSL,
+behind the script-runtime boundary in
+[ADR 0021](0021-script-runtime-boundary.md), with **SLua** — Linden Lab's
+MIT-licensed fork of Luau — as both the compatibility target and the expected
+implementation.
 
-Lua gets its own p-code machine as a peer of Falcon behind ADR 0021's boundary,
-which already states that the authoritative scene "will not depend on a
-particular virtual machine."
+## Why reuse rather than build
+
+An earlier revision of this ADR called for a purpose-built second p-code machine
+with a deliberately restricted Lua subset. That reasoning rested on one claim:
+that no supported way exists to serialize a mid-execution Lua state, so an
+off-the-shelf Lua could not participate in region crossings, and Lua scripts
+would therefore be second-class.
+
+**That claim no longer holds.** Second Life's SLua is a "friendly fork of Luau"
+under the MIT License that uses "a modified Eris called *Ares* to serialize agent
+execution state," with the stated goal of "stateful, semi-autonomous objects that
+can seamlessly roam across server instances" — the same crossing problem Falcon
+was designed around. Its published capabilities cover the four things that made
+a bespoke VM look necessary:
+
+| Requirement | SLua status as published |
+| --- | --- |
+| Serialize running script state | Ares; "a yielded thread can be serialized, along with its global environment" |
+| Preemptive scheduling | "Hooks for pre-emptive scheduling are implemented" |
+| Per-script memory limits | "implemented through a custom heap traversal function" |
+| Sandboxing | `luaL_sandbox` / `luaL_sandboxthread` protect builtin libraries |
+
+A second argument now applies that did not before. Under
+[ADR 0016](0016-firestorm-compatibility-target.md), HomeWorldz reimplements
+Second Life scripting semantics for **content and creator portability**, not for
+its own sake. Now that Second Life has an official Lua, "HomeWorldz Lua" should
+mean "SLua-compatible Lua" for exactly the same reason — otherwise Lua content,
+examples, and the emerging transpiler tooling do not transfer, which is the
+fragmentation ADR 0016 exists to prevent. Unlike LSL, where reimplementation was
+forced because the Second Life server is closed, here the actual implementation
+is available under a compatible license.
+
+## Compatibility target
+
+HomeWorldz follows SLua's surface rather than inventing one, and supports
+**everything SLua supports**. The enumerated items below are the shape of that
+surface, not its limit:
+
+- Linden functions under the **`ll` namespace in PascalCase** — `ll.Say`,
+  `ll.GetPos` — not LSL's `llSay`.
+- Events registered with **`LLEvents:on("touch_start", function(...) end)`**
+  rather than LSL event blocks.
+- Timers via **`LLTimers`**; JSON via **`lljson`**; bitwise via **`bit32`**.
+- Luau **gradual typing**, with type annotations available and used in SL's own
+  examples.
+- A **128 KB** logical memory limit, above LSL's 64 KB.
+
+**No subtractions.** HomeWorldz does not restrict the language surface below
+SLua's; a feature SLua supports is a feature HomeWorldz is expected to support,
+including ones that are awkward to implement. HomeWorldz-specific *additions*, if
+any, must use a separately documented namespace and their own compatibility
+decision, consistent with the rule SCRIPTING.md already applies to LSL.
+
+Because SLua is still evolving, this baseline is a moving target and tracking it
+is part of the commitment rather than a one-time port.
+
+## Relationship to Falcon
+
+Falcon remains the LSL VM. SLua is expected to sit beside it as a **second
+backend behind ADR 0021's boundary**, which already states that the authoritative
+scene "will not depend on a particular virtual machine."
 
 **Shared** across both backends: the scheduler and instruction-fuel model, the
-event dispatch model, the host-function registry, resource accounting, the
-snapshot *container*, and the crossing transaction in
-[SCRIPTING.md](../SCRIPTING.md).
+host-function registry, resource accounting, and the crossing transaction in
+[SCRIPTING.md](../SCRIPTING.md). **Per-language:** the VM, value model, garbage
+collection, and compiler.
 
-**Per-language:** opcodes, value model, garbage collection, and call frames.
+**Neither language is a subset of the other.** Features may exist in LSL and not
+Lua, or in Lua and not LSL. LSL remains the compatibility surface for existing
+content; Lua is a parallel one.
 
-LSL therefore keeps Falcon's cheap statically-typed machine and pays nothing for
-Lua's dynamism. Forcing LSL through a dynamically-typed superset would tax the
-compatibility-critical path to serve the optional language.
+## What HomeWorldz still owns
 
-## Design
+Adopting SLua does not outsource the region's responsibilities. HomeWorldz still
+implements the **`ll` host surface against its own authoritative scene**,
+integrates the VM with the region scheduler under bounded instruction slices,
+owns the crossing transaction and snapshot container, enforces aggregate
+resource budgets, and provides serializable continuations for asynchronous host
+operations. A script still reaches nothing outside the host boundary.
 
-**Heap references are integer handles, not pointers.** This is the load-bearing
-decision. Tables, strings, closures, upvalues, and coroutines live in VM-owned
-handle tables, so a snapshot is a near-linear dump of those tables with no
-pointer relocation on restore. It extends Falcon's existing property — all state
-as data — to a cyclic object graph. Raw pointers would make every crossing a
-graph walk with address fixups.
+## Reversal: metatables
 
-**Register-based instructions.** Falcon's `{Op, a, b}` triple widens to
-`{Op, a, b, c}`, matching Lua's A/B/C shape. Per-frame register windows cut
-instruction counts substantially versus a stack machine.
+The earlier revision excluded user metatables outright, because mid-instruction
+metamethod dispatch is the sharpest hazard for a snapshot-safe interpreter.
+**That exclusion is dropped.** Luau supports metatables, metatable-based OOP is
+idiomatic in SLua content, and Ares is designed to serialize the resulting object
+graphs. Excluding them would break a large class of otherwise-portable scripts
+for a hazard the upstream implementation already addresses — and it would violate
+the no-subtractions rule above.
 
-**Explicit state, no native re-entrancy.** Call frames are a frame vector (base
-register, return instruction pointer, closure handle, varargs) — never native
-C++ frames. `pcall` is a frame carrying an error-handler marker, unwound by
-walking that vector: **no `setjmp`/`longjmp`, and no C++ exceptions for
-Lua-level errors**. C++ exceptions may still *stop* a script, exactly as Falcon
-does today. Library functions that would otherwise call back into script
-(`table.sort` comparators, iterators) are **implemented in Lua and compiled to
-p-code**, so no native frame ever sits between two script frames.
+## Verification gates
 
-**Garbage collection** is incremental mark-sweep over the handle table with a
-tri-color invariant whose worklist is itself a handle vector. GC state is
-therefore data and serializes with everything else, and collection pauses stay
-inside the fuel budget rather than blocking the region thread.
+These decide **how** SLua compatibility is delivered, not whether. Each is a
+question about reusing the SLua implementation directly, and none should be
+assumed settled.
 
-**Numbers** are a single `f64`, following Luau, rather than Lua 5.3+'s
-integer/float subtypes — this avoids an overload decision in every arithmetic
-opcode.
+- **Serialization granularity.** SLua documents that a *yielded* thread can be
+  serialized. SCRIPTING.md requires suspension after any completed instruction,
+  including mid-handler. Lua's inability to yield across a C-call boundary may
+  mean a script inside a host function cannot be suspended. This is the decisive
+  gate.
+- **CodeGen interaction.** Luau ships a native code generator. Native frames
+  cannot be snapshotted, so establish whether serialization requires CodeGen
+  disabled, and what that costs.
+- **Aggregate budgets.** SLua's memory limits are per-script; SCRIPTING.md also
+  requires owner, object, and parcel aggregates plus wall-clock guards.
+- **Host-operation continuations.** HomeWorldz's asynchronous host operations
+  need transferable tokens; confirm these survive an Ares round trip.
+- **Maturity.** As of 2026-07 SLua is in **open beta**, limited to Second Life
+  sandbox regions and the beta grid, and compiling requires Linden Lab's Project
+  Lua Editor viewer — Firestorm does not yet compile SLua. The API may still
+  move. MIT licensing means a version can be pinned or forked if it does.
 
-**Optional type annotations**, Luau-style, let the compiler emit specialized
-fast-path opcodes. This is the same trick that makes Falcon's LSL `AddInt` cheap,
-applied to gradually-typed Lua.
+## Fallback
 
-**No JIT, ever.** JIT-compiled native code cannot be snapshotted mid-execution
-and is a hostile-content attack surface. Roughly 2–5× stock-Lua interpretation
-cost is accepted as the price of the crossing invariant.
+If the gates cannot be met, the fallback is to implement **SLua-compatible
+semantics on a purpose-built runtime** — not to retreat to a smaller language.
+The compatibility baseline holds either way, so such a runtime must still provide
+metatables, coroutines, and the rest of the SLua surface.
 
-## Excluded dynamism
+The design sketched in an earlier revision of this ADR remains the starting point
+for that vehicle: register-based instructions widening Falcon's `{Op, a, b}`
+triple, heap references as integer handles rather than pointers so snapshots need
+no relocation, explicit call frames with `pcall` as an error-handler frame, and
+incremental mark-sweep GC whose worklist is itself serializable. Metatables would
+have to be implemented rather than excluded, which means solving mid-instruction
+metamethod dispatch — push-a-frame with idempotent instruction re-execution.
 
-The subset is defined by what it removes. Each exclusion has a specific reason:
-
-| Excluded | Reason |
-| --- | --- |
-| **User metatables and all metamethods** | The decisive simplification — see below. |
-| `load`, `loadstring`, `dofile`, `require` of runtime source | Keeps p-code an immutable asset cached by source hash, per ADR 0021. |
-| `setfenv` / `getfenv` | Defeat static global resolution and sandboxing; Luau removed these too. |
-| The `io`, `os`, `package`, and `debug` libraries | ADR 0021 already forbids ambient operating-system capability. |
-| Weak tables (`__mode`) and `__gc` finalizers | Both make garbage collection re-enter script code. |
-| Implicit string↔number arithmetic coercion | Require an explicit `tonumber`. |
-
-**Metatables are excluded in v1** because they are the one construct that forces
-a single instruction to call a script function and thereby become *partially*
-complete: an `ADD` whose operand has an `__add` handler must invoke script
-mid-instruction. Stock Lua recurses natively there, which a snapshot-safe VM
-cannot do. Removing them removes the sharpest risk in the design.
-
-Tables plus functions still express struct and module patterns; what is lost is
-inheritance sugar and operator overloading. If this is ever revisited, the
-reserved path is push-a-frame dispatch with idempotent instruction
-re-execution — to be prototyped before being committed to.
-
-## Retained
-
-Closures and upvalues, varargs and multiple return values, and **coroutines**.
-Coroutines are *easier* in an explicit-state VM than in stock Lua: each is
-simply another frame stack plus register file, and all contexts snapshot
-together. In stock Lua they are among the hardest things to serialize.
+That is strictly harder than the restricted subset originally contemplated, and
+considerably harder than adopting an implementation that already exists. It is a
+fallback, and its cost is itself an argument for making the gates work.
 
 ## Language selection
 
-A script in a prim's Contents is still LSL-text as far as a legacy viewer is
-concerned — Firestorm's editor, its Save/compile path, and the existing
-Falcon compile-error reporting all assume it. Language is therefore selected by
-a **first-line pragma** (`--!lua`) plus a `source_language` field in the
-compiled `Program`, requiring no new asset type and no viewer change.
+Second Life selects a script's language with a **compiler selector** in the
+script editor, implying a protocol-level mechanism that HomeWorldz would prefer
+to adopt over an invention of its own. Because Firestorm cannot yet compile
+SLua, a first-line pragma (`--!lua`) is expected to serve as the interim
+mechanism, requiring no new asset type and no viewer change.
 
-Adding `source_language` to the `Program` container is cheapest **before**
-bytecode assets are cached in production, since adding it later means an ABI bump
-and a cache invalidation.
-
-## Snapshots and determinism
-
-Deterministic RNG state travels in the snapshot, per SCRIPTING.md. Variance in
-`libm` transcendentals across hosts is acceptable: exactly one copy of a script
-is authoritative after a transfer, so post-crossing execution need not be
-bit-identical to a counterfactual run on the source region.
-
-## Naming
-
-Falcon is the LSL VM. The Lua machine uses neutral module identifiers until it
-is named, matching the precedent in [VM.md](../VM.md) — "the current PoC code
-still uses neutral module identifiers, to be aligned as it graduates."
+Either way, a `source_language` field in the compiled `Program` is worth adding
+**before** bytecode caching hardens in production: cheap now, an ABI bump and
+cache invalidation later.
 
 ## Relationship to other ADRs
 
 - **ADR 0021** — this sits behind the same script-runtime boundary as a second
-  backend; the boundary's VM-neutrality is what makes it possible.
-- **ADR 0030** — the client's Blockly-style visual scripting emits Lua or
-  p-code, so non-coder authoring reuses this runtime.
+  backend; the boundary's VM-neutrality is what permits adopting an external VM
+  at all.
+- **ADR 0016** — SLua compatibility follows the same content-portability logic
+  as Second Life protocol compatibility.
+- **ADR 0030** — the client's Blockly-style visual scripting is expected to emit
+  Lua, so non-coder authoring reuses this runtime.
 
 ## References
 
+- [SLua implementation](https://github.com/secondlife/slua/) — the Luau fork,
+  Ares serialization, sandboxing, and scheduling hooks
+- [Luau](https://luau.org/) — the upstream typed, sandboxed Lua dialect
+- [Second Life Lua documentation](https://wiki.secondlife.com/wiki/Lua_Alpha) —
+  namespace, events, timers, and memory limit
+- [SLua open beta announcement](https://community.secondlife.com/news/featured-news/announcing-the-slua-open-beta-modern-scripting-comes-to-second-life-r11237/)
 - [SCRIPTING.md](../SCRIPTING.md) — scheduling, resource, and crossing
   requirements both backends share
 - [VM.md](../VM.md) — Falcon p-code format and VM internals
-- [Luau](https://luau.org/) — the typed, sandboxed Lua dialect this subset
-  follows on numbers, annotations, and the `setfenv`/`getfenv` removal

@@ -2,6 +2,10 @@
 
 Status: Accepted
 
+This ADR records **current expectation and intent**, not a commitment. No
+implementation work has started, and the choices below are expected to be revised
+as evidence arrives.
+
 The first-party client ([ADR 0030](0030-client-architecture.md)) needs region
 behavior that the Second Life protocol does not provide: modern asset formats,
 geometry it does not have to tessellate, and a transport a browser can reach.

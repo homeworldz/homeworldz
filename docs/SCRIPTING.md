@@ -6,11 +6,14 @@ supported language surface is Second Life LSL plus Halcyon/InWorldz extensions.
 OpenSimulator-only extensions, including OSSL functions, are intentionally
 excluded. See [VM.md](VM.md) for the Falcon p-code format and VM internals.
 
-A restricted, sandboxed **Lua** is a planned second language behind the same
-script-runtime boundary, with its own p-code machine so that it inherits the
-scheduling, resource, and crossing requirements below rather than weakening them
+A sandboxed **Lua** is a planned second language behind the same script-runtime
+boundary, with **SLua** — Second Life's MIT-licensed Luau fork — as the
+compatibility baseline: HomeWorldz targets everything SLua supports, with no
+subtractions, so that Lua content is portable. Reusing the SLua implementation is
+the expected means, and either way the runtime inherits the scheduling, resource,
+and crossing requirements below rather than weakening them
 ([ADR 0031](adr/0031-lua-scripting-subset.md)). Neither language is a subset of
-the other; LSL remains the compatibility surface.
+the other; LSL remains the compatibility surface for existing content.
 
 Scripting follows avatar synchronization and basic avatar physics in the
 implementation plan. Walking, flight, terrain collision, authoritative viewer
