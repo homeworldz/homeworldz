@@ -339,6 +339,94 @@ and last known location. The pattern to follow already exists:
 ([grid/internal/api/auth.go:24](../grid/internal/api/auth.go:24)), so a handler
 takes the user from `account.ID` and there is no path segment to get wrong.
 
+### What session open carries
+
+As implemented in
+[grid/internal/api/client_session.go](../grid/internal/api/client_session.go).
+The request is a `POST /v1/client/session` with the account bearer token from
+`POST /v1/tokens` and a body of exactly one JSON object — the decoder rejects
+unknown fields and trailing data, so the body behaves as
+`additionalProperties: false`:
+
+```json
+{ "start": "last" }
+```
+
+`start` is the only request field, and it is optional:
+
+- **`"last"`** (also the default when `start` is omitted or empty) — the user's
+  stored last location, falling back to the welcome arrival list when it is
+  missing or its region is offline.
+- **`"home"`** — the stored home location, with the same fallback.
+- **`"Region Name/x/y/z"`** — an explicit arrival point. An explicitly named
+  region that is not online is a `404`, never a diversion: the user asked for
+  somewhere particular. The legacy `uri:Region&x&y&z` spelling is not accepted.
+
+The keywords match case-insensitively. A `start` that parses as none of the
+three is a `400 invalid_start`.
+
+The response is `200` with `Cache-Control: no-store`:
+
+```json
+{
+  "session": {
+    "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    "expiresAt": "2026-07-27T08:14:00Z"
+  },
+  "region": {
+    "id": "22222222-2222-4222-8222-222222222222",
+    "name": "Welcome",
+    "gridX": 1000,
+    "gridY": 1000,
+    "endpoint": "https://welcome.example",
+    "position": [127, 127, 23]
+  },
+  "ticket": {
+    "token": "eyJhbGciOi…",
+    "expiresAt": "2026-07-26T20:19:00Z"
+  },
+  "capabilities": { "version": 1, "transports": [] }
+}
+```
+
+- **`session`** — the row in the shared session store, common to all client
+  kinds. `expiresAt` is RFC 3339; the TTL is 12 hours, matching viewer
+  sessions, so one expiry and revocation story covers both.
+- **`region`** — the resolved destination. `endpoint` is the region's public
+  endpoint with any trailing slash trimmed. `position` is `[x, y, z]` in
+  region-local metres and is **optional**: it is present when an explicit
+  arrival point named coordinates, when a welcome arrival point supplies its
+  own, or when a stored location survived resolution — and a stored position
+  survives only when the stored region is the region actually selected, so a
+  diversion can never leak a stale position into the wrong region. When
+  absent, the region chooses the spawn.
+- **`ticket`** — the region ticket: a token with audience `homeworldz:region`
+  binding this `region.id` and `session.id`, the only credential a region
+  ever sees. It is short-lived (`[website] region_ticket_ttl_seconds`,
+  default 300) and single-purpose: presenting it on any `/v1` account route
+  is refused, and the account token is refused wherever the ticket is
+  expected — the audience separation is structural.
+- **`capabilities`** — the versioned per-region manifest, resolved for this
+  region and re-resolved on every region crossing. `transports` is empty
+  until the region session transport exists; a client treats the manifest as
+  data and adapts rather than negotiating.
+
+Errors are the flat `{code, message}` object every `/v1` route uses:
+
+| Status | `code` | Meaning |
+| --- | --- | --- |
+| 400 | `invalid_json` | The body is not exactly one JSON object, or carries an unknown field |
+| 400 | `invalid_start` | `start` is not `last`, `home`, or `Region/x/y/z` |
+| 401 | `unauthorized` | Missing or expired bearer token |
+| 404 | `destination_unavailable` | The explicitly named region is not online |
+| 405 | `method_not_allowed` | Only `POST` is supported |
+| 503 | `destination_unavailable` | No online region can accept the session (the implicit paths exhausted the welcome list), or the selected region's endpoint is invalid |
+| 503 | `world_entry_unavailable` | The tier is running without the stores world entry needs |
+
+`destination_unavailable` appears at both `404` and `503` deliberately: the
+status carries the distinction. `404` says *the region you named* is the
+problem; `503` says *the grid right now* is.
+
 ### More store wiring than the ADRs assume
 
 Client ADR 0003 states these are "handlers over existing state rather than a
