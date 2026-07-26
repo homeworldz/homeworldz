@@ -1,12 +1,18 @@
-// Negotiated region extensions for the first-party client (ADR 0032).
+// Negotiated region extensions for legacy viewers (ADR 0032).
 //
 // Baseline Second Life protocol semantics are untouched. New region behavior is
 // negotiated per feature through two existing mechanisms used as intended: the
 // region advertises what it can serve in the `SimulatorFeatures` capability, and
-// a client opts in by naming an extension's capabilities in its seed request.
+// a viewer opts in by naming an extension's capabilities in its seed request.
 // A viewer that knows nothing about an extension never asks for it and therefore
 // never sees it, which is what keeps every extension invisible to Firestorm and
 // its peers (ADR 0016).
+//
+// The first-party client does not use any of this. Negotiation implies a
+// fallback and a browser has none, and both `SimulatorFeatures` and the seed
+// reply are LLSD, which that client is built never to read. It reaches the
+// modern surface through the grid's public user tier instead (ADR 0032, "How the
+// first-party client arrives"). Negotiation exists to protect viewers.
 //
 // This is the single mechanism for adding an extension. An extension must not
 // introduce a new negotiation of its own, change a baseline message, or alter a

@@ -19,7 +19,7 @@ redirect the work.
 
 Checkboxes describe the present state, not a promise of a release date. The only
 implementation work that has started is Phase 1's extension negotiation
-mechanism, which every other Phase 1 item is defined in terms of; the remaining
+mechanism, which serves legacy viewers rather than the new client; the remaining
 completed items are the decisions themselves.
 
 ## Relationship to the 1.0 roadmap
@@ -49,10 +49,15 @@ invalidation.
 ## Ordering and gates
 
 Unlike the 1.0 phases, which are parallel workstreams, the first three phases
-here are a **real dependency chain**, and deliberately so. The region extensions
-come first, a cheap throwaway browser client validates them second, and only
-then is the C++ core worth building. This ordering exists to avoid the failure
-mode of writing a large client against an unproven protocol surface.
+here are a **real dependency chain**, and deliberately so. The grid arrival path
+and region extensions come first, a cheap throwaway browser client validates them
+second, and only then is the C++ core worth building. This ordering exists to
+avoid the failure mode of writing a large client against an unproven protocol
+surface.
+
+Within Phase 1 the arrival path leads. A client that cannot authenticate, cannot
+learn a region endpoint, and cannot be told what a region can do has nothing to
+connect a transport to.
 
 Phases 5 and 6 are independent of the client work and can proceed in parallel
 with it.
@@ -72,21 +77,64 @@ with it.
 
 ## Phase 1: Region Extension Foundation
 
-Region-side work only. No new client exists yet, and Firestorm behavior must not
+Region and grid work. No new client exists yet, and Firestorm behavior must not
 change.
+
+The grid work is not incidental. [ADR 0032](adr/0032-region-extensions-for-new-client.md)
+places the client's arrival on the grid's public user tier rather than behind
+extension negotiation, so the client reaches the modern surface through `/v1`
+before a region transport is ever attempted. That milestone comes first here
+because it gates every other one: without it the client cannot authenticate,
+cannot learn a region endpoint, and cannot be told what a region can do.
+
+### Client arrival on the grid user tier
+
+The path the first-party client takes to reach a region, per ADR 0032's "How the
+first-party client arrives" and the server consequences in
+[client ADR 0004](https://github.com/homeworldz/client/blob/main/docs/adr/0004-client-transport-and-push-channels.md).
+None of this is negotiated: the client requires the modern path and treats its
+absence as an incompatible grid.
+
+- [ ] Serve an unauthenticated compatibility document reporting the grid's
+  version and capabilities, so a client can satisfy its declared minimum protocol
+  version before attempting a transport. Checked first deliberately: an absent
+  endpoint answers immediately, while a QUIC attempt against a region that
+  ignores it may hang until timeout.
+- [ ] Add user-scoped `/v1/client/*` world-entry routes deriving the acting user
+  **from the bearer token and never from the path**. The internal tier addresses
+  users positionally (`/api/v1/inventory/{userId}`); mirroring that shape on a
+  user-facing route would let any authenticated caller read another user's
+  inventory and last known location.
+- [ ] Mint short-lived, region-scoped tickets from a second signer with a
+  distinct audience, so the account token — which reaches account management
+  including password change — never reaches a region.
+  [ADR 0028](adr/0028-untrusted-region-trust-model.md) admits regions outside the
+  operator's control, which is what makes this structural rather than tidy.
+- [ ] Return per-region capabilities as data in the session-open response, as a
+  versioned field. Regions within one grid are not uniform, and a region crossing
+  re-resolves them.
+- [ ] Add the browser frontend's origin to the CORS allowlist.
+- [ ] Keep `POST /v1/tokens` as the login endpoint; no new authentication
+  surface is needed for this client.
 
 ### Extension negotiation
 
-Implemented ahead of the rest of this phase, because every item below is defined
-in terms of it. The registry of available extensions is **deliberately empty**:
-the mechanism advertises capability, never intent, so an extension appears only
-as part of its own implementation.
+**Negotiation exists to protect viewers, and the first-party client does not
+participate in it.** A browser has no fallback — it cannot open a raw UDP socket,
+so a region that cannot serve the modern transport cannot serve the client at all
+— and `SimulatorFeatures` and the seed reply are LLSD, which the client is
+specifically built never to read. What negotiation buys is that a Firestorm-class
+viewer never sees an extension it would not understand.
+
+The registry of available extensions is **deliberately empty**: the mechanism
+advertises capability, never intent, so an extension appears only as part of its
+own implementation.
 
 - [x] Advertise a Homeworldz extension feature map through the
-  `SimulatorFeatures` capability, so a client opts into each extension and a
-  client that does not understand one never sees it. `SimulatorFeatures` carries a
-  `HomeworldzExtensions` map beside the untouched `OpenSimExtras`; each advertised
-  extension lists its own version and the capability names a client uses to opt
+  `SimulatorFeatures` capability, so a viewer opts into each extension and one
+  that does not understand an extension never sees it. `SimulatorFeatures` carries
+  a `HomeworldzExtensions` map beside the untouched `OpenSimExtras`; each
+  advertised extension lists its own version and the capability names used to opt
   in. Opting in happens in the seed request, which the region previously ignored
   and now parses.
 - [x] Establish named seed capabilities as the single mechanism for adding
@@ -108,13 +156,35 @@ acceptance is still outstanding and remains tracked below.
 
 ### Browser-reachable transport
 
-- [ ] Implement a WebTransport/QUIC session capability carrying login, the event
-  stream, and object updates, with a WebSocket fallback for environments that
-  block QUIC.
+Not a negotiated capability. The client arrives already knowing the modern path
+is required and learns the region endpoint from the grid user tier above, so
+there is no seed capability to ask for and no fallback to a legacy transport.
+
+The client holds **two persistent channels rather than one**
+([client ADR 0004](https://github.com/homeworldz/client/blob/main/docs/adr/0004-client-transport-and-push-channels.md)):
+a low-rate grid channel for account and social traffic that must survive a region
+crossing, and a per-region session for scene traffic. A single region-anchored
+channel would die on every crossing; a single grid-anchored one would force every
+scene update through an extra hop.
+
+- [ ] Implement the region session transport over WebTransport/QUIC, carrying the
+  event stream and object updates, with a WebSocket fallback. The fallback is for
+  networks that block QUIC, **not** a degraded legacy mode — conflating the two
+  would report a corporate firewall as an incompatible grid. New C++ listener
+  work: nothing region-side speaks WebSocket or QUIC today.
+- [ ] Implement the grid channel as a WebSocket on the existing user-tier
+  service, carrying instant messages, presence, and inventory offers — the
+  traffic that must reach a user regardless of which region they occupy, and
+  therefore cannot live in one.
 - [ ] Keep LLUDP fully authoritative for legacy viewers; the new transport is an
   added path and never a migration.
-- [ ] Collapse the three legacy transports (LLUDP, capability HTTP, long-poll
-  event queue) into the single multiplexed stream for clients that take it.
+- [ ] Replace, for clients on the modern path, the three transports a legacy
+  session uses (LLUDP, capability HTTP, long-poll event queue). Long-polling is
+  dropped outright rather than carried forward: push is what these channels are
+  for.
+- [ ] Establish request/response over the realtime channel with correlation
+  identifiers, so REST is used only to get started rather than alongside the
+  session.
 - [ ] Define reliable and unreliable stream usage, interest-managed update
   batching, and per-session flow control.
 
@@ -154,8 +224,9 @@ surface before committing to a C++ core.
 
 ### Throwaway client
 
-- [ ] Connect from a browser over the WebTransport session capability,
-  authenticate, and hold a session.
+- [ ] Authenticate through the grid user tier, resolve a region endpoint, and
+  hold a WebTransport region session — exercising the arrival path end to end
+  rather than a negotiated capability.
 - [ ] Render terrain, static objects, and KTX2 textures with an existing
   high-level web renderer, with no shared code intended to survive.
 - [ ] Move an avatar under server authority and observe another participant
@@ -188,8 +259,9 @@ engine or renderer types.
 
 ### Protocol and replication
 
-- [ ] Implement the client half of the WebTransport session: login, event
-  stream, and object updates.
+- [ ] Implement the client half of both channels: the grid channel for account
+  and social traffic, and the region session for the event stream and object
+  updates.
 - [ ] Implement interest management, snapshot-plus-delta replication, and
   server-authoritative reconciliation.
 - [ ] Handle region crossings and teleports as first-class client state
