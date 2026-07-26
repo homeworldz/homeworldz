@@ -102,6 +102,27 @@ owns the crossing transaction and snapshot container, enforces aggregate
 resource budgets, and provides serializable continuations for asynchronous host
 operations. A script still reaches nothing outside the host boundary.
 
+**Perms-table discipline is a hard requirement, not an implementation detail.**
+Ares can persist a C function only when it is registered in the permanents table;
+light C functions cannot be persisted at all
+(`ERIS_ERR_CFUNC`, `ERIS_ERR_CFUNC_UPVALS`). Every `ll` host function must
+therefore be a C closure in the perms table, and every suspendable one must yield
+through a continuation registered there too. A host function added without this
+produces scripts that cannot cross a region border — a failure that surfaces at
+the border, not at the call.
+
+## Modules and bytecode caching
+
+SLua provides `require` and a module system, so under the no-subtractions rule
+HomeWorldz supports it. This has a consequence for ADR 0021, which describes
+bytecode as an immutable derived asset "cached by source hash plus compiler and
+ABI version": once a script can depend on modules, its compiled form depends on
+them too, so the cache key must cover the resolved dependency closure and
+invalidation must follow module edits. Module resolution also needs a defined,
+sandbox-safe source — inventory contents rather than a filesystem.
+
+This is unresolved and warrants its own decision.
+
 ## Reversal: metatables
 
 The earlier revision excluded user metatables outright, because mid-instruction
@@ -114,31 +135,63 @@ the no-subtractions rule above.
 
 ## Verification gates
 
-These decide **how** SLua compatibility is delivered, not whether. Each is a
-question about reusing the SLua implementation directly, and none should be
-assumed settled.
+These decide **how** SLua compatibility is delivered, not whether. Assessed
+2026-07-25 by reading the SLua sources and RFCs. **Nothing here has been built
+and run**, so each finding is evidence of feasibility, not proof of it.
 
-- **Serialization granularity.** SLua documents that a *yielded* thread can be
-  serialized. SCRIPTING.md requires suspension after any completed instruction,
-  including mid-handler. Lua's inability to yield across a C-call boundary may
-  mean a script inside a host function cannot be suspended. This is the decisive
-  gate.
-- **CodeGen interaction.** Luau ships a native code generator. Native frames
-  cannot be snapshotted, so establish whether serialization requires CodeGen
-  disabled, and what that costs.
-- **Aggregate budgets.** SLua's memory limits are per-script; SCRIPTING.md also
-  requires owner, object, and parcel aggregates plus wall-clock guards.
-- **Host-operation continuations.** HomeWorldz's asynchronous host operations
-  need transferable tokens; confirm these survive an Ares round trip.
-- **Maturity.** As of 2026-07 SLua is in **open beta**, limited to Second Life
-  sandbox regions and the beta grid, and compiling requires Linden Lab's Project
-  Lua Editor viewer — Firestorm does not yet compile SLua. The API may still
-  move. MIT licensing means a version can be pinned or forked if it does.
+- **Serialization inside a host call — passes.** This was the decisive gate.
+  `VM/src/ares.cpp` serializes C call frames explicitly (`ERIS_CI_KIND_C`,
+  selected by the `clvalue(thread->ci->func)->isC` branch) and validates a saved
+  continuation (`ERIS_ERR_THREADCTX`, "bad C continuation function"). A host
+  function that yielded mid-call therefore restores. The limits are that a thread
+  must be yielded rather than running (`ERIS_ERR_THREAD`), that a script must not
+  be yielded from inside a hook (`ERIS_ERR_HOOK`), and the perms-table rule
+  above.
+- **CodeGen — passes.** "Luau's JIT can be used mostly as-is, and serializing
+  state while inside a JITed function is fully supported." Native code generation
+  need not be disabled, and the position taken in an earlier revision of this ADR
+  that a JIT could never be permitted is **withdrawn**.
+- **Preemption — passes.** The scheduler injects a valueless yield from an
+  interrupt handler, while a `state` switch yields an integer, so the two are
+  distinguished by the number of yielded values
+  (`rfcs/lsl_state_handling.md`). One constraint: a script's "constructor" runs
+  synchronously and must not yield.
+- **Aggregate budgets — partially resolved.** `rfcs/memory-limitations.md`
+  (Implemented) provides hard per-script *logical* memory limits through memcat
+  tagging plus heap traversal from the script root, holding the contract that a
+  script's reported memory must not depend on which other scripts are resident.
+  Owner, object, and parcel aggregates plus wall-clock guards remain HomeWorldz
+  work layered on top; nothing blocks them.
+- **Maturity — open.** As of 2026-07 SLua is in **open beta**, limited to Second
+  Life sandbox regions and the beta grid, and compiling requires Linden Lab's
+  Project Lua Editor viewer — Firestorm does not yet compile SLua. The API may
+  still move. MIT licensing means a version can be pinned or forked if it does.
+
+What remains is empirical: build SLua, embed it behind the ADR 0021 boundary, and
+confirm a round trip of a thread yielded inside a HomeWorldz host call.
+
+## Architecture worth adopting
+
+SLua's own state model (`rfcs/lsl_state_handling.md`) solves problems HomeWorldz
+would otherwise solve independently, and is worth following rather than
+paralleling:
+
+- A **Grandparent → Base Image → Forker → Child** thread layout, where each
+  script's Child thread owns its globals and each event handler runs in a thread
+  pushed onto it, so a handler can be cancelled without tearing down the script.
+- Serialization **diffs a Child thread against the base image**, so only the
+  delta travels and function prototypes are never duplicated in a snapshot. This
+  is a materially better crossing payload than serializing each script whole.
+- Host-side data such as the current and next LSL state is serialized
+  **separately, outside the VM**, so it neither counts against script memory nor
+  requires reaching into VM internals. That split is the same one HomeWorldz
+  draws between the snapshot container and the runtime state inside it.
 
 ## Fallback
 
-If the gates cannot be met, the fallback is to implement **SLua-compatible
-semantics on a purpose-built runtime** — not to retreat to a smaller language.
+If empirical work overturns the findings above, the fallback is to implement
+**SLua-compatible semantics on a purpose-built runtime** — not to retreat to a
+smaller language.
 The compatibility baseline holds either way, so such a runtime must still provide
 metatables, coroutines, and the rest of the SLua surface.
 

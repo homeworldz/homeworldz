@@ -235,21 +235,22 @@ SLua surface.
 
 ### SLua evaluation and gates
 
-- [ ] Determine whether Ares serialization reaches the granularity crossings
-  require — suspension mid-handler, including while a host function is on the
-  stack — given that Lua cannot normally yield across a C-call boundary. This is
-  the decisive gate.
-- [ ] Determine whether Luau's native CodeGen must be disabled for serialization
-  to hold, and measure what that costs.
-- [ ] Confirm per-script memory limits can extend to the owner, object, and
-  parcel aggregates and wall-clock guards SCRIPTING.md requires.
-- [ ] Confirm HomeWorldz's asynchronous host-operation tokens survive an Ares
-  round trip.
-- [ ] Prototype SLua embedded in the region behind the ADR 0021 boundary, driven
-  by a bounded per-tick instruction slice.
-- [ ] Record the implementation outcome — reuse or purpose-built — in ADR 0031,
-  resolving its verification gates one way or the other. The compatibility
-  baseline is settled either way.
+Source review on 2026-07-25, recorded in ADR 0031, found the decisive gates
+pass: C call frames and their continuations serialize, Luau's CodeGen need not be
+disabled, and preemption is an injected valueless yield. What remains is
+empirical confirmation.
+
+- [ ] Build SLua and embed it behind the ADR 0021 boundary, driven by a bounded
+  per-tick instruction slice.
+- [ ] Confirm empirically that a thread yielded **inside a HomeWorldz host call**
+  survives an Ares round trip — the decisive gate, so far passing on source
+  review alone.
+- [ ] Measure CodeGen's effect on snapshot size, restore time, and region tick
+  cost, now that disabling it appears unnecessary.
+- [ ] Layer owner, object, and parcel aggregates and wall-clock guards on top of
+  SLua's per-script logical memory limits.
+- [ ] Record the implementation outcome — reuse or purpose-built — in ADR 0031.
+  The compatibility baseline is settled either way.
 
 ### Integration behind the script runtime boundary
 
@@ -263,6 +264,14 @@ SLua surface.
   with the same bounded-work and no-ambient-capability rules Falcon's hosts obey.
 - [ ] Represent slow host operations as serializable continuations, delivering
   completion as a script event on the region thread.
+- [ ] Register every `ll` host function as a C closure in the Ares permanents
+  table, and every suspendable one with a registered continuation, so a script
+  yielded inside a host call can still cross a border.
+- [ ] Adopt SLua's base-image diffing for crossing snapshots so only the delta
+  travels, and keep host-side state in a separate payload outside the VM.
+- [ ] Resolve module `require` against inventory contents, and extend bytecode
+  cache keys to cover the resolved dependency closure — ADR 0021's source-hash
+  model assumes a script has no dependencies.
 - [ ] Report Lua compile diagnostics through the same viewer capability path
   Falcon already uses, with line and column locations.
 
