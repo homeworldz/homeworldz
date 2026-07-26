@@ -4,10 +4,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-The Homeworldz monorepo: the **grid** server (Go, `grid/`), the **region** server
-(C++/Jolt, `region/`), the **script** VM (C++, `script/`), database migrations
-(`db/migrations/`), and the architecture documentation and ADRs (`docs/`). The
-public website is a separate repo, the sibling `../homeworldz.com`.
+This repo holds the Homeworldz server software: the **grid** server (Go,
+`grid/`), the **region** server (C++/Jolt, `region/`), the **script** VM (C++,
+`script/`), database migrations (`db/migrations/`), and the architecture
+documentation and ADRs (`docs/`).
+
+## Sibling repos are independent
+
+The other repos under `homeworldz/` — the public website (`../homeworldz.com`),
+the first-party client (`../client`), and `../freebies` — are **separate,
+independent projects**. They are related, but work in this repo must not modify
+them without **specific confirmation** each time; the user runs parallel
+sessions in each folder and cross-repo edits interfere with work in flight.
+Reading them is expected and fine.
+
+The one tool here that deliberately crosses that border is `node syncweb.mjs`
+(see Documentation below). It writes only `../homeworldz.com/content/ROADMAP.md`
+and leaves it unstaged; do not stage, commit, or push in the website repo.
 
 ## Naming and terminology
 
