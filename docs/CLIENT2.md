@@ -51,12 +51,12 @@ reusing that name and shape on the public tier keeps one convention instead of
 two. A `config` document also invites deployment detail that has no business
 being unauthenticated.
 
-Note that the public tier has **no unauthenticated operational routes today** —
-`/ping`, `/ready`, and `/version` exist only on the internal `grid` binary. This
-is the first one, and `internal/api` does not currently receive a version string
-even though `cmd/homeworldz-api` already has one
+Note that the public tier previously had **no unauthenticated operational
+routes** — `/ping`, `/ready`, and `/version` existed only on the internal `grid`
+binary. This is the first one, and `internal/api` did not receive a version
+string even though `cmd/homeworldz-api` already had one
 ([grid/cmd/homeworldz-api/main.go:32](../grid/cmd/homeworldz-api/main.go:32)), so
-`api.Options` grows a `Version` field.
+`api.Options` grew a `Version` field (shipped 2026-07-26).
 
 ### What it carries
 
@@ -152,12 +152,13 @@ registration, and told to upgrade.** Without this the `regions` group is only
 advisory. With it the grid can state what every leased region speaks, because it is
 the thing handing out leases.
 
-Registration carries no version today. `regions.Registration` is name,
-coordinates, endpoint, port, and lease duration
+Registration carried no version before this work — `regions.Registration` was
+name, coordinates, endpoint, port, and lease duration
 ([grid/internal/regions/store.go:29](../grid/internal/regions/store.go:29)),
 submitted over the `/api/v1/region-runtime/` path that per-region access keys
-authorize ([ADR 0024](adr/0024-provisioned-region-identity.md)). The region has to
-start sending its protocol version, and the grid has to check it.
+authorize ([ADR 0024](adr/0024-provisioned-region-identity.md)). **Shipped both
+sides 2026-07-26:** the region sends its protocol version and the grid checks
+it, at registration and at renewal.
 
 #### Two protocol numbers, neither of them a release version
 
@@ -258,14 +259,16 @@ The probe names a default landing region as `{name, gridX, gridY}` — no endpoi
 because world entry returns that and the probe should not become a public region
 directory.
 
-**Homeworldz has no such concept today, and that is a latent bug rather than
-merely a gap.** `resolveDestination`
+**Homeworldz had no such concept, and for viewers its absence remains a latent
+bug rather than merely a gap.** `resolveDestination`
 ([grid/internal/httpapi/viewer_login.go:391](../grid/internal/httpapi/viewer_login.go:391))
 tries the requested region, then a preferred region id, then falls back to
 `items[0]` — whatever the region list happens to return first. Where a viewer with
 no last location lands is therefore undefined and can change as regions come and
-go. Defining a welcome region fixes that for viewers at the same time as it serves
-the client, and `resolveDestination` should use it in place of `items[0]`.
+go. The welcome concept itself shipped 2026-07-26 (`[grid] welcome_locations`,
+the probe's `welcome` field, and world entry resolving against the list), but
+`resolveDestination` still uses `items[0]`, so the viewer-side fix is still
+open.
 
 **1000,1000 is already the convention**, though only in test fixtures — the
 `Welcome` region sits there across
@@ -482,8 +485,10 @@ duplication is worth that.
 
 ### Default and fallback arrival points
 
-Homeworldz has neither today, and the gap is larger than one missing setting.
-`resolveDestination` distinguishes three situations and handles none of them well:
+Homeworldz had neither; the client path now has the welcome list
+(`[grid] welcome_locations`, shipped 2026-07-26 for world entry), while for the
+viewer path the gap is larger than one missing setting. `resolveDestination`
+distinguishes three situations and handles none of them well:
 
 | Situation | Today |
 | --- | --- |
@@ -652,7 +657,7 @@ how this table accommodates variation.
 
 ## The communication mechanisms
 
-Six paths, of which three ship today and three do not. The legacy three are
+Six paths, of which five ship today and one does not. The legacy three are
 untouched by everything above.
 
 | Path | Used by | Transport | Encoding | State |
@@ -660,8 +665,8 @@ untouched by everything above.
 | Circuit protocol | viewers | LLUDP | legacy binary | Shipped |
 | Capability HTTP | viewers | HTTP/1.1 | LLSD | Shipped |
 | `EventQueueGet` | viewers | HTTP/1.1 long poll | LLSD | Shipped |
-| REST bootstrap | client | HTTPS | JSON | `POST /v1/tokens` only |
-| Grid channel | client | WebSocket | JSON | Not built |
+| REST bootstrap | client | HTTPS | JSON | Shipped (probe, tokens, world entry) |
+| Grid channel | client | WebSocket | JSON | Shipped (carries no notification traffic yet) |
 | Region session | client | WebTransport/QUIC, WebSocket fallback | JSON | Not built |
 
 ### Why the client holds two channels
