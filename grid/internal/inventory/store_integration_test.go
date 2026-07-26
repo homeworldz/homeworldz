@@ -22,7 +22,10 @@ func TestPostgresSystemFolderLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	// Registered before any row cleanup so it runs last: t.Cleanup is
+	// last-in-first-out, and a deferred close would instead run before every
+	// cleanup below, leaving them to fail silently against a closed pool.
+	t.Cleanup(func() { _ = db.Close() })
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	userID, err := identifier.NewUUID()

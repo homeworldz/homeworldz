@@ -18,7 +18,10 @@ func TestPostgresGet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	// Registered before any row cleanup so it runs last: t.Cleanup is
+	// last-in-first-out, and a deferred close would instead run before every
+	// cleanup below, leaving them to fail silently against a closed pool.
+	t.Cleanup(func() { _ = db.Close() })
 	const user = "99999999-9999-4999-8999-999999999991"
 	const region = "99999999-9999-4999-8999-999999999992"
 	if _, err := db.Exec(`INSERT INTO users(id,username,password_hash) VALUES($1,'location.test','x') ON CONFLICT DO NOTHING`, user); err != nil {

@@ -16,6 +16,40 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
+// Values this test reserves for itself. Grid coordinates and viewer circuit
+// codes are both unique-constrained, so the test owns a fixed, recognizable pair
+// and clears it before use rather than picking fresh values each run. The
+// coordinate sits far from real allocations — Welcome is at 1000,1000 — so a test
+// region can never shadow or displace a live one.
+const (
+	testRegionName        = "Circuit Test"
+	testGridCoordinate    = 3456
+	testViewerCircuitCode = 123456
+)
+
+// clearCircuitTestRows removes whatever an earlier run of this test left behind.
+// Cleanups cannot run when a run is killed, and a single surviving row then wedges
+// every later run against a unique constraint, so the test starts by reclaiming
+// the values it is about to insert rather than trusting the database to be clean.
+func clearCircuitTestRows(ctx context.Context, t *testing.T, db *sql.DB) {
+	t.Helper()
+	// Releasing the circuit code rather than deleting the session keeps this
+	// narrow: the code is what is constrained, and any session still holding it
+	// belongs to a test user whose own row is cleaned up separately.
+	if _, err := db.ExecContext(ctx,
+		"UPDATE sessions SET viewer_circuit_code = NULL WHERE viewer_circuit_code = $1",
+		testViewerCircuitCode); err != nil {
+		t.Fatalf("release reserved viewer circuit code: %v", err)
+	}
+	// Sessions reference a region with ON DELETE SET NULL, so removing a stale
+	// test region cannot orphan a session row.
+	if _, err := db.ExecContext(ctx,
+		"DELETE FROM regions WHERE name = $1 OR (grid_x = $2 AND grid_y = $2)",
+		testRegionName, testGridCoordinate); err != nil {
+		t.Fatalf("remove stale test region: %v", err)
+	}
+}
+
 func TestPostgresIdentityLifecycle(t *testing.T) {
 	databaseURL := os.Getenv("HOMEWORLDZ_TEST_DATABASE_URL")
 	if databaseURL == "" {
@@ -25,7 +59,10 @@ func TestPostgresIdentityLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	// Registered before any row cleanup so it runs last: t.Cleanup is
+	// last-in-first-out, and a deferred close would instead run before every
+	// cleanup below, leaving them to fail silently against a closed pool.
+	t.Cleanup(func() { _ = db.Close() })
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	store := NewPostgresStore(db)
@@ -60,17 +97,20 @@ func TestPostgresIdentityLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create destination region ID: %v", err)
 	}
+	clearCircuitTestRows(ctx, t, db)
 	if _, err := db.ExecContext(ctx, `INSERT INTO regions
 		(id, name, grid_x, grid_y, public_endpoint, lease_expires_at)
-		VALUES ($1, 'Circuit Test', 32000, 32000, 'http://127.0.0.1:42001', now() + interval '1 minute')`, regionID); err != nil {
+		VALUES ($1, $2, $3, $3, 'http://127.0.0.1:42001', now() + interval '1 minute')`,
+		regionID, testRegionName, testGridCoordinate); err != nil {
 		t.Fatalf("insert destination region: %v", err)
 	}
 	t.Cleanup(func() { _, _ = db.Exec("DELETE FROM regions WHERE id = $1", regionID) })
-	if err := store.AssignViewerDestination(ctx, viewerSession.ID, 123456, regionID); err != nil {
+	if err := store.AssignViewerDestination(ctx, viewerSession.ID, testViewerCircuitCode, regionID); err != nil {
 		t.Fatalf("assign viewer destination: %v", err)
 	}
 	validatedViewer, err := store.ValidateSession(ctx, viewerSession.ID)
-	if err != nil || validatedViewer.ViewerCircuitCode != 123456 || validatedViewer.DestinationRegionID != regionID {
+	if err != nil || validatedViewer.ViewerCircuitCode != testViewerCircuitCode ||
+		validatedViewer.DestinationRegionID != regionID {
 		t.Fatalf("validated viewer destination = %#v, error = %v", validatedViewer, err)
 	}
 	if _, err := db.ExecContext(ctx, "UPDATE sessions SET expires_at = now() - interval '1 second' WHERE id = $1", session.ID); err != nil {
@@ -100,7 +140,10 @@ func TestPostgresUpsertUser(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	// Registered before any row cleanup so it runs last: t.Cleanup is
+	// last-in-first-out, and a deferred close would instead run before every
+	// cleanup below, leaving them to fail silently against a closed pool.
+	t.Cleanup(func() { _ = db.Close() })
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	store := NewPostgresStore(db)
