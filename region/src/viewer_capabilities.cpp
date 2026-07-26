@@ -384,14 +384,13 @@ std::string event_queue_xml(std::uint64_t id, const std::vector<std::string>& ev
            "<key>id</key><integer>" + std::to_string(id) + "</integer></map></llsd>";
 }
 
-std::string simulator_features_xml(std::string_view currency, std::string_view map_server_url,
-                                   const std::vector<RegionExtension>& extensions) {
+std::string simulator_features_xml(const SimulatorFeatures& features) {
     // Each advertised extension carries its own version and the capability names
     // a client names in its seed request to opt in. With none available the map
     // is present but empty, which tells a client the mechanism exists and that
     // there is currently nothing to negotiate.
     std::string advertised;
-    for (const auto& extension : extensions) {
+    for (const auto& extension : features.extensions) {
         std::string names;
         for (const auto& capability : extension.capabilities)
             names += "<string>" + xml_escape(capability.name) + "</string>";
@@ -401,10 +400,30 @@ std::string simulator_features_xml(std::string_view currency, std::string_view m
                       "</integer><key>capabilities</key>" +
                       (names.empty() ? "<array/>" : "<array>" + names + "</array>") + "</map>";
     }
+    // Chat ranges come from the same constants the region enforces, so the
+    // advertised distances cannot drift from the audible ones.
     return "<?xml version=\"1.0\"?><llsd><map><key>OpenSimExtras</key><map>"
-           "<key>currency</key><string>" + xml_escape(currency) +
-           "</string><key>map-server-url</key><string>" + xml_escape(map_server_url) +
-           "</string></map>"
+           "<key>currency</key><string>" + xml_escape(features.currency) +
+           "</string><key>map-server-url</key><string>" + xml_escape(features.map_server_url) +
+           "</string><key>ExportSupported</key>" + llsd_boolean(features.export_supported) +
+           "<key>whisper-range</key><integer>" +
+           std::to_string(static_cast<int>(chat_range(chat_type_whisper))) +
+           "</integer><key>say-range</key><integer>" +
+           std::to_string(static_cast<int>(chat_range(chat_type_normal))) +
+           "</integer><key>shout-range</key><integer>" +
+           std::to_string(static_cast<int>(chat_range(chat_type_shout))) +
+           "</integer></map>"
+           "<key>MeshRezEnabled</key>" + llsd_boolean(features.mesh) +
+           "<key>MeshUploadEnabled</key>" + llsd_boolean(features.mesh) +
+           "<key>MeshXferEnabled</key>" + llsd_boolean(features.mesh) +
+           "<key>PhysicsMaterialsEnabled</key>" + llsd_boolean(features.physics_materials) +
+           "<key>DynamicPathfindingEnabled</key>" + llsd_boolean(features.dynamic_pathfinding) +
+           "<key>AvatarHoverHeightEnabled</key>" + llsd_boolean(features.avatar_hover_height) +
+           "<key>PhysicsShapeTypes</key><map>"
+           "<key>convex</key>" + llsd_boolean(features.physics_shape_convex) +
+           "<key>none</key>" + llsd_boolean(features.physics_shape_none) +
+           "<key>prim</key>" + llsd_boolean(features.physics_shape_prim) +
+           "</map>"
            "<key>HomeworldzExtensions</key><map><key>version</key><integer>" +
            std::to_string(extension_map_version) + "</integer><key>extensions</key>" +
            (advertised.empty() ? "<map/>" : "<map>" + advertised + "</map>") +

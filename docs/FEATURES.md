@@ -239,6 +239,39 @@ to owner-only behaviour because groups are not yet modelled (Phase 5). The damag
 (`AllowDamage`) and push (`RestrictPushObject`) flags are carried but inert until
 the combat/health and `llPushObject` systems exist.
 
+### Honest simulator feature advertisement
+
+Homeworldz advertises a `SimulatorFeatures` flag only when the region actually
+implements the behavior behind it, and advertises a definite `false` rather than
+omitting the key when it does not. A viewer enables interface on the strength of
+these flags, so an over-claim produces controls that silently do nothing and an
+under-claim hides behavior that works.
+
+Two consequences are visible to creators:
+
+- **Physics shape types** report `prim` and `none` as supported and `convex` as
+  **not** supported. Prim is the default collision shape and `None` is honored by
+  excluding the entity from the collision mirror, but Convex Hull, while accepted,
+  clamped, and persisted through take and re-rez, does not change the collision
+  shape — that is selected from the prim's own shape. The viewer therefore does
+  not offer a Convex Hull option the region would ignore. (Prisms and pyramids do
+  use convex hulls, but as a consequence of their prim shape, not of this
+  setting.)
+- **Mesh, dynamic pathfinding, and avatar hover height** report `false`. Mesh
+  assets are Phase 5 and ADR 0023 work. The region emits a hover-height block in
+  `AvatarAppearance` but accepts no hover-height update, so the control stays
+  hidden rather than appearing inert.
+
+Physics materials (density, friction, restitution, gravity multiplier) and the
+Export permission bit are implemented and advertised as such. Chat ranges —
+whisper 10 m, say 20 m, shout 100 m — are advertised from the same constants the
+region enforces when relaying a chat message, so the viewer's chat interface
+cannot disagree with what is actually audible.
+
+This differs from deployments that advertise a broad static feature map
+regardless of what the simulator implements. Adding a feature here means changing
+one flag beside the code that backs it.
+
 ### Grid-level estates
 
 Estates are stored centrally on the grid (Postgres), not per region, because an

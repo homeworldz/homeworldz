@@ -211,7 +211,7 @@ int main() {
     passed &= contains(crossed, "<key>Position</key><array><real>1.250000</real><real>255.500000</real><real>30.000000</real></array>");
     passed &= contains(crossed, "<key>LookAt</key><array><real>0.500000</real><real>-0.250000</real><real>0.000000</real></array>");
     const auto simulator_features = homeworldz::viewer::simulator_features_xml(
-        "C$", "https://grid.example/map/");
+        {.map_server_url = "https://grid.example/map/"});
     passed &= contains(simulator_features,
                        "<key>OpenSimExtras</key><map><key>currency</key><string>C$</string>");
     passed &= contains(simulator_features,

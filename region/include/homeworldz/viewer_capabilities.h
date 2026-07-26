@@ -149,12 +149,51 @@ std::string teleport_finish_event_xml(const TeleportFinish& event);
 std::string crossed_region_event_xml(const CrossedRegion& event);
 std::string parcel_properties_event_xml(const ParcelPropertiesEvent& event);
 std::string event_queue_xml(std::uint64_t id, const std::vector<std::string>& events = {});
-// Build the SimulatorFeatures reply. `OpenSimExtras` is unchanged; the
-// Homeworldz extension map is appended so a client can discover what it may
-// negotiate (ADR 0032). Legacy viewers ignore the unknown key.
-std::string simulator_features_xml(std::string_view currency = "C$",
-                                   std::string_view map_server_url = {},
-                                   const std::vector<RegionExtension>& extensions = {});
+// What the region tells a viewer it supports, served through the
+// `SimulatorFeatures` capability.
+//
+// A viewer enables interface on the strength of these flags, so every one must
+// reflect behavior the region actually implements. Advertising an unimplemented
+// feature produces controls that silently do nothing, and withholding an
+// implemented one hides working behavior — the defaults below are therefore the
+// single declaration of what this region software supports, and each is stated
+// against the code that backs it.
+struct SimulatorFeatures {
+    std::string currency{"C$"};
+    std::string map_server_url;
+
+    // Physics shape types offered in the viewer's Features tab. Prim is the
+    // default shape; None is honored by excluding the entity from the collision
+    // mirror. Convex Hull is deliberately false: the value is accepted, clamped,
+    // and persisted, but the collision shape is selected from the prim's own
+    // shape, so a viewer offering it would be offering a choice the region
+    // silently ignores.
+    bool physics_shape_prim{true};
+    bool physics_shape_none{true};
+    bool physics_shape_convex{false};
+    // Density, friction, and restitution are decoded from ObjectFlagUpdate,
+    // persisted, and applied to the Jolt body.
+    bool physics_materials{true};
+
+    // Mesh assets are not implemented (ADR 0023 and the Phase 5 content
+    // pipeline), so all three mesh flags stay false rather than absent: a
+    // definite no tells the viewer more than a missing key.
+    bool mesh{false};
+    bool dynamic_pathfinding{false};
+    // The region emits a hover-height block in AvatarAppearance but accepts no
+    // hover-height update, so the viewer must not offer the control.
+    bool avatar_hover_height{false};
+    // The Export permission bit is enforced in the permission core, including
+    // folding across linksets and task inventory.
+    bool export_supported{true};
+
+    // Negotiated region extensions (ADR 0032); empty until one is implemented.
+    std::vector<RegionExtension> extensions;
+};
+
+// Build the SimulatorFeatures reply. Legacy viewers ignore keys they do not
+// know, including the Homeworldz extension map.
+std::string simulator_features_xml(const SimulatorFeatures& features);
 std::string environment_settings_xml(std::string_view region_id);
 // Build the RemoteParcelRequest reply carrying a parcel's global UUID.
 std::string remote_parcel_reply_xml(std::string_view parcel_id);

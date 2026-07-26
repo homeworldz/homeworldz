@@ -850,6 +850,27 @@ struct ModifyLand : AgentMessage {
     std::vector<float> extended_brush_sizes;
 };
 
+// ChatFromViewer chat types, matching the viewer's own numbering.
+inline constexpr std::uint8_t chat_type_whisper = 0;
+inline constexpr std::uint8_t chat_type_normal = 1;
+inline constexpr std::uint8_t chat_type_shout = 2;
+
+// Audible radius in metres for each chat type, matching the Second Life
+// defaults. These are both enforced when a chat message is relayed and
+// advertised in SimulatorFeatures, so a viewer's chat interface agrees with what
+// the region actually delivers; they must stay a single source for both.
+inline constexpr double chat_whisper_range = 10.0;
+inline constexpr double chat_say_range = 20.0;
+inline constexpr double chat_shout_range = 100.0;
+
+// Audible radius for a chat type. An unrecognized type is treated as normal
+// speech, which is the conservative choice: never louder than the viewer asked.
+constexpr double chat_range(std::uint8_t chat_type) {
+    if (chat_type == chat_type_whisper) return chat_whisper_range;
+    if (chat_type == chat_type_shout) return chat_shout_range;
+    return chat_say_range;
+}
+
 struct ChatFromViewer : AgentMessage {
     std::string message;
     std::uint8_t type{};

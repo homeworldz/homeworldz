@@ -2583,8 +2583,10 @@ int main(int argc, char* argv[]) {
                             response = homeworldz::http::response_for_content(
                                 request, 200, "application/llsd+xml",
                                 homeworldz::viewer::simulator_features_xml(
-                                    "C$", grid_public_endpoint + "/map/",
-                                    homeworldz::viewer::available_region_extensions()));
+                                    homeworldz::viewer::SimulatorFeatures{
+                                        .map_server_url = grid_public_endpoint + "/map/",
+                                        .extensions =
+                                            homeworldz::viewer::available_region_extensions()}));
                         } else if (authorized && environment_settings && registration) {
                             response = homeworldz::http::response_for_content(
                                 request, 200, "application/llsd+xml",
@@ -7198,7 +7200,7 @@ int main(int argc, char* argv[]) {
                             chat->session_id == identity->session_id && chat->channel == 0 &&
                             !chat->message.empty() && chat->message.size() <= 1023) {
                             const auto& origin = avatar->second.controller.state().position;
-                            const double radius = chat->type == 0 ? 10.0 : (chat->type == 2 ? 100.0 : 20.0);
+                            const double radius = homeworldz::viewer::chat_range(chat->type);
                             homeworldz::viewer::ChatFromSimulator outgoing;
                             outgoing.from_name = homeworldz::viewer::format_uuid(identity->agent_id);
                             outgoing.source_id = identity->agent_id;

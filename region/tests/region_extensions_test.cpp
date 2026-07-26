@@ -6,6 +6,7 @@
 // as it did before extensions existed.
 #include "homeworldz/region_extensions.h"
 #include "homeworldz/viewer_capabilities.h"
+#include "homeworldz/viewer_protocol.h"
 
 #include <iostream>
 #include <string>
@@ -33,6 +34,25 @@ std::string requested_body(const std::vector<std::string>& names) {
     std::string body = "<?xml version=\"1.0\"?><llsd><array>";
     for (const auto& name : names) body += "<string>" + name + "</string>";
     return body + "</array></llsd>";
+}
+
+// Count non-overlapping occurrences of a tag.
+std::size_t count_of(std::string_view haystack, std::string_view needle) {
+    std::size_t total = 0;
+    for (std::size_t at = haystack.find(needle); at != std::string_view::npos;
+         at = haystack.find(needle, at + needle.size()))
+        ++total;
+    return total;
+}
+
+// Substring assertions cannot catch an unbalanced document, and a malformed
+// SimulatorFeatures reply would reach a live viewer, so check the structure too.
+bool well_formed_llsd(std::string_view document) {
+    return count_of(document, "<map>") == count_of(document, "</map>") &&
+           count_of(document, "<array>") == count_of(document, "</array>") &&
+           document.rfind("<?xml version=\"1.0\"?><llsd>", 0) == 0 &&
+           document.size() > std::string_view("<?xml version=\"1.0\"?><llsd></llsd>").size() &&
+           document.substr(document.size() - 7) == "</llsd>";
 }
 
 bool has_capability(const std::vector<ExtensionCapability>& granted, std::string_view name) {
@@ -106,7 +126,7 @@ int main() {
     // SimulatorFeatures advertises the mechanism and its map version even with
     // nothing to offer, so a client can tell an extension-aware region from one
     // that predates the mechanism.
-    const auto bare = simulator_features_xml("C$", "https://grid.example/map/", {});
+    const auto bare = simulator_features_xml({.map_server_url = "https://grid.example/map/"});
     passed &= contains(bare, "<key>HomeworldzExtensions</key><map><key>version</key>"
                              "<integer>1</integer><key>extensions</key><map/></map>");
     // OpenSimExtras is untouched, and stays first.
@@ -114,10 +134,47 @@ int main() {
     passed &= contains(bare, "<key>map-server-url</key><string>https://grid.example/map/</string>");
     passed &= bare.find("<key>OpenSimExtras</key>") < bare.find("<key>HomeworldzExtensions</key>");
 
+    // Feature advertisement. Each flag must match behavior the region actually
+    // implements, so these assert the honest answer rather than a hopeful one.
+    // Implemented and therefore advertised: prim and none physics shapes, and
+    // physics materials, which reach the Jolt body as friction and restitution.
+    passed &= contains(bare, "<key>PhysicsShapeTypes</key><map>"
+                             "<key>convex</key><boolean>0</boolean>"
+                             "<key>none</key><boolean>1</boolean>"
+                             "<key>prim</key><boolean>1</boolean></map>");
+    passed &= contains(bare, "<key>PhysicsMaterialsEnabled</key><boolean>1</boolean>");
+    // Not implemented, and advertised as a definite no rather than omitted: mesh
+    // assets, dynamic pathfinding, and hover height, which the region emits in
+    // AvatarAppearance but never accepts an update for.
+    passed &= contains(bare, "<key>MeshRezEnabled</key><boolean>0</boolean>");
+    passed &= contains(bare, "<key>MeshUploadEnabled</key><boolean>0</boolean>");
+    passed &= contains(bare, "<key>MeshXferEnabled</key><boolean>0</boolean>");
+    passed &= contains(bare, "<key>DynamicPathfindingEnabled</key><boolean>0</boolean>");
+    passed &= contains(bare, "<key>AvatarHoverHeightEnabled</key><boolean>0</boolean>");
+    // The Export permission bit is enforced in the permission core.
+    passed &= contains(bare, "<key>ExportSupported</key><boolean>1</boolean>");
+    // Advertised chat ranges are the enforced ones, taken from the same
+    // constants the relay uses, so the two cannot drift apart.
+    passed &= contains(bare, "<key>whisper-range</key><integer>10</integer>");
+    passed &= contains(bare, "<key>say-range</key><integer>20</integer>");
+    passed &= contains(bare, "<key>shout-range</key><integer>100</integer>");
+    passed &= chat_range(chat_type_whisper) == 10.0;
+    passed &= chat_range(chat_type_normal) == 20.0;
+    passed &= chat_range(chat_type_shout) == 100.0;
+    // An unrecognized chat type is never louder than normal speech.
+    passed &= chat_range(0x7f) == chat_range(chat_type_normal);
+
+    // A region that later implements one flips its flag without touching the
+    // rest of the advertisement.
+    const auto with_mesh = simulator_features_xml({.mesh = true});
+    passed &= contains(with_mesh, "<key>MeshRezEnabled</key><boolean>1</boolean>");
+    passed &= contains(with_mesh, "<key>MeshUploadEnabled</key><boolean>1</boolean>");
+    passed &= contains(with_mesh, "<key>PhysicsMaterialsEnabled</key><boolean>1</boolean>");
+
     // An advertised extension carries its own version and the capability names a
     // client names to opt in.
-    const auto advertised = simulator_features_xml("C$", "https://grid.example/map/",
-                                                   test_extensions());
+    const auto advertised = simulator_features_xml(
+        {.map_server_url = "https://grid.example/map/", .extensions = test_extensions()});
     passed &= contains(advertised, "<key>HomeworldzTestGeometry</key><map><key>version</key>"
                                    "<integer>2</integer><key>capabilities</key><array>"
                                    "<string>TestGeometryMesh</string>"
@@ -171,6 +228,17 @@ int main() {
                                    "session-id/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa</uri>");
     passed &= contains(with_visit, "<key>TestTransportSession</key>");
 
-    if (!passed) std::cerr << "region extension negotiation checks failed\n";
+    // Structure, not just contents: an unbalanced map or array would still
+    // satisfy every substring assertion above but break a real viewer.
+    passed &= well_formed_llsd(bare);
+    passed &= well_formed_llsd(advertised);
+    passed &= well_formed_llsd(baseline);
+    passed &= well_formed_llsd(granted);
+    passed &= well_formed_llsd(simulator_features_xml({}));
+
+    if (!passed) {
+        std::cerr << "region extension negotiation checks failed\n";
+        std::cerr << "SimulatorFeatures: " << bare << '\n';
+    }
     return passed ? 0 : 1;
 }
