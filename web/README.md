@@ -45,14 +45,15 @@ plus a manual pass over affected routes.
 - **`public/_redirects`** — SPA fallback (`/* /index.html 200`) for static
   hosting; direct navigation to a router path must reach `index.html`.
 
-## Cutover configuration (server side)
+## Server-side configuration this site depends on
 
-Two grid-side settings point at this site and change when `my.homeworldz.com`
-goes live:
+Two grid-side settings point at this site; both were repointed when
+`my.homeworldz.com` went live on 2026-07-26:
 
 - `[website] allowed_origins` must include `https://my.homeworldz.com` (and a
   dev origin such as `http://127.0.0.1:43220` where wanted) or the browser
   blocks every API call.
-- `[mail] verification_url` defaults to `https://homeworldz.com/verify` and
-  must become `https://my.homeworldz.com/verify` once registration lives here,
-  or emailed verification links land on a site without the page.
+- `[mail] verification_url` is `https://my.homeworldz.com/verify`, so emailed
+  verification links land on this site's `/verify` page directly. (Its code
+  default is still the marketing origin, so a fresh deployment without this
+  setting sends links there — keep it set.)

@@ -109,7 +109,7 @@ func LoadGrid(directory string) (Grid, error) {
 	mail := parsed.Section("mail")
 	result.MailTransport = strings.ToLower(strings.TrimSpace(mail.Key("transport").MustString("log")))
 	result.MailFrom = mail.Key("from").MustString("no-reply@homeworldz.com")
-	result.MailVerificationURL = mail.Key("verification_url").MustString("https://homeworldz.com/verify")
+	result.MailVerificationURL = mail.Key("verification_url").MustString("https://my.homeworldz.com/verify")
 	result.SMTPHost = mail.Key("smtp_host").String()
 	result.SMTPPort = mail.Key("smtp_port").MustInt(587)
 	result.SMTPUsername = mail.Key("smtp_username").String()
