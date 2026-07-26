@@ -16,10 +16,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/homeworldz/homeworldz/grid/internal/gestures"
-	"github.com/homeworldz/homeworldz/grid/internal/identity"
-	"github.com/homeworldz/homeworldz/grid/internal/inventory"
-	"github.com/homeworldz/homeworldz/grid/internal/regions"
+	"github.com/homeworldz/server/grid/internal/gestures"
+	"github.com/homeworldz/server/grid/internal/identity"
+	"github.com/homeworldz/server/grid/internal/inventory"
+	"github.com/homeworldz/server/grid/internal/regions"
 )
 
 type rpcMethodCall struct {

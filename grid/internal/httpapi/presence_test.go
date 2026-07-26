@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/homeworldz/homeworldz/grid/internal/presence"
+	"github.com/homeworldz/server/grid/internal/presence"
 )
 
 type memoryPresenceStore struct {

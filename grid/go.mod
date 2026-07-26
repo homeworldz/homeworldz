@@ -1,4 +1,4 @@
-module github.com/homeworldz/homeworldz/grid
+module github.com/homeworldz/server/grid
 
 go 1.23
 

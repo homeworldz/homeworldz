@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/homeworldz/homeworldz/grid/internal/identity"
-	"github.com/homeworldz/homeworldz/grid/internal/regions"
-	"github.com/homeworldz/homeworldz/grid/internal/transit"
+	"github.com/homeworldz/server/grid/internal/identity"
+	"github.com/homeworldz/server/grid/internal/regions"
+	"github.com/homeworldz/server/grid/internal/transit"
 )
 
 func (a *API) transitsRoot(w http.ResponseWriter, r *http.Request) {

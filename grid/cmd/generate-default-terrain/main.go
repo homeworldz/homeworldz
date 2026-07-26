@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/homeworldz/homeworldz/grid/internal/terrainimage"
+	"github.com/homeworldz/server/grid/internal/terrainimage"
 )
 
 func main() {

@@ -11,9 +11,9 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/homeworldz/homeworldz/grid/internal/config"
-	"github.com/homeworldz/homeworldz/grid/internal/identity"
-	"github.com/homeworldz/homeworldz/grid/internal/inventory"
+	"github.com/homeworldz/server/grid/internal/config"
+	"github.com/homeworldz/server/grid/internal/identity"
+	"github.com/homeworldz/server/grid/internal/inventory"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"golang.org/x/term"
 )

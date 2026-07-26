@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/homeworldz/homeworldz/grid/internal/provisioning"
+	"github.com/homeworldz/server/grid/internal/provisioning"
 )
 
 func newRegionProtocolHarness(t *testing.T) http.Handler {

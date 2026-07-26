@@ -17,7 +17,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/homeworldz/homeworldz/grid/internal/regions"
+	"github.com/homeworldz/server/grid/internal/regions"
 )
 
 //go:embed assets/default-map.jpg

@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/homeworldz/homeworldz/grid/internal/vault"
+	"github.com/homeworldz/server/grid/internal/vault"
 )
 
 // vaultBlob serves the asset vault of ADR 0026 at

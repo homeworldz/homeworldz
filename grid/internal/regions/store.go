@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/homeworldz/homeworldz/grid/internal/identifier"
+	"github.com/homeworldz/server/grid/internal/identifier"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 

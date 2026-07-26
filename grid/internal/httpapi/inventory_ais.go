@@ -16,10 +16,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/homeworldz/homeworldz/grid/internal/assetmeta"
-	"github.com/homeworldz/homeworldz/grid/internal/identifier"
-	"github.com/homeworldz/homeworldz/grid/internal/identity"
-	"github.com/homeworldz/homeworldz/grid/internal/inventory"
+	"github.com/homeworldz/server/grid/internal/assetmeta"
+	"github.com/homeworldz/server/grid/internal/identifier"
+	"github.com/homeworldz/server/grid/internal/identity"
+	"github.com/homeworldz/server/grid/internal/inventory"
 )
 
 func (a *API) inventoryAISCapability(w http.ResponseWriter, r *http.Request) {

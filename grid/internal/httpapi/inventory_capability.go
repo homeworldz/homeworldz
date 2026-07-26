@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/homeworldz/homeworldz/grid/internal/identity"
-	"github.com/homeworldz/homeworldz/grid/internal/inventory"
+	"github.com/homeworldz/server/grid/internal/identity"
+	"github.com/homeworldz/server/grid/internal/inventory"
 )
 
 const maximumInventoryFolderBatch = 256

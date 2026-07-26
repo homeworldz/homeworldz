@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/homeworldz/homeworldz/grid/internal/estate"
-	"github.com/homeworldz/homeworldz/grid/internal/provisioning"
+	"github.com/homeworldz/server/grid/internal/estate"
+	"github.com/homeworldz/server/grid/internal/provisioning"
 )
 
 func TestRegionRuntimeEstateLifecycle(t *testing.T) {

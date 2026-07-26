@@ -19,15 +19,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/homeworldz/homeworldz/grid/internal/mailer"
-	"github.com/homeworldz/homeworldz/grid/internal/presence"
-	"github.com/homeworldz/homeworldz/grid/internal/provisioning"
-	"github.com/homeworldz/homeworldz/grid/internal/arrival"
-	"github.com/homeworldz/homeworldz/grid/internal/identity"
-	"github.com/homeworldz/homeworldz/grid/internal/locations"
-	"github.com/homeworldz/homeworldz/grid/internal/regions"
-	"github.com/homeworldz/homeworldz/grid/internal/webaccount"
-	"github.com/homeworldz/homeworldz/grid/internal/webtoken"
+	"github.com/homeworldz/server/grid/internal/mailer"
+	"github.com/homeworldz/server/grid/internal/presence"
+	"github.com/homeworldz/server/grid/internal/provisioning"
+	"github.com/homeworldz/server/grid/internal/arrival"
+	"github.com/homeworldz/server/grid/internal/identity"
+	"github.com/homeworldz/server/grid/internal/locations"
+	"github.com/homeworldz/server/grid/internal/regions"
+	"github.com/homeworldz/server/grid/internal/webaccount"
+	"github.com/homeworldz/server/grid/internal/webtoken"
 )
 
 // AccountStore is the account persistence the API depends on. It is satisfied

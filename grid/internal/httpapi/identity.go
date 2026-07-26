@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/homeworldz/homeworldz/grid/internal/identity"
+	"github.com/homeworldz/server/grid/internal/identity"
 )
 
 func (a *API) usersRoot(w http.ResponseWriter, r *http.Request) {

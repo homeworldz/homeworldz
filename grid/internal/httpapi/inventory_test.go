@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/homeworldz/homeworldz/grid/internal/assetmeta"
-	"github.com/homeworldz/homeworldz/grid/internal/inventory"
+	"github.com/homeworldz/server/grid/internal/assetmeta"
+	"github.com/homeworldz/server/grid/internal/inventory"
 )
 
 type memoryInventoryStore struct {

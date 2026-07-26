@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/homeworldz/homeworldz/grid/internal/assetmeta"
+	"github.com/homeworldz/server/grid/internal/assetmeta"
 )
 
 type memoryAssetStore struct{ assets map[string]assetmeta.Asset }

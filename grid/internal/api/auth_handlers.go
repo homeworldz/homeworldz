@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/homeworldz/homeworldz/grid/internal/mailer"
-	"github.com/homeworldz/homeworldz/grid/internal/webaccount"
+	"github.com/homeworldz/server/grid/internal/mailer"
+	"github.com/homeworldz/server/grid/internal/webaccount"
 )
 
 // registrations handles POST /v1/registrations (public, rate-limited).

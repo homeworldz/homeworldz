@@ -10,13 +10,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/homeworldz/homeworldz/grid/internal/arrival"
-	"github.com/homeworldz/homeworldz/grid/internal/identifier"
-	"github.com/homeworldz/homeworldz/grid/internal/identity"
-	"github.com/homeworldz/homeworldz/grid/internal/locations"
-	"github.com/homeworldz/homeworldz/grid/internal/regions"
-	"github.com/homeworldz/homeworldz/grid/internal/webaccount"
-	"github.com/homeworldz/homeworldz/grid/internal/webtoken"
+	"github.com/homeworldz/server/grid/internal/arrival"
+	"github.com/homeworldz/server/grid/internal/identifier"
+	"github.com/homeworldz/server/grid/internal/identity"
+	"github.com/homeworldz/server/grid/internal/locations"
+	"github.com/homeworldz/server/grid/internal/regions"
+	"github.com/homeworldz/server/grid/internal/webaccount"
+	"github.com/homeworldz/server/grid/internal/webtoken"
 )
 
 // memoryAccountStore satisfies AccountStore for requireAuth: only Get is

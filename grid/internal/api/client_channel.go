@@ -9,7 +9,7 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/homeworldz/homeworldz/grid/internal/webaccount"
+	"github.com/homeworldz/server/grid/internal/webaccount"
 )
 
 // The grid channel (docs/CLIENT2.md, "The communication mechanisms"): the

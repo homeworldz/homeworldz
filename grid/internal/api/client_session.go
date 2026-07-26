@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/homeworldz/homeworldz/grid/internal/arrival"
+	"github.com/homeworldz/server/grid/internal/arrival"
 )
 
 // World entry for the Homeworldz client (docs/CLIENT2.md, "Arrival on the grid

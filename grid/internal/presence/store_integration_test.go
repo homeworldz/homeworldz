@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/homeworldz/homeworldz/grid/internal/identity"
-	"github.com/homeworldz/homeworldz/grid/internal/regions"
+	"github.com/homeworldz/server/grid/internal/identity"
+	"github.com/homeworldz/server/grid/internal/regions"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 

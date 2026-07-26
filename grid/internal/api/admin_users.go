@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/homeworldz/homeworldz/grid/internal/webaccount"
+	"github.com/homeworldz/server/grid/internal/webaccount"
 )
 
 // adminUsersRoot handles GET /v1/admin/users (list/search).

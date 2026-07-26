@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/homeworldz/homeworldz/grid/internal/arrival"
-	"github.com/homeworldz/homeworldz/grid/internal/mailer"
-	"github.com/homeworldz/homeworldz/grid/internal/provisioning"
-	"github.com/homeworldz/homeworldz/grid/internal/webtoken"
+	"github.com/homeworldz/server/grid/internal/arrival"
+	"github.com/homeworldz/server/grid/internal/mailer"
+	"github.com/homeworldz/server/grid/internal/provisioning"
+	"github.com/homeworldz/server/grid/internal/webtoken"
 )
 
 // memoryRegionStore satisfies RegionStore with a fixed provisioned-region set.

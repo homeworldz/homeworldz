@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/homeworldz/homeworldz/grid/internal/vault"
+	"github.com/homeworldz/server/grid/internal/vault"
 )
 
 // memoryVault is an in-memory stand-in that keeps the real store's verification

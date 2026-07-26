@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/homeworldz/homeworldz/grid/internal/presence"
+	"github.com/homeworldz/server/grid/internal/presence"
 )
 
 func (a *API) presenceRoot(w http.ResponseWriter, r *http.Request) {

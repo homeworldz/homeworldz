@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/homeworldz/homeworldz/grid/internal/locations"
+	"github.com/homeworldz/server/grid/internal/locations"
 )
 
 func (a *API) locationByUser(w http.ResponseWriter, r *http.Request) {

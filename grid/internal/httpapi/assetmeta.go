@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/homeworldz/homeworldz/grid/internal/assetmeta"
+	"github.com/homeworldz/server/grid/internal/assetmeta"
 )
 
 func (a *API) assetsRoot(w http.ResponseWriter, r *http.Request) {

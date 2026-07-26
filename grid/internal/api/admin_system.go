@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/homeworldz/homeworldz/grid/internal/webaccount"
+	"github.com/homeworldz/server/grid/internal/webaccount"
 )
 
 // SystemRegionSummary counts provisioned regions by derived state.

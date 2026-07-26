@@ -9,8 +9,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/homeworldz/homeworldz/grid/internal/provisioning"
-	"github.com/homeworldz/homeworldz/grid/internal/webaccount"
+	"github.com/homeworldz/server/grid/internal/provisioning"
+	"github.com/homeworldz/server/grid/internal/webaccount"
 )
 
 // Region state values.

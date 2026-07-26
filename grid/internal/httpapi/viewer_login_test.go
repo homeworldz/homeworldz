@@ -15,10 +15,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/homeworldz/homeworldz/grid/internal/inventory"
-	"github.com/homeworldz/homeworldz/grid/internal/locations"
-	"github.com/homeworldz/homeworldz/grid/internal/provisioning"
-	"github.com/homeworldz/homeworldz/grid/internal/regions"
+	"github.com/homeworldz/server/grid/internal/inventory"
+	"github.com/homeworldz/server/grid/internal/locations"
+	"github.com/homeworldz/server/grid/internal/provisioning"
+	"github.com/homeworldz/server/grid/internal/regions"
 )
 
 type memoryLocationStore struct{ value locations.Location }

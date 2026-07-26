@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/homeworldz/homeworldz/grid/internal/provisioning"
-	"github.com/homeworldz/homeworldz/grid/internal/regions"
+	"github.com/homeworldz/server/grid/internal/provisioning"
+	"github.com/homeworldz/server/grid/internal/regions"
 )
 
 type memoryRegionStore struct {

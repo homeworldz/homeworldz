@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/homeworldz/homeworldz/grid/internal/webaccount"
+	"github.com/homeworldz/server/grid/internal/webaccount"
 )
 
 // bearerToken extracts a Bearer token from the Authorization header.

@@ -1,12 +1,12 @@
 package httpapi
 
 import (
-	"github.com/homeworldz/homeworldz/grid/internal/estate"
-	"github.com/homeworldz/homeworldz/grid/internal/inventory"
-	"github.com/homeworldz/homeworldz/grid/internal/presence"
-	"github.com/homeworldz/homeworldz/grid/internal/provisioning"
-	"github.com/homeworldz/homeworldz/grid/internal/regions"
-	"github.com/homeworldz/homeworldz/grid/internal/transit"
+	"github.com/homeworldz/server/grid/internal/estate"
+	"github.com/homeworldz/server/grid/internal/inventory"
+	"github.com/homeworldz/server/grid/internal/presence"
+	"github.com/homeworldz/server/grid/internal/provisioning"
+	"github.com/homeworldz/server/grid/internal/regions"
+	"github.com/homeworldz/server/grid/internal/transit"
 )
 
 const APIVersion = "v1"

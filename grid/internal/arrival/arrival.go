@@ -22,7 +22,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/homeworldz/homeworldz/grid/internal/regions"
+	"github.com/homeworldz/server/grid/internal/regions"
 )
 
 // ErrNoDestination reports that no leased region satisfies the request.

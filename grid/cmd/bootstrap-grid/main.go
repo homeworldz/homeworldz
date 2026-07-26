@@ -14,7 +14,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/homeworldz/homeworldz/grid/internal/config"
+	"github.com/homeworldz/server/grid/internal/config"
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/term"
 )

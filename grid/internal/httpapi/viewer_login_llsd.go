@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/homeworldz/homeworldz/grid/internal/inventory"
+	"github.com/homeworldz/server/grid/internal/inventory"
 )
 
 // llsdLoginKeyString matches top-level string members of the LLSD login request

@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/homeworldz/homeworldz/grid/internal/inventory"
-	"github.com/homeworldz/homeworldz/grid/internal/tasktransfer"
+	"github.com/homeworldz/server/grid/internal/inventory"
+	"github.com/homeworldz/server/grid/internal/tasktransfer"
 )
 
 type prepareTaskTransferRequest struct {

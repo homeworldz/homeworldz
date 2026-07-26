@@ -14,7 +14,7 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/homeworldz/homeworldz/grid/internal/config"
+	"github.com/homeworldz/server/grid/internal/config"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 

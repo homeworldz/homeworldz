@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/homeworldz/homeworldz/grid/internal/locations"
-	"github.com/homeworldz/homeworldz/grid/internal/provisioning"
+	"github.com/homeworldz/server/grid/internal/locations"
+	"github.com/homeworldz/server/grid/internal/provisioning"
 )
 
 type memoryWritableLocationStore struct{ value locations.Location }

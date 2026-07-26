@@ -4,7 +4,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/homeworldz/homeworldz/grid/internal/webaccount"
+	"github.com/homeworldz/server/grid/internal/webaccount"
 )
 
 // account handles GET /v1/account.
