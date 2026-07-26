@@ -33,6 +33,17 @@ does not never sees it. No wire-format change, no version negotiation.
 This is the mechanism Second Life itself used to ship mesh, materials, PBR, and
 WebRTC voice, used as intended rather than worked around.
 
+Negotiation exists to protect **viewers**, and **the client does not participate
+in it.** Negotiation implies a fallback and a browser has none: it cannot open a
+raw UDP socket, so a region that cannot serve the modern transport cannot serve
+the client at all. `SimulatorFeatures` and the seed reply are also LLSD, so
+negotiating through them would put an LLSD reader into the one client whose
+purpose is to carry no legacy serialization.
+
+The client requires the modern path and reaches it as described in "How the
+first-party client arrives" below, per
+[client ADR 0003](https://github.com/homeworldz/client/blob/main/docs/adr/0003-no-legacy-serialization-in-the-client.md).
+
 ## Modern formats at rest, legacy on demand
 
 Assets are **normalized at upload**: **KTX2/Basis** for textures and **glTF 2.0**
@@ -71,6 +82,48 @@ replacement, and it also collapses the three transports a legacy session uses
 (LLUDP, capability HTTP, and the long-poll event queue) into one multiplexed
 stream for clients that take it.
 
+The first-party client does not find this transport by negotiating for it. It
+arrives already knowing the modern path is required, and learns the endpoint from
+the grid's user tier as described below. The **WebSocket fallback is for networks
+that block QUIC**, not a degraded legacy mode — conflating the two would report a
+corporate firewall as an incompatible grid.
+
+## How the first-party client arrives
+
+The client reaches the modern surface through the grid's **public user tier**, the
+`/v1` service, and never through `/api/v1`, whose service token authorizes access
+well beyond a single user.
+
+- **Compatibility is a probe, not a negotiation.** An unauthenticated version and
+  capability document either satisfies the client's declared minimum protocol
+  version or the grid is reported incompatible. It is checked before a transport
+  is attempted, because an absent endpoint answers at once while a QUIC attempt
+  against a region that ignores it may hang until timeout.
+- **Login already exists.** `POST /v1/tokens` issues a bearer token, so no new
+  authentication endpoint is needed for this client.
+- **World entry needs new user-scoped `/v1/client/*` routes.** They must derive
+  the acting user **from the token and never from the path**. The internal tier
+  addresses users positionally, and mirroring that shape on a user-facing route
+  would let any authenticated caller read another user's inventory and last known
+  location.
+- **Region credentials are separate from account credentials.** World entry mints
+  a short-lived, region-scoped ticket rather than forwarding the account token,
+  which reaches account management including password change.
+  [ADR 0028](0028-untrusted-region-trust-model.md) admits regions outside the
+  operator's control, so that token must never reach one. The user tier's signer
+  already carries an audience and a lifetime, so a second signer with a distinct
+  audience makes the separation structural rather than conventional.
+- **Per-region capabilities arrive as data**, a versioned field in the
+  session-open response. Regions within one grid are not uniform, and a region
+  crossing re-resolves them.
+
+Notifications that must outlive a region — instant messages, presence changes,
+inventory offers — are a **grid** concern rather than a region extension. They are
+recorded in
+[client ADR 0004](https://github.com/homeworldz/client/blob/main/docs/adr/0004-client-transport-and-push-channels.md)
+rather than here, along with the reason the client holds two channels instead of
+one.
+
 ## The inversion worth recording
 
 Across all three areas the **region carries the legacy shims and the new client
@@ -81,10 +134,14 @@ it is what keeps the new client small enough to also run in a browser.
 
 ## Relationship to other ADRs
 
-- **ADR 0016** — the compatibility target stands; all extensions are additive
-  and negotiated.
+- **ADR 0016** — the compatibility target stands; every extension is additive,
+  and negotiation is how a viewer is kept from seeing one.
 - **ADR 0014 / 0026 / 0027 / 0029** — down-converted assets are derived,
   cache-tier, and vault-exempt.
 - **ADR 0023** — portable mesh and collision representations, which the glTF and
   server-side-meshing paths must respect.
 - **ADR 0030** — the client that consumes these extensions.
+- **Client ADR 0003 and ADR 0004** — the client's own decisions, which narrow
+  this one: no legacy serialization at any layer, the modern path required rather
+  than negotiated, and two push channels in place of the long-poll event queue.
+  Both state the server-side consequences above.
