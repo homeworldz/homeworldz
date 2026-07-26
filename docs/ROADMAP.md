@@ -586,11 +586,14 @@ Falcon LSL scripting foundation.
   and evaluate newer releases deliberately.
 - [ ] Add read-only legacy inventory access only if its older-viewer benefit
   justifies the maintenance cost; AIS v3 remains authoritative.
-- [ ] Support thin/headless clients such as LibreMetaverse: advertise the
+- [x] Support thin/headless clients such as LibreMetaverse: advertise the
   per-region `FetchInventoryDescendents2` / `FetchLibDescendents2` capabilities
   and make the HTTP asset-fetch capabilities LMV-compatible
   (see `tools/testclient/README.md`). Server-side baking largely removes the
-  appearance dependency on these.
+  appearance dependency on these. Live acceptance 2026-07-26: an LMV v3.1.3
+  bot on the cloud grid enumerated its Current Outfit through the descendents
+  capabilities, fetched wearables and textures over the asset caps, completed
+  a client-side bake, and rendered fully baked in Firestorm.
 - [ ] Validate Halcyon/InWorldz LSL extensions without admitting OpenSimulator
   scripting extensions accidentally.
 - [ ] Document import and migration tools separately from live legacy service or
