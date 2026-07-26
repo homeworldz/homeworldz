@@ -1,5 +1,5 @@
 [Unit]
-Description=HomeWorldz Grid Service
+Description=Homeworldz Grid Service
 After=network-online.target postgresql.service
 Wants=network-online.target
 

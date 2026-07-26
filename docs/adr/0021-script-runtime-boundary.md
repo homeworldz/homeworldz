@@ -2,7 +2,7 @@
 
 Status: Accepted
 
-HomeWorldz will expose an LSL-compatible source language and event model to
+Homeworldz will expose an LSL-compatible source language and event model to
 viewer-created content, but the authoritative scene and persistence formats
 will not depend on a particular virtual machine. LSL compilation produces an
 opaque module consumed through the C++ script engine boundary. The boundary

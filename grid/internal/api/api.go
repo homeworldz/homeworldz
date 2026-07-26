@@ -1,4 +1,4 @@
-// Package api implements the browser-facing HomeWorldz website API described
+// Package api implements the browser-facing Homeworldz website API described
 // by homeworldz.com/api/openapi.yaml: email-verified avatar registration,
 // stateless website authentication, self-service account management, and
 // privileged user/ban/region administration.

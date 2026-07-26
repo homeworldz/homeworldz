@@ -2,7 +2,7 @@
 
 Status: Accepted
 
-The first playable HomeWorldz slice targets the 64-bit, OpenSim-enabled
+The first playable Homeworldz slice targets the 64-bit, OpenSim-enabled
 Firestorm 7.2.4 release branch at source commit
 `10bd3c9f930c76e1427ddd4ecece6cdf36b4406d`. The upstream viewer version at
 that commit is 26.1.1.
@@ -12,5 +12,5 @@ also capture the installed binary's full About version and checksum. Viewer pin
 upgrades are explicit changes that must rerun the login and region-entry smoke
 test described in `../FIRESTORM.md`.
 
-HomeWorldz implements Firestorm's required external XML-RPC/LLSD and UDP edge
-protocols without adopting them for communication between HomeWorldz services.
+Homeworldz implements Firestorm's required external XML-RPC/LLSD and UDP edge
+protocols without adopting them for communication between Homeworldz services.

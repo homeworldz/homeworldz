@@ -90,7 +90,7 @@ func New(ready ReadinessChecker, version string, options Options) http.Handler {
 		a.publicURL = "http://127.0.0.1:42000"
 	}
 	if a.gridName == "" {
-		a.gridName = "HomeWorldz"
+		a.gridName = "Homeworldz"
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/get_grid_info", getOnly(a.gridInfo))

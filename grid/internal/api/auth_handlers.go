@@ -177,7 +177,7 @@ func validPassword(w http.ResponseWriter, password string) bool {
 // the code can be re-requested via resend.
 func (a *API) sendVerificationEmail(ctx context.Context, userid, email, code string) {
 	var body strings.Builder
-	body.WriteString("Welcome to HomeWorldz.\n\n")
+	body.WriteString("Welcome to Homeworldz.\n\n")
 	body.WriteString("Your confirmation code for avatar \"" + userid + "\" is:\n\n")
 	body.WriteString("    " + code + "\n\n")
 	if a.verificationURL != "" {
@@ -187,7 +187,7 @@ func (a *API) sendVerificationEmail(ctx context.Context, userid, email, code str
 	body.WriteString("This code expires in 24 hours. If you did not request it, ignore this email.\n")
 	if err := a.mailer.Send(ctx, mailer.Message{
 		To:      email,
-		Subject: "Confirm your HomeWorldz avatar",
+		Subject: "Confirm your Homeworldz avatar",
 		Body:    body.String(),
 	}); err != nil && a.logger != nil {
 		a.logger.Error("send verification email", "userid", userid, "error", err)

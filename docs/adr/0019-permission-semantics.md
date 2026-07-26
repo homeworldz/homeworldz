@@ -2,7 +2,7 @@
 
 Status: Accepted
 
-HomeWorldz treats observable Second Life viewer and protocol behavior as the
+Homeworldz treats observable Second Life viewer and protocol behavior as the
 primary compatibility contract for object and inventory permissions. The
 official Second Life viewer and message definitions are the preferred sources
 for viewer-facing flags, packets, and interaction behavior.
@@ -10,7 +10,7 @@ for viewer-facing flags, packets, and interaction behavior.
 Halcyon is the preferred server-side reference implementation when the public
 protocol does not fully specify permission evaluation. OpenSimulator behavior
 is not authoritative for permissions and must not be copied merely for
-compatibility. Tests and HomeWorldz's own security model decide ambiguous or
+compatibility. Tests and Homeworldz's own security model decide ambiguous or
 conflicting cases.
 
 Creator provenance and ownership are independent UUIDs. A transfer may change

@@ -169,7 +169,7 @@ func TestViewerLoginResolvesNamedRegion(t *testing.T) {
 	for _, value := range librarySkeleton {
 		name := value.fields()["name"].text()
 		libraryNames[name] = true
-		if strings.Contains(name, "HomeWorldz") || strings.HasPrefix(name, "My ") {
+		if strings.Contains(name, "Homeworldz") || strings.HasPrefix(name, "My ") {
 			t.Fatalf("branded or personal library folder name = %q", name)
 		}
 	}

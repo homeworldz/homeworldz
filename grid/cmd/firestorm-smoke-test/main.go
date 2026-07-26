@@ -188,7 +188,7 @@ func run(ctx context.Context, opts options) error {
 		return fmt.Errorf("validate asset federation: %w", err)
 	}
 
-	fmt.Println("HomeWorldz grid and region are ready on loopback.")
+	fmt.Println("Homeworldz grid and region are ready on loopback.")
 	if opts.validateOnly {
 		replicaDataPath := filepath.Join(logDirectory, "replica-region")
 		replicaAssetPath := filepath.Join(logDirectory, "replica-assets")

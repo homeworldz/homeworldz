@@ -19,7 +19,7 @@ const char* type_name(Type type) {
     return "?";
 }
 
-// A bounded host-function signature. Real HomeWorldz will have a generated
+// A bounded host-function signature. Real Homeworldz will have a generated
 // table; the PoC hand-lists the functions the demo needs.
 struct HostSignature {
     std::vector<Type> params;

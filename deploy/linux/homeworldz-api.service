@@ -1,5 +1,5 @@
 [Unit]
-Description=HomeWorldz Website API
+Description=Homeworldz Website API
 After=network-online.target postgresql.service
 Wants=network-online.target
 

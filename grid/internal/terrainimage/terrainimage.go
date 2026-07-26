@@ -1,5 +1,5 @@
 // Package terrainimage implements the OpenSimulator/Halcyon image-heightmap
-// convention used by HomeWorldz terrain import tools.
+// convention used by Homeworldz terrain import tools.
 package terrainimage
 
 import (

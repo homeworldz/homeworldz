@@ -131,7 +131,7 @@ ParcelSet::ParcelSet(int region_size_metres, std::string global_id, std::string 
     Parcel parcel;
     parcel.global_id = std::move(global_id);
     parcel.local_id = next_local_id();
-    parcel.name = "HomeWorldz";
+    parcel.name = "Homeworldz";
     parcel.owner_id = std::move(owner_id);
     parcel.flags = default_parcel_flags;
     parcel.claim_date = claim_date;

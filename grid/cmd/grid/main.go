@@ -46,7 +46,7 @@ func main() {
 	flag.BoolVar(&showHelp, "help", false, "show this help and exit")
 	createUser := flag.String("u", "", "create or update a user (prompts for a password) and exit")
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "HomeWorldz grid server %s\n\n", version)
+		fmt.Fprintf(os.Stderr, "Homeworldz grid server %s\n\n", version)
 		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n\n", filepath.Base(os.Args[0]))
 		fmt.Fprintln(os.Stderr, "Options:")
 		fmt.Fprintln(os.Stderr, "  -config <dir>    directory containing grid.ini and db.ini (default \"config\")")

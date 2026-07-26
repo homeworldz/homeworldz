@@ -1,13 +1,13 @@
-# HomeWorldz Working Goal
+# Homeworldz Working Goal
 
-This file is the primary handoff for continuing HomeWorldz in a fresh Codex
+This file is the primary handoff for continuing Homeworldz in a fresh Codex
 conversation. Read it before choosing work. The detailed design and acceptance
 record remain in `docs/`, but this document captures the current objective,
 constraints, working agreement, verified state, and immediate next step.
 
 ## Primary objective
 
-Continue building HomeWorldz into a practical, creator-friendly virtual-world
+Continue building Homeworldz into a practical, creator-friendly virtual-world
 grid and Region implementation compatible with the supported Firestorm viewer.
 Advance useful work across the roadmap's phases in parallel; the phase numbers
 describe product areas and broad sequencing, not gates that require one phase
@@ -34,8 +34,8 @@ minutes. Use local Windows tests and direct Linux build/tests on the OVH host.
 
 ## Repository ownership boundary
 
-This work owns the entire current HomeWorldz repository. There is no local
-`website/` subtree. The HomeWorldz website now lives in the separate sibling
+This work owns the entire current Homeworldz repository. There is no local
+`website/` subtree. The Homeworldz website now lives in the separate sibling
 repository `../homeworldz.com` with its own conversation and tooling. Do not
 edit, stage, commit, deploy, or otherwise operate on that sibling repository
 unless the user explicitly requests cross-repository work. The Go Grid and its

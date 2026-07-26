@@ -1,9 +1,9 @@
-# LibreMetaverse TestClient — HomeWorldz test harness
+# LibreMetaverse TestClient — Homeworldz test harness
 
 Using the LibreMetaverse (LMV) **TestClient** as an external, headless load- and
-movement-testing client for a HomeWorldz grid. TestClient is an independent
+movement-testing client for a Homeworldz grid. TestClient is an independent
 implementation of the same viewer-facing LLUDP + capabilities + XML-RPC login
-protocol HomeWorldz targets, so it doubles as a second-client compatibility
+protocol Homeworldz targets, so it doubles as a second-client compatibility
 probe. Its `ClientManager` can drive many bots at once (mass login via
 `--file`), which is the load-testing path.
 
@@ -41,7 +41,7 @@ Build (with a .NET 10 `dotnet`, e.g. `~/.dotnet/dotnet`):
 dotnet build -c Release tools/libremetaverse/Programs/examples/TestClient/TestClient.csproj
 ```
 
-## Local HomeWorldz stack (verified working)
+## Local Homeworldz stack (verified working)
 
 - Login URI: `http://127.0.0.1:42000/login`.
 - Provisioned dev regions come from `config/regions.json`: **Welcome**
@@ -86,17 +86,17 @@ dotnet <dll> --first test --last bot --pass testpass123 \
 `forward`, `jump`, `fly`, `location`; a scriptfile ending in `quit` drives a run
 to completion.
 
-## Login compatibility analysis (static, LMV ↔ HomeWorldz)
+## Login compatibility analysis (static, LMV ↔ Homeworldz)
 
 `grid/internal/httpapi/viewer_login.go` vs LMV `LoginResponseData.cs`:
 
-- HomeWorldz `/login` is the standard XML-RPC `login_to_simulator`: expects
+- Homeworldz `/login` is the standard XML-RPC `login_to_simulator`: expects
   `first`/`last`/`passwd` (`$1$` + 32-hex MD5), returns `login`, `agent_id`,
   `session_id`, `secure_session_id`, `circuit_code`, `sim_ip`, `sim_port`,
   `region_x/y`, `region_size_x/y`, `look_at`, `seed_capability`,
   `inventory-root`/`-skeleton`, library folders, `login-flags`, `gestures`,
   `buddy-list`.
-- LMV consumes exactly this set. Fields HomeWorldz omits (`home`, `agent_access`)
+- LMV consumes exactly this set. Fields Homeworldz omits (`home`, `agent_access`)
   are tolerated — `ParseHome` only throws on a *malformed* `home`; absent it
   defaults to zero.
 - The *field set* matches. But the **transport does not** — see the live
@@ -107,11 +107,11 @@ to completion.
 First run failed at login with `Expected </methodResponse>`: **modern
 LibreMetaverse uses LLSD login** (`LibreMetaverse/Login.cs` builds an LLSD
 `OSDMap` `~:1000`, POSTs it via `PostAsync(loginUri, OSDFormat.Xml, …)` `~:1074`,
-parses the reply with `OSDParser.Deserialize` `~:1167`), while HomeWorldz's
+parses the reply with `OSDParser.Deserialize` `~:1167`), while Homeworldz's
 `/login` implemented only the legacy XML-RPC `login_to_simulator` that Firestorm
 7.2.4 uses.
 
-**Resolved:** HomeWorldz `/login` now supports **both** — it dispatches on the
+**Resolved:** Homeworldz `/login` now supports **both** — it dispatches on the
 request document type (`<methodCall>` → XML-RPC as before; `<llsd>` → LLSD),
 sharing all auth/region/inventory logic (`resolveViewerLogin`) and serializing
 either format (`grid/internal/httpapi/viewer_login.go` +
@@ -120,7 +120,7 @@ either format (`grid/internal/httpapi/viewer_login.go` +
 With that in place the smoke test **passes end to end**:
 
 ```
-Login Success: Welcome to HomeWorldz Local
+Login Success: Welcome to Homeworldz Local
 Logged in test bot
 CurrentSim: 'Welcome (127.0.0.1:42002)' Position: <178, 161, 25.031677>
 ```
@@ -137,14 +137,14 @@ deployment memory), and a same-grid test was run: 4 LMV bots
 (`cloudbot0..3.tester`) plus two Firestorm avatars (Jim + Fae) on the **same**
 cloud grid.
 
-**What works against HomeWorldz (LMV):** LLSD login; presence; the **People/
+**What works against Homeworldz (LMV):** LLSD login; presence; the **People/
 Nearby list**; the **minimap** (fed from ObjectUpdate, not CoarseLocationUpdate);
 avatar **movement** (control-flag `forward` walked the avatar ~16 m); ~8-bot
 concurrent login load; and bots are **visible** to Firestorm viewers on the
 same grid (as clouds). (An earlier "bots invisible" scare was purely
 **cross-grid** — bots on the local dev grid, viewers on the cloud grid.)
 
-**Gaps to reach full LMV parity (HomeWorldz-side, share-ready for Cinder):**
+**Gaps to reach full LMV parity (Homeworldz-side, share-ready for Cinder):**
 
 1. **Inventory-descendents capabilities** — RESOLVED (2026-07-25).
    `FetchInventoryDescendents2` was already advertised (grid-hosted), but its
@@ -172,7 +172,7 @@ same grid (as clouds). (An earlier "bots invisible" scare was purely
 layers from a user's worn wearables and serves baked textures, then *every*
 client — headless LMV bots, thin viewers, anything — rezzes correctly with no
 client-side baking, which **supersedes** chasing gaps #1/#2 for appearance. It's
-a natural C++ region job (HomeWorldz already has inventory, asset blobs, a
+a natural C++ region job (Homeworldz already has inventory, asset blobs, a
 `baked_texture_cache`, and legacy-baking groundwork); output needs JPEG2000
 encoding (C++ **OpenJPEG**; Cinder's .NET **CoreJ2K** and SL's open-source
 server-side-appearance "Sunshine" are references). Also noted for the future:

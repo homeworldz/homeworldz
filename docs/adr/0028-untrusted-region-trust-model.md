@@ -2,7 +2,7 @@
 
 Status: Accepted
 
-HomeWorldz exists so that mostly-untrusted users can run their own regions —
+Homeworldz exists so that mostly-untrusted users can run their own regions —
 at home or on a cloud VPS — and still participate in one grid. That goal, not
 a single-operator deployment, is the trust model the rest of the system is
 designed against. A region may disappear without warning, be operated by

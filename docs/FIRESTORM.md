@@ -2,7 +2,7 @@
 
 ## Pinned Viewer
 
-HomeWorldz targets the OpenSim-enabled **Firestorm 7.2.4** viewer for the first
+Homeworldz targets the OpenSim-enabled **Firestorm 7.2.4** viewer for the first
 playable vertical slice.
 
 - Official source branch: [`Firestorm_7.2.4`](https://github.com/FirestormViewer/phoenix-firestorm/tree/Firestorm_7.2.4)
@@ -17,20 +17,20 @@ full About dialog version and installer checksum when the binary is introduced
 into the manual test workflow.
 
 Firestorm's official repository advises downstream users to use official
-release branches rather than `master`, preview, or nightly builds. HomeWorldz
+release branches rather than `master`, preview, or nightly builds. Homeworldz
 therefore upgrades this pin deliberately and reruns the login smoke test instead
 of silently following new viewer releases.
 
 ## Minimum Login Request
 
-Firestorm adds HomeWorldz using the base grid URI
+Firestorm adds Homeworldz using the base grid URI
 `http://<grid-host>:42000/`. It discovers viewer metadata from
 `GET /get_grid_info`, including the grid name, login URI, welcome page, and
 helper URI. The default login endpoint is `http://<grid-host>:42000/login`.
 
 The OpenSim-enabled viewer posts a `login_to_simulator` request to that URI. The
 wire encoding is the viewer-compatible XML-RPC/LLSD login envelope; it is an
-edge protocol and does not become an internal HomeWorldz service protocol.
+edge protocol and does not become an internal Homeworldz service protocol.
 
 The request parameters relevant to the first slice are:
 
@@ -46,7 +46,7 @@ The request parameters relevant to the first slice are:
 
 Firestorm 7.2.4 requests inventory roots and skeletons, initial outfit,
 gestures, buddy data, UI/login flags, global textures, map/voice settings, and
-OpenSim extensions such as currency and maximum groups. HomeWorldz may return
+OpenSim extensions such as currency and maximum groups. Homeworldz may return
 empty optional collections, but it must preserve their expected LLSD types.
 
 ## Minimum Successful Response
@@ -96,7 +96,7 @@ a different raw heightmap; invalid or missing input falls back to flat terrain.
 
 ## System Library
 
-HomeWorldz presents a grid-owned, read-only inventory root named `Library`.
+Homeworldz presents a grid-owned, read-only inventory root named `Library`.
 Its initial viewer-facing structure follows the familiar Second Life layout:
 `Library / Clothing / Initial Outfits / Default Avatar`, with a standard
 top-level `Body Parts` category. The default-avatar folder contains the same
@@ -106,13 +106,13 @@ mountain, and rock textures used by the compatible terrain protocol.
 
 Firestorm reads this shared catalog through the separate `LibraryAPIv3`
 capability when supported. Firestorm 7.2.4 may instead request known Library
-folder UUIDs through `InventoryAPIv3`; HomeWorldz recognizes those UUIDs and
+folder UUIDs through `InventoryAPIv3`; Homeworldz recognizes those UUIDs and
 returns the same read-only catalog. Library data is not copied into personal
 inventory and never changes an existing outfit merely because the viewer
 reads it.
 
 The stable `homeworldz.library` service identity owns this catalog and is
-shown to viewers as `HomeWorldz Library` when identity names are available.
+shown to viewers as `Homeworldz Library` when identity names are available.
 Its UUID, `00000000-0000-0000-0000-000000000002`, is also recorded as creator
 for bundled Library inventory items and as uploader for their region asset
 mappings. The account is created locked; an administrator must explicitly set
@@ -134,7 +134,7 @@ without having the grid reapply the default outfit to established avatars.
 
 The region advertises `NewFileAgentInventory` for the initial ordinary-upload
 slice. Firestorm sends metadata as LLSD, receives a one-shot uploader URL,
-converts the selected source, and posts the binary asset. HomeWorldz accepts
+converts the selected source, and posts the binary asset. Homeworldz accepts
 the exact texture, snapshot, sound, and animation type pairs used by Firestorm;
 it validates JPEG2000 image signatures, Ogg Vorbis sound framing, and the
 version-one animation header. The active viewer session is authoritative for
@@ -158,7 +158,7 @@ uploader stores a fresh asset with the editor's creator UUID, registers that
 origin with the Grid, and atomically relinks the personal inventory item.
 Notecard and gesture completion returns the new asset UUID. LSL source is
 preserved now but compilation is intentionally reported as unavailable until
-the Phase 4 HomeWorldz compiler and runtime are implemented.
+the Phase 4 Homeworldz compiler and runtime are implemented.
 
 Each region registers its viewer UDP port with the grid. Login advertises that
 stored port, while `region.viewer_port` controls the matching region listener
@@ -255,7 +255,7 @@ password = your-local-test-password
 When the file or password is absent, the launcher prompts for a password. It
 creates the configured `jim.tarber` smoke-test account or
 validates the supplied password when that account already exists, then launches
-the installed OpenSim-enabled Firestorm with the HomeWorldz login URI. Service
+the installed OpenSim-enabled Firestorm with the Homeworldz login URI. Service
 logs are written beneath ignored `var/smoke-test/`, and the services stop when
 Firestorm exits or the launcher is interrupted.
 
@@ -280,7 +280,7 @@ Milestone 3 passed on 2026-07-13 using the Windows OpenSim release executable:
 - executable SHA-256:
   `9c891171eecab1c24f2eec47aa77f26b5e7f559dd2da72b49dd0e3db6de45bb1`.
 
-The viewer discovered and authenticated against HomeWorldz, entered the region,
+The viewer discovered and authenticated against Homeworldz, entered the region,
 rendered the complete 256-by-256 terrain, water, environment lighting, shadows,
 and the welcome primitive, and accepted avatar movement. The UDP circuit
 remained connected for more than 30 minutes without a heartbeat timeout. A
@@ -312,7 +312,7 @@ viewer UUID, SHA-256 digest, and byte length all match; a content mismatch
 still fails closed. Viewer acceptance of the fix remains pending.
 
 Editing a worn shape or clothing item produces a new wearable asset before the
-viewer updates the inventory item's asset reference. HomeWorldz accepts the
+viewer updates the inventory item's asset reference. Homeworldz accepts the
 narrow legacy asset-transaction packets Firestorm still uses for this binary
 upload, including bounded multi-packet `xfer`, but keeps AISv3 as the inventory
 authority. Transfer UUIDs use the protocol-defined MD5 combination of the
@@ -335,7 +335,7 @@ not edited or replaced.
 The read-only system Library acceptance passed on 2026-07-14. Firestorm showed
 the shared `Library / Clothing / Initial Outfits / Default Avatar` hierarchy
 and all six default wearable items. This Firestorm build requested the Library
-folder UUIDs through `InventoryAPIv3`; HomeWorldz returned the shared catalog
+folder UUIDs through `InventoryAPIv3`; Homeworldz returned the shared catalog
 without copying it into Demo Avatar's personal inventory or changing the worn
 outfit.
 
@@ -362,7 +362,7 @@ slightly softened corners, and a calm 22-metre surface above the standard
 separate bundled 200-metre round plateau remains an optional alternative.
 
 The first ordinary texture upload passed on 2026-07-14 while logged in as
-`HomeWorldz Library`. Firestorm uploaded `terrain-island5.png` virtually
+`Homeworldz Library`. Firestorm uploaded `terrain-island5.png` virtually
 instantly and created `Terrain Island 5 Heightmap` in the account's personal
 Textures folder. The region stored a 3,990-byte JPEG2000 asset, returned
 distinct asset and inventory-item UUIDs, and recorded the stable Library UUID
@@ -375,7 +375,7 @@ the subsequent capability response was accepted and the preview button showed
 `Upload (C$0)`.
 
 The first personal AIS item rename passed on 2026-07-14. While logged in as
-`HomeWorldz Library`, Firestorm renamed the uploaded `terrain-island5` texture
+`Homeworldz Library`, Firestorm renamed the uploaded `terrain-island5` texture
 to `Terrain Island 5`; both viewer PATCH requests returned success and the
 stored item immediately reported the new name. A subsequent clean viewer login
 showed `Terrain Island 5`, and Firestorm opened the texture successfully. A
@@ -383,7 +383,7 @@ second rename from `terrain-paw` to `Terrain Paw` was also accepted immediately;
 its persistence across the next clean login remains to be confirmed.
 
 AIS Current Outfit link creation passed on 2026-07-14. An earlier incomplete
-outfit replacement had left the `HomeWorldz Library` account's Current Outfit
+outfit replacement had left the `Homeworldz Library` account's Current Outfit
 empty while its four body parts and two clothing items remained intact. After
 adding atomic AIS link creation and compatibility handling for legacy null
 creator metadata, Firestorm successfully wore all six personal items. Each
@@ -394,7 +394,7 @@ account.
 
 The packaged login-logo update passed on 2026-07-14. After rebuilding and
 restarting the grid, Firestorm's login screen displayed the swapped-color
-HomeWorldz SVG. An automated test also requires the grid's embedded SVG to
+Homeworldz SVG. An automated test also requires the grid's embedded SVG to
 remain byte-for-byte identical to the project-root logo.
 
 The AIS v3 Library-outfit flow passed on 2026-07-14 with `Jim Tarber`.
@@ -618,7 +618,7 @@ The initial production Jolt avatar-capsule mirror passed live Firestorm acceptan
 Tarber, synchronized it on the bounded fixed-step clock, and retained stable
 login, terrain following, walking, stopping, jumping, and flight behavior.
 No viewer-visible regression was detected. Authoritative scene identity and
-persistence remain owned by HomeWorldz rather than by Jolt.
+persistence remain owned by Homeworldz rather than by Jolt.
 
 Viewer terrain editing passed live Firestorm acceptance on 2026-07-15.
 Firestorm's standard `ModifyLand` Raise tool changed only the affected terrain
@@ -635,13 +635,13 @@ region mirrors all 65,536 authoritative samples into a correctly oriented Jolt
 heightfield at startup, replaces that collision body after viewer terrain edits,
 and initially obtained the controller's support height through a targeted physics ray cast.
 Jim Tarber walked over and stopped on the persisted spike, then flew and landed
-nearby without a visible regression. The HomeWorldz controller still owns
+nearby without a visible regression. The Homeworldz controller still owns
 movement policy while Jolt supplies the collision geometry.
 
 The production `CharacterVirtual` cutover passed live Firestorm acceptance on
 2026-07-15. Persisted and newly edited static prims are mirrored into Jolt with
 their scale and quaternion rotation. A vertical, appearance-height-derived,
-bottom-origin capsule follows HomeWorldz velocity policy while Jolt resolves its
+bottom-origin capsule follows Homeworldz velocity policy while Jolt resolves its
 position and grounded state. Firestorm stepped smoothly onto the 0.25 m
 `Physics1`, remained stable after walking or falling onto it, landed stably on
 terrain, and was blocked by the live-resized 1.5 m `Physics2`. Foot alignment on
@@ -708,11 +708,11 @@ The standard Blank (`5748decc-f629-461c-9a36-a35a221fe21f`), Plywood
 (`8b5fec65-8d8d-9dc5-cda8-8fdf2716e361`) assets passed live Library acceptance
 on 2026-07-15. After incrementing the Textures catalog version to invalidate
 Firestorm's cached folder, all four appeared directly under Library → Textures.
-Their region-backed asset mappings retain `HomeWorldz Library` as their
+Their region-backed asset mappings retain `Homeworldz Library` as their
 importing creator provenance.
 
 New-prim texture initialization also passed live acceptance. Because the
-viewer `ObjectAdd` message does not contain a texture entry, HomeWorldz assigns
+viewer `ObjectAdd` message does not contain a texture entry, Homeworldz assigns
 the canonical Plywood texture with white tint, unit repeats, and no per-face
 overrides. Two newly created boxes visibly used Plywood, and their complete
 63-byte default texture entries were present in the authoritative snapshot.
@@ -720,7 +720,7 @@ Editing an existing prim's texture or tint remains independent and must not
 change the default used by later prim creation.
 
 Firestorm Build-preference application passed live acceptance on 2026-07-15.
-HomeWorldz honors the `ObjectAdd` material, scale, rotation, Physical, and
+Homeworldz honors the `ObjectAdd` material, scale, rotation, Physical, and
 Create Selected fields. The last is returned transiently only to the creating
 avatar, causing Firestorm to select the new object and apply its configured
 follow-up object updates. A new box received the viewer's configured texture,
@@ -760,7 +760,7 @@ then retained the in-world copy as a Physical cylinder.
 Canonical Prism creation passed live rendering and physics acceptance on
 2026-07-16. Firestorm encodes this tool preset as a square/line prim with raw
 path scale `[200,100]` and shear `[0xce,0]`, rather than as an equilateral
-triangle profile. HomeWorldz now round-trips the complete classic prim shape
+triangle profile. Homeworldz now round-trips the complete classic prim shape
 parameter block and uses a matching convex wedge; all sides, including the
 sloped face, produced the expected collision. Taking `Prism1` into Inventory
 and re-rezzing it preserved both the wedge shape and Physical state. A complete
@@ -822,7 +822,7 @@ avatar's chosen outfit.
 Firestorm's standard private inventory setup also passed. AIS category
 creation now accepts the viewer's empty `<uuid/>` server-allocation sentinel,
 which created `#Firestorm` and its nested `#AO`, `#LSL Bridge`, and
-`#Wearable Favorites` folders. HomeWorldz provisions the viewer-required
+`#Wearable Favorites` folders. Homeworldz provisions the viewer-required
 `Calling Cards → Friends → All` hierarchy, with all three folders using type
 2 as Firestorm expects. The final login produced no AIS HTTP 400 responses.
 Initial wearable-cache and texture probes can still return 404 when a cache
@@ -832,7 +832,7 @@ delay the final rendered appearance.
 Cloud world-map discovery passed live acceptance on 2026-07-16. From
 Firestorm, both `Welcome` at `(1000, 1000)` and `Sandbox` at `(1001, 1000)`
 were found by their complete names and by the case-insensitive prefixes `welc`
-and `sand`. HomeWorldz now advertises a stable grid-specific map image UUID and
+and `sand`. Homeworldz now advertises a stable grid-specific map image UUID and
 the Grid serves Firestorm's levelled HTTP map-tile convention. A clean viewer
 session displayed only the two registered regions rather than unrelated cached
 tiles from other grids. Multi-resolution requests also returned a composite
@@ -916,7 +916,7 @@ identity fields.
 Task-item Next Owner permission mutation passed live acceptance on 2026-07-18.
 The uploaded source texture initially carried Firestorm's configured
 `0x00082000` move-plus-transfer default, so Modify and Copy were clear rather
-than being replaced by a HomeWorldz default. Enabling Copy persisted after
+than being replaced by a Homeworldz default. Enabling Copy persisted after
 closing and reopening the item Properties, closing and reopening object Edit,
 and restarting the Welcome Region. Creator, owner, base, and asset identity
 remained server-authoritative while mutable masks stayed bounded by base and
@@ -993,7 +993,7 @@ Each request must identify an owned, modifiable object and a matching
 modifiable task item. Its upload creates an immutable creator-attributed asset,
 updates only that task item's asset reference, increments the task-inventory
 serial, and persists the complete scene snapshot. LSL source is stored but is
-reported as not compiled until the Phase 4 HomeWorldz runtime is available.
+reported as not compiled until the Phase 4 Homeworldz runtime is available.
 Live Firestorm save-and-restart acceptance remains pending.
 
 Dynamic physical-object synchronization now combines the previously accepted
@@ -1043,7 +1043,7 @@ mixed-size borders, attachments, sitting, and failure recovery remains open.
 
 Initial 2x2 Region acceptance passed on 2026-07-18. Firestorm originally
 constructed Beta as 256 by 256 metres after a Sandbox-to-Beta crossing because
-HomeWorldz omitted the OpenSim `RegionSizeX` and `RegionSizeY` extension fields
+Homeworldz omitted the OpenSim `RegionSizeX` and `RegionSizeY` extension fields
 from `CrossedRegion`; the viewer consequently treated the internal 256 metre
 line like a Region edge. Repeating both dimensions in `CrossedRegion.RegionData`
 made Firestorm construct Beta as one 512 by 512 metre Region. Jim Tarber then
@@ -1063,7 +1063,7 @@ Gamma as one 1024 by 1024 metre Region and successfully teleported Jim Tarber
 into its southwest quadrant. A same-Region map teleport to the centre initially
 failed because Firestorm quantized the requested destination handle to the
 internal 256 m map tile and expected the simulator to map that tile back to the
-containing variable Region. HomeWorldz now accepts either the Region's
+containing variable Region. Homeworldz now accepts either the Region's
 southwest-origin handle with full Region-local coordinates or any covered tile
 handle with tile-local coordinates. After all cloud Regions received the fix,
 the same map action completed normally at approximately `(514, 514)` without a
@@ -1092,7 +1092,7 @@ returns reliable UDP `TeleportLocal` without creating a Grid transit. A local
 teleport in Beta completed immediately at `(240, 140, 23.56)`. The preceding
 rapid Beta-to-Sandbox-to-Beta sequence also exposed a separate EEP follow-up:
 Firestorm requested an environment `settings_id` that was not present in the
-asset service and briefly displayed a UUID load error. HomeWorldz now packages
+asset service and briefly displayed a UUID load error. Homeworldz now packages
 the standard default-day settings asset under its canonical UUID. A subsequent
 trace showed that Firestorm could still process `AgentMovementComplete` before
 the destination seed-capability response, selecting the default day instead of

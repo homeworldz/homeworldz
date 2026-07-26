@@ -5,8 +5,8 @@ Status: Accepted
 This ADR records intent for work that has not started. Two things in it carry
 different weight, and the distinction matters:
 
-- **SLua compatibility is the baseline.** HomeWorldz targets everything SLua
-  supports and does not define a HomeWorldz-specific Lua dialect. This is a
+- **SLua compatibility is the baseline.** Homeworldz targets everything SLua
+  supports and does not define a Homeworldz-specific Lua dialect. This is a
   decision, not an expectation.
 - **Adopting the SLua implementation is the expected means.** It is the obvious
   way to deliver that baseline and to leverage problems Linden Lab has already
@@ -16,7 +16,7 @@ If a gate fails, the baseline does not move — only the means of delivering it
 does. That is the relationship Falcon already has with LSL: the compatibility
 target is fixed, the implementation is ours to choose.
 
-HomeWorldz will support **Lua** as a second scripting language alongside LSL,
+Homeworldz will support **Lua** as a second scripting language alongside LSL,
 behind the script-runtime boundary in
 [ADR 0021](0021-script-runtime-boundary.md), with **SLua** — Linden Lab's
 MIT-licensed fork of Luau — as both the compatibility target and the expected
@@ -45,9 +45,9 @@ a bespoke VM look necessary:
 | Sandboxing | `luaL_sandbox` / `luaL_sandboxthread` protect builtin libraries |
 
 A second argument now applies that did not before. Under
-[ADR 0016](0016-firestorm-compatibility-target.md), HomeWorldz reimplements
+[ADR 0016](0016-firestorm-compatibility-target.md), Homeworldz reimplements
 Second Life scripting semantics for **content and creator portability**, not for
-its own sake. Now that Second Life has an official Lua, "HomeWorldz Lua" should
+its own sake. Now that Second Life has an official Lua, "Homeworldz Lua" should
 mean "SLua-compatible Lua" for exactly the same reason — otherwise Lua content,
 examples, and the emerging transpiler tooling do not transfer, which is the
 fragmentation ADR 0016 exists to prevent. Unlike LSL, where reimplementation was
@@ -56,7 +56,7 @@ is available under a compatible license.
 
 ## Compatibility target
 
-HomeWorldz follows SLua's surface rather than inventing one, and supports
+Homeworldz follows SLua's surface rather than inventing one, and supports
 **everything SLua supports**. The enumerated items below are the shape of that
 surface, not its limit:
 
@@ -69,9 +69,9 @@ surface, not its limit:
   examples.
 - A **128 KB** logical memory limit, above LSL's 64 KB.
 
-**No subtractions.** HomeWorldz does not restrict the language surface below
-SLua's; a feature SLua supports is a feature HomeWorldz is expected to support,
-including ones that are awkward to implement. HomeWorldz-specific *additions*, if
+**No subtractions.** Homeworldz does not restrict the language surface below
+SLua's; a feature SLua supports is a feature Homeworldz is expected to support,
+including ones that are awkward to implement. Homeworldz-specific *additions*, if
 any, must use a separately documented namespace and their own compatibility
 decision, consistent with the rule SCRIPTING.md already applies to LSL.
 
@@ -93,9 +93,9 @@ collection, and compiler.
 Lua, or in Lua and not LSL. LSL remains the compatibility surface for existing
 content; Lua is a parallel one.
 
-## What HomeWorldz still owns
+## What Homeworldz still owns
 
-Adopting SLua does not outsource the region's responsibilities. HomeWorldz still
+Adopting SLua does not outsource the region's responsibilities. Homeworldz still
 implements the **`ll` host surface against its own authoritative scene**,
 integrates the VM with the region scheduler under bounded instruction slices,
 owns the crossing transaction and snapshot container, enforces aggregate
@@ -114,7 +114,7 @@ the border, not at the call.
 ## Modules and bytecode caching
 
 SLua provides `require` and a module system, so under the no-subtractions rule
-HomeWorldz supports it. This has a consequence for ADR 0021, which describes
+Homeworldz supports it. This has a consequence for ADR 0021, which describes
 bytecode as an immutable derived asset "cached by source hash plus compiler and
 ABI version": once a script can depend on modules, its compiled form depends on
 them too, so the cache key must cover the resolved dependency closure and
@@ -160,7 +160,7 @@ and run**, so each finding is evidence of feasibility, not proof of it.
   (Implemented) provides hard per-script *logical* memory limits through memcat
   tagging plus heap traversal from the script root, holding the contract that a
   script's reported memory must not depend on which other scripts are resident.
-  Owner, object, and parcel aggregates plus wall-clock guards remain HomeWorldz
+  Owner, object, and parcel aggregates plus wall-clock guards remain Homeworldz
   work layered on top; nothing blocks them.
 - **Maturity — open.** As of 2026-07 SLua is in **open beta**, limited to Second
   Life sandbox regions and the beta grid, and compiling requires Linden Lab's
@@ -168,11 +168,11 @@ and run**, so each finding is evidence of feasibility, not proof of it.
   still move. MIT licensing means a version can be pinned or forked if it does.
 
 What remains is empirical: build SLua, embed it behind the ADR 0021 boundary, and
-confirm a round trip of a thread yielded inside a HomeWorldz host call.
+confirm a round trip of a thread yielded inside a Homeworldz host call.
 
 ## Architecture worth adopting
 
-SLua's own state model (`rfcs/lsl_state_handling.md`) solves problems HomeWorldz
+SLua's own state model (`rfcs/lsl_state_handling.md`) solves problems Homeworldz
 would otherwise solve independently, and is worth following rather than
 paralleling:
 
@@ -184,7 +184,7 @@ paralleling:
   is a materially better crossing payload than serializing each script whole.
 - Host-side data such as the current and next LSL state is serialized
   **separately, outside the VM**, so it neither counts against script memory nor
-  requires reaching into VM internals. That split is the same one HomeWorldz
+  requires reaching into VM internals. That split is the same one Homeworldz
   draws between the snapshot container and the runtime state inside it.
 
 ## Fallback
@@ -210,7 +210,7 @@ fallback, and its cost is itself an argument for making the gates work.
 ## Language selection
 
 Second Life selects a script's language with a **compiler selector** in the
-script editor, implying a protocol-level mechanism that HomeWorldz would prefer
+script editor, implying a protocol-level mechanism that Homeworldz would prefer
 to adopt over an invention of its own. Because Firestorm cannot yet compile
 SLua, a first-line pragma (`--!lua`) is expected to serve as the interim
 mechanism, requiring no new asset type and no viewer change.

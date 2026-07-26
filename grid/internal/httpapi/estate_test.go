@@ -26,7 +26,7 @@ func TestRegionRuntimeEstateLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := New(checker{}, "test", Options{ServiceToken: "grid-secret", GridName: "HomeWorldz Test",
+	handler := New(checker{}, "test", Options{ServiceToken: "grid-secret", GridName: "Homeworldz Test",
 		GridPublicURL: "https://grid.example", Regions: newMemoryRegionStore(), Provisioned: registry,
 		Estates: estate.NewMemoryStore()})
 

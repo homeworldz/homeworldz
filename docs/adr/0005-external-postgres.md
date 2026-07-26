@@ -2,7 +2,7 @@
 
 Status: Accepted
 
-HomeWorldz supports PostgreSQL 16 or newer and recommends PostgreSQL 18.4 for
+Homeworldz supports PostgreSQL 16 or newer and recommends PostgreSQL 18.4 for
 new installations. It does not prescribe how PostgreSQL is installed or
 operated. Development may use a native Windows or Linux installation, while
 deployments may use a separately managed database service.
@@ -12,4 +12,4 @@ Environment-variable runtime overrides are intentionally unsupported; build
 and disposable integration-test variables are outside the runtime
 configuration contract. The Go grid bootstrap applies repository
 migrations directly through the PostgreSQL driver, so neither `psql` nor
-container tooling is required by HomeWorldz.
+container tooling is required by Homeworldz.

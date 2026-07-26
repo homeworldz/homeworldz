@@ -36,7 +36,7 @@ foreach ($directory in @("assets", "scene", "logs")) {
     New-Item -ItemType Directory -Path (Join-Path $resolvedDataPath $directory) -Force | Out-Null
 }
 
-Write-Host "HomeWorldz region directories are ready at '$resolvedDataPath'."
+Write-Host "Homeworldz region directories are ready at '$resolvedDataPath'."
 Write-Host "The region bootstrap does not require PostgreSQL; central state belongs to the grid service."
 Write-Host "As region configuration and registration are implemented, this script will initialize them here."
 

@@ -7,7 +7,7 @@ the entered password. A bcrypt-only password record cannot validate that value
 because the grid never receives the original password during viewer login.
 
 Development user creation therefore stores both the bcrypt password hash used
-by HomeWorldz JSON login and the lowercase Firestorm-compatible MD5 digest used
+by Homeworldz JSON login and the lowercase Firestorm-compatible MD5 digest used
 only by `/login`. The MD5 value is password-equivalent legacy protocol material:
 it is never returned, never logged, and must receive the same database and
 backup protection as the bcrypt hash. This is compatibility containment, not a

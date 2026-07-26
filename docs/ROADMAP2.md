@@ -1,4 +1,4 @@
-# HomeWorldz 2.0 Roadmap
+# Homeworldz 2.0 Roadmap
 
 This roadmap describes direction **beyond** the implementation sequence in
 [`ROADMAP.md`](ROADMAP.md): a first-party client of our own, region protocol
@@ -58,11 +58,12 @@ with it.
 
 ## Decisions recorded
 
-- [x] Choose C++ with an engine-neutral core, reject Unreal on license grounds
-  for an MIT project, and adopt Godot 4 via GDExtension as the first frontend
-  (ADR 0030).
+- [x] Choose C++ with an engine-neutral core and adopt Godot 4 via GDExtension as
+  the first frontend — capable, permissively licensed, and compatible with a
+  browser target, where Unreal is more license-encumbered than alternatives like
+  Godot and has no credible web export (ADR 0030).
 - [x] Adopt SLua compatibility as the baseline for Lua scripting, superseding an
-  earlier plan for a HomeWorldz-specific subset, and record the gates that decide
+  earlier plan for a Homeworldz-specific subset, and record the gates that decide
   whether the SLua implementation is reused or its semantics reimplemented
   (ADR 0031).
 - [x] Define the additive, negotiated region extension model and the modern
@@ -75,7 +76,7 @@ change.
 
 ### Extension negotiation
 
-- [ ] Advertise a HomeWorldz extension feature map through the
+- [ ] Advertise a Homeworldz extension feature map through the
   `SimulatorFeatures` capability, so a client opts into each extension and a
   client that does not understand one never sees it.
 - [ ] Establish named seed capabilities as the single mechanism for adding
@@ -224,7 +225,7 @@ Two peers over one core, not a primary and a port.
 Independent of the client work. Follows [ADR 0031](adr/0031-lua-scripting-subset.md)
 and sits behind the ADR 0021 boundary as a peer of Falcon.
 
-**SLua compatibility is the baseline**: HomeWorldz targets everything SLua
+**SLua compatibility is the baseline**: Homeworldz targets everything SLua
 supports, with no subtractions. **Reusing the SLua implementation** — Linden
 Lab's MIT-licensed fork of Luau, which already provides execution-state
 serialization (Ares), preemptive scheduling hooks, per-script memory limits, and
@@ -242,7 +243,7 @@ empirical confirmation.
 
 - [ ] Build SLua and embed it behind the ADR 0021 boundary, driven by a bounded
   per-tick instruction slice.
-- [ ] Confirm empirically that a thread yielded **inside a HomeWorldz host call**
+- [ ] Confirm empirically that a thread yielded **inside a Homeworldz host call**
   survives an Ares round trip — the decisive gate, so far passing on source
   review alone.
 - [ ] Measure CodeGen's effect on snapshot size, restore time, and region tick
@@ -260,7 +261,7 @@ empirical confirmation.
   upstream API change cannot break a running grid.
 - [ ] Share the scheduler, instruction fuel, host-function registry, and resource
   accounting with Falcon rather than duplicating them.
-- [ ] Implement the `ll` host surface against the authoritative HomeWorldz scene,
+- [ ] Implement the `ll` host surface against the authoritative Homeworldz scene,
   with the same bounded-work and no-ambient-capability rules Falcon's hosts obey.
 - [ ] Represent slow host operations as serializable continuations, delivering
   completion as a script event on the region thread.
@@ -290,7 +291,7 @@ empirical confirmation.
   Firestorm cannot yet compile SLua.
 - [ ] Track SLua as it evolves out of open beta, treating the moving baseline as
   ongoing work rather than a one-time port.
-- [ ] Document any HomeWorldz addition as a namespaced extension — the surface
+- [ ] Document any Homeworldz addition as a namespaced extension — the surface
   may be added to, never subtracted from.
 
 ### Crossing parity

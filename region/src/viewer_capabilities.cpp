@@ -395,8 +395,8 @@ std::string environment_settings_xml(std::string_view region_id) {
            "<key>messageID</key><uuid>00000000-0000-0000-0000-000000000000</uuid>"
            "<key>regionID</key><uuid>" + xml_escape(region_id) +
            "</uuid></map>"
-           "<array><array><real>0</real><string>HomeWorldz Default</string></array></array>"
-           "<map><key>HomeWorldz Default</key><map>"
+           "<array><array><real>0</real><string>Homeworldz Default</string></array></array>"
+           "<map><key>Homeworldz Default</key><map>"
            "<key>gamma</key><array><real>1</real><real>0</real><real>0</real><real>1</real></array>"
            "</map></map>"
            "<map><key>blurMultiplier</key><real>0.04</real></map>"

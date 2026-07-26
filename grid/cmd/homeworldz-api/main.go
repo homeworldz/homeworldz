@@ -1,4 +1,4 @@
-// Command homeworldz-api serves the browser-facing HomeWorldz website API
+// Command homeworldz-api serves the browser-facing Homeworldz website API
 // (homeworldz.com/api/openapi.yaml): email-verified avatar registration,
 // stateless website authentication, self-service account management, and
 // privileged administration. It runs as its own binary on its own port,

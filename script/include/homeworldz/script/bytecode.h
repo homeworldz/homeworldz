@@ -1,6 +1,6 @@
 #pragma once
 
-// HomeWorldz "Falcon" script bytecode: the immutable, versioned instruction
+// Homeworldz "Falcon" script bytecode: the immutable, versioned instruction
 // format the handwritten LSL compiler emits and the explicit-stack VM consumes.
 // Per ADR 0021 the authoritative scene never depends on this representation
 // directly; it is an opaque module behind the script-engine boundary.

@@ -1,8 +1,8 @@
-# HomeWorldz Physics Evaluation
+# Homeworldz Physics Evaluation
 
 ## Context
 
-HomeWorldz is considering a clean architecture where region servers run
+Homeworldz is considering a clean architecture where region servers run
 distributed simulations with local asset management and central grid services
 for users, region registration, presence, and coordination. The region server
 language is C++20. Physics still requires an explicit evaluation because the
@@ -16,13 +16,13 @@ avatar movement, object interaction, vehicles, scripted forces, terrain
 collision, and cross-region behavior must feel coherent to users familiar with
 Second Life/OpenSim-style worlds.
 
-See [PLAN.md](PLAN.md) for the broader HomeWorldz implementation plan.
+See [PLAN.md](PLAN.md) for the broader Homeworldz implementation plan.
 
 ## Evaluation Criteria
 
 The physics engine should be evaluated against the following criteria:
 
-- License compatibility with an open HomeWorldz server.
+- License compatibility with an open Homeworldz server.
 - Long-term maintenance health and upstream activity.
 - Native interop cost from likely host languages.
 - Impact on server language and runtime selection.
@@ -51,32 +51,32 @@ PhysX generation.
 - Mature rigid body simulation, collision detection, vehicles, constraints,
   character-controller support, and broad production history.
 - Good continuity with Halcyon's historical PhysX direction.
-- Strong feature ceiling if HomeWorldz later needs advanced simulation features.
+- Strong feature ceiling if Homeworldz later needs advanced simulation features.
 - C++ core can be embedded in a native physics worker or wrapped for another
   host language.
 
 ### Risks
 
-- Integration weight is significant if the HomeWorldz server is not C++.
+- Integration weight is significant if the Homeworldz server is not C++.
 - A maintained binding layer would be required for Rust, .NET, Go, or another
   host language unless physics runs as a separate native process.
 - Behavior will not automatically match Halcyon's old PhysX 3-era integration.
   Compatibility tuning is still required.
-- The SDK may be more complex than HomeWorldz needs for region-scale virtual
+- The SDK may be more complex than Homeworldz needs for region-scale virtual
   world simulation.
 - GPU features should not be assumed for v1 server physics because distributed
   region hosts may not have suitable hardware.
 
 ### Best Fit
 
-PhysX 5 is best if HomeWorldz values continuity with Halcyon's PhysX history,
+PhysX 5 is best if Homeworldz values continuity with Halcyon's PhysX history,
 expects complex physical simulation needs, and is willing to own a serious
 native integration layer.
 
 ## Jolt Physics
 
 Jolt is a modern C++ physics engine designed for games and VR applications. It
-is a strong candidate for a clean HomeWorldz architecture because it is
+is a strong candidate for a clean Homeworldz architecture because it is
 multicore-friendly, permissively licensed, and focused on real-time gameplay
 simulation.
 
@@ -96,14 +96,14 @@ simulation.
 - Less historical continuity with Halcyon and Second Life physics behavior.
 - Requires compatibility tuning for avatar movement, vehicles, prims,
   constraints, and scripted object behavior.
-- Existing HomeWorldz/Halcyon assets and expectations may reveal edge cases that
+- Existing Homeworldz/Halcyon assets and expectations may reveal edge cases that
   Jolt does not match by default.
 - Bindings may still need project ownership depending on the final server
   language.
 
 ### Best Fit
 
-Jolt is best if HomeWorldz wants a modern, open, game-oriented physics engine
+Jolt is best if Homeworldz wants a modern, open, game-oriented physics engine
 with a lower integration burden than PhysX and is willing to tune behavior
 against Firestorm/OpenSim expectations.
 
@@ -134,7 +134,7 @@ hull or a decomposition of convex hulls, while suitable static objects could
 use triangle meshes. High-detail circular profiles used 24 sides. Generated
 shapes were cached by a hash of the prim parameters and scale.
 
-HomeWorldz can reuse that architecture and use the BSD-3-Clause Halcyon source
+Homeworldz can reuse that architecture and use the BSD-3-Clause Halcyon source
 as a compatibility reference when implementing its C++ portable prim mesher.
 The authoritative output should be engine-independent vertices and hulls.
 PhysX 3 cooked data must not be copied as an asset because cooked formats are
@@ -167,7 +167,7 @@ and a history in games, robotics, simulation, and virtual world projects.
 ### Risks
 
 - Older architecture compared with Jolt.
-- Not the strongest greenfield default if HomeWorldz is trying to reduce legacy
+- Not the strongest greenfield default if Homeworldz is trying to reduce legacy
   assumptions.
 - Quality depends heavily on integration choices and tuning.
 - It is likely to offer less upside than Jolt for a new region simulation core.
@@ -175,7 +175,7 @@ and a history in games, robotics, simulation, and virtual world projects.
 ### Best Fit
 
 Bullet should be treated as a fallback or reference candidate, not the default
-HomeWorldz v1 physics choice.
+Homeworldz v1 physics choice.
 
 ## Havok
 
@@ -190,7 +190,7 @@ physics. It remains mature commercial middleware.
 
 ### Risks
 
-- Proprietary licensing conflicts with HomeWorldz's open architecture goals.
+- Proprietary licensing conflicts with Homeworldz's open architecture goals.
 - Commercial terms add cost and distribution constraints.
 - It would make community contribution and reproducible open builds harder.
 - It risks making the physics layer unavailable to smaller independent region
@@ -199,7 +199,7 @@ physics. It remains mature commercial middleware.
 ### Best Fit
 
 Havok should be excluded as the default. It should only be reconsidered if
-HomeWorldz later makes a deliberate commercial licensing decision.
+Homeworldz later makes a deliberate commercial licensing decision.
 
 ## Recommendation
 
@@ -215,12 +215,12 @@ The likely decision shape is:
 - Pick **PhysX 5** if Jolt cannot meet compatibility or stability needs, or if
   PhysX's richer feature set proves important enough to justify the integration
   cost.
-- Keep the HomeWorldz physics API independent of either engine so a future
+- Keep the Homeworldz physics API independent of either engine so a future
   backend can be swapped without rewriting region simulation code.
 
 ## Selected Backend
 
-The comparison gate selected **Jolt 5.5** for HomeWorldz v1. Both engines passed
+The comparison gate selected **Jolt 5.5** for Homeworldz v1. Both engines passed
 the shared Windows and Linux scenarios, but Jolt had the lower total suite CPU
 cost on both measured platforms, the stronger Windows tick results, and a
 smaller packaging surface. The PhysX adapter remains in the lab as a working
@@ -233,7 +233,7 @@ Before committing the playable region to a physics backend, build a small
 standalone physics lab that exercises both Jolt and PhysX 5 against the same
 scenario set.
 
-The lab should be independent of the final HomeWorldz server. It can be a native
+The lab should be independent of the final Homeworldz server. It can be a native
 C++ harness, or a thin host-language harness that calls native engine adapters.
 The important requirement is that both physics engines run the same scenarios,
 emit comparable traces, and expose the same region-facing API shape.
@@ -251,7 +251,7 @@ avatar-push forces or calculate collision responses. The physics integration
 converts shape volume and density to body mass, supplies mass and the contact
 properties to Jolt, and lets the engine calculate inertia and collision response.
 
-HomeWorldz follows [Second Life's legacy `PRIM_MATERIAL_*` defaults](https://wiki.secondlife.com/wiki/LlSetPhysicsMaterial): all eight
+Homeworldz follows [Second Life's legacy `PRIM_MATERIAL_*` defaults](https://wiki.secondlife.com/wiki/LlSetPhysicsMaterial): all eight
 materials initially have density 1000 kg/m3, while their friction and
 restitution differ. Stone, metal, glass, wood, flesh, plastic, rubber, and the
 deprecated light material therefore do not have different default weights.
@@ -265,7 +265,7 @@ the production Jolt adapter also applies gravity multiplier through Jolt's
 per-body gravity factor. PhysX parity for per-body gravity scaling remains
 pending. `PhysicsShapeType.None` removes the object's collision body while
 leaving the scene object itself present.
-HomeWorldz configures Jolt to average the two bodies' restitution values, which
+Homeworldz configures Jolt to average the two bodies' restitution values, which
 matches PhysX's default combination policy. Jolt's native maximum-value policy
 made a wood prim with restitution 0.5 rebound from zero-restitution terrain as
 if the complete contact also had restitution 0.5; averaging makes that contact
@@ -288,7 +288,7 @@ The portable physics contract describes a compound as analytic or convex child
 shapes plus each prim's root-local translation and rotation. Jolt builds these
 parts into a native static-compound shape, derives inertia from the complete
 geometry, and receives the sum of the collidable prim masses. Because Jolt
-applies friction, restitution, and gravity factor at body scope, HomeWorldz
+applies friction, restitution, and gravity factor at body scope, Homeworldz
 uses mass-weighted values across the compound parts. Child prims never become
 independent self-colliding dynamic bodies. Root motion updates every child's
 derived world transform while the viewer continues receiving the stable local
@@ -303,7 +303,7 @@ This preserves the documented Jolt-first, PhysX-eventually boundary.
 Jolt's virtual-character controller separates character mass from maximum
 horizontal contact force: mass contributes downward force when standing on an
 object, while the force ceiling bounds how strongly a non-rigid character can
-affect horizontal contacts. HomeWorldz derives that ceiling from character mass
+affect horizontal contacts. Homeworldz derives that ceiling from character mass
 and a configured maximum push acceleration rather than adding synthetic
 region-side impulses. The initial 70 kg character and 30 m/s2 ceiling produce a
 maximum 2100 N contact force. In the adapter regression scenario this moves a
@@ -398,7 +398,7 @@ cylinder.
 
 Firestorm's canonical Prism preset is a square/line prim with its top X ratio
 collapsed to zero and sheared to one side (`pathScaleX=200`, raw
-`pathShearX=0xce`). HomeWorldz preserves the complete classic prim parameter
+`pathShearX=0xce`). Homeworldz preserves the complete classic prim parameter
 block and builds a matching six-point convex wedge. Live acceptance on
 2026-07-16 confirmed correct rendering and collision on every face, including
 the slope. Taking `Prism1` into Inventory and re-rezzing it preserved both its
@@ -406,7 +406,7 @@ wedge geometry and Physical state. A subsequent complete viewer and region
 restart retained the rezzed Prism as wedge-shaped and Physical.
 
 Firestorm's canonical Pyramid preset uses raw path scale `[200,200]`, collapsing
-both top axes to an apex. HomeWorldz mirrors it as a five-point convex hull and
+both top axes to an apex. Homeworldz mirrors it as a five-point convex hull and
 uses one-third-box volume for mass. Live acceptance on 2026-07-16 confirmed
 correct rendering and physical collision on all four sloped faces.
 
@@ -448,7 +448,7 @@ The physics engine decision should not be finalized until both shortlisted
 engines have run the lab and the results are documented. A chosen engine should
 pass the avatar movement, terrain collision, object stacking, scripted impulse,
 and region handoff scenarios well enough to support a first playable
-HomeWorldz region.
+Homeworldz region.
 
 The initial shared-lab measurements are recorded in
 [`PHYSICS_RESULTS.md`](PHYSICS_RESULTS.md).

@@ -1,6 +1,6 @@
 # Falcon VM
 
-The **Falcon VM** (the **Falcon Engine**) is HomeWorldz's script execution
+The **Falcon VM** (the **Falcon Engine**) is Homeworldz's script execution
 engine: a small, single-threaded bytecode interpreter that runs compiled LSL on
 the authoritative region thread. It is named for the peregrine falcon — the
 fastest animal on the planet, exceeding 380 km/h (240 mph) in its hunting dive —

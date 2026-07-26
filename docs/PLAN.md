@@ -1,6 +1,6 @@
-# HomeWorldz Implementation Plan
+# Homeworldz Implementation Plan
 
-[ARCHITECTURE.md](ARCHITECTURE.md) is authoritative. HomeWorldz is a new
+[ARCHITECTURE.md](ARCHITECTURE.md) is authoritative. Homeworldz is a new
 implementation; legacy projects are protocol and behavioral references rather
 than runtime dependencies.
 

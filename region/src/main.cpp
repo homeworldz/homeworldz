@@ -5286,7 +5286,7 @@ int main(int argc, char* argv[]) {
                                 static_cast<std::uint32_t>(region_grid_y * 256);
                             response.timestamp = static_cast<std::uint32_t>(
                                 std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
-                            response.channel_version = "HomeWorldz " + region_version;
+                            response.channel_version = "Homeworldz " + region_version;
                             if (!avatars.contains(endpoint)) {
                                 const auto name = agent_id;
                                 homeworldz::scene::EntityId entity{};

@@ -10,7 +10,7 @@ finished JPEG2000 baked textures, and the region only caches them
 content-addressed, re-serves them, and rebroadcasts `AvatarAppearance`. That
 design depends on **every client baking**. Thin or headless clients — notably
 LibreMetaverse/TestClient — never bake, so they render as gray clouds. Second
-Life moved baking to the server ("server-side appearance"); HomeWorldz adopts
+Life moved baking to the server ("server-side appearance"); Homeworldz adopts
 the same model so that **any** client rezzes correctly with no client-side
 baking.
 

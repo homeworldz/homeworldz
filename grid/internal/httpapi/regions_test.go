@@ -310,7 +310,7 @@ func TestProvisionedRegionRegistrationUsesPerRegionCredentials(t *testing.T) {
 		t.Fatal(err)
 	}
 	store := newMemoryRegionStore()
-	handler := New(checker{}, "test", Options{ServiceToken: "grid-secret", GridName: "HomeWorldz Test",
+	handler := New(checker{}, "test", Options{ServiceToken: "grid-secret", GridName: "Homeworldz Test",
 		GridPublicURL: "https://grid.example", Regions: store, Provisioned: registry})
 
 	request := httptest.NewRequest(http.MethodPost,
@@ -331,7 +331,7 @@ func TestProvisionedRegionRegistrationUsesPerRegionCredentials(t *testing.T) {
 		registered.GridX != 1001 || registered.GridY != 1000 ||
 		registered.SizeX != 256 || registered.SizeY != 256 || registered.Maturity != 0 ||
 		registered.PublicEndpoint != "https://sandbox.example/region" || registered.ViewerPort != 43002 ||
-		registered.GridName != "HomeWorldz Test" || registered.GridPublicURL != "https://grid.example" ||
+		registered.GridName != "Homeworldz Test" || registered.GridPublicURL != "https://grid.example" ||
 		registered.OwnerUserID != "33333333-3333-4333-8333-333333333333" {
 		t.Fatalf("unexpected registered region: %#v", registered)
 	}

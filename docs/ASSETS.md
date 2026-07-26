@@ -1,6 +1,6 @@
-# HomeWorldz Assets
+# Homeworldz Assets
 
-This document describes how HomeWorldz stores, identifies, and moves asset
+This document describes how Homeworldz stores, identifies, and moves asset
 content: region-local storage, inventory-referenced assets, what happens to an
 avatar's attachments during a teleport or border crossing, and how viewers will
 observe content across a region border. It is the implementation-level
@@ -224,7 +224,7 @@ faster source and for scene-only content.
 
 Endpoints are operator-configured stable region URLs. The single shared service
 token is an interim measure for the current single-operator deployment;
-HomeWorldz's goal of mostly-untrusted, user-run regions requires per-owner
+Homeworldz's goal of mostly-untrusted, user-run regions requires per-owner
 federation tokens — one per owner, scoped to that owner's regions — and
 verified fetch of region-served bytes, over HTTPS in production (ADR 0020,
 ADR 0028).
@@ -301,14 +301,14 @@ sees the scene of the region its agent occupies; neighbor topology is known
 viewer for the world map, which already composes adjacent tiles), but neighbor
 *scene content* is not streamed.
 
-The Second Life viewer protocol HomeWorldz targets solves this with **child
+The Second Life viewer protocol Homeworldz targets solves this with **child
 agents**: the region an avatar occupies tells the viewer about its neighbors
 (`EnableSimulator` / `EstablishAgentCommunication`), the viewer opens a
 secondary, non-authoritative connection to each neighbor within interest
 range, and each neighbor streams its own object updates directly to the
 viewer.
 
-That model composes cleanly with the HomeWorldz asset architecture, which is
+That model composes cleanly with the Homeworldz asset architecture, which is
 the main reason to expect it to be adopted largely as-is:
 
 - Each neighbor advertises **its own** `GetTexture`/`ViewerAsset` capabilities
@@ -334,7 +334,7 @@ across a border never duplicates simulation.
 ## Halcyon/InWorldz lineage
 
 The stack-and-cache asset topology of InWorldz (per-region caches over central
-services) informs performance expectations, but HomeWorldz inverts the
+services) informs performance expectations, but Homeworldz inverts the
 serving authority: regions are the *primary* asset stores for all viewer
 traffic, and the center holds metadata plus a replica-only durability vault
 (ADR 0026) that is never in the viewer data path. Whisper/Aperture-style

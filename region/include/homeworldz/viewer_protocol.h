@@ -762,8 +762,8 @@ struct RegionInfoReply {
     std::int32_t redirect_grid_y{};
     bool use_estate_sun{true};
     float sun_hour{};
-    std::string product_sku{"HomeWorldz"};
-    std::string product_name{"HomeWorldz Region"};
+    std::string product_sku{"Homeworldz"};
+    std::string product_name{"Homeworldz Region"};
     std::uint64_t region_flags_extended{};
 };
 
@@ -817,7 +817,7 @@ struct AgentMovementComplete : AgentMessage {
     std::array<float, 3> look_at{1.0F, 0.0F, 0.0F};
     std::uint64_t region_handle{};
     std::uint32_t timestamp{};
-    std::string channel_version{"HomeWorldz dev"};
+    std::string channel_version{"Homeworldz dev"};
 };
 
 struct AgentUpdate : AgentMessage {

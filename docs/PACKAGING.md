@@ -1,6 +1,6 @@
 # Release Packaging
 
-HomeWorldz produces separate packages because grid operators and region owners
+Homeworldz produces separate packages because grid operators and region owners
 have different trust boundaries, configuration, storage, and dependencies.
 Neither package contains source code, test programs, compilers, development
 settings, or private configuration.

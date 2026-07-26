@@ -153,7 +153,7 @@ func (a *API) viewerLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if a.identity == nil || a.regions == nil {
-		writeViewerLogin(w, loginFailure("unavailable", "The HomeWorldz grid is not ready."))
+		writeViewerLogin(w, loginFailure("unavailable", "The Homeworldz grid is not ready."))
 		return
 	}
 	body, readErr := io.ReadAll(http.MaxBytesReader(w, r.Body, 1024*1024))
@@ -224,7 +224,7 @@ func (a *API) resolveViewerLogin(r *http.Request, firstRaw, lastRaw, passwd, sta
 		return nil, "key", "The username or password is incorrect."
 	}
 	if err != nil {
-		return nil, "unavailable", "The HomeWorldz grid could not create a session."
+		return nil, "unavailable", "The Homeworldz grid could not create a session."
 	}
 	preferredRegionID := ""
 	if a.locations != nil {

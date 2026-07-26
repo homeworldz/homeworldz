@@ -2,7 +2,7 @@
 
 Status: Accepted
 
-HomeWorldz models stored content in three distinct layers — blob, asset, and
+Homeworldz models stored content in three distinct layers — blob, asset, and
 instance. Earlier ADRs conflated the first two: a single record carried the
 bytes' identity, the creator, and the serving locations together (ADR 0014's
 content-addressed blob, ADR 0020's `asset_metadata`). That conflation cannot
@@ -88,7 +88,7 @@ touching the asset or any instance, because they name the blob indirectly.
 
 Each blob carries a checksum recorded at ingest, as **metadata, not identity**.
 Its one load-bearing purpose is **verifying bytes fetched across a trust
-boundary**. HomeWorldz is built for mostly-untrusted users to run their own
+boundary**. Homeworldz is built for mostly-untrusted users to run their own
 regions from home or a VPS, so a region serving a blob is not trusted: a
 fetching region compares the received bytes against the checksum the grid
 recorded and accepts them without trusting the sender (ADR 0020 already does

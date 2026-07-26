@@ -37,11 +37,11 @@ func run(ctx context.Context, configDirectory string) error {
 	if settings.DatabaseURL == "" {
 		return errors.New("database URL is not configured")
 	}
-	password, err := readPassword("Password for 'HomeWorldz Library': ")
+	password, err := readPassword("Password for 'Homeworldz Library': ")
 	if err != nil {
 		return err
 	}
-	confirmation, err := readPassword("Confirm password for 'HomeWorldz Library': ")
+	confirmation, err := readPassword("Confirm password for 'Homeworldz Library': ")
 	if err != nil {
 		return err
 	}

@@ -1,9 +1,9 @@
 # Bundled Region Heightmaps
 
-HomeWorldz terrain image import follows the OpenSimulator and Halcyon
+Homeworldz terrain image import follows the OpenSimulator and Halcyon
 `GenericSystemDrawing` convention: a lossless image is flipped vertically into
 terrain coordinates and each pixel's HSL lightness is multiplied by 128
-metres. Imported images must exactly match the region dimensions. HomeWorldz
+metres. Imported images must exactly match the region dimensions. Homeworldz
 accepts PNG and intentionally rejects JPEG because lossy compression artifacts
 become terrain height spikes.
 
@@ -27,8 +27,8 @@ that terrain was authored. It is retained only for provenance and visual
 reference; its rendered water, ground texture, lighting, and pre-existing
 compression artifacts mean it is not a terrain heightmap merely because its
 container is now lossless PNG. Its original creator and upstream package are
-not identified in the supplied files. HomeWorldz records the stable
-`HomeWorldz Library` service identity as its importing creator/uploader rather
+not identified in the supplied files. Homeworldz records the stable
+`Homeworldz Library` service identity as its importing creator/uploader rather
 than inventing an author attribution. The source PNG has SHA-256
 `f13dd19bf0c0be1cd9deb84fbb990ca3e6f8a219cc2aa06d6727eea946ca6acb`.
 

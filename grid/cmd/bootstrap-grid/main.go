@@ -38,9 +38,9 @@ func main() {
 	flag.IntVar(&opts.port, "port", 5432, "PostgreSQL server port")
 	flag.StringVar(&opts.adminUser, "admin-user", "postgres", "PostgreSQL administrator role")
 	flag.StringVar(&opts.adminDB, "admin-database", "postgres", "administrator connection database")
-	flag.StringVar(&opts.appUser, "application-user", "homeworldz", "HomeWorldz application role")
-	flag.StringVar(&opts.appDB, "application-database", "homeworldz", "HomeWorldz database")
-	flag.StringVar(&opts.configDir, "config-dir", filepath.Join(root, "config"), "HomeWorldz configuration directory")
+	flag.StringVar(&opts.appUser, "application-user", "homeworldz", "Homeworldz application role")
+	flag.StringVar(&opts.appDB, "application-database", "homeworldz", "Homeworldz database")
+	flag.StringVar(&opts.configDir, "config-dir", filepath.Join(root, "config"), "Homeworldz configuration directory")
 	flag.StringVar(&opts.migrations, "migrations", filepath.Join(root, "db", "migrations"), "SQL migration directory")
 	flag.BoolVar(&opts.migrateOnly, "migrations-only", false, "apply pending migrations using the configured database URL")
 	flag.Parse()
@@ -73,7 +73,7 @@ func runConfiguredMigrations(ctx context.Context, migrations, configDirectory st
 	if err := applyMigrations(ctx, connection, migrations); err != nil {
 		return err
 	}
-	fmt.Println("HomeWorldz database migrations completed.")
+	fmt.Println("Homeworldz database migrations completed.")
 	return nil
 }
 
@@ -156,7 +156,7 @@ func run(ctx context.Context, opts options) error {
 	if err := writeDatabaseConfig(opts.configDir, connectionURL(opts.host, opts.port, opts.appUser, appPassword, opts.appDB)); err != nil {
 		return err
 	}
-	fmt.Println("HomeWorldz grid bootstrap completed.")
+	fmt.Println("Homeworldz grid bootstrap completed.")
 	fmt.Println("Database configuration written to", filepath.Join(opts.configDir, "db.ini"))
 	return nil
 }

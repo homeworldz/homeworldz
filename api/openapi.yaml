@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: HomeWorldz Internal API
+  title: Homeworldz Internal API
   version: 0.1.0
 servers:
   - url: http://localhost:42000

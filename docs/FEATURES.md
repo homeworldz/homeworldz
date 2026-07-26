@@ -1,6 +1,6 @@
-# HomeWorldz Feature Differences
+# Homeworldz Feature Differences
 
-This document tracks major intentional differences between HomeWorldz and the
+This document tracks major intentional differences between Homeworldz and the
 Second Life, OpenSimulator, and Halcyon models. It is a design ledger, not a
 general implementation checklist. Missing compatibility work belongs in
 [`PLAN.md`](PLAN.md); protocol observations belong in
@@ -10,7 +10,7 @@ general implementation checklist. Missing compatibility work belongs in
 
 ### Live terrain-derived world maps
 
-HomeWorldz world-map tiles are rendered from each running Region's current
+Homeworldz world-map tiles are rendered from each running Region's current
 heightfield over the Grid-authenticated service boundary rather than generated
 only as an offline or administrator-triggered snapshot. Viewer terrain edits
 can therefore become visible on the world map
@@ -24,13 +24,13 @@ world map while Sandbox remained unchanged.
 
 This is intentionally different from the InWorldz/Halcyon deployment model,
 where terrain was processed into map textures on a scheduled cycle, commonly
-once per day. HomeWorldz terrain edits feed the live map pipeline immediately,
+once per day. Homeworldz terrain edits feed the live map pipeline immediately,
 subject only to its brief tile cache, so operators do not wait for a daily map
 refresh or run a separate terrain-map generation job.
 
 ### Asset creation provenance
 
-Every HomeWorldz asset metadata record has a required `creator_id` UUID. For a
+Every Homeworldz asset metadata record has a required `creator_id` UUID. For a
 viewer-created asset, this is the authenticated UUID of the user whose upload
 created the asset record. Bundled or migrated assets whose original creator is
 unknown use the zero UUID as an explicit system/unknown value.
@@ -47,7 +47,7 @@ The creator is asset provenance, not current ownership:
 
 This differs from compatibility models that can keep creator and ownership
 primarily on inventory items or scene objects without requiring authenticated
-uploader provenance on every stored asset mapping. HomeWorldz enforces the
+uploader provenance on every stored asset mapping. Homeworldz enforces the
 provenance rule at the asset-storage boundary regardless of what metadata a
 viewer exposes. Second Life's internal asset-store schema is not public, so
 this comparison concerns observable/protocol semantics rather than a claim
@@ -55,7 +55,7 @@ about its private implementation.
 
 ### Region-local, content-addressed assets
 
-HomeWorldz stores immutable asset bytes as region-local SHA-256-addressed blobs.
+Homeworldz stores immutable asset bytes as region-local SHA-256-addressed blobs.
 Viewer UUIDs map to those blobs in SQLite, allowing different viewer IDs to
 share bytes without duplication. This deliberately does not preserve the
 central or pluggable legacy asset-service boundaries commonly used by
@@ -74,7 +74,7 @@ fetch path, which still always goes to the connected region.
 
 ### Free texture uploads
 
-HomeWorldz does not charge users to upload textures. Regions advertise a zero
+Homeworldz does not charge users to upload textures. Regions advertise a zero
 upload price through the viewer economy protocol and identify the grid's
 currency as credits (`C$`) for viewer interfaces that insist on displaying a
 currency beside zero. Credits may support other features later, but texture
@@ -86,7 +86,7 @@ and are included when an object is taken to inventory and re-rezzed.
 
 ### Internal service boundaries
 
-HomeWorldz uses a C++20 region server, Go grid services, HTTP/JSON internal
+Homeworldz uses a C++20 region server, Go grid services, HTTP/JSON internal
 APIs, PostgreSQL central state, and region-local SQLite/filesystem state. It
 does not preserve OpenSimulator or Halcyon internal APIs, database schemas,
 WHIP/Aperture boundaries, C#/.NET implementation constraints, or protobuf as
@@ -112,7 +112,7 @@ monitoring.
 
 ### Pluggable physics engines
 
-HomeWorldz keeps simulation behind an engine-independent physics plugin
+Homeworldz keeps simulation behind an engine-independent physics plugin
 boundary rather than making one third-party engine part of the scene model.
 [Jolt Physics](https://github.com/jrouwe/JoltPhysics) is the initial target and
 default engine. NVIDIA PhysX 5.x is also intended to become a supported plugin;
@@ -165,7 +165,7 @@ refine its behavior without exposing Jolt- or PhysX-specific APIs to scripts.
 
 ### Static-capture mesh collision
 
-HomeWorldz plans to keep visual mesh geometry separate from a portable physics
+Homeworldz plans to keep visual mesh geometry separate from a portable physics
 representation. Static geometry may use validated triangle collision meshes;
 dynamic mesh objects use convex hulls or compound hulls. Animated, skinned, or
 deforming visuals retain a static collision capture while the object moves as
@@ -176,7 +176,7 @@ and PhysX cooked shapes are caches, not authoritative assets. See
 
 ### Recursively folded object permissions
 
-HomeWorldz treats Halcyon's effective-permission behavior as the compatibility
+Homeworldz treats Halcyon's effective-permission behavior as the compatibility
 reference for nested object contents. Modify, Copy, Transfer, and derived
 Export restrictions are folded across every prim in a linkset and every task
 inventory item. A containing object inventory item records those effective
@@ -193,7 +193,7 @@ as well as linkset-child Contents coverage.
 
 ### AIS-first viewer inventory
 
-HomeWorldz requires Second Life AIS v3 for supported viewer-facing inventory
+Homeworldz requires Second Life AIS v3 for supported viewer-facing inventory
 mutation workflows. Legacy inventory capabilities and UDP messages may remain
 as compatibility shims for OpenSimulator, Halcyon, Firestorm, and other
 viewers, but feature completion does not require a parallel legacy path. All
@@ -214,7 +214,7 @@ for legacy mutation workflows or a commitment to any particular older viewer.
 
 ### Parcel land data over the Event Queue
 
-HomeWorldz delivers `ParcelProperties` to viewers as an LLSD message over the
+Homeworldz delivers `ParcelProperties` to viewers as an LLSD message over the
 Event Queue rather than as the legacy `ParcelProperties` UDP packet. This matches
 the current Halcyon/OpenSimulator behaviour and, more importantly, avoids the
 LLUDP datagram size limit: a full-region parcel bitmap is 512 bytes on a 256 m
@@ -257,7 +257,7 @@ restart, and estate kick/teleport-home remain future work.
 
 ### Variable-sized regions
 
-HomeWorldz supports exactly three OpenSimulator-style region sizes:
+Homeworldz supports exactly three OpenSimulator-style region sizes:
 1x1 (256 by 256 metres), 2x2 (512 by 512 metres), and 4x4 (1024 by 1024
 metres). Larger sizes and arbitrary whole multiples are intentionally out of
 scope. This differs from Second Life's public 256-by-256-metre region model
@@ -269,18 +269,18 @@ and movement bounds, login/teleport/map size metadata, and live map slicing.
 
 ### Server-side appearance baking
 
-HomeWorldz will bake avatar appearance **server-side**: the region composites
+Homeworldz will bake avatar appearance **server-side**: the region composites
 the bake layers from a user's worn wearables and serves the baked textures, so
 any client — including thin or headless ones such as LibreMetaverse/TestClient —
 rezzes correctly without performing its own baking. Second Life moved viewer
-appearance baking to the server ("server-side appearance"); HomeWorldz adopts
+appearance baking to the server ("server-side appearance"); Homeworldz adopts
 the same model rather than depending on every client to fetch wearables, bake,
 and upload textures. Planned; today appearance relies on client-side baking,
 which leaves non-baking clients rendered as clouds.
 
 ### Voice via WebRTC
 
-HomeWorldz will provide voice using **WebRTC**, matching the direction Second
+Homeworldz will provide voice using **WebRTC**, matching the direction Second
 Life and current viewers (including the supported Firestorm release) are moving.
 **Vivox is explicitly not pursued.** Planned and lower priority than server-side
 baking; no voice is provided today.

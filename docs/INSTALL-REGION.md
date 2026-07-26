@@ -1,7 +1,7 @@
-# Install a HomeWorldz Region
+# Install a Homeworldz Region
 
 This guide is for a **region owner** connecting a region to an existing
-HomeWorldz grid. You do not need PostgreSQL, its credentials, or access to the
+Homeworldz grid. You do not need PostgreSQL, its credentials, or access to the
 grid database. If you operate the central grid too, complete the
 `INSTALL-GRID.md` included in the grid package first.
 
@@ -240,7 +240,7 @@ firewall prompts. For remote viewers:
 5. Restrict firewall rules as narrowly as the deployment permits.
 
 Do not add PostgreSQL access or broad executable exceptions for a region host.
-Voice is not initially provided by HomeWorldz; a viewer may still prompt for
+Voice is not initially provided by Homeworldz; a viewer may still prompt for
 its own voice executable, but that is separate from the two region ports.
 
 The range `42010`–`42099` is reserved for additional local regions and

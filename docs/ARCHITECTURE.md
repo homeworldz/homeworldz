@@ -1,8 +1,8 @@
-# HomeWorldz Architecture
+# Homeworldz Architecture
 
 ## Direction
 
-HomeWorldz is a clean architecture effort for a Firestorm-first virtual world
+Homeworldz is a clean architecture effort for a Firestorm-first virtual world
 server. The only protocol compatibility requirement is the viewer-facing
 Second Life/OpenSim behavior needed by Firestorm and compatible viewers.
 
@@ -62,7 +62,7 @@ compatible viewers stay first-class.
 ## Region Server
 
 The region server should be implemented in modern C++ because it owns the
-game/simulation-heavy parts of HomeWorldz:
+game/simulation-heavy parts of Homeworldz:
 
 - Firestorm/Second Life viewer protocol handling.
 - Region scene graph and authoritative object state.
@@ -152,7 +152,7 @@ The Region answers authenticated viewer `MapBlockRequest` and `MapNameRequest`
 UDP messages from that live topology snapshot. Replies currently cover the
 Region itself and its cardinal neighbors, including coordinates, name, access,
 water height, and local agent count. The initial package advertises a stable
-HomeWorldz JPEG-2000 rendering of the default plateau rather than a null image
+Homeworldz JPEG-2000 rendering of the default plateau rather than a null image
 UUID, preventing unrelated cross-grid cache reuse.
 
 Firestorm also consumes the OpenSim `map-server-url` simulator feature for
@@ -188,7 +188,7 @@ Postgres is the default durable store for grid services.
 
 ## Internal APIs
 
-HomeWorldz internal APIs should start with HTTP and JSON.
+Homeworldz internal APIs should start with HTTP and JSON.
 
 This is intentionally simpler than gRPC/protobuf and keeps the first system easy
 to inspect with common tools such as curl, browser dev tools, logs, and OpenAPI
@@ -229,7 +229,7 @@ evolve.
 
 ## Configuration
 
-HomeWorldz uses INI files under `config/`. Grid hosts use `grid.ini` and
+Homeworldz uses INI files under `config/`. Grid hosts use `grid.ini` and
 `db.ini`; region hosts use `region.ini` and `grid.ini`. Files are separated by
 operational ownership and are the authoritative persistent settings source.
 Runtime settings do not have environment-variable overrides. The Linux Region
@@ -243,7 +243,7 @@ secrets is not committed.
 - `42001/tcp`: region HTTP API.
 - `42002/udp`: reserved for the region viewer circuit.
 - `42010-42099`: reserved for additional local region instances and future
-  HomeWorldz development services.
+  Homeworldz development services.
 
 All ports are deployment configuration rather than protocol constants.
 
@@ -252,7 +252,7 @@ All ports are deployment configuration rather than protocol constants.
 The physics engine is important, but it should not be the sole owner of region
 state.
 
-HomeWorldz owns authoritative scene state:
+Homeworldz owns authoritative scene state:
 
 - Object identity.
 - Persistence.
@@ -321,7 +321,7 @@ because the rezzed instance is the owner's only copy. The vault never
 originates assets, never hosts agents, is never in the viewer data path, and
 may internally tier rarely accessed blobs onto slower S3-compatible storage.
 
-Because HomeWorldz is built for mostly-untrusted users to run their own
+Because Homeworldz is built for mostly-untrusted users to run their own
 regions, the **grid is the trust anchor and regions are untrusted**
 ([ADR 0028](adr/0028-untrusted-region-trust-model.md)). The grid owns
 authoritative metadata, provenance, and durability; a region may vanish, be
@@ -395,7 +395,7 @@ The minimum login and region-entry flow is recorded in
 [FIRESTORM.md](FIRESTORM.md).
 
 The official Second Life viewer and existing OpenSim/Halcyon codebases are
-references for protocol behavior, but HomeWorldz only needs to preserve what
+references for protocol behavior, but Homeworldz only needs to preserve what
 the viewer sees and depends on:
 
 - Login and grid information.
@@ -416,6 +416,6 @@ protocols.
 ## Implementation Roadmap
 
 Implementation phases, milestones, completion state, and upcoming work are
-maintained in the [HomeWorldz roadmap](ROADMAP.md). This document describes the
+maintained in the [Homeworldz roadmap](ROADMAP.md). This document describes the
 architectural boundaries and decisions rather than duplicating that evolving
 project status.

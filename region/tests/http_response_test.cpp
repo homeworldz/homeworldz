@@ -220,7 +220,7 @@ int main() {
         "11111111-2222-4333-8444-555555555555");
     passed &= contains(environment, "<key>messageID</key><uuid>00000000-0000-0000-0000-000000000000</uuid>");
     passed &= contains(environment, "<key>regionID</key><uuid>11111111-2222-4333-8444-555555555555</uuid>");
-    passed &= contains(environment, "<real>0</real><string>HomeWorldz Default</string>");
+    passed &= contains(environment, "<real>0</real><string>Homeworldz Default</string>");
     passed &= contains(environment, "<key>gamma</key>");
     passed &= contains(environment, "<key>blurMultiplier</key><real>0.04</real>");
     const auto upload = homeworldz::viewer::baked_texture_upload_xml(

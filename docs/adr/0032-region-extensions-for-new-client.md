@@ -68,7 +68,7 @@ stream for clients that take it.
 Across all three areas the **region carries the legacy shims and the new client
 implements only the modern path**. That is the opposite of every previous
 third-party Second Life viewer, which had to reproduce twenty years of client
-behavior faithfully. It is possible only because HomeWorldz owns both ends, and
+behavior faithfully. It is possible only because Homeworldz owns both ends, and
 it is what keeps the new client small enough to also run in a browser.
 
 ## Relationship to other ADRs

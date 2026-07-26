@@ -15,7 +15,7 @@ http_port = 42001
 viewer_port = 42002
 bind_address = 0.0.0.0
 viewer_bind_address = 0.0.0.0
-data_path = D:\HomeWorldz\region
+data_path = D:\Homeworldz\region
 asset_path = assets/region
 terrain_path = assets/region/terrain/plateau-square.raw
 lease_seconds = 60
@@ -32,7 +32,7 @@ service_token = secret
         settings.at("region.http_port") != "42001" || settings.at("region.viewer_port") != "42002" ||
         settings.at("region.bind_address") != "0.0.0.0" ||
         settings.at("region.viewer_bind_address") != "0.0.0.0" ||
-        settings.at("region.data_path") != "D:\\HomeWorldz\\region" ||
+        settings.at("region.data_path") != "D:\\Homeworldz\\region" ||
         settings.at("region.asset_path") != "assets/region" ||
         settings.at("region.terrain_path") != "assets/region/terrain/plateau-square.raw" ||
         settings.at("region.lease_seconds") != "60" ||

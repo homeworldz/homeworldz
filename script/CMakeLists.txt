@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 
 # Buildable standalone (it has no Jolt/PhysX/sqlite dependency) or as a
-# subdirectory of the top-level HomeWorldz project.
+# subdirectory of the top-level Homeworldz project.
 if(NOT DEFINED PROJECT_NAME)
   project(homeworldz-script LANGUAGES CXX)
   enable_testing()

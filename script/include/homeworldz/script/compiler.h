@@ -1,6 +1,6 @@
 #pragma once
 
-// Lowers the AST to HomeWorldz bytecode with light semantic analysis: local
+// Lowers the AST to Homeworldz bytecode with light semantic analysis: local
 // slot allocation, static typing to select integer vs. string operators and
 // casts, and host-call arity/type checking against a small built-in table.
 

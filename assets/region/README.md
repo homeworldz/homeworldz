@@ -1,7 +1,7 @@
 # Bundled region assets
 
 `default-avatar/` contains the four base body-part assets, a shirt and pants,
-and five source textures needed to render HomeWorldz's initial system outfit.
+and five source textures needed to render Homeworldz's initial system outfit.
 They were derived from the Halcyon simulator asset set without changing their
 wearable parameters and named by viewer UUID so the region can import them
 deterministically.
@@ -9,7 +9,7 @@ deterministically.
 `library/textures/` contains the canonical Blank, Plywood, Transparent, and
 Media texture assets expected by Second Life-compatible viewers and scripts.
 They retain their standard viewer UUIDs. Library inventory records attribute
-their import to the `HomeWorldz Library` service identity, independently of
+their import to the `Homeworldz Library` service identity, independently of
 their upstream artwork provenance.
 
 `viewer-standard/` contains server-backed textures and UI sounds that

@@ -15,5 +15,5 @@ token remains a transitional file-backed credential for other internal APIs.
 
 The initial socket transport supports `http://` on Windows and Linux. Deployed
 HTTPS support will use a maintained TLS transport rather than implementing TLS
-inside HomeWorldz; production deployment remains out of scope for this
+inside Homeworldz; production deployment remains out of scope for this
 milestone.

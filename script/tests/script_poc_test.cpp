@@ -1,4 +1,4 @@
-// Proof-of-concept confirmation for the HomeWorldz "Falcon" LSL scripting engine
+// Proof-of-concept confirmation for the Homeworldz "Falcon" LSL scripting engine
 // (ADR 0021 / SCRIPTING.md). It exercises the whole pipeline and asserts the
 // properties that make the approach viable:
 //
@@ -97,7 +97,7 @@ default
 } // namespace
 
 int main() {
-    std::cout << "HomeWorldz Falcon VM PoC\n";
+    std::cout << "Homeworldz Falcon VM PoC\n";
 
     // (1) Compile the loop script.
     const Program loop = compile_source(kLoopSource);

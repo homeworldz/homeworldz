@@ -1,6 +1,6 @@
-# HomeWorldz Scripting
+# Homeworldz Scripting
 
-HomeWorldz will implement Linden Scripting Language compatibility with a
+Homeworldz will implement Linden Scripting Language compatibility with a
 purpose-built, single-threaded C++ bytecode interpreter — the **Falcon VM**. The
 supported language surface is Second Life LSL plus Halcyon/InWorldz extensions.
 OpenSimulator-only extensions, including OSSL functions, are intentionally
@@ -8,7 +8,7 @@ excluded. See [VM.md](VM.md) for the Falcon p-code format and VM internals.
 
 A sandboxed **Lua** is a planned second language behind the same script-runtime
 boundary, with **SLua** — Second Life's MIT-licensed Luau fork — as the
-compatibility baseline: HomeWorldz targets everything SLua supports, with no
+compatibility baseline: Homeworldz targets everything SLua supports, with no
 subtractions, so that Lua content is portable. Reusing the SLua implementation is
 the expected means, and either way the runtime inherits the scheduling, resource,
 and crossing requirements below rather than weakening them
@@ -29,7 +29,7 @@ host functions. A script cannot mutate scene data from another thread or call
 operating-system services directly.
 
 The LSL compiler owns tokenization, parsing, type checking, compatibility
-diagnostics, and HomeWorldz bytecode generation. It will use a handwritten
+diagnostics, and Homeworldz bytecode generation. It will use a handwritten
 scanner, recursive-descent statement parser, and precedence/Pratt expression
 parser rather than ANTLR or another parser-generator runtime.
 
@@ -55,7 +55,7 @@ runtime dependencies.
 
 Halcyon/InWorldz additions will be inventoried explicitly and covered by
 compatibility tests. OpenSimulator extensions will not be admitted accidentally
-through shared historical code or names. HomeWorldz-specific additions, if any,
+through shared historical code or names. Homeworldz-specific additions, if any,
 must use a separately documented namespace and compatibility decision.
 
 Vehicle compatibility includes the SL/Halcyon `llSetVehicleType` model. As a
@@ -99,7 +99,7 @@ script and produce an LSL-visible runtime error where the protocol permits.
 
 ## Serializable execution state
 
-HomeWorldz bytecode never uses the native C++ call stack as script state. A
+Homeworldz bytecode never uses the native C++ call stack as script state. A
 script can be suspended after any completed bytecode instruction, including in
 the middle of an event handler. This is essential for attachments and moving
 vehicles: crossing cannot wait for a poorly written handler or infinite loop to
@@ -117,7 +117,7 @@ The crossing snapshot contains at least:
 - Memory accounting and deterministic random-generator state.
 - Transferable pending host-operation tokens and continuation state.
 
-The wire format is a compact, versioned HomeWorldz binary format with bounded,
+The wire format is a compact, versioned Homeworldz binary format with bounded,
 length-prefixed fields and tagged LSL values. It is not JSON, XML, protobuf, or
 a reflection dump. Bytecode is cached separately and transferred only when the
 destination lacks the matching asset and ABI. Serialization uses reusable,
@@ -153,7 +153,7 @@ a bounded safe point, cancel cleanly, or cause the crossing to roll back.
 
 ## Acceptance gates
 
-Before general scripting work begins, HomeWorldz must demonstrate:
+Before general scripting work begins, Homeworldz must demonstrate:
 
 - Continuous authoritative avatar position and flight-state updates in the
   viewer.

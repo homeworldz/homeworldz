@@ -806,7 +806,7 @@ std::vector<std::byte> encode_region_handshake(const RegionHandshake& message) {
     append_le_u32(output, 0); // CPU class
     append_le_u32(output, 1); // CPU ratio
     if (!append_variable1(output, "") || !append_variable1(output, "homeworldz") ||
-        !append_variable1(output, "HomeWorldz Region")) return {};
+        !append_variable1(output, "Homeworldz Region")) return {};
     output.push_back(std::byte{}); // no RegionInfo4 blocks
     return output;
 }

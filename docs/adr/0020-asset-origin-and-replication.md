@@ -13,11 +13,11 @@ The immutability guarantee below — a UUID never remaps to different content or
 creator — is carried by the immutable `asset_id → blob_id` binding, not by
 comparing content hashes at registration. The SHA-256 named below is retained
 only as an integrity checksum for verifying bytes fetched across a trust
-boundary — core to HomeWorldz, where mostly-untrusted users run their own
+boundary — core to Homeworldz, where mostly-untrusted users run their own
 regions — never as identity and not on routine local reads. Immutable
 provenance is unchanged. Read the hash references below in that light.
 
-Viewer-facing asset UUIDs are immutable content identities within a HomeWorldz
+Viewer-facing asset UUIDs are immutable content identities within a Homeworldz
 grid. Registering an existing UUID is idempotent only when its content and
 creator are unchanged — under ADR 0027, the same immutable `asset_id → blob_id`
 binding and creator. A conflicting registration is rejected; a region must
@@ -38,7 +38,7 @@ replica after a verified copy.
 Region-to-region lookup and fetch use authenticated internal HTTP APIs. The
 initial single shared grid service token is an interim measure for the
 single-operator deployment; ADR 0028 replaces it with per-owner federation
-tokens — one per owner, scoped to that owner's regions — as HomeWorldz moves
+tokens — one per owner, scoped to that owner's regions — as Homeworldz moves
 toward its goal of mostly-untrusted, user-run regions. Public viewer
 capabilities are not federation credentials.
 

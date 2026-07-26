@@ -1,6 +1,6 @@
-# HomeWorldz Roadmap
+# Homeworldz Roadmap
 
-This roadmap describes the major implementation sequence for HomeWorldz. It is
+This roadmap describes the major implementation sequence for Homeworldz. It is
 organized at three levels: phases, milestones within each phase, and major work
 items within each milestone. [`PLAN.md`](PLAN.md) remains the detailed
 engineering checklist, while [`FEATURES.md`](FEATURES.md) records intentional
@@ -371,7 +371,7 @@ Falcon LSL scripting foundation.
 - [ ] Inventory the complete Second Life LSL language and built-in surface plus
   Halcyon/InWorldz extensions, explicitly excluding OpenSimulator extensions.
 - [ ] Complete the handwritten lexer, parser, semantic analysis, diagnostics,
-  and versioned HomeWorldz bytecode compiler for that full supported language.
+  and versioned Homeworldz bytecode compiler for that full supported language.
 - [x] Store creator-attributed LSL source in personal and task inventory, with
   Firestorm creation, retrieval, editing, saving, and drag-to-contents behavior.
 - [ ] Cache immutable bytecode by source hash, compiler version, and runtime ABI.
@@ -415,7 +415,7 @@ Falcon LSL scripting foundation.
 - [ ] Implement bounded LSL host functions for scene, physics, inventory,
   communication, parcel, avatar, HTTP, and data operations.
 - [ ] Preserve Second Life event ordering and delay semantics where observable
-  and document intentional HomeWorldz differences.
+  and document intentional Homeworldz differences.
 - [ ] Integrate script ownership and permissions with linksets, attachments,
   seated avatars, parcels, and estate policy.
 

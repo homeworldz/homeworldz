@@ -1,6 +1,6 @@
 # OpenMetaverse Terrain Compressor
 
-HomeWorldz's terrain patch DCT, quantization, zig-zag ordering, and bit encoding
+Homeworldz's terrain patch DCT, quantization, zig-zag ordering, and bit encoding
 in `region/src/viewer_protocol.cpp` are adapted from the OpenMetaverse
 `TerrainCompressor` implementation distributed with Halcyon.
 

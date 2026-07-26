@@ -1,5 +1,5 @@
 [Unit]
-Description=HomeWorldz Region (%i)
+Description=Homeworldz Region (%i)
 After=network-online.target homeworldz-grid.service
 Wants=network-online.target
 

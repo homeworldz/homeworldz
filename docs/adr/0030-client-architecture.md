@@ -6,7 +6,7 @@ This ADR records **current expectation and intent**, not a commitment. No
 implementation work has started, and the choices below are expected to be revised
 as evidence arrives.
 
-HomeWorldz expects to build a first-party open-source client. This is **additive**:
+Homeworldz expects to build a first-party open-source client. This is **additive**:
 ADR 0016's Firestorm/Second Life protocol compatibility target stands, legacy
 viewers stay first-class, and the new client is a second front door to the same
 regions rather than a replacement. The region-side extensions it relies on are
@@ -20,15 +20,26 @@ choice below.
 The client is **C++** with an engine-neutral domain core, and **Godot 4 via
 GDExtension** as its first frontend.
 
-Godot rather than Unreal, primarily on licensing. HomeWorldz is **MIT**. Unreal
-is source-available under a proprietary EULA: engine source may be shared only
-between Epic licensees, so every contributor would need to accept the EULA and
-link an Epic account to build the client. The 5% royalty's application to
-**region hosting revenue** is ambiguous and would require written clarification
-from Epic, whose terms can change at renewal, and who competes directly in this
-space. Godot and `godot-cpp` are MIT, and because a GDExtension is a separate
-shared library across a **C ABI**, there is no linking or copyleft entanglement
-and no compiler lock-step with the engine — stock Godot binaries load it.
+Godot rather than Unreal, for two reasons in that order.
+
+**Fit.** Zero-install browser access is a primary goal, and there is no credible
+Unreal web export, so Unreal could serve at most one of the two targets. Godot
+is capable, actively developed, and well matched to this workload, and
+GDExtension's **C ABI** boundary means stock engine binaries load our code with
+no compiler lock-step. Unreal is a highly capable engine and its rendering is
+excellent; it is simply aimed at a different problem than a browser-reachable
+client for streamed user content.
+
+**Licensing simplicity.** Godot and `godot-cpp` are MIT, as Homeworldz is, so
+there is nothing to weigh: no royalty terms, no per-contributor agreement, no
+linking or copyleft entanglement. Unreal is more license-encumbered than
+alternatives like Godot — source-available under a proprietary EULA rather than
+an open-source license. That is a legitimate model many successful projects
+accept, but it brings terms to evaluate and revisit (contributor access to
+engine source, royalty scope against region hosting revenue, changes at
+renewal) that simply do not arise with a permissively licensed engine. For an
+open-source project expecting outside contributors, not having to weigh them at
+all is worth more here than the capability difference.
 
 ## The layering rule
 
@@ -45,8 +56,8 @@ applied a third time.
 ## Own the domain, borrow the platform
 
 A game engine's chief value is its **offline content pipeline** — editor,
-importers, baking. A viewer has no offline content: everything arrives over the
-wire at runtime, and the world itself is the editor. So the engine's greatest
+importers, baking. This client has no offline content: everything arrives over
+the wire at runtime, and the world itself is the editor. So the engine's greatest
 strength is largely unusable here while its weakest area, streaming arbitrary
 runtime content, is the central requirement. The core therefore depends on
 focused libraries rather than an engine:

@@ -14,6 +14,6 @@ Linden Research, Inc. licenses these works under the Creative Commons
 Attribution-ShareAlike 3.0 License:
 <https://creativecommons.org/licenses/by-sa/3.0/legalcode>.
 
-Linden Lab trademarks remain subject to its trademark policy. HomeWorldz has
+Linden Lab trademarks remain subject to its trademark policy. Homeworldz has
 renamed the source files to their existing asset UUIDs but has not modified
 their contents.

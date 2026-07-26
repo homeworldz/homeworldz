@@ -1,8 +1,8 @@
 <div style="text-align: left; width: 320px; margin: 0;">
-  <img src="homeworldz.svg" alt="HomeWorldz logo" width="320" style="display: block; margin: 0;">
+  <img src="homeworldz.svg" alt="Homeworldz logo" width="320" style="display: block; margin: 0;">
 </div>
 
-HomeWorldz is a clean-architecture virtual world server targeting practical
+Homeworldz is a clean-architecture virtual world server targeting practical
 Firestorm compatibility. It is a new implementation informed by Halcyon,
 OpenSimulator, and the Second Life viewer protocol without preserving their
 internal service boundaries or storage formats.
@@ -24,7 +24,7 @@ the [roadmap](docs/ROADMAP.md) for the current phase-by-phase status.
 Central grid hosts require Go 1.21 or newer and a reachable PostgreSQL 16 or
 newer installation. PostgreSQL 18.4 is recommended for new installations.
 Region builds require a C++20 toolchain with CMake 3.24 or newer. PostgreSQL may
-run locally or on another reachable host; HomeWorldz does not require Docker.
+run locally or on another reachable host; Homeworldz does not require Docker.
 
 Runtime configuration uses ordinary INI files in `config/`. Start from the
 matching files in `config/examples/`: `grid.ini` controls grid server and client
@@ -81,7 +81,7 @@ go run ./grid/cmd/bootstrap-grid -migrations-only
 ```
 
 The shared Library identity is installed in a locked state. To assign local
-interactive credentials to `HomeWorldz Library`, run:
+interactive credentials to `Homeworldz Library`, run:
 
 ```cmd
 go run ./grid/cmd/configure-library
@@ -149,4 +149,4 @@ unsupported.
 
 ## License
 
-HomeWorldz is open source under the [MIT License](LICENSE).
+Homeworldz is open source under the [MIT License](LICENSE).

@@ -2,7 +2,7 @@
 
 Status: Accepted
 
-HomeWorldz transfers an avatar between Regions through a Grid-coordinated,
+Homeworldz transfers an avatar between Regions through a Grid-coordinated,
 durable transaction. A transit has a caller-generated UUID, a monotonically
 increasing per-avatar generation, the viewer session UUID, source and
 destination Region UUIDs, arrival position/look direction/flying state, an

@@ -7,7 +7,7 @@ engine-independent interface. Jolt and PhysX 5 were evaluated through the same
 Windows and Linux scenario harness described in `../PHYSICS.md`; results are in
 `../PHYSICS_RESULTS.md`.
 
-Jolt 5.5 is selected as the default HomeWorldz v1 physics backend. It passed all
+Jolt 5.5 is selected as the default Homeworldz v1 physics backend. It passed all
 required first-gate scenarios. It used substantially less suite CPU time on
 both measured platforms, had the better Windows tick results, and has the
 smaller dependency and packaging surface. PhysX had better average tick latency

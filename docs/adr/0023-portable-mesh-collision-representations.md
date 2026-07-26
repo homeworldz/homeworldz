@@ -2,7 +2,7 @@
 
 Status: Accepted
 
-HomeWorldz stores mesh rendering data and collision data as separate concerns.
+Homeworldz stores mesh rendering data and collision data as separate concerns.
 An uploaded mesh may provide a dedicated portable physics mesh or hull set;
 otherwise an explicitly selected, validated derivation policy produces one.
 The portable source is authoritative. Jolt- or PhysX-cooked shapes are
@@ -19,7 +19,7 @@ Parametric prims that cannot use an exact native analytic shape are converted
 to portable vertices and convex hulls before reaching an engine adapter. The
 Halcyon `Meshmerizer`/`PrimMesher` and PhysX meshing pipeline are the primary
 compatibility reference for this conversion, including shape-key caching, but
-HomeWorldz does not treat legacy PhysX-cooked bytes as portable content.
+Homeworldz does not treat legacy PhysX-cooked bytes as portable content.
 
 Animated, skinned, or otherwise deforming visual meshes use a static capture
 of their collision representation when instantiated. Rigid translation and
