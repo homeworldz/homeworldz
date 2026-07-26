@@ -19,7 +19,7 @@ public:
                                         std::string_view body) override {
         requests.push_back({std::string(method), std::string(path), std::string(body)});
         if (method == "POST" && path.starts_with("/api/v1/region-runtime/"))
-            return {200, R"({"id":"22222222-2222-4222-8222-222222222222","name":"Sandbox Region","gridX":1001,"gridY":1000,"sizeX":256,"sizeY":256,"maturity":0,"publicEndpoint":"https://sandbox.example/region","viewerPort":43002,"gridName":"Homeworldz Test","gridPublicUrl":"https://grid.example"})"};
+            return {200, R"({"id":"22222222-2222-4222-8222-222222222222","name":"Sandbox Region","gridX":1001,"gridY":1000,"sizeX":256,"sizeY":256,"maturity":0,"publicEndpoint":"https://sandbox.example/region","viewerPort":43002,"gridName":"Homeworldz Test","gridPublicUrl":"https://grid.example","regionProtocol":1})"};
         if (method == "GET" && path.ends_with("/neighbors"))
             return {200, R"({"neighbors":[{"direction":"west","region":{"id":"11111111-1111-4111-8111-111111111111","name":"Welcome","gridX":1000,"gridY":1000,"sizeX":256,"sizeY":256,"maturity":0,"publicEndpoint":"http://grid.example:42011","viewerPort":42012,"online":true}}]})"};
         if (method == "POST" && path == "/api/v1/transits")
@@ -81,6 +81,16 @@ public:
     std::vector<Request> requests;
 };
 
+// Answers every request the way the grid refuses a protocol mismatch, so the
+// refusal message's path to the log can be proven.
+class RefusingTransport final : public homeworldz::grid::Transport {
+public:
+    homeworldz::grid::HttpResponse send(std::string_view, std::string_view,
+                                        std::string_view) override {
+        return {409, R"({"code":"region_protocol_mismatch","message":"region is running grid-region protocol 1; this grid requires 2"})"};
+    }
+};
+
 } // namespace
 
 int main() {
@@ -110,9 +120,29 @@ int main() {
 		provisioned->maturity != 0 || provisioned->public_endpoint != "https://sandbox.example/region" ||
         provisioned->viewer_port != 43002 || provisioned->grid_name != "Homeworldz Test" ||
         provisioned->grid_public_url != "https://grid.example" ||
+        provisioned->grid_region_protocol != 1 ||
         transport->requests.back().path != "/api/v1/region-runtime/Sandbox%20Region" ||
         transport->requests.back().body.find(
-            R"("viewerPort":42012)") == std::string::npos) return 1;
+            R"("viewerPort":42012)") == std::string::npos ||
+        transport->requests.back().body.find(
+            R"("regionProtocol":1)") == std::string::npos) return 1;
+    // Renewal carries the protocol too: enforcement at renewal is how a grid
+    // increment drains non-matching regions within one lease period.
+    if (!client.renew_provisioned_lease(provisioned->id, 60) ||
+        transport->requests.back().method != "PUT" ||
+        transport->requests.back().body.find(
+            R"("regionProtocol":1)") == std::string::npos) return 1;
+    {
+        // A protocol-mismatch refusal surfaces the grid's message, which names
+        // both versions, so the operator's log is actionable.
+        homeworldz::grid::Client refused(std::make_shared<RefusingTransport>());
+        std::string refusal;
+        if (refused.register_provisioned_region("Sandbox Region", provisioned_settings, &refusal) ||
+            refusal.find("requires 2") == std::string::npos) return 1;
+        refusal.clear();
+        if (refused.renew_provisioned_lease(provisioned->id, 60, &refusal) ||
+            refusal.find("requires 2") == std::string::npos) return 1;
+    }
     const auto neighbors = client.find_region_neighbors(provisioned->id);
     if (!neighbors || neighbors->size() != 1 || neighbors->front().direction != "west" ||
         neighbors->front().id != "11111111-1111-4111-8111-111111111111" ||

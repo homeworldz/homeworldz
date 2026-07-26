@@ -3,8 +3,10 @@
 Decisions made while implementing [CLIENT2.md](CLIENT2.md), recorded for review
 rather than approval-in-advance: each was judged cheaper to revise after the
 fact than to hold the implementation for. Entries are grouped by the build-order
-step they belong to. Grid side only, per direction; the region binary is
-untouched.
+step they belong to.
+
+The 2026-07-26 grid-side entries below were reviewed and approved 2026-07-26 as
+a good "for now" state; individual calls may be reopened as evidence arrives.
 
 ## 2026-07-26 — steps 0 through 4 (commits `1f2e178` through `28c8218`)
 
@@ -114,8 +116,38 @@ untouched.
 ### Not done, so nobody hunts for it
 
 - No C++ region work (per "grid side only"): the region does not yet send
-  `regionProtocol`, and nothing region-side validates a region ticket — that
-  lands with the region session transport.
+  `regionProtocol` (done later that day — see the next section), and nothing
+  region-side validates a region ticket — that lands with the region session
+  transport.
 - No CORS allowlist change: no client origin exists to add.
 - No persistence of reported region protocols, no increment scheduling, no
   region session transport, no asset-format work.
+
+## 2026-07-26 — step 2, region side
+
+The region binary now reports its grid-region protocol version, completing the
+version handshake in both directions.
+
+- **The version is `homeworldz::grid::region_protocol = 1`, a compiled-in
+  constant** in `region/include/homeworldz/grid_client.h`, per CLIENT2.md's
+  distribution rule: the number is an assertion about what the code implements,
+  so it ships with the code and cannot be separated from it by a stale file.
+- **It is sent on the provisioned paths only** — registration
+  (`POST /api/v1/region-runtime/{id}`) and lease renewal
+  (`PUT .../lease`) — because those are where the grid enforces the match. The
+  legacy `POST /api/v1/regions` request model does not carry the field and the
+  internal tier's strict decoder would 400 it; the legacy dev path stays as it
+  was.
+- **The registration reply's `regionProtocol` is required and kept** on
+  `RegisteredRegion::grid_region_protocol`, matching the function's strict
+  parsing of every other reply field. Requiring it costs nothing: a grid old
+  enough to omit it would already have 400ed the request's unknown field
+  (grids deploy before regions, the standing order). Today a successful
+  registration always matches; the field is the hook for warning ahead of an
+  announced increment once the grid can announce one.
+- **Refusals reach the operator's log.** `register_provisioned_region` and
+  `renew_provisioned_lease` take an optional out-parameter filled with the
+  grid's error `message` on failure, `RegistrationLifecycle` keeps the last
+  renewal failure's message, and `main.cpp` logs either as a `reason` field
+  beside the existing error line — so a protocol-mismatch refusal, which names
+  both versions, is actionable from the region's own log per CLIENT2.md.

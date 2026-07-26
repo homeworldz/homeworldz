@@ -27,6 +27,13 @@ public:
 
 std::shared_ptr<Transport> socket_transport(std::string grid_url, std::string service_token);
 
+// The grid-region protocol version this region software implements
+// (docs/CLIENT2.md, "the region protocol version"). Compiled in rather than
+// configured so the number cannot be separated from the code it describes; it
+// increments only when a change genuinely requires region software to be
+// upgraded, and the grid refuses registration on any mismatch.
+constexpr int region_protocol = 1;
+
 struct RegionSettings {
     std::string name;
     int grid_x{};
@@ -81,6 +88,9 @@ struct RegisteredRegion {
 	int maturity{};
 	std::string owner_id;
 	std::optional<Estate> estate;
+	// The grid's current grid-region protocol version from the registration
+	// reply; how a region learns an increment is coming before it is enforced.
+	int grid_region_protocol{};
 };
 
 struct RegionNeighbor {
@@ -263,8 +273,11 @@ class Client {
 public:
     explicit Client(std::shared_ptr<Transport> transport) : transport_(std::move(transport)) {}
     std::string register_region(const RegionSettings& settings);
+	// On failure, *refusal (when given) receives the grid's error message —
+	// a protocol-mismatch refusal names both versions and belongs in the log.
 	std::optional<RegisteredRegion> register_provisioned_region(
-		std::string_view region_id, const RegionSettings& settings);
+		std::string_view region_id, const RegionSettings& settings,
+		std::string* refusal = nullptr);
     std::optional<std::vector<RegionNeighbor>> find_region_neighbors(
         std::string_view region_id);
     std::optional<Estate> update_estate_settings(std::string_view region_id,
@@ -273,7 +286,8 @@ public:
                                             int role, bool present);
     bool renew_lease(std::string_view region_id, int lease_seconds);
     bool deregister(std::string_view region_id);
-	bool renew_provisioned_lease(std::string_view region_id, int lease_seconds);
+	bool renew_provisioned_lease(std::string_view region_id, int lease_seconds,
+	                             std::string* refusal = nullptr);
 	bool deregister_provisioned(std::string_view region_id);
     std::optional<ViewerSession> validate_viewer_session(std::string_view session_id);
     std::optional<AvatarTransit> prepare_avatar_transit(const AvatarTransitRequest& request);
@@ -377,6 +391,8 @@ public:
     bool tick(std::chrono::steady_clock::time_point now);
     void stop();
     const std::string& region_id() const { return region_id_; }
+    // The grid's message from the most recent failed renewal, empty otherwise.
+    const std::string& last_error() const { return last_error_; }
 
 private:
     Client client_;
@@ -384,6 +400,7 @@ private:
     std::string region_id_;
     std::chrono::steady_clock::time_point renew_at_{};
 	bool already_registered_{};
+    std::string last_error_;
 };
 
 } // namespace homeworldz::grid

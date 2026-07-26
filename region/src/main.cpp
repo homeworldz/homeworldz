@@ -963,10 +963,15 @@ int main(int argc, char* argv[]) {
             const auto grid_url = configured_value("grid.url", "http://localhost:42000");
             auto registration_transport = homeworldz::grid::socket_transport(grid_url, region_access_key);
             homeworldz::grid::Client registration_client(registration_transport);
+            std::string registration_refusal;
             const auto provisioned = registration_client.register_provisioned_region(
-                provisioned_region_id, settings);
+                provisioned_region_id, settings, &registration_refusal);
             if (!provisioned) {
-                std::cerr << "{\"level\":\"error\",\"message\":\"region registration failed\"}" << std::endl;
+                std::cerr << "{\"level\":\"error\",\"message\":\"region registration failed\"";
+                if (!registration_refusal.empty())
+                    std::cerr << ",\"reason\":"
+                              << homeworldz::api::json_string(registration_refusal);
+                std::cerr << '}' << std::endl;
 #ifdef _WIN32
                 WSACleanup();
 #endif
@@ -7750,7 +7755,11 @@ int main(int argc, char* argv[]) {
             }
         }
         if (registration && !registration->tick(now)) {
-            std::cerr << "{\"level\":\"error\",\"message\":\"region lease renewal failed\"}" << std::endl;
+            std::cerr << "{\"level\":\"error\",\"message\":\"region lease renewal failed\"";
+            if (!registration->last_error().empty())
+                std::cerr << ",\"reason\":"
+                          << homeworldz::api::json_string(registration->last_error());
+            std::cerr << '}' << std::endl;
             running = false;
         }
         if (viewer_grid && now >= next_neighbor_refresh)

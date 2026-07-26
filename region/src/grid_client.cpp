@@ -525,13 +525,17 @@ std::string Client::register_region(const RegionSettings& settings) {
 }
 
 std::optional<RegisteredRegion> Client::register_provisioned_region(
-    std::string_view region_id, const RegionSettings& settings) {
+    std::string_view region_id, const RegionSettings& settings, std::string* refusal) {
     const auto body = "{\"publicEndpoint\":" + api::json_string(settings.public_endpoint) +
                       ",\"viewerPort\":" + std::to_string(settings.viewer_port) +
-                      ",\"leaseSeconds\":" + std::to_string(settings.lease_seconds) + '}';
+                      ",\"leaseSeconds\":" + std::to_string(settings.lease_seconds) +
+                      ",\"regionProtocol\":" + std::to_string(region_protocol) + '}';
     const auto response = transport_->send(
         "POST", "/api/v1/region-runtime/" + path_segment(region_id), body);
-    if (response.status_code != 200) return std::nullopt;
+    if (response.status_code != 200) {
+        if (refusal) *refusal = json_field(response.body, "message");
+        return std::nullopt;
+    }
     RegisteredRegion region{json_field(response.body, "id"), json_field(response.body, "name")};
     const auto grid_x = json_int(response.body, "gridX");
     const auto grid_y = json_int(response.body, "gridY");
@@ -539,6 +543,7 @@ std::optional<RegisteredRegion> Client::register_provisioned_region(
 	const auto size_y = json_int(response.body, "sizeY");
 	const auto maturity = json_int(response.body, "maturity");
     const auto viewer_port = json_int(response.body, "viewerPort");
+    const auto grid_protocol = json_int(response.body, "regionProtocol");
     region.public_endpoint = json_field(response.body, "publicEndpoint");
     region.grid_name = json_field(response.body, "gridName");
     region.grid_public_url = json_field(response.body, "gridPublicUrl");
@@ -547,7 +552,9 @@ std::optional<RegisteredRegion> Client::register_provisioned_region(
 		(*size_x != 256 && *size_x != 512 && *size_x != 1024) || *size_x != *size_y ||
 		!maturity || *maturity < 0 || *maturity > 2 ||
         region.public_endpoint.empty() || !viewer_port || *viewer_port < 1 || *viewer_port > 65535 ||
-        region.grid_name.empty() || region.grid_public_url.empty()) return std::nullopt;
+        region.grid_name.empty() || region.grid_public_url.empty() ||
+        !grid_protocol || *grid_protocol < 1) return std::nullopt;
+    region.grid_region_protocol = *grid_protocol;
     region.grid_x = *grid_x;
     region.grid_y = *grid_y;
 	region.viewer_port = *viewer_port;
@@ -712,10 +719,15 @@ bool Client::deregister(std::string_view region_id) {
     return transport_->send("DELETE", "/api/v1/regions/" + std::string(region_id), {}).status_code == 204;
 }
 
-bool Client::renew_provisioned_lease(std::string_view region_id, int lease_seconds) {
-    const auto body = "{\"leaseSeconds\":" + std::to_string(lease_seconds) + '}';
-    return transport_->send("PUT", "/api/v1/region-runtime/" + std::string(region_id) + "/lease", body)
-               .status_code == 200;
+bool Client::renew_provisioned_lease(std::string_view region_id, int lease_seconds,
+                                     std::string* refusal) {
+    const auto body = "{\"leaseSeconds\":" + std::to_string(lease_seconds) +
+                      ",\"regionProtocol\":" + std::to_string(region_protocol) + '}';
+    const auto response = transport_->send(
+        "PUT", "/api/v1/region-runtime/" + std::string(region_id) + "/lease", body);
+    if (response.status_code == 200) return true;
+    if (refusal) *refusal = json_field(response.body, "message");
+    return false;
 }
 
 bool Client::deregister_provisioned(std::string_view region_id) {
@@ -1126,8 +1138,9 @@ bool RegistrationLifecycle::start(std::chrono::steady_clock::time_point now) {
 
 bool RegistrationLifecycle::tick(std::chrono::steady_clock::time_point now) {
     if (region_id_.empty() || now < renew_at_) return !region_id_.empty();
+    last_error_.clear();
     const auto renewed = already_registered_ ?
-        client_.renew_provisioned_lease(region_id_, settings_.lease_seconds) :
+        client_.renew_provisioned_lease(region_id_, settings_.lease_seconds, &last_error_) :
         client_.renew_lease(region_id_, settings_.lease_seconds);
     if (!renewed) return false;
     renew_at_ = now + std::chrono::seconds(settings_.lease_seconds / 2);

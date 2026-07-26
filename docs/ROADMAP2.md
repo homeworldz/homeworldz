@@ -19,9 +19,10 @@ redirect the work.
 
 Checkboxes describe the present state, not a promise of a release date. Phase 1
 implementation has started on two fronts: the extension negotiation mechanism,
-which serves legacy viewers rather than the new client, and the grid side of the
-client arrival path — the compatibility probe, world entry with region-scoped
-tickets, the grid-region protocol handshake, and the grid channel WebSocket.
+which serves legacy viewers rather than the new client, and the client arrival
+path — the compatibility probe, world entry with region-scoped tickets, the
+grid-region protocol handshake (now reported from both sides), and the grid
+channel WebSocket.
 [CLIENT2.md](CLIENT2.md) is the implementation companion and
 [CLIENT2-LOG.md](CLIENT2-LOG.md) records the judgment calls made along the way.
 
