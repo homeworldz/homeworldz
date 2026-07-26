@@ -74,6 +74,13 @@ struct HeightFieldDefinition {
     std::vector<float> samples;
     std::uint32_t sample_count{};
     double spacing{1.0};
+    // Terrain contact material, defaulting to the stone preset of the legacy
+    // material table. Without an explicit material the terrain body inherits the
+    // engine default — restitution zero in Jolt — and the averaging restitution
+    // combine then silently caps every ground bounce at half the object's own
+    // setting.
+    double friction{0.8};
+    double restitution{0.4};
 };
 
 struct Contact {

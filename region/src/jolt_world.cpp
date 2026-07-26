@@ -191,6 +191,13 @@ public:
             settings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
             settings.mMassPropertiesOverride.mMass = static_cast<float>(definition.mass);
         }
+        // The region takes one collision step per 45 Hz tick, so a fast-falling
+        // body can cover more than its own height in a single step, sink into the
+        // terrain, and get pushed back out over the following frames — visible as
+        // the object "squashing" on impact, and it swallows energy that should
+        // have returned as bounce. LinearCast sweeps the motion instead.
+        if (definition.motion == MotionType::Dynamic)
+            settings.mMotionQuality = JPH::EMotionQuality::LinearCast;
         const auto native = system_.GetBodyInterface().CreateAndAddBody(settings,
             definition.motion == MotionType::Static ? JPH::EActivation::DontActivate : JPH::EActivation::Activate);
         if (native.IsInvalid()) throw std::runtime_error("Jolt could not create a body");
@@ -257,6 +264,8 @@ public:
             0.0F, static_cast<float>(static_cast<double>(count - 1) * definition.spacing), 0.0F};
         JPH::BodyCreationSettings settings(
             shape.Get(), position, rotation, JPH::EMotionType::Static, Layers::static_body);
+        settings.mFriction = static_cast<float>(definition.friction);
+        settings.mRestitution = static_cast<float>(definition.restitution);
         const auto native = system_.GetBodyInterface().CreateAndAddBody(settings, JPH::EActivation::DontActivate);
         if (native.IsInvalid()) throw std::runtime_error("Jolt could not create a heightfield");
         const auto id = next_body_++;

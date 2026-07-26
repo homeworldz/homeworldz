@@ -73,6 +73,69 @@ bool jolt_heightfield_test() {
            hit->body == body && std::abs(hit->point.z - 6.0) < 0.1;
 }
 
+bool jolt_terrain_bounce_test() {
+    using namespace homeworldz;
+    auto world = physics::make_jolt_world();
+    // Flat terrain at z = 5 with the default stone-like material. Before the
+    // terrain carried a material, it inherited Jolt's restitution 0 and the
+    // averaging combine halved every ground bounce.
+    physics::HeightFieldDefinition terrain;
+    terrain.entity_id = 120;
+    terrain.sample_count = 8;
+    terrain.samples.assign(64, 5.0F);
+    if (world->create_heightfield(terrain) == 0) return false;
+    physics::BodyDefinition ball;
+    ball.entity_id = 121;
+    ball.motion = physics::MotionType::Dynamic;
+    ball.shape.type = physics::ShapeType::Sphere;
+    ball.shape.radius = 0.25;
+    ball.position = {3.5, 3.5, 7};
+    ball.restitution = 0.9;
+    ball.mass = 10.0;
+    const auto body = world->create_body(ball);
+    double rebound_speed = 0.0;
+    for (int tick = 0; tick < 600; ++tick) {
+        world->step(1.0 / 180.0);
+        if (const auto state = world->body_state(body))
+            rebound_speed = std::max(rebound_speed, state->linear_velocity.z);
+    }
+    // A 1.75 m drop impacts at about 5.9 m/s. Averaging 0.9 against the terrain's
+    // 0.4 gives 0.65, so the rebound should be near 3.8 m/s; the old bare terrain
+    // averaged to 0.45 and could not exceed about 2.7 m/s.
+    return rebound_speed > 3.0 && rebound_speed < 4.6;
+}
+
+bool jolt_fast_fall_penetration_test() {
+    using namespace homeworldz;
+    auto world = physics::make_jolt_world();
+    physics::HeightFieldDefinition terrain;
+    terrain.entity_id = 130;
+    terrain.sample_count = 8;
+    terrain.samples.assign(64, 5.0F);
+    if (world->create_heightfield(terrain) == 0) return false;
+    // A thin, heavy box falling fast enough to cross more than its own thickness
+    // in one 45 Hz region tick. Discrete collision let it sink into the terrain
+    // and get pushed back out — the "squashing" a viewer sees on impact;
+    // LinearCast sweeps the motion so the surface is never meaningfully crossed.
+    physics::BodyDefinition slab;
+    slab.entity_id = 131;
+    slab.motion = physics::MotionType::Dynamic;
+    slab.shape.half_extents = {0.5, 0.5, 0.1};
+    slab.position = {3.5, 3.5, 25};
+    slab.restitution = 0.0;
+    slab.mass = 500.0;
+    const auto body = world->create_body(slab);
+    double lowest_center = 25.0;
+    for (int tick = 0; tick < 240; ++tick) {
+        world->step(1.0 / 45.0);
+        if (const auto state = world->body_state(body))
+            lowest_center = std::min(lowest_center, state->position.z);
+    }
+    // Resting center is 5.1; anything below 5.0 means the slab's midplane crossed
+    // the terrain surface entirely. Allow a small solver margin above that.
+    return lowest_center > 5.0;
+}
+
 bool jolt_restitution_combine_test() {
     using namespace homeworldz;
     auto world = physics::make_jolt_world();
@@ -305,6 +368,8 @@ bool jolt_character_spawn_depenetration_test() {
 
 int main() {
     if (!jolt_heightfield_test()) return 1;
+    if (!jolt_terrain_bounce_test()) return 1;
+    if (!jolt_fast_fall_penetration_test()) return 1;
     if (!jolt_restitution_combine_test()) return 1;
     if (!static_scene_mirror_test()) return 1;
     if (!jolt_compound_linkset_test()) return 1;

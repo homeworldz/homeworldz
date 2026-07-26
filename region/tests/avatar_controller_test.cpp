@@ -132,5 +132,40 @@ int main() {
         edge_avatar.state().position.z != 40 || edge_avatar.state().grounded ||
         !edge_avatar.state().flying)
         return 24;
+
+    // Stopping flight mid-air keeps forward momentum: the fall is ballistic, not
+    // straight down. Fly forward at altitude, toggle flight off, release keys.
+    homeworldz::viewer::AvatarController glider;
+    glider.teleport({100, 100, 60}, true);
+    update.control_flags = homeworldz::viewer::control_fly | homeworldz::viewer::control_forward;
+    update.body_rotation = {0.F, 0.F, 0.F}; // facing +x
+    glider.apply(update);
+    glider.step(0.25);
+    if (!glider.state().flying || std::abs(glider.state().velocity.x - 4.0) > 1e-9) return 25;
+    update.control_flags = 0; // flight and keys released together
+    glider.apply(update);
+    glider.step(0.25);
+    if (glider.state().flying || glider.state().grounded) return 26;
+    // Horizontal momentum carried through; gravity owns the vertical.
+    if (std::abs(glider.state().velocity.x - 4.0) > 1e-9 || glider.state().velocity.y != 0.0 ||
+        glider.state().velocity.z >= 0.0)
+        return 27;
+    const auto glide_x = glider.state().position.x;
+    glider.step(0.25);
+    if (glider.state().position.x <= glide_x) return 28;
+    // Directional input still steers the fall.
+    update.control_flags = homeworldz::viewer::control_back;
+    glider.apply(update);
+    glider.step(0.25);
+    if (std::abs(glider.state().velocity.x + 4.0) > 1e-9) return 29;
+    // Landing still stops the slide on key release: grounded resumes control.
+    homeworldz::viewer::AvatarController lander;
+    update.control_flags = homeworldz::viewer::control_fly | homeworldz::viewer::control_forward;
+    lander.apply(update);
+    lander.step(0.25);
+    update.control_flags = 0;
+    lander.apply(update);
+    for (int index = 0; index < 400; ++index) lander.step(0.05);
+    if (!lander.state().grounded || lander.state().velocity.x != 0.0) return 30;
     return 0;
 }

@@ -206,8 +206,18 @@ void AvatarController::step(double seconds) {
     if (length > 1.0) { forward /= length; left /= length; }
     const bool fast = controls_ & (control_fast_forward | control_fast_left | control_fast_up);
     const double speed = fast ? 8.0 : 4.0;
-    state_.velocity.x = (forward_x * forward + left_x * left) * speed;
-    state_.velocity.y = (forward_y * forward + left_y * left) * speed;
+    // Horizontal velocity is control-driven while flying (release hovers in
+    // place) or grounded (release stops), but an airborne avatar that is not
+    // flying is ballistic: momentum from the moment flight ended or the jump
+    // launched carries through the fall, as in Second Life, with directional
+    // input still steering. Without this, releasing the keys — or toggling
+    // flight off — zeroed horizontal velocity in one tick and the avatar fell
+    // straight down instead of like a slow bullet.
+    const bool steering = forward != 0.0 || left != 0.0;
+    if (state_.flying || state_.grounded || steering) {
+        state_.velocity.x = (forward_x * forward + left_x * left) * speed;
+        state_.velocity.y = (forward_y * forward + left_y * left) * speed;
+    }
     if (state_.flying) {
         const double vertical = ((controls_ & control_up) ? 1.0 : 0.0) - ((controls_ & control_down) ? 1.0 : 0.0);
         state_.velocity.z = vertical * speed + flight_lift_velocity_;
