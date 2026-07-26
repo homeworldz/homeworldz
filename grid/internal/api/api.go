@@ -114,6 +114,10 @@ type Options struct {
 	Sessions     SessionStore
 	Locations    LocationStore
 	TicketSigner *webtoken.Signer
+	// ChannelURL is the absolute wss:// URL of the grid channel, reported in
+	// the probe when the deployment knows its public URL; a client that
+	// probed can otherwise derive it from the API base it already used.
+	ChannelURL string
 }
 
 // API is the website API handler.
@@ -134,6 +138,7 @@ type API struct {
 	sessions        SessionStore
 	locations       LocationStore
 	ticketSigner    *webtoken.Signer
+	channelURL      string
 }
 
 // New validates options and returns the composed website API handler.
@@ -176,6 +181,7 @@ func New(options Options) (http.Handler, error) {
 		sessions:        options.Sessions,
 		locations:       options.Locations,
 		ticketSigner:    options.TicketSigner,
+		channelURL:      options.ChannelURL,
 	}
 
 	mux := http.NewServeMux()
@@ -184,6 +190,7 @@ func New(options Options) (http.Handler, error) {
 	// so handlers keep the explicit method check the rest of the mux uses.
 	mux.HandleFunc("/v1/version", a.clientVersion)
 	mux.HandleFunc("/v1/client/session", a.clientSession)
+	mux.HandleFunc("/v1/client/channel", a.clientChannel)
 	mux.HandleFunc("/v1/registrations", a.registrations)
 	mux.HandleFunc("/v1/verifications", a.verifications)
 	mux.HandleFunc("/v1/verifications/resend", a.resendVerification)

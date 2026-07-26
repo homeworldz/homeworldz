@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -102,6 +103,7 @@ func main() {
 		Sessions:        identity.NewPostgresStore(db),
 		Locations:       locations.NewPostgresStore(db),
 		TicketSigner:    ticketSigner,
+		ChannelURL:      channelURL(settings.WebsitePublicURL),
 	})
 	if err != nil {
 		logger.Error("build website api", "error", err)
@@ -129,6 +131,19 @@ func main() {
 	defer cancel()
 	if err := server.Shutdown(ctx); err != nil {
 		logger.Error("shutdown", "error", err)
+	}
+}
+
+// channelURL derives the grid channel's absolute WebSocket URL from the
+// website API's public URL, when one is configured.
+func channelURL(publicURL string) string {
+	switch {
+	case strings.HasPrefix(publicURL, "https://"):
+		return "wss://" + strings.TrimPrefix(publicURL, "https://") + "/v1/client/channel"
+	case strings.HasPrefix(publicURL, "http://"):
+		return "ws://" + strings.TrimPrefix(publicURL, "http://") + "/v1/client/channel"
+	default:
+		return ""
 	}
 }
 

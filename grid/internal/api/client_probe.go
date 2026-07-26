@@ -40,9 +40,10 @@ type ClientSupport struct {
 	Welcome         *WelcomeRegion `json:"welcome,omitempty"`
 }
 
-// GridSupport describes capabilities the grid services themselves serve.
-// Channel and ChannelURL are absent until the grid channel exists: a probe
-// advertises implemented behavior only.
+// GridSupport describes capabilities the grid services themselves serve. The
+// grid channel is part of this binary, so it is always advertised; ChannelURL
+// is present when the deployment knows its public URL, and a client that
+// probed can otherwise derive the URL from the API base it already used.
 type GridSupport struct {
 	Name       string `json:"name"`
 	Channel    string `json:"channel,omitempty"`
@@ -85,7 +86,7 @@ func (a *API) clientVersion(w http.ResponseWriter, r *http.Request) {
 		Client: ClientSupport{
 			Protocol:        clientProtocol,
 			MinimumProtocol: clientMinimumProtocol,
-			Grid:            GridSupport{Name: a.gridName},
+			Grid:            GridSupport{Name: a.gridName, Channel: "websocket", ChannelURL: a.channelURL},
 			Regions: RegionSupport{
 				Transports:   []string{},
 				AssetFormats: []string{},

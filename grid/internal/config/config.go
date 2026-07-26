@@ -30,6 +30,10 @@ type Grid struct {
 	// Website API ([website] and [mail] sections). These configure the
 	// separate browser-facing homeworldz-api binary; the grid binary ignores them.
 	WebsiteAddress        string
+	// WebsitePublicURL is the public https:// base of the website API
+	// ([website] public_url), used to derive absolute URLs such as the grid
+	// channel's wss:// endpoint. Empty when the deployment has no public name.
+	WebsitePublicURL      string
 	WebsiteAllowedOrigins []string
 	WebsiteJWTSecret      string
 	WebsiteJWTIssuer      string
@@ -91,6 +95,7 @@ func LoadGrid(directory string) (Grid, error) {
 
 	website := parsed.Section("website")
 	result.WebsiteAddress = website.Key("address").MustString("127.0.0.1:42010")
+	result.WebsitePublicURL = strings.TrimRight(strings.TrimSpace(website.Key("public_url").String()), "/")
 	result.WebsiteAllowedOrigins = splitList(website.Key("allowed_origins").
 		MustString("https://homeworldz.com,https://www.homeworldz.com"))
 	result.WebsiteJWTSecret = website.Key("jwt_secret").String()

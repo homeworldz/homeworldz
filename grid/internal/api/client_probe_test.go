@@ -100,9 +100,11 @@ func TestClientVersionProbe(t *testing.T) {
 	if document.Client.Grid.Name != "Homeworldz Test" {
 		t.Fatalf("unexpected grid name: %+v", document.Client.Grid)
 	}
-	// Honesty: nothing unbuilt is advertised.
-	if document.Client.Grid.Channel != "" || document.Client.Grid.ChannelURL != "" {
-		t.Fatalf("grid channel advertised before it exists: %+v", document.Client.Grid)
+	// Honesty: what is built is advertised, and nothing more. The grid channel
+	// ships in this binary; its absolute URL appears only when the deployment
+	// knows its public URL.
+	if document.Client.Grid.Channel != "websocket" || document.Client.Grid.ChannelURL != "" {
+		t.Fatalf("unexpected grid channel advertisement: %+v", document.Client.Grid)
 	}
 	if len(document.Client.Regions.Transports) != 0 || len(document.Client.Regions.AssetFormats) != 0 ||
 		document.Client.Regions.MeshedPrims {
