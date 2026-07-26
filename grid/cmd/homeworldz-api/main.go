@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/homeworldz/homeworldz/grid/internal/arrival"
 	"github.com/homeworldz/homeworldz/grid/internal/config"
 	"github.com/homeworldz/homeworldz/grid/internal/mailer"
 	"github.com/homeworldz/homeworldz/grid/internal/presence"
@@ -66,6 +67,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	welcome, err := arrival.ParseList(settings.WelcomeLocations)
+	if err != nil {
+		logger.Error("parse [grid] welcome_locations", "error", err)
+		os.Exit(1)
+	}
+
 	handler, err := api.New(api.Options{
 		Accounts:        webaccount.NewPostgresStore(db),
 		Regions:         provisioning.NewPostgresStore(db),
@@ -78,6 +85,9 @@ func main() {
 		VerificationURL: settings.MailVerificationURL,
 		RatePerMinute:   settings.WebsiteRatePerMinute,
 		RateBurst:       settings.WebsiteRateBurst,
+		Version:         version,
+		GridName:        settings.Name,
+		Welcome:         welcome,
 	})
 	if err != nil {
 		logger.Error("build website api", "error", err)

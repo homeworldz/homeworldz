@@ -22,6 +22,7 @@ import (
 	"github.com/homeworldz/homeworldz/grid/internal/mailer"
 	"github.com/homeworldz/homeworldz/grid/internal/presence"
 	"github.com/homeworldz/homeworldz/grid/internal/provisioning"
+	"github.com/homeworldz/homeworldz/grid/internal/arrival"
 	"github.com/homeworldz/homeworldz/grid/internal/regions"
 	"github.com/homeworldz/homeworldz/grid/internal/webaccount"
 	"github.com/homeworldz/homeworldz/grid/internal/webtoken"
@@ -83,6 +84,14 @@ type Options struct {
 	VerificationURL string
 	RatePerMinute   int
 	RateBurst       int
+	// Version is the build version reported by GET /v1/version.
+	Version string
+	// GridName is the operator-facing grid name ([grid] name), reported to the
+	// Homeworldz client for its login screen.
+	GridName string
+	// Welcome is the ordered new-arrival list ([grid] welcome_locations); the
+	// probe's welcome field derives from its first entry.
+	Welcome []arrival.Point
 }
 
 // API is the website API handler.
@@ -97,6 +106,9 @@ type API struct {
 	allowedOrigins  map[string]bool
 	verificationURL string
 	limiter         *rateLimiter
+	version         string
+	gridName        string
+	welcome         []arrival.Point
 }
 
 // New validates options and returns the composed website API handler.
@@ -133,9 +145,16 @@ func New(options Options) (http.Handler, error) {
 		allowedOrigins:  origins,
 		verificationURL: strings.TrimRight(options.VerificationURL, "/"),
 		limiter:         newRateLimiter(float64(perMinute)/60.0, burst),
+		version:         options.Version,
+		gridName:        options.GridName,
+		welcome:         options.Welcome,
 	}
 
 	mux := http.NewServeMux()
+	// Method-specific patterns would 405 wrong methods by themselves, but the
+	// "/" catch-all below out-matches that fallback and turns them into 404s,
+	// so handlers keep the explicit method check the rest of the mux uses.
+	mux.HandleFunc("/v1/version", a.clientVersion)
 	mux.HandleFunc("/v1/registrations", a.registrations)
 	mux.HandleFunc("/v1/verifications", a.verifications)
 	mux.HandleFunc("/v1/verifications/resend", a.resendVerification)

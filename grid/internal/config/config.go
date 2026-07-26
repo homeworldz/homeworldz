@@ -17,6 +17,11 @@ type Grid struct {
 	DatabaseURL  string
 	ServiceToken string
 	Directory    string
+	// WelcomeLocations is the ordered new-arrival list ([grid]
+	// welcome_locations): comma-separated Region/x/y/z entries, first entry
+	// preferred. Parsing into structured points happens at the consumer so a
+	// malformed entry fails that binary's startup with a specific error.
+	WelcomeLocations []string
 	// VaultPath is the filesystem root of the asset vault (ADR 0026), holding the
 	// durable bytes behind inventory-referenced assets. A relative value resolves
 	// against the process working directory, as the region's data_path does.
@@ -66,6 +71,7 @@ func LoadGrid(directory string) (Grid, error) {
 		Directory:    resolved,
 		VaultPath: strings.TrimSpace(parsed.Section("vault").Key("path").
 			MustString(filepath.Join("var", "vault"))),
+		WelcomeLocations: splitList(parsed.Section("grid").Key("welcome_locations").String()),
 	}
 	if result.VaultPath == "" {
 		return Grid{}, fmt.Errorf("invalid asset vault path %q", result.VaultPath)
