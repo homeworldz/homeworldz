@@ -40,12 +40,18 @@ type RegisterRegionRequest struct {
 
 type RenewRegionLeaseRequest struct {
 	LeaseSeconds int `json:"leaseSeconds"`
+	// RegionProtocol is the region software's grid-region protocol version
+	// (docs/CLIENT2.md, "the region protocol version"). Zero means the region
+	// predates the handshake and is accepted; a non-zero value must match.
+	RegionProtocol int `json:"regionProtocol,omitempty"`
 }
 
 type StartProvisionedRegionRequest struct {
 	PublicEndpoint string `json:"publicEndpoint"`
 	ViewerPort     int    `json:"viewerPort"`
 	LeaseSeconds   int    `json:"leaseSeconds"`
+	// RegionProtocol, as on RenewRegionLeaseRequest.
+	RegionProtocol int `json:"regionProtocol,omitempty"`
 }
 
 type ProvisionedRegionRuntimeResult struct {
@@ -57,6 +63,10 @@ type ProvisionedRegionRuntimeResult struct {
 	Maturity      int            `json:"maturity"`
 	OwnerUserID   string         `json:"ownerUserId"`
 	Estate        *estate.Estate `json:"estate,omitempty"`
+	// RegionProtocol is the grid's current grid-region protocol version, so a
+	// region that is behind can warn its operator before an increment is
+	// enforced against it.
+	RegionProtocol int `json:"regionProtocol"`
 }
 
 // EstateResult wraps an estate for the region-runtime estate endpoints.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -142,6 +143,33 @@ func New(ready ReadinessChecker, version string, options Options) http.Handler {
 	))
 }
 
+// gridRegionProtocol is the grid-region protocol version this grid requires
+// (docs/CLIENT2.md, "the region protocol version"). It increments only when a
+// change genuinely requires region software to be upgraded, and a region
+// reporting a different version is refused registration. A region reporting
+// nothing predates the handshake and is accepted, so enforcement began as a
+// no-op; that allowance is removed once deployed regions all report.
+const gridRegionProtocol = 1
+
+// regionProtocolAccepted enforces the match rule, writing the refusal that
+// names both versions when a reported protocol differs. It returns true when
+// the caller should proceed.
+func regionProtocolAccepted(w http.ResponseWriter, reported int) bool {
+	if reported == 0 || reported == gridRegionProtocol {
+		return true
+	}
+	remedy := "upgrade the region software"
+	if reported > gridRegionProtocol {
+		remedy = "the grid is behind this region software"
+	}
+	writeJSON(w, http.StatusConflict, Error{
+		Code: "region_protocol_mismatch",
+		Message: fmt.Sprintf("region is running grid-region protocol %d; this grid requires %d — %s",
+			reported, gridRegionProtocol, remedy),
+	})
+	return false
+}
+
 func (a *API) provisionedRegionRuntime(w http.ResponseWriter, r *http.Request) {
 	if a.regions == nil || a.provisioned == nil {
 		writeJSON(w, http.StatusServiceUnavailable, Error{Code: "region_registration_unavailable", Message: "provisioned region registration is unavailable"})
@@ -176,7 +204,7 @@ func (a *API) provisionedRegionRuntime(w http.ResponseWriter, r *http.Request) {
 		}
 		validation := RegisterRegionRequest{Name: provisioned.Name, GridX: provisioned.MapX, GridY: provisioned.MapY,
 			PublicEndpoint: publicEndpoint, ViewerPort: viewerPort}
-		if !ok || !validateRegistration(w, validation) {
+		if !ok || !validateRegistration(w, validation) || !regionProtocolAccepted(w, request.RegionProtocol) {
 			return
 		}
 		region, err := a.regions.RegisterProvisioned(r.Context(), id, regions.Registration{
@@ -191,7 +219,8 @@ func (a *API) provisionedRegionRuntime(w http.ResponseWriter, r *http.Request) {
 			result := ProvisionedRegionRuntimeResult{
 				Region: region, GridName: a.gridName, GridPublicURL: a.publicURL,
 				SizeX: provisioned.Size * 256, SizeY: provisioned.Size * 256,
-				Maturity: provisioned.Maturity, OwnerUserID: provisioned.OwnerUserID}
+				Maturity: provisioned.Maturity, OwnerUserID: provisioned.OwnerUserID,
+				RegionProtocol: gridRegionProtocol}
 			if a.estates != nil {
 				if est, eerr := a.estates.ForRegion(r.Context(), id, provisioned.OwnerUserID); eerr == nil {
 					result.Estate = &est
@@ -211,7 +240,7 @@ func (a *API) provisionedRegionRuntime(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		lease, ok := validateLease(w, request.LeaseSeconds)
-		if !ok {
+		if !ok || !regionProtocolAccepted(w, request.RegionProtocol) {
 			return
 		}
 		region, err := a.regions.RenewProvisioned(r.Context(), id, lease)
