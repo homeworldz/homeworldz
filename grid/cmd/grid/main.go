@@ -31,6 +31,7 @@ import (
 	"github.com/homeworldz/homeworldz/grid/internal/regions"
 	"github.com/homeworldz/homeworldz/grid/internal/tasktransfer"
 	"github.com/homeworldz/homeworldz/grid/internal/transit"
+	"github.com/homeworldz/homeworldz/grid/internal/vault"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -115,6 +116,8 @@ func main() {
 		provisionedStore = persistent
 	}
 
+	assetVault := vaultStore(db, settings.VaultPath, logger)
+
 	server := &http.Server{
 		Addr: settings.Address,
 		Handler: httpapi.New(db, version, httpapi.Options{
@@ -127,6 +130,7 @@ func main() {
 			Presence:          presenceStore(db),
 			Inventory:         inventoryStore(db),
 			Assets:            assetStore(db),
+			Vault:             assetVault,
 			Provisioned:       provisionedStore,
 			TerrainHTTPClient: &http.Client{Timeout: 2 * time.Second},
 			Transits:          transitStore(db),
@@ -252,6 +256,24 @@ func assetStore(db *sql.DB) assetmeta.Store {
 		return nil
 	}
 	return assetmeta.NewPostgresStore(db)
+}
+
+// vaultStore opens the asset vault (ADR 0026). A configured database with an
+// unusable vault directory is fatal rather than degraded: the vault's whole
+// purpose is that inventory durability never depends on something optional, and
+// once inventory commits enforce it, a grid that silently ran without one would
+// have accepted items whose bytes it never stored.
+func vaultStore(db *sql.DB, directory string, logger *slog.Logger) vault.Store {
+	if db == nil {
+		return nil
+	}
+	store, err := vault.NewPostgresStore(db, directory)
+	if err != nil {
+		logger.Error("open asset vault", "error", err, "path", directory)
+		os.Exit(1)
+	}
+	logger.Info("asset vault ready", "path", store.Directory())
+	return store
 }
 
 func transitStore(db *sql.DB) transit.Store {

@@ -22,6 +22,7 @@ import (
 	"github.com/homeworldz/homeworldz/grid/internal/regions"
 	"github.com/homeworldz/homeworldz/grid/internal/tasktransfer"
 	"github.com/homeworldz/homeworldz/grid/internal/transit"
+	"github.com/homeworldz/homeworldz/grid/internal/vault"
 )
 
 type ReadinessChecker interface {
@@ -38,6 +39,7 @@ type API struct {
 	presence      presence.Store
 	inventory     inventory.Store
 	assets        assetmeta.Store
+	vault         vault.Store
 	serviceToken  string
 	provisioned   provisioning.Store
 	terrainHTTP   *http.Client
@@ -68,6 +70,7 @@ type Options struct {
 	Presence          presence.Store
 	Inventory         inventory.Store
 	Assets            assetmeta.Store
+	Vault             vault.Store
 	Provisioned       provisioning.Store
 	TerrainHTTPClient *http.Client
 	Transits          transit.Store
@@ -81,8 +84,9 @@ func New(ready ReadinessChecker, version string, options Options) http.Handler {
 	a := &API{ready: ready, version: version, publicURL: strings.TrimRight(options.GridPublicURL, "/"),
 		gridName: strings.TrimSpace(options.GridName),
 		regions:  options.Regions, identity: options.Identity, presence: options.Presence,
-		inventory: options.Inventory, assets: options.Assets, serviceToken: options.ServiceToken,
-		provisioned: options.Provisioned, terrainHTTP: options.TerrainHTTPClient,
+		inventory: options.Inventory, assets: options.Assets, vault: options.Vault,
+		serviceToken: options.ServiceToken,
+		provisioned:  options.Provisioned, terrainHTTP: options.TerrainHTTPClient,
 		terrainCache: newTerrainTileCache(), transits: options.Transits,
 		taskTransfers: options.TaskTransfers, locations: options.Locations,
 		gestures: options.Gestures, estates: options.Estates}
@@ -123,6 +127,7 @@ func New(ready ReadinessChecker, version string, options Options) http.Handler {
 	mux.HandleFunc("/api/v1/inventory/", a.inventoryByUser)
 	mux.HandleFunc("/api/v1/assets", a.assetsRoot)
 	mux.HandleFunc("/api/v1/assets/", a.assetByID)
+	mux.HandleFunc("/api/v1/vault/blobs/", a.vaultBlob)
 	mux.HandleFunc("/api/v1/transits", a.transitsRoot)
 	mux.HandleFunc("/api/v1/transits/", a.transitByID)
 	mux.HandleFunc("/api/v1/task-transfers", a.taskTransfersRoot)

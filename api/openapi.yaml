@@ -525,6 +525,74 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/vault/blobs/{sha256}:
+    parameters:
+      - $ref: "#/components/parameters/RequestId"
+      - $ref: "#/components/parameters/BlobDigest"
+    description: >
+      The asset vault (ADR 0026): durable, replica-only storage for the bytes
+      behind inventory-referenced assets. Regions reach it over the internal
+      service-token boundary; it is never in the viewer asset fetch path, and
+      viewers continue to fetch bytes from the region they are connected to.
+    put:
+      operationId: ingestVaultBlob
+      summary: Write a blob through to the vault, verified against its digest
+      description: >
+        Idempotent. The declared length comes from Content-Length and the digest
+        from the path; bytes that match neither are rejected and never stored.
+        Responds 200 whether or not this request is what first stored the blob.
+      security:
+        - ServiceToken: []
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        "200":
+          description: Vault holds the blob
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VaultBlob" }
+        "400":
+          description: Digest or length is invalid, or the bytes do not match them
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "413":
+          description: Blob exceeds the maximum vault blob size
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    head:
+      operationId: statVaultBlob
+      summary: Report whether the vault durably holds a blob
+      security:
+        - ServiceToken: []
+      responses:
+        "200":
+          description: Vault holds the blob; Content-Length is its stored length
+        "404":
+          description: Vault does not hold the blob
+    get:
+      operationId: getVaultBlob
+      summary: Fetch blob bytes from the vault
+      description: >
+        The always-available fetch location for an inventory-referenced asset,
+        used by a region that cannot reach a peer holding the blob.
+      security:
+        - ServiceToken: []
+      responses:
+        "200":
+          description: Blob bytes
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "404":
+          description: Vault does not hold the blob
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 components:
   parameters:
     RequestId:
@@ -577,6 +645,14 @@ components:
       schema:
         type: string
         format: uuid
+    BlobDigest:
+      name: sha256
+      in: path
+      required: true
+      description: Lowercase hexadecimal SHA-256 of the blob bytes.
+      schema:
+        type: string
+        pattern: "^[0-9a-f]{64}$"
   headers:
     RequestId:
       required: true
@@ -717,6 +793,13 @@ components:
         locations:
           type: array
           items: { $ref: "#/components/schemas/AssetLocation" }
+    VaultBlob:
+      type: object
+      required: [sha256, size, ingestedAt]
+      properties:
+        sha256: { type: string, pattern: "^[0-9a-f]{64}$" }
+        size: { type: integer, format: int64, minimum: 1 }
+        ingestedAt: { type: string, format: date-time }
     InventoryFolder:
       type: object
       required: [id, ownerUserId, parentId, name, typeDefault, version]

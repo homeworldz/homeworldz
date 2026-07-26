@@ -310,9 +310,18 @@ Falcon LSL scripting foundation.
 
 ### Inventory asset durability
 
-- [ ] Implement the grid asset vault: a durable, replica-only blob store that
+- [x] Implement the grid asset vault: a durable, replica-only blob store that
   never originates assets, never hosts agents, and is never in the viewer data
-  path (ADR 0026).
+  path (ADR 0026). Blob bytes live on a sharded filesystem tree under the
+  `[vault] path` setting and are indexed in PostgreSQL; regions reach them at
+  `/api/v1/vault/blobs/{sha256}` behind the internal service-token boundary,
+  which is what keeps the vault out of the viewer fetch path. Ingest verifies the
+  declared digest and length on a temporary file before an atomic rename, so
+  bytes that fail verification are never reachable, and it is idempotent. A
+  presence check confirms the stored file as well as the index row, so the vault
+  never claims a blob it cannot serve. This is the store only — the enforcement,
+  ingest, fallback, and backfill items below are what make inventory durability
+  real, and until they land the vault holds nothing.
 - [ ] Enforce the vault invariant grid-side: commit an inventory item only
   after the vault holds verified bytes for its referenced asset, with
   write-through ingest on upload, take-to-inventory, give, and purchase.

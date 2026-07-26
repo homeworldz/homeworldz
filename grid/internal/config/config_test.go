@@ -20,6 +20,37 @@ func TestLoadGridFromINI(t *testing.T) {
 	}
 }
 
+func TestVaultPathDefaultsAndOverrides(t *testing.T) {
+	directory := t.TempDir()
+	writeFile(t, directory, "db.ini", "[database]\nurl=postgres://file/database\n")
+
+	writeFile(t, directory, "grid.ini", "[grid]\nname=Homeworldz\n")
+	got, err := LoadGrid(directory)
+	if err != nil || got.VaultPath != filepath.Join("var", "vault") {
+		t.Fatalf("default vault path = %q, error = %v", got.VaultPath, err)
+	}
+
+	writeFile(t, directory, "grid.ini", "[vault]\npath = /srv/homeworldz/vault\n")
+	got, err = LoadGrid(directory)
+	if err != nil || got.VaultPath != "/srv/homeworldz/vault" {
+		t.Fatalf("configured vault path = %q, error = %v", got.VaultPath, err)
+	}
+
+	// A blank value falls back to the default, as every other setting here does.
+	writeFile(t, directory, "grid.ini", "[vault]\npath =\n")
+	got, err = LoadGrid(directory)
+	if err != nil || got.VaultPath != filepath.Join("var", "vault") {
+		t.Fatalf("blank vault path = %q, error = %v", got.VaultPath, err)
+	}
+
+	// A whitespace-only path is rejected rather than trimmed to nothing, which
+	// would otherwise resolve the vault root to the working directory.
+	writeFile(t, directory, "grid.ini", "[vault]\npath = \"   \"\n")
+	if _, err := LoadGrid(directory); err == nil {
+		t.Fatal("whitespace-only vault path was accepted")
+	}
+}
+
 func TestMissingFilesAreRejected(t *testing.T) {
 	if _, err := LoadGrid(t.TempDir()); err == nil {
 		t.Fatal("missing configuration files were accepted")

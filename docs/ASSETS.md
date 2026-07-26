@@ -126,12 +126,36 @@ since replicated them on demand. An asset only ever used in one region has
 exactly one replica — and independently operated regions may disappear
 without warning, taking such bytes with them.
 
-### The asset vault — Planned (ADR 0026)
+### The asset vault — Partially implemented (ADR 0026)
 
 ADR 0026 closes that gap with a grid-side **asset vault** and one invariant:
 
 > An inventory item row may only be committed when the vault already holds the
 > verified blob for the asset it references.
+
+**Implemented today: the store, not yet the invariant.** The vault exists as a
+durable blob store — `grid/internal/vault`, indexed by migration `000024`,
+rooted at the `[vault] path` setting in `grid.ini` — reachable by regions over
+the internal service-token boundary at `/api/v1/vault/blobs/{sha256}`:
+`PUT` ingests, `HEAD` reports whether a blob is held, and `GET` serves bytes
+back. Ingest verifies the bytes against the digest in the path and the declared
+`Content-Length` on a temporary file before publishing them by atomic rename, so
+a mismatch is never reachable, and it is idempotent because identical bytes carry
+an identical digest. `HEAD`/`GET` confirm both the index row and the stored file,
+so the vault never reports holding a blob it cannot produce. Unlike the region
+blob store it does not re-hash on read: the vault trusts its own storage layer,
+and verification concentrates at the untrusted cross-region boundary.
+
+Blobs are keyed by the same lowercase SHA-256 the region stores use, so existing
+registrations need no new identifier; ADR 0027's `blob_id` will re-key the index
+rather than reshape it.
+
+**Not yet built:** nothing writes to the vault or reads from it. Inventory
+commits do not enforce the invariant, regions do not push on upload or
+take-to-inventory, region-to-region fetch has not been demoted to an
+optimization, the backfill has not run, and no blob is treated as an evictable
+region cache. Until enforcement lands, the vault stores nothing and inventory
+durability is unchanged.
 
 - The vault is a durable, replica-only **blob** store (ADR 0027): it holds
   bytes, never originates assets, never hosts agents, and is never in the

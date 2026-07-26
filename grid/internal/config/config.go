@@ -17,6 +17,10 @@ type Grid struct {
 	DatabaseURL  string
 	ServiceToken string
 	Directory    string
+	// VaultPath is the filesystem root of the asset vault (ADR 0026), holding the
+	// durable bytes behind inventory-referenced assets. A relative value resolves
+	// against the process working directory, as the region's data_path does.
+	VaultPath string
 
 	// Website API ([website] and [mail] sections). These configure the
 	// separate browser-facing homeworldz-api binary; the grid binary ignores them.
@@ -60,6 +64,11 @@ func LoadGrid(directory string) (Grid, error) {
 		DatabaseURL:  parsed.Section("database").Key("url").String(),
 		ServiceToken: parsed.Section("auth").Key("service_token").String(),
 		Directory:    resolved,
+		VaultPath: strings.TrimSpace(parsed.Section("vault").Key("path").
+			MustString(filepath.Join("var", "vault"))),
+	}
+	if result.VaultPath == "" {
+		return Grid{}, fmt.Errorf("invalid asset vault path %q", result.VaultPath)
 	}
 	if result.Name == "" || len(result.Name) > 128 {
 		return Grid{}, fmt.Errorf("invalid grid name %q", result.Name)
