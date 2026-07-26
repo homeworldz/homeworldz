@@ -680,6 +680,36 @@ answer — its HTTP/3 layer `msh3` is a separate and younger project — against
 set aside first: it would drag a Rust toolchain into the region build, a heavy ask
 for one dependency.
 
+### A shared C++ protocol library for the region session
+
+Both ends of the region session are C++ — the region here, the client core in its
+own repository — and most of what the region-side implementation needs (envelope
+encoding, first-byte discrimination, correlation tracking, message type
+definitions, framing over the transport) is work the client core would otherwise
+write a second time. **The direction is to build the region-session protocol layer
+as a library intended for both ends**, so the two implementations cannot drift:
+one definition of every message, one encoder, one set of tests exercising both
+roles.
+
+Constraints that shape it, recorded before any code exists:
+
+- **It must satisfy client ADR 0002's rule** — building natively and for
+  WebAssembly — or the client cannot adopt it and the point is lost. That
+  constrains its dependencies to effectively none beyond the standard library,
+  which suits a protocol layer.
+- **It carries no transport.** The QUIC/WebSocket stacks differ per end (the
+  region's listener, the browser's native implementation, the native client's
+  library); the shared layer is everything above the byte stream and nothing
+  below.
+- **It lives in this repository** with the region that ships first, structured for
+  consumption from the client repository later — how it is consumed (vendored,
+  submodule, or split out) is decided when the client core exists, per the
+  sibling-repo boundary.
+- The grid's Go side of the WebSocket fallback and grid channel implements the
+  same wire format from its documentation. Two implementations across two
+  languages is the floor; the library keeps it from becoming three in one
+  language.
+
 ### Reaching home-hosted regions: direct where possible, relayed where not
 
 The transport work above assumes a client can dial the region, and for the
