@@ -157,9 +157,11 @@ same grid (as clouds). (An earlier "bots invisible" scare was purely
    (grid `/caps/inventory/library-descendents/{session}`, serving the fixed
    Library catalog). Verified by replaying LMV's exact LLSD requests against
    the live grid.
-2. **HTTP asset fetch fails for LMV** — `RequestAssetHTTP` throws in a loop; LMV
-   can't download wearable/texture assets. The `GetTexture`/`ViewerAsset` cap
-   flow doesn't match LMV's expectations.
+2. **HTTP asset fetch fails for LMV** — RESOLVED (fixed during the server-side
+   baking work: the `GetTexture`/`ViewerAsset` caps now accept the slashless
+   `?<type>_id=<uuid>` query form LMV sends). Confirmed 2026-07-26: a bot
+   downloaded all six wearables and their textures over these caps and
+   completed a client-side bake.
 3. **Logout not handled → ghost avatars** — RESOLVED (2026-07-24). Every
    avatar-removal path (clean logout, session invalidation, duplicate-login
    replacement, teleport/crossing retirement) now broadcasts `KillObject`, and
