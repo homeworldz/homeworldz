@@ -17,10 +17,13 @@ Direction here is expected to change as evidence arrives — Phase 5 already
 reflects one such change — and phases carry explicit gates where an outcome would
 redirect the work.
 
-Checkboxes describe the present state, not a promise of a release date. The only
-implementation work that has started is Phase 1's extension negotiation
-mechanism, which serves legacy viewers rather than the new client; the remaining
-completed items are the decisions themselves.
+Checkboxes describe the present state, not a promise of a release date. Phase 1
+implementation has started on two fronts: the extension negotiation mechanism,
+which serves legacy viewers rather than the new client, and the grid side of the
+client arrival path — the compatibility probe, world entry with region-scoped
+tickets, the grid-region protocol handshake, and the grid channel WebSocket.
+[CLIENT2.md](CLIENT2.md) is the implementation companion and
+[CLIENT2-LOG.md](CLIENT2-LOG.md) records the judgment calls made along the way.
 
 ## Relationship to the 1.0 roadmap
 
@@ -95,26 +98,32 @@ first-party client arrives" and the server consequences in
 None of this is negotiated: the client requires the modern path and treats its
 absence as an incompatible grid.
 
-- [ ] Serve an unauthenticated compatibility document reporting the grid's
+- [x] Serve an unauthenticated compatibility document reporting the grid's
   version and capabilities, so a client can satisfy its declared minimum protocol
   version before attempting a transport. Checked first deliberately: an absent
   endpoint answers immediately, while a QUIC attempt against a region that
-  ignores it may hang until timeout.
-- [ ] Add user-scoped `/v1/client/*` world-entry routes deriving the acting user
+  ignores it may hang until timeout. Served at `GET /v1/version`; what may
+  honestly appear in it is recorded in [CLIENT2.md](CLIENT2.md).
+- [x] Add user-scoped `/v1/client/*` world-entry routes deriving the acting user
   **from the bearer token and never from the path**. The internal tier addresses
   users positionally (`/api/v1/inventory/{userId}`); mirroring that shape on a
   user-facing route would let any authenticated caller read another user's
-  inventory and last known location.
-- [ ] Mint short-lived, region-scoped tickets from a second signer with a
+  inventory and last known location. `POST /v1/client/session` opens a session
+  in the store viewer logins share.
+- [x] Mint short-lived, region-scoped tickets from a second signer with a
   distinct audience, so the account token — which reaches account management
   including password change — never reaches a region.
   [ADR 0028](adr/0028-untrusted-region-trust-model.md) admits regions outside the
-  operator's control, which is what makes this structural rather than tidy.
-- [ ] Return per-region capabilities as data in the session-open response, as a
+  operator's control, which is what makes this structural rather than tidy. The
+  ticket also carries the region and session as claims; nothing region-side
+  validates it yet, which lands with the region transport.
+- [x] Return per-region capabilities as data in the session-open response, as a
   versioned field. Regions within one grid are not uniform, and a region crossing
-  re-resolves them.
-- [ ] Add the browser frontend's origin to the CORS allowlist.
-- [ ] Keep `POST /v1/tokens` as the login endpoint; no new authentication
+  re-resolves them. The manifest ships at version 1, honestly empty of
+  transports until the region session exists.
+- [ ] Add the browser frontend's origin to the CORS allowlist — waiting on a
+  client origin existing to add.
+- [x] Keep `POST /v1/tokens` as the login endpoint; no new authentication
   surface is needed for this client.
 
 ### Extension negotiation
