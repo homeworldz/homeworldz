@@ -376,6 +376,25 @@ std::string parcel_properties_event_xml(const ParcelPropertiesEvent& event) {
            key("AgeVerificationBlock") + age + "</map></map>";
 }
 
+std::string object_physics_properties_event_xml(const ObjectPhysicsProperties& properties) {
+    // Delivered over the Event Queue as LLSD rather than as a UDP message,
+    // matching the Halcyon/Second Life shape. Without this the viewer's Extra
+    // Physics fields have no source and read zero, and because the viewer posts
+    // the whole set back when any one of them is edited, those zeros overwrite
+    // the region's real density, friction, and gravity.
+    const auto real = [](double value) { return "<real>" + std::to_string(value) + "</real>"; };
+    return "<map><key>message</key><string>ObjectPhysicsProperties</string>"
+           "<key>body</key><map><key>ObjectData</key><array><map>"
+           "<key>LocalID</key><integer>" + std::to_string(properties.local_id) +
+           "</integer><key>PhysicsShapeType</key><integer>" +
+           std::to_string(static_cast<unsigned>(properties.physics_shape_type)) +
+           "</integer><key>Density</key>" + real(properties.density) +
+           "<key>Friction</key>" + real(properties.friction) +
+           "<key>Restitution</key>" + real(properties.restitution) +
+           "<key>GravityMultiplier</key>" + real(properties.gravity_multiplier) +
+           "</map></array></map></map>";
+}
+
 std::string event_queue_xml(std::uint64_t id, const std::vector<std::string>& events) {
     std::string encoded_events = events.empty() ? "<array/>" : "<array>";
     for (const auto& event : events) encoded_events += event;

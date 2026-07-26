@@ -148,6 +148,20 @@ std::string enable_simulator_event_xml(std::uint64_t region_handle,
 std::string teleport_finish_event_xml(const TeleportFinish& event);
 std::string crossed_region_event_xml(const CrossedRegion& event);
 std::string parcel_properties_event_xml(const ParcelPropertiesEvent& event);
+// The Extra Physics values the viewer's Features tab displays for one object.
+// The region is the authority for these; the viewer has no other source, and
+// treats what it last received as the current state when the creator edits any
+// one of them.
+struct ObjectPhysicsProperties {
+    std::uint32_t local_id{};
+    std::uint8_t physics_shape_type{};
+    double density{1000.0};
+    double friction{0.6};
+    double restitution{0.5};
+    double gravity_multiplier{1.0};
+};
+
+std::string object_physics_properties_event_xml(const ObjectPhysicsProperties& properties);
 std::string event_queue_xml(std::uint64_t id, const std::vector<std::string>& events = {});
 // What the region tells a viewer it supports, served through the
 // `SimulatorFeatures` capability.

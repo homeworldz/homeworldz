@@ -228,6 +228,29 @@ int main() {
                                    "session-id/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa</uri>");
     passed &= contains(with_visit, "<key>TestTransportSession</key>");
 
+    // ObjectPhysicsProperties: the viewer's only source for the Extra Physics
+    // fields. Defaults must be the region's real ones, because the viewer posts
+    // the whole set back when the creator edits any single field — so a zero here
+    // becomes a zero in the scene.
+    const ObjectPhysicsProperties defaults{};
+    passed &= defaults.density == 1000.0 && defaults.friction == 0.6 &&
+              defaults.restitution == 0.5 && defaults.gravity_multiplier == 1.0;
+    const auto physics = object_physics_properties_event_xml(
+        {42, 2, 1000.0, 0.6, 0.5, 1.0});
+    passed &= contains(physics, "<key>message</key><string>ObjectPhysicsProperties</string>");
+    passed &= contains(physics, "<key>LocalID</key><integer>42</integer>");
+    passed &= contains(physics, "<key>PhysicsShapeType</key><integer>2</integer>");
+    passed &= contains(physics, "<key>Density</key><real>1000.000000</real>");
+    passed &= contains(physics, "<key>Friction</key><real>0.600000</real>");
+    passed &= contains(physics, "<key>Restitution</key><real>0.500000</real>");
+    passed &= contains(physics, "<key>GravityMultiplier</key><real>1.000000</real>");
+    passed &= contains(physics, "<key>ObjectData</key><array><map>");
+    passed &= well_formed_llsd("<?xml version=\"1.0\"?><llsd>" + physics + "</llsd>");
+    // A zeroed set is representable, since that is what a viewer sends when it has
+    // never been told otherwise — the regression this event exists to prevent.
+    const auto zeroed = object_physics_properties_event_xml({1, 0, 0.0, 0.0, 0.0, 0.0});
+    passed &= contains(zeroed, "<key>GravityMultiplier</key><real>0.000000</real>");
+
     // Structure, not just contents: an unbalanced map or array would still
     // satisfy every substring assertion above but break a real viewer.
     passed &= well_formed_llsd(bare);

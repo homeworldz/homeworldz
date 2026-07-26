@@ -622,6 +622,17 @@ void apply_extra_physics(
         std::clamp(static_cast<double>(update.gravity_multiplier), -1.0, 28.0);
 }
 
+// The Extra Physics values to report to a viewer for one entity. The region is
+// the only source the viewer has for these.
+homeworldz::viewer::ObjectPhysicsProperties physics_properties_of(
+    const homeworldz::scene::Entity& entity) {
+    // Scene entity ids are 64-bit; the viewer addresses objects by a 32-bit
+    // LocalID, the same narrowing every other object update performs.
+    return {static_cast<std::uint32_t>(entity.id), entity.physics_shape_type,
+            entity.physics_density, entity.physics_friction, entity.physics_restitution,
+            entity.physics_gravity_multiplier};
+}
+
 std::optional<homeworldz::viewer::StaticObject> static_object_from_entity(
     const homeworldz::scene::Scene& scene, const homeworldz::scene::Entity& entity,
     std::string_view recipient_id, const homeworldz::script::FalconRuntime& falcon) {
@@ -5708,6 +5719,8 @@ int main(int argc, char* argv[]) {
                             std::vector<homeworldz::viewer::ObjectProperties> properties;
                             properties.reserve(object_select->local_ids.size());
                             const auto user_id = homeworldz::viewer::format_uuid(identity->agent_id);
+                            const auto session_id =
+                                homeworldz::viewer::format_uuid(identity->session_id);
                             for (const auto local_id : object_select->local_ids) {
                                 const auto* entity = scene.find(local_id);
                                 if (!entity) continue;
@@ -5725,6 +5738,14 @@ int main(int argc, char* argv[]) {
                                 }
                                 if (const auto object = object_properties_from_entity(scene, *entity))
                                     properties.push_back(*object);
+                                // The viewer's Extra Physics fields have no other
+                                // source. Without this they read zero, and editing
+                                // any one of them posts those zeros back over the
+                                // region's real values.
+                                enqueue_viewer_event(
+                                    session_id,
+                                    homeworldz::viewer::object_physics_properties_event_xml(
+                                        physics_properties_of(*entity)));
                             }
                             auto response = homeworldz::viewer::encode_object_properties(properties);
                             if (!response.empty()) {
@@ -6624,6 +6645,16 @@ int main(int argc, char* argv[]) {
                                     else
                                         temporary_expirations.erase(entity->id);
                                     synchronize_physics_object(*entity);
+                                    // Echo the stored values back, which are the
+                                    // clamped ones rather than whatever arrived, so
+                                    // the floater shows what the region actually
+                                    // holds and the next edit sends that instead of
+                                    // a stale or out-of-range figure.
+                                    if (object_flags->has_extra_physics)
+                                        enqueue_viewer_event(
+                                            homeworldz::viewer::format_uuid(identity->session_id),
+                                            homeworldz::viewer::object_physics_properties_event_xml(
+                                                physics_properties_of(*entity)));
                                     const auto region_handle =
                                         (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
                                         static_cast<std::uint32_t>(region_grid_y * 256);
