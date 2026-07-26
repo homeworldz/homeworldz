@@ -661,6 +661,16 @@ departure from that stance and should be recorded as one.
 
 ### Library choices
 
+**The version-floor rule.** Dependency choices confined to one deliverable are
+made freely on their merits. A dependency whose version constrains an
+**independent deliverable** — both ends of a communication path, or software
+run by people the operator does not employ, region owners above all — instead
+requires the **lowest long-term-supported version that satisfies the need**, so
+no upgrade burden is exported downstream. PostgreSQL is the worked example:
+grid-side only, and 18.x is specifically approved as the minimum. The C++
+QUIC/WebTransport stack and the shared protocol library below sit on both
+sides of the wire, so this rule governs both.
+
 **Go WebSocket: `coder/websocket`, decided now.** The realistic field is two —
 `gorilla/websocket`, the long-standing default that was archived in 2022 and later
 revived under new maintainers, and `coder/websocket` (formerly
