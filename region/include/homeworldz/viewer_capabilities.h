@@ -1,5 +1,7 @@
 #pragma once
 
+#include "homeworldz/region_extensions.h"
+
 #include <cstdint>
 #include <array>
 #include <optional>
@@ -127,8 +129,17 @@ struct ParcelPropertiesEvent {
     bool obscure_music{};
 };
 
+// Build the seed capability reply. The baseline capability set is always served,
+// unchanged; `extension_capabilities` are the additional ones a client negotiated
+// under ADR 0032 and is empty for a viewer that asked for none, which makes the
+// reply byte-identical to the pre-extension one.
 std::string seed_capability_xml(std::string_view public_endpoint, std::string_view grid_public_endpoint,
-                                std::string_view session_id, std::string_view visit_id = {});
+                                std::string_view session_id, std::string_view visit_id = {},
+                                const std::vector<ExtensionCapability>& extension_capabilities = {});
+// Extract the capability names a viewer's seed request asks for. The body is an
+// LLSD array of strings; an absent or unparseable body yields none, so a client
+// that requests nothing negotiates nothing.
+std::vector<std::string> parse_requested_capabilities(std::string_view xml);
 std::string establish_agent_communication_event_xml(const EstablishAgentCommunication& event);
 std::string enable_simulator_event_xml(std::uint64_t region_handle,
                                        const SimulatorEventEndpoint& simulator,
@@ -138,8 +149,12 @@ std::string teleport_finish_event_xml(const TeleportFinish& event);
 std::string crossed_region_event_xml(const CrossedRegion& event);
 std::string parcel_properties_event_xml(const ParcelPropertiesEvent& event);
 std::string event_queue_xml(std::uint64_t id, const std::vector<std::string>& events = {});
+// Build the SimulatorFeatures reply. `OpenSimExtras` is unchanged; the
+// Homeworldz extension map is appended so a client can discover what it may
+// negotiate (ADR 0032). Legacy viewers ignore the unknown key.
 std::string simulator_features_xml(std::string_view currency = "C$",
-                                   std::string_view map_server_url = {});
+                                   std::string_view map_server_url = {},
+                                   const std::vector<RegionExtension>& extensions = {});
 std::string environment_settings_xml(std::string_view region_id);
 // Build the RemoteParcelRequest reply carrying a parcel's global UUID.
 std::string remote_parcel_reply_xml(std::string_view parcel_id);

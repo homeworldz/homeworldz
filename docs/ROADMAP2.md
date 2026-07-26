@@ -17,9 +17,10 @@ Direction here is expected to change as evidence arrives — Phase 5 already
 reflects one such change — and phases carry explicit gates where an outcome would
 redirect the work.
 
-Checkboxes describe the present state, not a promise of a release date. No
-implementation work in this document has started; the only completed items are
-the decisions themselves.
+Checkboxes describe the present state, not a promise of a release date. The only
+implementation work that has started is Phase 1's extension negotiation
+mechanism, which every other Phase 1 item is defined in terms of; the remaining
+completed items are the decisions themselves.
 
 ## Relationship to the 1.0 roadmap
 
@@ -76,13 +77,34 @@ change.
 
 ### Extension negotiation
 
-- [ ] Advertise a Homeworldz extension feature map through the
+Implemented ahead of the rest of this phase, because every item below is defined
+in terms of it. The registry of available extensions is **deliberately empty**:
+the mechanism advertises capability, never intent, so an extension appears only
+as part of its own implementation.
+
+- [x] Advertise a Homeworldz extension feature map through the
   `SimulatorFeatures` capability, so a client opts into each extension and a
-  client that does not understand one never sees it.
-- [ ] Establish named seed capabilities as the single mechanism for adding
+  client that does not understand one never sees it. `SimulatorFeatures` carries a
+  `HomeworldzExtensions` map beside the untouched `OpenSimExtras`; each advertised
+  extension lists its own version and the capability names a client uses to opt
+  in. Opting in happens in the seed request, which the region previously ignored
+  and now parses.
+- [x] Establish named seed capabilities as the single mechanism for adding
   extensions, with no changes to baseline message semantics or wire formats.
-- [ ] Version the extension map and define how an unknown or withdrawn extension
-  degrades.
+  Negotiated capabilities are appended to the seed reply after the baseline set,
+  each at its own region path. An extension is granted whole rather than
+  piecemeal, since a partially negotiated extension has no defined meaning.
+- [x] Version the extension map and define how an unknown or withdrawn extension
+  degrades. The map carries its own version, distinct from any extension's. A
+  requested name the region does not know is ignored rather than rejected, so a
+  newer client gets less instead of failing; a withdrawn extension is absent from
+  the advertisement and is not granted even to a client that still asks, whose
+  stale capability URL then 404s.
+
+Legacy non-regression is asserted on equality rather than by inspection: with no
+extension negotiated, the seed reply is byte-identical to the pre-extension one,
+and the baseline reply is a strict prefix of a negotiated one. Live Firestorm
+acceptance is still outstanding and remains tracked below.
 
 ### Browser-reachable transport
 

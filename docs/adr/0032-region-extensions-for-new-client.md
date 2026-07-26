@@ -2,9 +2,17 @@
 
 Status: Accepted
 
-This ADR records **current expectation and intent**, not a commitment. No
-implementation work has started, and the choices below are expected to be revised
-as evidence arrives.
+This ADR records **current expectation and intent**, not a commitment, and is
+expected to be revised as evidence arrives.
+
+**Implementation state.** The extension model below — the `SimulatorFeatures`
+advertisement, named seed capabilities, map versioning, and the degradation
+rules — is implemented in `region/src/region_extensions.cpp` and the region's
+capability layer. The registry of available extensions is empty: it advertises
+what the region can serve, so an extension is registered as part of its own
+implementation rather than ahead of it. The three extensions this ADR
+anticipates — modern asset formats at rest, server-side prim meshing, and the
+browser-reachable transport — are **not built**, and none is advertised.
 
 The first-party client ([ADR 0030](0030-client-architecture.md)) needs region
 behavior that the Second Life protocol does not provide: modern asset formats,

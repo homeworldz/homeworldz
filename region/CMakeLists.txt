@@ -13,6 +13,7 @@ add_library(homeworldz-region-core
   src/physics_scene.cpp
   src/physics_scenarios.cpp
   src/region_config.cpp
+  src/region_extensions.cpp
   src/region_transit.cpp
   src/region_storage.cpp
   src/scene.cpp
@@ -104,6 +105,10 @@ add_test(NAME region-parcel COMMAND homeworldz-parcel-tests)
 add_executable(homeworldz-region-config-tests tests/region_config_test.cpp)
 target_link_libraries(homeworldz-region-config-tests PRIVATE homeworldz-region-core)
 add_test(NAME region-config COMMAND homeworldz-region-config-tests)
+
+add_executable(homeworldz-region-extension-tests tests/region_extensions_test.cpp)
+target_link_libraries(homeworldz-region-extension-tests PRIVATE homeworldz-region-core)
+add_test(NAME region-extensions COMMAND homeworldz-region-extension-tests)
 
 add_executable(homeworldz-storage-tests tests/region_storage_test.cpp)
 target_link_libraries(homeworldz-storage-tests PRIVATE homeworldz-region-core)

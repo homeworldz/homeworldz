@@ -116,8 +116,33 @@ std::string ip_binary(const SimulatorEventEndpoint& simulator) {
 }
 } // namespace
 
+std::vector<std::string> parse_requested_capabilities(std::string_view xml) {
+    // The seed body is an LLSD array of capability-name strings. Names are plain
+    // identifiers, so the string contents need no XML unescaping; anything
+    // carrying markup is not a capability name and is skipped by the bounds below.
+    std::vector<std::string> requested;
+    const auto array_start = xml.find("<array>");
+    if (array_start == std::string_view::npos) return requested;
+    const auto array_end = xml.find("</array>", array_start);
+    if (array_end == std::string_view::npos) return requested;
+    std::size_t position = array_start;
+    while (requested.size() < max_requested_capabilities) {
+        const auto open = xml.find("<string>", position);
+        if (open == std::string_view::npos || open > array_end) break;
+        const auto close = xml.find("</string>", open);
+        if (close == std::string_view::npos || close > array_end) break;
+        const auto name = xml.substr(open + 8, close - (open + 8));
+        if (!name.empty() && name.size() <= max_capability_name_length &&
+            name.find('<') == std::string_view::npos)
+            requested.emplace_back(name);
+        position = close + 9;
+    }
+    return requested;
+}
+
 std::string seed_capability_xml(std::string_view public_endpoint, std::string_view grid_public_endpoint,
-                                std::string_view session_id, std::string_view visit_id) {
+                                std::string_view session_id, std::string_view visit_id,
+                                const std::vector<ExtensionCapability>& extension_capabilities) {
     auto base = std::string(public_endpoint);
     while (!base.empty() && base.back() == '/') base.pop_back();
     const auto visit_suffix = visit_id.empty() ? std::string{} : "/" + std::string(visit_id);
@@ -149,6 +174,13 @@ std::string seed_capability_xml(std::string_view public_endpoint, std::string_vi
         xml_escape(grid_base + "/caps/inventory/ais/" + std::string(session_id));
     const auto library_ais_url =
         xml_escape(grid_base + "/caps/inventory/library/" + std::string(session_id));
+    // Negotiated extension capabilities are appended after the baseline set, so a
+    // client that negotiated none receives exactly the pre-extension reply.
+    std::string extensions;
+    for (const auto& capability : extension_capabilities) {
+        extensions += "<key>" + xml_escape(capability.name) + "</key><uri>" +
+                      xml_escape(base + capability.path + std::string(session_id)) + "</uri>";
+    }
     return "<?xml version=\"1.0\"?><llsd><map><key>EventQueueGet</key><uri>" + event_url +
            "</uri><key>GetTexture</key><uri>" + texture_url +
            "</uri><key>ViewerAsset</key><uri>" + asset_url +
@@ -169,7 +201,7 @@ std::string seed_capability_xml(std::string_view public_endpoint, std::string_vi
            "</uri><key>CreateInventoryCategory</key><uri>" + create_inventory_folder_url +
            "</uri><key>InventoryAPIv3</key><uri>" + inventory_ais_url +
            "</uri><key>LibraryAPIv3</key><uri>" + library_ais_url +
-           "</uri></map></llsd>";
+           "</uri>" + extensions + "</map></llsd>";
 }
 
 std::string establish_agent_communication_event_xml(const EstablishAgentCommunication& event) {
@@ -352,11 +384,31 @@ std::string event_queue_xml(std::uint64_t id, const std::vector<std::string>& ev
            "<key>id</key><integer>" + std::to_string(id) + "</integer></map></llsd>";
 }
 
-std::string simulator_features_xml(std::string_view currency, std::string_view map_server_url) {
+std::string simulator_features_xml(std::string_view currency, std::string_view map_server_url,
+                                   const std::vector<RegionExtension>& extensions) {
+    // Each advertised extension carries its own version and the capability names
+    // a client names in its seed request to opt in. With none available the map
+    // is present but empty, which tells a client the mechanism exists and that
+    // there is currently nothing to negotiate.
+    std::string advertised;
+    for (const auto& extension : extensions) {
+        std::string names;
+        for (const auto& capability : extension.capabilities)
+            names += "<string>" + xml_escape(capability.name) + "</string>";
+        advertised += "<key>" + xml_escape(extension.name) +
+                      "</key><map><key>version</key><integer>" +
+                      std::to_string(extension.version) +
+                      "</integer><key>capabilities</key>" +
+                      (names.empty() ? "<array/>" : "<array>" + names + "</array>") + "</map>";
+    }
     return "<?xml version=\"1.0\"?><llsd><map><key>OpenSimExtras</key><map>"
            "<key>currency</key><string>" + xml_escape(currency) +
            "</string><key>map-server-url</key><string>" + xml_escape(map_server_url) +
-           "</string></map></map></llsd>";
+           "</string></map>"
+           "<key>HomeworldzExtensions</key><map><key>version</key><integer>" +
+           std::to_string(extension_map_version) + "</integer><key>extensions</key>" +
+           (advertised.empty() ? "<map/>" : "<map>" + advertised + "</map>") +
+           "</map></map></llsd>";
 }
 
 std::string remote_parcel_reply_xml(std::string_view parcel_id) {

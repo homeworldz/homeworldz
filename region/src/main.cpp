@@ -2513,11 +2513,21 @@ int main(int argc, char* argv[]) {
                             if (authorized) authorized_agent_id = authorized_session->agent_id;
                         }
                         if (authorized && seed) {
+                            // ADR 0032: a client opts into an extension by naming its
+                            // capabilities here. A viewer that names none — or sends no
+                            // body at all, as Firestorm's login seed does — negotiates
+                            // nothing and receives exactly the baseline set.
+                            const auto requested_capabilities =
+                                homeworldz::viewer::parse_requested_capabilities(
+                                    http_request_body(request));
                             response = homeworldz::http::response_for_content(
                                 request, 200, "application/llsd+xml",
                                 homeworldz::viewer::seed_capability_xml(
                                     region_public_endpoint, grid_public_endpoint, session_id,
-                                    capability_visit_id));
+                                    capability_visit_id,
+                                    homeworldz::viewer::negotiated_extension_capabilities(
+                                        homeworldz::viewer::available_region_extensions(),
+                                        requested_capabilities)));
                             if (!capability_visit_id.empty())
                                 static_cast<void>(capability_arrival_gate.mark_seed_served(
                                     session_id, capability_visit_id));
@@ -2573,7 +2583,8 @@ int main(int argc, char* argv[]) {
                             response = homeworldz::http::response_for_content(
                                 request, 200, "application/llsd+xml",
                                 homeworldz::viewer::simulator_features_xml(
-                                    "C$", grid_public_endpoint + "/map/"));
+                                    "C$", grid_public_endpoint + "/map/",
+                                    homeworldz::viewer::available_region_extensions()));
                         } else if (authorized && environment_settings && registration) {
                             response = homeworldz::http::response_for_content(
                                 request, 200, "application/llsd+xml",
