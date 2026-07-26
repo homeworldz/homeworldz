@@ -23,6 +23,8 @@ import (
 	"github.com/homeworldz/homeworldz/grid/internal/presence"
 	"github.com/homeworldz/homeworldz/grid/internal/provisioning"
 	"github.com/homeworldz/homeworldz/grid/internal/arrival"
+	"github.com/homeworldz/homeworldz/grid/internal/identity"
+	"github.com/homeworldz/homeworldz/grid/internal/locations"
 	"github.com/homeworldz/homeworldz/grid/internal/regions"
 	"github.com/homeworldz/homeworldz/grid/internal/webaccount"
 	"github.com/homeworldz/homeworldz/grid/internal/webtoken"
@@ -58,11 +60,25 @@ type RegionStore interface {
 }
 
 // LeaseStore exposes just enough of the live-region lease store to derive
-// online state and end a lease on undeploy. It is satisfied by
-// *regions.PostgresStore.
+// online state, list leased regions for destination resolution, and end a
+// lease on undeploy. It is satisfied by *regions.PostgresStore.
 type LeaseStore interface {
 	Get(ctx context.Context, id string) (regions.Region, error)
+	List(ctx context.Context) ([]regions.Region, error)
 	DeregisterProvisioned(ctx context.Context, id string) error
+}
+
+// SessionStore opens client sessions in the session store shared with viewer
+// logins. It is satisfied by *identity.PostgresStore.
+type SessionStore interface {
+	CreateClientSession(ctx context.Context, userID, regionID string, duration time.Duration) (identity.Session, error)
+}
+
+// LocationStore reads a user's stored last and home locations for world
+// entry. It is satisfied by *locations.PostgresStore.
+type LocationStore interface {
+	Get(ctx context.Context, userID string) (locations.Location, error)
+	GetHome(ctx context.Context, userID string) (locations.Location, error)
 }
 
 // PresenceStore exposes active viewer presences for system status. It is
@@ -92,6 +108,12 @@ type Options struct {
 	// Welcome is the ordered new-arrival list ([grid] welcome_locations); the
 	// probe's welcome field derives from its first entry.
 	Welcome []arrival.Point
+	// Sessions and Locations serve client world entry; TicketSigner mints the
+	// region-scoped ticket and must carry the region-ticket audience and a
+	// short TTL, never the account-token audience.
+	Sessions     SessionStore
+	Locations    LocationStore
+	TicketSigner *webtoken.Signer
 }
 
 // API is the website API handler.
@@ -109,6 +131,9 @@ type API struct {
 	version         string
 	gridName        string
 	welcome         []arrival.Point
+	sessions        SessionStore
+	locations       LocationStore
+	ticketSigner    *webtoken.Signer
 }
 
 // New validates options and returns the composed website API handler.
@@ -148,6 +173,9 @@ func New(options Options) (http.Handler, error) {
 		version:         options.Version,
 		gridName:        options.GridName,
 		welcome:         options.Welcome,
+		sessions:        options.Sessions,
+		locations:       options.Locations,
+		ticketSigner:    options.TicketSigner,
 	}
 
 	mux := http.NewServeMux()
@@ -155,6 +183,7 @@ func New(options Options) (http.Handler, error) {
 	// "/" catch-all below out-matches that fallback and turns them into 404s,
 	// so handlers keep the explicit method check the rest of the mux uses.
 	mux.HandleFunc("/v1/version", a.clientVersion)
+	mux.HandleFunc("/v1/client/session", a.clientSession)
 	mux.HandleFunc("/v1/registrations", a.registrations)
 	mux.HandleFunc("/v1/verifications", a.verifications)
 	mux.HandleFunc("/v1/verifications/resend", a.resendVerification)

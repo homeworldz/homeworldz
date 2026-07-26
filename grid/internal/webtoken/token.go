@@ -42,6 +42,12 @@ type Claims struct {
 	Version     int
 	IssuedAt    time.Time
 	ExpiresAt   time.Time
+	// RegionID and SessionID are carried only by region tickets (docs/CLIENT2.md,
+	// "The region ticket"): RegionID binds the ticket to one region so another
+	// region refuses it, and SessionID anchors it to the revocable session row.
+	// Both are empty on account tokens.
+	RegionID  string
+	SessionID string
 }
 
 type payload struct {
@@ -55,9 +61,18 @@ type payload struct {
 	Version     int    `json:"ver"`
 	IssuedAt    int64  `json:"iat"`
 	ExpiresAt   int64  `json:"exp"`
+	// omitempty keeps account tokens byte-compatible with tokens issued before
+	// these fields existed, which the strict decoder in Verify requires.
+	RegionID  string `json:"regionId,omitempty"`
+	SessionID string `json:"sessionId,omitempty"`
 }
 
 const header = `{"alg":"HS256","typ":"JWT"}`
+
+// RegionTicketAudience is the audience of every region ticket. It is a
+// constant rather than configuration: the separation from the account-token
+// audience is structural, and there is nothing for an operator to choose.
+const RegionTicketAudience = "homeworldz:region"
 
 // Signer signs and verifies tokens for a single issuer/audience with a fixed
 // lifetime. It is safe for concurrent use.
@@ -93,20 +108,44 @@ func (s *Signer) TTL() time.Duration { return s.ttl }
 // issuer, audience, issued-at, and expiry are set by the signer. It returns the
 // compact token and its absolute expiry.
 func (s *Signer) Sign(now time.Time, subject, userid, displayName string, rezDate time.Time, privs string, version int) (string, time.Time, error) {
-	issued := now.UTC().Truncate(time.Second)
-	expires := issued.Add(s.ttl)
-	body := payload{
-		Issuer:      s.issuer,
-		Audience:    s.audience,
+	return s.sign(payload{
 		Subject:     subject,
 		Userid:      userid,
 		DisplayName: displayName,
 		RezDate:     rezDate.UTC().Format(time.RFC3339),
 		Privs:       privs,
 		Version:     version,
-		IssuedAt:    issued.Unix(),
-		ExpiresAt:   expires.Unix(),
+	}, now)
+}
+
+// SignRegionTicket issues a region-scoped ticket: the credential world entry
+// hands a client for one region session, never the account token. The signer
+// this is called on must carry the region-ticket audience and a short TTL —
+// the audience is what makes an account route refuse a ticket structurally.
+func (s *Signer) SignRegionTicket(now time.Time, subject, userid, displayName string,
+	rezDate time.Time, privs string, version int, regionID, sessionID string) (string, time.Time, error) {
+	if strings.TrimSpace(regionID) == "" || strings.TrimSpace(sessionID) == "" {
+		return "", time.Time{}, errors.New("webtoken: a region ticket requires a region and a session")
 	}
+	return s.sign(payload{
+		Subject:     subject,
+		Userid:      userid,
+		DisplayName: displayName,
+		RezDate:     rezDate.UTC().Format(time.RFC3339),
+		Privs:       privs,
+		Version:     version,
+		RegionID:    regionID,
+		SessionID:   sessionID,
+	}, now)
+}
+
+func (s *Signer) sign(body payload, now time.Time) (string, time.Time, error) {
+	issued := now.UTC().Truncate(time.Second)
+	expires := issued.Add(s.ttl)
+	body.Issuer = s.issuer
+	body.Audience = s.audience
+	body.IssuedAt = issued.Unix()
+	body.ExpiresAt = expires.Unix()
 	encodedPayload, err := json.Marshal(body)
 	if err != nil {
 		return "", time.Time{}, fmt.Errorf("webtoken: encode claims: %w", err)
@@ -175,6 +214,8 @@ func (s *Signer) Verify(token string, now time.Time) (Claims, error) {
 		Version:     body.Version,
 		IssuedAt:    time.Unix(body.IssuedAt, 0).UTC(),
 		ExpiresAt:   time.Unix(body.ExpiresAt, 0).UTC(),
+		RegionID:    body.RegionID,
+		SessionID:   body.SessionID,
 	}, nil
 }
 

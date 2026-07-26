@@ -20,6 +20,8 @@ import (
 
 	"github.com/homeworldz/homeworldz/grid/internal/arrival"
 	"github.com/homeworldz/homeworldz/grid/internal/config"
+	"github.com/homeworldz/homeworldz/grid/internal/identity"
+	"github.com/homeworldz/homeworldz/grid/internal/locations"
 	"github.com/homeworldz/homeworldz/grid/internal/mailer"
 	"github.com/homeworldz/homeworldz/grid/internal/presence"
 	"github.com/homeworldz/homeworldz/grid/internal/provisioning"
@@ -60,6 +62,15 @@ func main() {
 		logger.Error("configure token signer (set [website] jwt_secret)", "error", err)
 		os.Exit(1)
 	}
+	// The region-ticket signer shares the secret and issuer but never the
+	// audience: an account route refuses a ticket and a region refuses an
+	// account token on the audience check alone.
+	ticketSigner, err := webtoken.NewSigner([]byte(settings.WebsiteJWTSecret),
+		settings.WebsiteJWTIssuer, webtoken.RegionTicketAudience, settings.RegionTicketTTL)
+	if err != nil {
+		logger.Error("configure region ticket signer", "error", err)
+		os.Exit(1)
+	}
 
 	mail, err := buildMailer(settings, logger)
 	if err != nil {
@@ -88,6 +99,9 @@ func main() {
 		Version:         version,
 		GridName:        settings.Name,
 		Welcome:         welcome,
+		Sessions:        identity.NewPostgresStore(db),
+		Locations:       locations.NewPostgresStore(db),
+		TicketSigner:    ticketSigner,
 	})
 	if err != nil {
 		logger.Error("build website api", "error", err)

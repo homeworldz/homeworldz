@@ -35,6 +35,9 @@ type Grid struct {
 	WebsiteJWTIssuer      string
 	WebsiteJWTAudience    string
 	WebsiteTokenTTL       time.Duration
+	// RegionTicketTTL is the short lifetime of region-scoped tickets minted at
+	// world entry ([website] region_ticket_ttl_seconds, default 300).
+	RegionTicketTTL time.Duration
 	WebsiteRatePerMinute  int
 	WebsiteRateBurst      int
 	MailTransport         string
@@ -94,6 +97,7 @@ func LoadGrid(directory string) (Grid, error) {
 	result.WebsiteJWTIssuer = website.Key("jwt_issuer").MustString("https://api.homeworldz.com")
 	result.WebsiteJWTAudience = website.Key("jwt_audience").MustString("https://homeworldz.com")
 	result.WebsiteTokenTTL = time.Duration(website.Key("token_ttl_seconds").MustInt(3600)) * time.Second
+	result.RegionTicketTTL = time.Duration(website.Key("region_ticket_ttl_seconds").MustInt(300)) * time.Second
 	result.WebsiteRatePerMinute = website.Key("rate_per_minute").MustInt(30)
 	result.WebsiteRateBurst = website.Key("rate_burst").MustInt(10)
 

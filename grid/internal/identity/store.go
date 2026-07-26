@@ -205,6 +205,34 @@ func (s *PostgresStore) CreateViewerSession(ctx context.Context, username, passw
 	return s.insertSession(ctx, userID, duration)
 }
 
+// CreateClientSession opens a session for the Homeworldz client's world entry
+// (docs/CLIENT2.md, "One session store for every kind of client"). The caller
+// has already authenticated a bearer token, so no credential is checked here;
+// the destination region is known at creation and no viewer circuit is ever
+// assigned. It is deliberately not part of the Store interface, which serves
+// the viewer paths.
+func (s *PostgresStore) CreateClientSession(ctx context.Context, userID, regionID string, duration time.Duration) (Session, error) {
+	id, err := identifier.NewUUID()
+	if err != nil {
+		return Session{}, err
+	}
+	secureID, err := identifier.NewUUID()
+	if err != nil {
+		return Session{}, err
+	}
+	var session Session
+	err = s.db.QueryRowContext(ctx, `
+        INSERT INTO sessions (id, user_id, expires_at, secure_session_id, destination_region_id)
+        VALUES ($1, $2, now() + $3 * interval '1 second', $4, $5)
+        RETURNING id, user_id, expires_at, secure_session_id, destination_region_id`,
+		id, userID, int64(duration/time.Second), secureID, regionID,
+	).Scan(&session.ID, &session.UserID, &session.ExpiresAt, &session.SecureID, &session.DestinationRegionID)
+	if err != nil {
+		return Session{}, fmt.Errorf("create client session: %w", err)
+	}
+	return session, nil
+}
+
 func (s *PostgresStore) insertSession(ctx context.Context, userID string, duration time.Duration) (Session, error) {
 	id, err := identifier.NewUUID()
 	if err != nil {
