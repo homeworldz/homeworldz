@@ -1791,6 +1791,26 @@ int main(int argc, char* argv[]) {
     // keys; every UDP loop is inert for them (no circuit), and these helpers
     // are the session-facing halves of the fan-outs that matter for E1.
     std::unordered_map<std::string, double> session_draw_distances;
+    // Which avatars each embodied session currently knows about. Enter and
+    // leave are events the interest sweep emits — because interest changes
+    // when either party moves, not only when the subject does — and avatar
+    // transforms flow only for pairs already in interest.
+    std::unordered_map<std::string, std::unordered_set<homeworldz::scene::EntityId>>
+        session_avatar_interest;
+    auto next_session_interest_sweep = previous_tick;
+    const auto session_interested = [](const LiveAvatar& observer, const LiveAvatar& subject) {
+        // An avatar is about a metre wide; grant that so a body does not pop
+        // exactly on the boundary. A zero draw distance would mean no filter,
+        // which a session can never have (it is clamped at spawn).
+        constexpr double avatar_radius = 1.0;
+        const auto draw = static_cast<double>(observer.controller.state().draw_distance);
+        if (draw <= 0.0) return true;
+        const auto& from = observer.controller.state().position;
+        const auto& to = subject.controller.state().position;
+        const auto dx = from.x - to.x, dy = from.y - to.y, dz = from.z - to.z;
+        const auto reach = draw + avatar_radius;
+        return dx * dx + dy * dy + dz * dz <= reach * reach;
+    };
     const auto session_vec3 = [](double x, double y, double z) {
         return "[" + std::to_string(x) + "," + std::to_string(y) + "," + std::to_string(z) + "]";
     };
@@ -1872,6 +1892,13 @@ int main(int argc, char* argv[]) {
             static_cast<void>(viewer_grid->clear_presence(found->second.user_id));
         session_draw_distances.erase(found->second.session_id);
         sent_dynamic_transforms.erase(participant_key);
+        session_avatar_interest.erase(participant_key);
+        // Forget this avatar in every other session's view, so a later
+        // arrival is announced afresh rather than assumed known.
+        for (auto& [other_key, known] : session_avatar_interest) {
+            static_cast<void>(other_key);
+            known.erase(entity_id);
+        }
         avatar_appearances.erase(participant_key);
         avatar_geometries.erase(participant_key);
         avatar_animations.erase(participant_key);
@@ -7543,11 +7570,18 @@ int main(int argc, char* argv[]) {
                     // Initial scene: every other avatar, then every non-avatar
                     // entity. Terrain deliberately not sent (design decision 4).
                     std::unordered_set<homeworldz::scene::EntityId> avatar_entities;
+                    auto& known_avatars = session_avatar_interest[participant_key];
+                    // Self is always in interest: its own transforms are its
+                    // authoritative position, and the client knows itself from
+                    // the spawned reply rather than an avatar message.
+                    known_avatars.insert(entity);
                     for (const auto& [other_key, other] : avatars) {
                         avatar_entities.insert(other.entity_id);
                         if (other_key == participant_key) continue;
+                        if (!session_interested(live, other)) continue;
                         session_server->send_to(inbound.session_id,
                                                 session_avatar_envelope(other));
+                        known_avatars.insert(other.entity_id);
                     }
                     for (const auto& [entity_id, scene_entity] : scene.entities()) {
                         if (avatar_entities.count(entity_id) != 0 ||
@@ -7591,7 +7625,9 @@ int main(int argc, char* argv[]) {
                     for (const auto& [other_key, other] : avatars) {
                         if (other_key == participant_key ||
                             other.transport != AvatarTransport::session) continue;
+                        if (!session_interested(other, live)) continue;
                         session_server->send_to(other.session_id, arrival_envelope);
+                        session_avatar_interest[other_key].insert(entity);
                     }
                     std::cout << "{\"level\":\"info\",\"message\":\"session avatar spawned\",\"agent\":"
                               << homeworldz::api::json_string(inbound.user_id)
@@ -7977,15 +8013,29 @@ int main(int argc, char* argv[]) {
                         if (const auto outgoing = circuits.send(recipient_endpoint, update, false, now, true))
                             static_cast<void>(send_udp(viewer_server, recipient_endpoint, *outgoing));
                     }
-                    deliver_to_embodied(homeworldz::session::encode_envelope("transform", {},
-                        "{\"id\":\"" + std::to_string(avatar.entity_id) + "\"" +
-                        ",\"position\":" + session_vec3(viewer_position.x, viewer_position.y,
-                                                        viewer_position.z) +
-                        ",\"velocity\":" + session_vec3(state.velocity.x, state.velocity.y,
-                                                        state.velocity.z) +
-                        ",\"rotation\":[" + std::to_string(state.rotation[0]) + "," +
-                            std::to_string(state.rotation[1]) + "," +
-                            std::to_string(state.rotation[2]) + "]}"), true);
+                    // Avatar transforms reach the sessions that hold this
+                    // avatar in interest — the sweep below owns enter and
+                    // leave, so an unknown subject is silently skipped rather
+                    // than freezing on a client that never learned of it.
+                    if (session_server) {
+                        const auto transform_envelope =
+                            homeworldz::session::encode_envelope("transform", {},
+                                "{\"id\":\"" + std::to_string(avatar.entity_id) + "\"" +
+                                ",\"position\":" + session_vec3(viewer_position.x,
+                                    viewer_position.y, viewer_position.z) +
+                                ",\"velocity\":" + session_vec3(state.velocity.x,
+                                    state.velocity.y, state.velocity.z) +
+                                ",\"rotation\":[" + std::to_string(state.rotation[0]) + "," +
+                                    std::to_string(state.rotation[1]) + "," +
+                                    std::to_string(state.rotation[2]) + "]}");
+                        for (const auto& [recipient_key, recipient] : avatars) {
+                            if (recipient.transport != AvatarTransport::session) continue;
+                            const auto known = session_avatar_interest.find(recipient_key);
+                            if (known == session_avatar_interest.end() ||
+                                known->second.count(avatar.entity_id) == 0) continue;
+                            session_server->send_to(recipient.session_id, transform_envelope, true);
+                        }
+                    }
                     avatar.last_sent_position = viewer_position;
                     avatar.last_sent_velocity = state.velocity;
                     avatar.last_sent_rotation = state.rotation;
@@ -8001,6 +8051,31 @@ int main(int argc, char* argv[]) {
         }
         for (const auto& participant_key : crossing_session_avatars)
             retire_session_avatar(participant_key);
+        // The interest sweep: emit an avatar's arrival into, and departure
+        // from, each session's view. Evaluated for every pair because either
+        // party moving changes the answer — a stationary observer walking away
+        // from a stationary subject must still be told it is gone.
+        if (session_server && now >= next_session_interest_sweep) {
+            for (const auto& [observer_key, observer] : avatars) {
+                if (observer.transport != AvatarTransport::session) continue;
+                auto& known = session_avatar_interest[observer_key];
+                for (const auto& [subject_key, subject] : avatars) {
+                    static_cast<void>(subject_key);
+                    const auto interested = session_interested(observer, subject);
+                    const auto present = known.count(subject.entity_id) != 0;
+                    if (interested && !present) {
+                        session_server->send_to(observer.session_id,
+                                                session_avatar_envelope(subject));
+                        known.insert(subject.entity_id);
+                    } else if (!interested && present) {
+                        session_server->send_to(observer.session_id,
+                                                session_kill_envelope(subject.entity_id));
+                        known.erase(subject.entity_id);
+                    }
+                }
+            }
+            next_session_interest_sweep = now + std::chrono::milliseconds(100);
+        }
         if (physics_world)
             for (std::size_t step = 0; step < fixed_steps; ++step)
                 physics_world->step(simulation.step_seconds());
