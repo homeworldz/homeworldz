@@ -327,6 +327,29 @@ first-party client itself is tracked in its own repository.
 
 ### Inventory asset durability
 
+**Current priority (2026-07-27).** A region that dies must not take its
+users' inventory with it, and today it would: the vault store exists but
+nothing writes to it, so inventory still depends on the region that
+originated the bytes. The items in this section come before other phases'
+work until that is no longer true.
+
+Sequencing, decided on one fact: **the vault is empty, so re-keying it costs
+nothing now and means moving every stored blob later.** The layer separation
+below therefore lands before the write-through and backfill that fill the
+vault, and the enforcement is written once against the final shape rather
+than twice.
+
+- [ ] Separate the blob, asset, and instance layers of
+  [ADR 0027](adr/0027-asset-blob-instance-separation.md): a grid-assigned
+  `blob_id` naming bytes, with the digest demoted to an integrity checksum;
+  `asset_id` carrying creator, provenance, and the exportable option;
+  locations attached to blobs rather than assets; and reference counts from
+  back-links deciding retention. Instances (inventory items, rezzed objects)
+  already hold owner and permissions and do not move. `blob_id` stays
+  grid-internal — regions keep naming assets and verifying with the
+  checksum — so this re-keys the vault and the registry without changing
+  what a region speaks.
+
 - [x] Implement the grid asset vault: a durable, replica-only blob store that
   never originates assets, never hosts agents, and is never in the viewer data
   path (ADR 0026). Blob bytes live on a sharded filesystem tree under the
