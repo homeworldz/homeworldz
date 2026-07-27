@@ -3,8 +3,12 @@
 Decision support for [CLIENT2.md](CLIENT2.md) build-order step 5, "The region
 session" — the C++ QUIC/WebTransport stack that CLIENT2.md deliberately left
 open, and the WebSocket fallback leg beside it. This document lays out the
-field and makes a recommendation; it decides nothing. Library facts were
-verified against upstream repositories and vcpkg in July 2026.
+field and makes a recommendation. Library facts were verified against
+upstream repositories and vcpkg in July 2026.
+
+**Decision: Option A, accepted 2026-07-27.** The region session ships over
+TLS + WebSocket on libwebsockets; the QUIC/WebTransport question reopens when
+the RFC publishes or Phase 2 produces rate numbers, whichever comes first.
 
 ## What is being chosen
 
@@ -135,3 +139,24 @@ reaches the first-party client months before the QUIC question needs an
 answer. The deliberately unfashionable observation: nothing in the region
 session's Phase 1 traffic is known to need QUIC yet, and the document that
 would prove it needs QUIC is the one Phase 2 exists to write.
+
+## Executive summary: what each option means for the person in-world
+
+- **A — WebSocket first (chosen):** on a healthy connection indistinguishable
+  from the QUIC options; on a lossy link (bad Wi-Fi, congested cable), TCP's
+  head-of-line blocking means one lost packet briefly stalls *all* in-flight
+  object updates instead of just one object's, which shows up as occasional
+  whole-scene stutter under packet loss rather than lower frame rate — chat,
+  IMs, and login feel identical either way.
+- **B — picoquic now:** the smoothest experience on bad networks — per-stream
+  delivery lets distant-object updates keep flowing while a lost packet is
+  recovered, so crowds and vehicles stay fluid where option A stutters — but
+  users wait longer for the world to be reachable at all, and a
+  one-maintainer stack carries more risk of a bad week in production.
+- **C — msquic plus our own WebTransport layer:** the same in-world smoothness
+  as B once finished, but the user-visible cost is calendar — months of
+  protocol work before any scene traffic flows, in the layer where parser
+  bugs become security incidents.
+- **D — Google quiche:** wire-identical to B and C in-world — no user ever
+  notices the difference — so its entire cost (a Chromium-grade build system
+  bolted to a region server) buys users nothing they can see.

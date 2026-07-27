@@ -677,7 +677,7 @@ untouched by everything above.
 | `EventQueueGet` | viewers | HTTP/1.1 long poll | LLSD | Shipped |
 | REST bootstrap | client | HTTPS | JSON | Shipped (probe, tokens, world entry) |
 | Grid channel | client | WebSocket | JSON | Shipped (system notices; IMs, presence, offers have no producers yet) |
-| Region session | client | WebTransport/QUIC, WebSocket fallback | JSON | Not built |
+| Region session | client | TLS WebSocket now; WebTransport when the RFC lands ([CLIENT2-TRANSPORT.md](CLIENT2-TRANSPORT.md)) | JSON | Decided, not built |
 
 ### Why the client holds two channels
 
@@ -821,14 +821,17 @@ input from the open internet and framing bugs there are security bugs; this is t
 place to take the dependency. Nothing downstream changes with the choice, so
 deciding early costs nothing.
 
-**C++ QUIC/WebTransport stack: open until the region session is built**, per the
-same due-when-there-is-a-build-to-measure discipline the client's plan applies to
-its half. The slate: **msquic** (C, MIT, actively maintained) noting that
-WebTransport rides HTTP/3 rather than raw QUIC, so msquic alone is not the whole
-answer — its HTTP/3 layer `msh3` is a separate and younger project — against
-**ngtcp2 + nghttp3** (C, MIT, the pairing many HTTP/3 deployments use). quiche is
-set aside first: it would drag a Rust toolchain into the region build, a heavy ask
-for one dependency.
+**C++ region-session transport: decided 2026-07-27 — WebSocket first, on
+libwebsockets.** The full comparison and the decision are in
+[CLIENT2-TRANSPORT.md](CLIENT2-TRANSPORT.md); the short form is that the
+provisional msquic-versus-ngtcp2 slate dissolved on inspection (neither ships
+the WebTransport layer browsers speak; the stacks that do each fail a build
+constraint), and WebTransport is still a moving draft that the version-floor
+rule above cannot pin. The region session ships over TLS + WebSocket
+(`transports: ["websocket"]`, RFC 6455, libwebsockets from vcpkg, covering
+the listener and the call-home relay leg alike); QUIC/WebTransport reopens
+when the RFC publishes or Phase 2 produces rate numbers, whichever comes
+first.
 
 ### A shared C++ protocol library for the region session
 
