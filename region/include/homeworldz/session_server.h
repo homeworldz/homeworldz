@@ -54,12 +54,14 @@ public:
     std::vector<InboundCommand> drain_commands();
 
     // send_to delivers one pre-encoded envelope to every connection of one
-    // session (normally exactly one). Thread-safe.
-    void send_to(std::string_view session_id, std::string message);
+    // session (normally exactly one). Thread-safe. droppable marks a frame a
+    // later one supersedes (a transform), so a client that stops reading
+    // loses those before anything that matters.
+    void send_to(std::string_view session_id, std::string message, bool droppable = false);
 
     // broadcast delivers one pre-encoded envelope to every authenticated
-    // session. Thread-safe.
-    void broadcast(std::string message);
+    // session. Thread-safe; droppable as above.
+    void broadcast(std::string message, bool droppable = false);
 
     // session_count reports authenticated sessions, for logs and tests.
     int session_count() const;

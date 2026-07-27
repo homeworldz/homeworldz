@@ -5,6 +5,7 @@
 #include <atomic>
 #include <cstring>
 #include <deque>
+#include <iostream>
 #include <mutex>
 #include <thread>
 #include <unordered_set>
@@ -13,14 +14,30 @@
 namespace homeworldz::session {
 namespace {
 
+// OutboundFrame is one queued message. droppable marks a frame whose loss a
+// client can absorb because a later frame supersedes it (transforms); chat,
+// kills, and protocol replies are not droppable.
+struct OutboundFrame {
+    std::string text;
+    bool droppable{};
+};
+
 // One connection's state, owned by the service thread.
 struct Connection {
     SessionCore core;
     std::string inbound;
-    std::deque<std::string> outbox;
+    std::deque<OutboundFrame> outbox;
 
     explicit Connection(SessionCore state) : core(std::move(state)) {}
 };
+
+// A client that stops reading — a frozen or heavily throttled browser tab is
+// the realistic case, since hidden tabs can be throttled to one tick a
+// minute — must not grow the region's memory without bound. Past the soft
+// limit superseded frames are dropped first; past the hard limit the oldest
+// frames go regardless, and the client resynchronizes by spawning again.
+constexpr std::size_t outbox_soft_limit = 256;
+constexpr std::size_t outbox_hard_limit = 1024;
 
 // authTimeoutSeconds bounds how long an unauthenticated connection may hold
 // a socket, matching the grid channel's rule.
@@ -39,10 +56,14 @@ struct Server::State {
     std::atomic<int> established{0};
 
     // Outbound messages queued by the simulation thread, drained on the
-    // service thread. An empty session id targets every authenticated
-    // session.
+    // service thread. An empty target targets every authenticated session.
+    struct PendingSend {
+        std::string target;
+        std::string message;
+        bool droppable{};
+    };
     std::mutex pending_mutex;
-    std::vector<std::pair<std::string, std::string>> pending_sends;
+    std::vector<PendingSend> pending_sends;
 
     // Inbound embodiment commands queued on the service thread, drained by
     // the simulation thread once per tick.
@@ -70,9 +91,31 @@ struct Server::State {
         return static_cast<State*>(lws_context_user(lws_get_context(wsi)));
     }
 
+    // trim_outbox enforces the limits above, returning how many frames were
+    // dropped so the caller can say so once rather than per frame.
+    static std::size_t trim_outbox(Connection* connection) {
+        if (connection->outbox.size() <= outbox_soft_limit) return 0;
+        std::size_t dropped = 0;
+        for (auto frame = connection->outbox.begin();
+             frame != connection->outbox.end() && connection->outbox.size() > outbox_soft_limit;) {
+            if (frame->droppable) {
+                frame = connection->outbox.erase(frame);
+                ++dropped;
+            } else {
+                ++frame;
+            }
+        }
+        while (connection->outbox.size() > outbox_hard_limit) {
+            connection->outbox.pop_front();
+            ++dropped;
+        }
+        return dropped;
+    }
+
     static void queue_messages(lws* wsi, Connection* connection, std::vector<std::string> messages,
                                bool close_after, const std::string& reason) {
-        for (auto& message : messages) connection->outbox.push_back(std::move(message));
+        for (auto& message : messages)
+            connection->outbox.push_back({std::move(message), false});
         if (close_after) {
             lws_close_reason(wsi, LWS_CLOSE_STATUS_POLICY_VIOLATION,
                              reinterpret_cast<unsigned char*>(const_cast<char*>(reason.data())),
@@ -154,7 +197,7 @@ int Server::State::callback(lws* wsi, lws_callback_reasons reason, void* user, v
 
 bool Server::State::flush_one(lws* wsi, Connection* connection) {
     if (connection->outbox.empty()) return true;
-    auto& message = connection->outbox.front();
+    const auto& message = connection->outbox.front().text;
     std::vector<unsigned char> frame(LWS_PRE + message.size());
     std::memcpy(frame.data() + LWS_PRE, message.data(), message.size());
     const auto written = lws_write(wsi, frame.data() + LWS_PRE, message.size(), LWS_WRITE_TEXT);
@@ -176,7 +219,7 @@ void Server::State::sweep_callback(lws_sorted_usec_list_t* scheduled) {
 }
 
 void Server::State::drain_broadcasts() {
-    std::vector<std::pair<std::string, std::string>> drained;
+    std::vector<PendingSend> drained;
     {
         std::lock_guard<std::mutex> hold(pending_mutex);
         drained.swap(pending_sends);
@@ -187,12 +230,18 @@ void Server::State::drain_broadcasts() {
         auto* connection = user ? *static_cast<Connection**>(user) : nullptr;
         if (!connection || !connection->core.established()) continue;
         bool queued = false;
-        for (const auto& [target, message] : drained) {
-            if (!target.empty() && target != connection->core.identity().session_id) continue;
-            connection->outbox.push_back(message);
+        for (const auto& pending : drained) {
+            if (!pending.target.empty() &&
+                pending.target != connection->core.identity().session_id) continue;
+            connection->outbox.push_back({pending.message, pending.droppable});
             queued = true;
         }
-        if (queued) lws_callback_on_writable(wsi);
+        if (!queued) continue;
+        if (const auto dropped = trim_outbox(connection); dropped > 0)
+            std::cout << "{\"level\":\"warning\",\"message\":\"session outbox trimmed\",\"session\":\""
+                      << connection->core.identity().session_id << "\",\"dropped\":" << dropped
+                      << ",\"queued\":" << connection->outbox.size() << "}" << std::endl;
+        lws_callback_on_writable(wsi);
     }
 }
 
@@ -251,20 +300,20 @@ void Server::broadcast_chat(std::string_view from_name, std::string_view message
         "{\"from\":" + json_string(from_name) + ",\"message\":" + json_string(message) + "}"));
 }
 
-void Server::broadcast(std::string message) {
+void Server::broadcast(std::string message, bool droppable) {
     if (!state_) return;
     {
         std::lock_guard<std::mutex> hold(state_->pending_mutex);
-        state_->pending_sends.emplace_back(std::string{}, std::move(message));
+        state_->pending_sends.push_back({std::string{}, std::move(message), droppable});
     }
     lws_cancel_service(state_->context);
 }
 
-void Server::send_to(std::string_view session_id, std::string message) {
+void Server::send_to(std::string_view session_id, std::string message, bool droppable) {
     if (!state_ || session_id.empty()) return;
     {
         std::lock_guard<std::mutex> hold(state_->pending_mutex);
-        state_->pending_sends.emplace_back(std::string(session_id), std::move(message));
+        state_->pending_sends.push_back({std::string(session_id), std::move(message), droppable});
     }
     lws_cancel_service(state_->context);
 }

@@ -1796,12 +1796,12 @@ int main(int argc, char* argv[]) {
     const auto session_quat_w = [](double x, double y, double z) {
         return std::sqrt((std::max)(0.0, 1.0 - x * x - y * y - z * z));
     };
-    const auto deliver_to_embodied = [&](const std::string& envelope) {
+    const auto deliver_to_embodied = [&](const std::string& envelope, bool droppable = false) {
         if (!session_server) return;
         for (const auto& [key, participant] : avatars) {
             static_cast<void>(key);
             if (participant.transport == AvatarTransport::session)
-                session_server->send_to(participant.session_id, envelope);
+                session_server->send_to(participant.session_id, envelope, droppable);
         }
     };
     // An entity with no object id is not a rezzed object — an avatar's own
@@ -7875,7 +7875,7 @@ int main(int argc, char* argv[]) {
                                                         state.velocity.z) +
                         ",\"rotation\":[" + std::to_string(state.rotation[0]) + "," +
                             std::to_string(state.rotation[1]) + "," +
-                            std::to_string(state.rotation[2]) + "]}"));
+                            std::to_string(state.rotation[2]) + "]}"), true);
                     avatar.last_sent_position = viewer_position;
                     avatar.last_sent_velocity = state.velocity;
                     avatar.last_sent_rotation = state.rotation;
@@ -7951,7 +7951,7 @@ int main(int argc, char* argv[]) {
                                 ",\"rotation\":[" + std::to_string(state.rotation[0]) + "," +
                                     std::to_string(state.rotation[1]) + "," +
                                     std::to_string(state.rotation[2]) + "," +
-                                    std::to_string(state.rotation[3]) + "]}"));
+                                    std::to_string(state.rotation[3]) + "]}"), true);
                         recipient_cache.insert_or_assign(
                             entity_id, SentDynamicTransform{state, now});
                         continue;

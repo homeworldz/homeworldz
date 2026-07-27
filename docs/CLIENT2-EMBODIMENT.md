@@ -128,6 +128,28 @@ Server → client:
 JSON first, per the encoding decision; the first-byte rule leaves room for
 a packed transform encoding if Phase 2 measurement demands it.
 
+## A quiet client is not a dead client
+
+Established by the client core's browser work, 2026-07-27, and binding on
+anything added later. **Browsers throttle hidden pages** — a tab hidden long
+enough runs timers roughly once a minute ("intensive throttling"), and may be
+frozen outright. A backgrounded client therefore stops sending keepalives,
+while its socket stays open and reads normally.
+
+Two consequences the server side must honor:
+
+- **No idle or pong timeout below about 120 seconds** on the region session
+  or the grid channel. A tighter one disconnects users whose only fault is
+  looking at another tab. The session has no idle timeout today, and the
+  auth deadline (10 seconds, before any traffic) is unaffected.
+- **A stalled reader must not grow the region's memory.** Each session's
+  outbox is bounded: past a soft limit, frames a later one supersedes
+  (transforms) are dropped first; past a hard limit the oldest go
+  regardless, logged as `session outbox trimmed`. A client that was stalled
+  long enough to lose frames resynchronizes by spawning again — the initial
+  scene is the resync mechanism. Durable traffic is deliberately not here:
+  instant messages live on the grid channel with store-and-forward.
+
 ## Milestones
 
 - **E1 — embodied presence:** spawn/move/leave, transforms and kills both
