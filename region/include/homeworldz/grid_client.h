@@ -41,6 +41,19 @@ struct RegionSettings {
     std::string public_endpoint;
     int viewer_port{42002};
     int lease_seconds{60};
+    // session_endpoint is the public ws:// or wss:// URL of this region's
+    // session transport, reported at registration when it serves one
+    // (docs/CLIENT2-TRANSPORT.md).
+    std::string session_endpoint;
+};
+
+// TicketIdentity is who a region ticket resolves to, answered by the grid —
+// the ticket-signing secret never reaches a region.
+struct TicketIdentity {
+    std::string user_id;
+    std::string userid;
+    std::string display_name;
+    std::string session_id;
 };
 
 struct Estate {
@@ -354,6 +367,10 @@ public:
     std::optional<HomeLocation> home_location(std::string_view user_id);
     bool set_gesture_active(std::string_view user_id, std::string_view item_id,
                             std::string_view asset_id, bool active);
+    // validate_region_ticket asks the grid to resolve a client's region
+    // ticket for this region; nullopt is any refusal.
+    std::optional<TicketIdentity> validate_region_ticket(std::string_view region_id,
+                                                         std::string_view token);
 
 private:
     std::shared_ptr<Transport> transport_;

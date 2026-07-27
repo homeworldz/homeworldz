@@ -24,6 +24,16 @@ add_library(homeworldz-region-core
 target_sources(homeworldz-region-core PRIVATE src/terrain_edit.cpp)
 target_sources(homeworldz-region-core PRIVATE src/viewer_protocol.cpp)
 target_sources(homeworldz-region-core PRIVATE src/viewer_capabilities.cpp)
+target_sources(homeworldz-region-core PRIVATE src/session_protocol.cpp)
+target_sources(homeworldz-region-core PRIVATE src/session_server.cpp)
+find_package(libwebsockets CONFIG REQUIRED)
+# vcpkg's dynamic triplets export websockets_shared; static ones export
+# websockets. Take whichever this build provides.
+if(TARGET websockets_shared)
+  target_link_libraries(homeworldz-region-core PUBLIC websockets_shared)
+else()
+  target_link_libraries(homeworldz-region-core PUBLIC websockets)
+endif()
 target_include_directories(homeworldz-region-core PUBLIC include)
 target_compile_features(homeworldz-region-core PUBLIC cxx_std_20)
 target_compile_definitions(homeworldz-region-core PUBLIC
@@ -85,6 +95,10 @@ add_test(NAME region-inventory-asset COMMAND homeworldz-inventory-asset-tests)
 add_executable(homeworldz-scene-tests tests/scene_test.cpp)
 target_link_libraries(homeworldz-scene-tests PRIVATE homeworldz-region-core)
 add_test(NAME region-scene COMMAND homeworldz-scene-tests)
+
+add_executable(homeworldz-session-protocol-tests tests/session_protocol_test.cpp)
+target_link_libraries(homeworldz-session-protocol-tests PRIVATE homeworldz-region-core)
+add_test(NAME region-session-protocol COMMAND homeworldz-session-protocol-tests)
 
 add_executable(homeworldz-grid-client-tests tests/grid_client_test.cpp)
 target_link_libraries(homeworldz-grid-client-tests PRIVATE homeworldz-region-core)

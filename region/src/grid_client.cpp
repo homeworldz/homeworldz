@@ -526,10 +526,13 @@ std::string Client::register_region(const RegionSettings& settings) {
 
 std::optional<RegisteredRegion> Client::register_provisioned_region(
     std::string_view region_id, const RegionSettings& settings, std::string* refusal) {
-    const auto body = "{\"publicEndpoint\":" + api::json_string(settings.public_endpoint) +
-                      ",\"viewerPort\":" + std::to_string(settings.viewer_port) +
-                      ",\"leaseSeconds\":" + std::to_string(settings.lease_seconds) +
-                      ",\"regionProtocol\":" + std::to_string(region_protocol) + '}';
+    auto body = "{\"publicEndpoint\":" + api::json_string(settings.public_endpoint) +
+                ",\"viewerPort\":" + std::to_string(settings.viewer_port) +
+                ",\"leaseSeconds\":" + std::to_string(settings.lease_seconds) +
+                ",\"regionProtocol\":" + std::to_string(region_protocol);
+    if (!settings.session_endpoint.empty())
+        body += ",\"sessionEndpoint\":" + api::json_string(settings.session_endpoint);
+    body += '}';
     const auto response = transport_->send(
         "POST", "/api/v1/region-runtime/" + path_segment(region_id), body);
     if (response.status_code != 200) {
@@ -1112,6 +1115,21 @@ std::optional<HomeLocation> Client::home_location(std::string_view user_id) {
     if (!parse_vec3(response.body, "position", home.position)) return std::nullopt;
     parse_vec3(response.body, "lookAt", home.look_at);
     return home;
+}
+
+std::optional<TicketIdentity> Client::validate_region_ticket(std::string_view region_id,
+                                                             std::string_view token) {
+    const auto body = "{\"token\":" + api::json_string(token) + '}';
+    const auto response = transport_->send(
+        "POST", "/api/v1/region-runtime/" + path_segment(region_id) + "/validate-ticket", body);
+    if (response.status_code != 200) return std::nullopt;
+    TicketIdentity identity;
+    identity.user_id = json_field(response.body, "userId");
+    identity.userid = json_field(response.body, "userid");
+    identity.display_name = json_field(response.body, "displayName");
+    identity.session_id = json_field(response.body, "sessionId");
+    if (identity.user_id.empty() || identity.session_id.empty()) return std::nullopt;
+    return identity;
 }
 
 bool Client::set_gesture_active(std::string_view user_id, std::string_view item_id,

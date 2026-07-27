@@ -398,7 +398,11 @@ The response is `200` with `Cache-Control: no-store`:
     "token": "eyJhbGciOi…",
     "expiresAt": "2026-07-26T20:19:00Z"
   },
-  "capabilities": { "version": 1, "transports": [] }
+  "capabilities": {
+    "version": 1,
+    "transports": ["websocket"],
+    "sessionURL": "wss://welcome.example/session"
+  }
 }
 ```
 
@@ -420,9 +424,16 @@ The response is `200` with `Cache-Control: no-store`:
   is refused, and the account token is refused wherever the ticket is
   expected — the audience separation is structural.
 - **`capabilities`** — the versioned per-region manifest, resolved for this
-  region and re-resolved on every region crossing. `transports` is empty
-  until the region session transport exists; a client treats the manifest as
-  data and adapts rather than negotiating.
+  region and re-resolved on every region crossing. `transports` lists what
+  this region's session transport serves — `["websocket"]` for a region that
+  reported a session endpoint at registration, empty for one that serves
+  none — and `sessionURL` (present exactly when `transports` is non-empty)
+  is where to connect. The session opens with the same envelope protocol as
+  the grid channel: mandatory first-message `auth` carrying the **ticket**
+  (not the account token), answered by `hello {region, identity}`, then
+  `ping`/`pong`/`error`, and server-initiated `chat {from, message}` for the
+  region's public chat. A client treats the manifest as data and adapts
+  rather than negotiating.
 
 Errors are the flat `{code, message}` object every `/v1` route uses:
 

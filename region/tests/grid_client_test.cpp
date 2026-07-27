@@ -18,6 +18,8 @@ public:
     homeworldz::grid::HttpResponse send(std::string_view method, std::string_view path,
                                         std::string_view body) override {
         requests.push_back({std::string(method), std::string(path), std::string(body)});
+        if (method == "POST" && path.ends_with("/validate-ticket"))
+            return {200, R"({"userId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","userid":"jim.tarber","displayName":"Jim Tarber","sessionId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","expiresAt":"2026-07-27T00:00:00Z"})"};
         if (method == "POST" && path.starts_with("/api/v1/region-runtime/"))
             return {200, R"({"id":"22222222-2222-4222-8222-222222222222","name":"Sandbox Region","gridX":1001,"gridY":1000,"sizeX":256,"sizeY":256,"maturity":0,"publicEndpoint":"https://sandbox.example/region","viewerPort":43002,"gridName":"Homeworldz Test","gridPublicUrl":"https://grid.example","regionProtocol":1})"};
         if (method == "GET" && path.ends_with("/neighbors"))
@@ -111,7 +113,7 @@ int main() {
     if (transport->requests.size() != 3 || transport->requests[2].method != "DELETE" ||
         !lifecycle.region_id().empty()) return 1;
     homeworldz::grid::RegionSettings provisioned_settings{
-        {}, 0, 0, "http://localhost:42011", 42012, 60};
+        {}, 0, 0, "http://localhost:42011", 42012, 60, "wss://sandbox.example/session"};
     const auto provisioned = client.register_provisioned_region(
         "Sandbox Region", provisioned_settings);
     if (!provisioned || provisioned->id != "22222222-2222-4222-8222-222222222222" ||
@@ -125,7 +127,18 @@ int main() {
         transport->requests.back().body.find(
             R"("viewerPort":42012)") == std::string::npos ||
         transport->requests.back().body.find(
-            R"("regionProtocol":1)") == std::string::npos) return 1;
+            R"("regionProtocol":1)") == std::string::npos ||
+        transport->requests.back().body.find(
+            R"("sessionEndpoint":"wss://sandbox.example/session")") == std::string::npos) return 1;
+    // The grid resolves a client's region ticket; the region never holds the
+    // signing secret.
+    const auto ticket_identity = client.validate_region_ticket(provisioned->id, "a-ticket");
+    if (!ticket_identity || ticket_identity->user_id != "cccccccc-cccc-4ccc-8ccc-cccccccccccc" ||
+        ticket_identity->userid != "jim.tarber" || ticket_identity->display_name != "Jim Tarber" ||
+        ticket_identity->session_id != "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" ||
+        transport->requests.back().path !=
+            "/api/v1/region-runtime/" + provisioned->id + "/validate-ticket" ||
+        transport->requests.back().body.find(R"("token":"a-ticket")") == std::string::npos) return 1;
     // Renewal carries the protocol too: enforcement at renewal is how a grid
     // increment drains non-matching regions within one lease period.
     if (!client.renew_provisioned_lease(provisioned->id, 60) ||

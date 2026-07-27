@@ -32,6 +32,7 @@
 #include "homeworldz/avatar_controller.h"
 #include "homeworldz/falcon_runtime.h"
 #include "homeworldz/grid_client.h"
+#include "homeworldz/session_server.h"
 #include "homeworldz/http_response.h"
 #include "homeworldz/inventory_asset.h"
 #include "homeworldz/object_asset.h"
@@ -881,6 +882,7 @@ int main(int argc, char* argv[]) {
     const auto connection_timeout =
         std::chrono::seconds(configured_int("region.connection_timeout_seconds", 60, 15, 3600));
     std::unique_ptr<homeworldz::grid::RegistrationLifecycle> registration;
+    std::unique_ptr<homeworldz::session::Server> session_server;
     std::unique_ptr<homeworldz::grid::Client> viewer_grid;
     // Access-key-authenticated client for estate updates via the region-runtime API.
     std::unique_ptr<homeworldz::grid::Client> estate_client;
@@ -960,6 +962,12 @@ int main(int argc, char* argv[]) {
                 region_public_endpoint,
                 region_viewer_port,
                 configured_int("region.lease_seconds", 60, 10, 300)};
+            // The session transport is served when a port is configured, and
+            // its public URL is reported to the grid so world entry can hand
+            // it to clients (docs/CLIENT2-TRANSPORT.md). The URL is explicit
+            // configuration: only the operator knows where TLS terminates.
+            if (configured_int("region.session_port", 0, 0, 65535) > 0)
+                settings.session_endpoint = configured_value("region.session_public_url");
             const auto grid_url = configured_value("grid.url", "http://localhost:42000");
             auto registration_transport = homeworldz::grid::socket_transport(grid_url, region_access_key);
             homeworldz::grid::Client registration_client(registration_transport);
@@ -1010,6 +1018,33 @@ int main(int argc, char* argv[]) {
                 WSACleanup();
 #endif
                 return 1;
+            }
+            if (const auto session_port = configured_int("region.session_port", 0, 0, 65535);
+                session_port > 0) {
+                // The validator asks the grid on its own connection; the
+                // ticket-signing secret never reaches the region.
+                auto validation_client = std::make_shared<homeworldz::grid::Client>(
+                    homeworldz::grid::socket_transport(grid_url, region_access_key));
+                const auto session_region_id = provisioned->id;
+                session_server = homeworldz::session::Server::start({session_port, region_name,
+                    [validation_client, session_region_id](const std::string& token)
+                        -> std::optional<homeworldz::session::SessionIdentity> {
+                        const auto resolved =
+                            validation_client->validate_region_ticket(session_region_id, token);
+                        if (!resolved) return std::nullopt;
+                        return homeworldz::session::SessionIdentity{resolved->user_id,
+                            resolved->userid, resolved->display_name, resolved->session_id};
+                    }});
+                if (!session_server) {
+                    std::cerr << "{\"level\":\"error\",\"message\":\"region session listener failed\",\"port\":"
+                              << session_port << "}" << std::endl;
+#ifdef _WIN32
+                    WSACleanup();
+#endif
+                    return 1;
+                }
+                std::cout << "{\"level\":\"info\",\"message\":\"region session listening\",\"port\":"
+                          << session_port << "}" << std::endl;
             }
         } catch (const std::exception& error) {
             std::cerr << "{\"level\":\"error\",\"message\":\"region registration failed\",\"error\":"
@@ -1693,6 +1728,10 @@ int main(int argc, char* argv[]) {
                          static_cast<float>(speaker->position.y),
                          static_cast<float>(speaker->position.z)};
         chat.message = std::move(message.text);
+        // Public script chat also reaches authenticated region sessions; the
+        // session has no position yet, so it hears the whole region.
+        if (session_server && !message.owner_only)
+            session_server->broadcast_chat(chat.from_name, chat.message);
         const auto payload = homeworldz::viewer::encode_chat_from_simulator(chat);
         const auto sent_at = std::chrono::steady_clock::now();
         for (const auto& [recipient_endpoint, recipient] : avatars) {
@@ -7245,6 +7284,8 @@ int main(int argc, char* argv[]) {
                             outgoing.position = {static_cast<float>(origin.x), static_cast<float>(origin.y),
                                                  static_cast<float>(origin.z)};
                             outgoing.message = chat->message;
+                            if (session_server)
+                                session_server->broadcast_chat(outgoing.from_name, outgoing.message);
                             const auto payload = homeworldz::viewer::encode_chat_from_simulator(outgoing);
                             for (const auto& [recipient_endpoint, recipient] : avatars) {
                                 const auto& target = recipient.controller.state().position;

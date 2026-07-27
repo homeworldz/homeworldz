@@ -123,6 +123,49 @@ a good "for now" state; individual calls may be reopened as evidence arrives.
 - No persistence of reported region protocols, no increment scheduling, no
   region session transport, no asset-format work.
 
+## 2026-07-27 — step 5, the region session (WebSocket, option A)
+
+The region session ships over TLS + WebSocket per the accepted decision in
+[CLIENT2-TRANSPORT.md](CLIENT2-TRANSPORT.md). The milestone is deliberately an
+**observer session**: authenticate, hello, ping/pong, and the region's public
+chat delivered server-initiated — no avatar embodiment, no scene updates, no
+client-to-region chat. Those arrive with the arrival/embodiment work, which
+has its own design surface (spawn, appearance, interest management).
+
+- **Region-side ticket validation is a grid round trip**, POST
+  `/api/v1/region-runtime/{id}/validate-ticket`, authenticated by the
+  region's own access key. Verifying locally would require the signing
+  secret on machines the operator does not run, and an evil region holding
+  that secret could mint account tokens; ADR 0028 forbids exactly that
+  trust. The validation call blocks the session service thread for one grid
+  round trip during auth only.
+- **TLS terminates at fronting infrastructure this milestone** (the grid's
+  edge or a local proxy such as the Caddy already on the deployment box);
+  the region listens in plaintext on `region.session_port` and reports the
+  *public* `region.session_public_url` — explicit configuration, because
+  only the operator knows where TLS terminates. In-region TLS arrives with
+  direct home-hosted serving, where the relay design already concluded the
+  certificate question is hardest.
+- **The protocol layer is transport-free** (`session_protocol.h`:
+  envelope codec, first-byte discrimination, and the `SessionCore` state
+  machine), in the shared-library shape CLIENT2.md calls for — dependency-
+  free, unit-tested without sockets, structured for later consumption by the
+  client core. The libwebsockets glue (`session_server.cpp`) runs one
+  service thread; cross-thread chat is queued and drained via
+  `lws_cancel_service`.
+- **An authenticated session hears the whole region's public chat.** A
+  session has no position yet, so llSay's 20 m radius has nothing to measure
+  from; region-wide delivery is the honest interim and narrows to
+  position-based interest when sessions gain an avatar. `llOwnerSay` stays
+  viewer-only (it targets one owner in-world).
+- **Avatar chat reaches sessions with the same `from_name` the viewer path
+  sends today** — currently the agent UUID, which viewers resolve by name
+  lookup. Parity, not polish; name resolution for sessions lands with
+  identity work.
+- **libwebsockets is the region's first networking dependency** (vcpkg, both
+  platforms), taken per the decision document; the region's own hand-rolled
+  HTTP/1.1 listener is untouched.
+
 ## 2026-07-26 — viewer destination resolution moves onto the arrival package
 
 The follow-up the world-entry work deferred: `httpapi.resolveDestination` now
