@@ -34,7 +34,7 @@ export function App(props) {
                 <span class="hamburger-icon" aria-hidden="true"></span>
               </summary>
               <div class="mobile-nav-panel">
-                <a href={MARKETING_URL} onClick={closeMobileNavigation}>Homeworldz.com</a>
+                <A href="/" onClick={closeMobileNavigation}>Home</A>
                 <Show
                   when={isAuthenticated()}
                   fallback={
@@ -52,14 +52,14 @@ export function App(props) {
                 </Show>
               </div>
             </details>
-            <A href="/" end class="brand" aria-label="Homeworldz management home">
+            <a href={MARKETING_URL} class="brand" aria-label="Homeworldz.com">
               <img src={homeworldzMark} alt="" width="64" height="64" />
               <span>Homeworldz</span>
-            </A>
+            </a>
           </div>
           <div class="nav-controls">
             <div class="nav-links">
-              <a href={MARKETING_URL}>Homeworldz.com</a>
+              <A href="/" end>Home</A>
               <Show
                 when={isAuthenticated()}
                 fallback={
