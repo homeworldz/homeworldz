@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/homeworldz/server/grid/internal/arrival"
 	"github.com/homeworldz/server/grid/internal/gestures"
 	"github.com/homeworldz/server/grid/internal/identity"
 	"github.com/homeworldz/server/grid/internal/inventory"
@@ -236,7 +237,7 @@ func (a *API) resolveViewerLogin(r *http.Request, firstRaw, lastRaw, passwd, sta
 			preferredRegionID = location.RegionID
 		}
 	}
-	region, err := resolveDestination(r.Context(), a.regions, start, preferredRegionID)
+	region, err := resolveDestination(r.Context(), a.regions, start, preferredRegionID, a.welcomePoints)
 	if err != nil {
 		_ = a.identity.RevokeSession(r.Context(), session.ID)
 		return nil, "destination", "No online region matches the requested destination."
@@ -388,30 +389,36 @@ func (a *API) regionStartState(ctx context.Context, endpoint, userID string) (re
 
 func isFinite(value float64) bool { return !math.IsNaN(value) && !math.IsInf(value, 0) }
 
-func resolveDestination(ctx context.Context, store regions.Store, start, preferredRegionID string) (regions.Region, error) {
-	items, err := store.List(ctx)
-	if err != nil || len(items) == 0 {
-		return regions.Region{}, regions.ErrNotFound
-	}
+// resolveDestination selects the viewer's login region on the shared arrival
+// logic (docs/CLIENT2.md, "Default and fallback arrival points"): an explicit
+// uri: destination is honored or refused (never diverted), a stored region
+// wins while it is leased, and otherwise the welcome list decides. The legacy
+// first-region fallback survives only for grids with no welcome list, so an
+// unconfigured development grid still logs a viewer in somewhere.
+func resolveDestination(ctx context.Context, store regions.Store, start, preferredRegionID string,
+	welcome []arrival.Point) (regions.Region, error) {
 	if strings.HasPrefix(strings.ToLower(start), "uri:") {
 		name := strings.TrimPrefix(start, "uri:")
 		if before, _, found := strings.Cut(name, "&"); found {
 			name = before
 		}
-		for _, region := range items {
-			if strings.EqualFold(strings.TrimSpace(name), region.Name) {
-				return region, nil
-			}
+		destination, err := arrival.ResolveNamed(ctx, store, name)
+		if err != nil {
+			return regions.Region{}, regions.ErrNotFound
 		}
-		return regions.Region{}, regions.ErrNotFound
+		return destination.Region, nil
 	}
 	// preferredRegionID is the home region for start=home, else the last region.
-	if preferredRegionID != "" {
-		for _, region := range items {
-			if region.ID == preferredRegionID {
-				return region, nil
-			}
-		}
+	destination, err := arrival.Resolve(ctx, store, preferredRegionID, welcome)
+	if err == nil {
+		return destination.Region, nil
+	}
+	items, listErr := store.List(ctx)
+	if listErr != nil || len(items) == 0 || len(welcome) > 0 {
+		// With a welcome list configured, its exhaustion means no listed
+		// region is online: refuse rather than land the user somewhere the
+		// operator never named.
+		return regions.Region{}, regions.ErrNotFound
 	}
 	return items[0], nil
 }

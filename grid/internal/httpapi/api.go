@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/homeworldz/server/grid/internal/arrival"
 	"github.com/homeworldz/server/grid/internal/assetmeta"
 	"github.com/homeworldz/server/grid/internal/estate"
 	"github.com/homeworldz/server/grid/internal/gestures"
@@ -50,6 +51,7 @@ type API struct {
 	locations     locations.Store
 	gestures      gestures.Store
 	estates       estate.Store
+	welcomePoints []arrival.Point
 }
 
 func (a *API) regionExtent(ctx context.Context, id string) float32 {
@@ -79,6 +81,11 @@ type Options struct {
 	Locations         locations.Store
 	Gestures          gestures.Store
 	Estates           estate.Store
+	// Welcome is the ordered new-arrival list ([grid] welcome_locations),
+	// shared with the client's world entry: where a viewer login lands when
+	// no stored location decides it, and where it is diverted when the stored
+	// region is offline. Empty preserves the legacy first-region fallback.
+	Welcome []arrival.Point
 }
 
 func New(ready ReadinessChecker, version string, options Options) http.Handler {
@@ -90,7 +97,8 @@ func New(ready ReadinessChecker, version string, options Options) http.Handler {
 		provisioned:  options.Provisioned, terrainHTTP: options.TerrainHTTPClient,
 		terrainCache: newTerrainTileCache(), transits: options.Transits,
 		taskTransfers: options.TaskTransfers, locations: options.Locations,
-		gestures: options.Gestures, estates: options.Estates}
+		gestures: options.Gestures, estates: options.Estates,
+		welcomePoints: options.Welcome}
 	if a.publicURL == "" {
 		a.publicURL = "http://127.0.0.1:42000"
 	}

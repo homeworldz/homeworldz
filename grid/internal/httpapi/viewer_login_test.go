@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/homeworldz/server/grid/internal/arrival"
 	"github.com/homeworldz/server/grid/internal/inventory"
 	"github.com/homeworldz/server/grid/internal/locations"
 	"github.com/homeworldz/server/grid/internal/provisioning"
@@ -240,6 +241,38 @@ func TestViewerLoginUsesDurableLastRegion(t *testing.T) {
 	if fields["login"].text() != "true" || fields["sim_ip"].text() != "sandbox.example" ||
 		fields["region_x"].text() != "256256" {
 		t.Fatalf("last-location destination = %#v", fields)
+	}
+}
+
+// The welcome list decides where a viewer with no usable stored location
+// lands, replacing the old first-listed-region fallback (docs/CLIENT2.md,
+// "Default and fallback arrival points"). And when a welcome list is
+// configured but none of its regions is online, the login is refused rather
+// than landing the user somewhere the operator never named.
+func TestViewerLoginLandsOnWelcomeList(t *testing.T) {
+	identities := newMemoryIdentityStore()
+	_, _ = identities.CreateUser(context.Background(), "new.user", "development-password")
+	regionStore := newMemoryRegionStore()
+	// Registered first, so the legacy fallback would have chosen it.
+	_, _ = regionStore.Register(context.Background(), regions.Registration{Name: "Elsewhere", GridX: 999, GridY: 999,
+		PublicEndpoint: "http://elsewhere.example:42021", ViewerPort: 42022, LeaseDuration: time.Minute})
+	_, _ = regionStore.Register(context.Background(), regions.Registration{Name: "Welcome", GridX: 1000, GridY: 1000,
+		PublicEndpoint: "http://welcome.example:42011", ViewerPort: 42012, LeaseDuration: time.Minute})
+
+	handler := New(checker{}, "test", Options{Identity: identities, Regions: regionStore,
+		Inventory: &memoryInventoryStore{folders: make(map[string][]inventory.Folder)},
+		Welcome:   []arrival.Point{{Region: "Welcome", X: 127, Y: 127, Z: 23}}})
+	fields := viewerResponse(t, handler, viewerRequest("New", "User", "development-password", "last"))
+	if fields["login"].text() != "true" || fields["sim_ip"].text() != "welcome.example" {
+		t.Fatalf("welcome-list destination = %#v", fields)
+	}
+
+	offlineOnly := New(checker{}, "test", Options{Identity: identities, Regions: regionStore,
+		Inventory: &memoryInventoryStore{folders: make(map[string][]inventory.Folder)},
+		Welcome:   []arrival.Point{{Region: "Not Leased", X: 1, Y: 1, Z: 1}}})
+	fields = viewerResponse(t, offlineOnly, viewerRequest("New", "User", "development-password", "last"))
+	if fields["login"].text() != "false" || fields["reason"].text() != "destination" {
+		t.Fatalf("exhausted welcome list = %#v", fields)
 	}
 }
 

@@ -259,16 +259,17 @@ The probe names a default landing region as `{name, gridX, gridY}` — no endpoi
 because world entry returns that and the probe should not become a public region
 directory.
 
-**Homeworldz had no such concept, and for viewers its absence remains a latent
-bug rather than merely a gap.** `resolveDestination`
+**Homeworldz had no such concept, and its absence was a latent bug for viewers
+rather than merely a gap**: `resolveDestination` used to try the requested
+region, then a preferred region id, then fall back to `items[0]` — whatever the
+region list happened to return first — so where a viewer with no last location
+landed was undefined and changed as regions came and went. Both halves are now
+shipped (2026-07-26): the welcome concept (`[grid] welcome_locations`, the
+probe's `welcome` field, world entry resolving against the list), and
+`resolveDestination`
 ([grid/internal/httpapi/viewer_login.go:391](../grid/internal/httpapi/viewer_login.go:391))
-tries the requested region, then a preferred region id, then falls back to
-`items[0]` — whatever the region list happens to return first. Where a viewer with
-no last location lands is therefore undefined and can change as regions come and
-go. The welcome concept itself shipped 2026-07-26 (`[grid] welcome_locations`,
-the probe's `welcome` field, and world entry resolving against the list), but
-`resolveDestination` still uses `items[0]`, so the viewer-side fix is still
-open.
+resolving on the same shared arrival logic, with the first-region fallback
+surviving only on grids that configure no welcome list.
 
 **1000,1000 is already the convention**, though only in test fixtures — the
 `Welcome` region sits there across
@@ -485,10 +486,10 @@ duplication is worth that.
 
 ### Default and fallback arrival points
 
-Homeworldz had neither; the client path now has the welcome list
-(`[grid] welcome_locations`, shipped 2026-07-26 for world entry), while for the
-viewer path the gap is larger than one missing setting. `resolveDestination`
-distinguishes three situations and handles none of them well:
+Homeworldz had neither; both paths now resolve on the welcome list
+(`[grid] welcome_locations`, shipped 2026-07-26 — world entry first, the
+viewer login later the same day). `resolveDestination` distinguished three
+situations and handled none of them well:
 
 | Situation | Today |
 | --- | --- |

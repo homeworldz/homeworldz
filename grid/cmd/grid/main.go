@@ -18,6 +18,7 @@ import (
 
 	"golang.org/x/term"
 
+	"github.com/homeworldz/server/grid/internal/arrival"
 	"github.com/homeworldz/server/grid/internal/assetmeta"
 	"github.com/homeworldz/server/grid/internal/config"
 	"github.com/homeworldz/server/grid/internal/estate"
@@ -118,6 +119,12 @@ func main() {
 
 	assetVault := vaultStore(db, settings.VaultPath, logger)
 
+	welcome, err := arrival.ParseList(settings.WelcomeLocations)
+	if err != nil {
+		logger.Error("parse [grid] welcome_locations", "error", err)
+		os.Exit(1)
+	}
+
 	server := &http.Server{
 		Addr: settings.Address,
 		Handler: httpapi.New(db, version, httpapi.Options{
@@ -138,6 +145,7 @@ func main() {
 			Locations:         locationStore(db),
 			Gestures:          gestureStore(db),
 			Estates:           estate.NewPostgresStore(db),
+			Welcome:           welcome,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}

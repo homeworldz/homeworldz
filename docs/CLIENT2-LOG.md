@@ -123,6 +123,25 @@ a good "for now" state; individual calls may be reopened as evidence arrives.
 - No persistence of reported region protocols, no increment scheduling, no
   region session transport, no asset-format work.
 
+## 2026-07-26 — viewer destination resolution moves onto the arrival package
+
+The follow-up the world-entry work deferred: `httpapi.resolveDestination` now
+resolves on `arrival.Resolve`/`ResolveNamed` instead of its own walk, so the
+viewer login lands on the welcome list where the old code fell back to
+`items[0]`, and the client and viewer paths cannot drift apart.
+
+- **The first-region fallback survives only on grids with no welcome list**,
+  so an unconfigured development grid still logs a viewer in somewhere. With
+  a welcome list configured, exhausting it refuses the login — landing the
+  user in a region the operator never named would misreport the outage.
+- **`startLocation` semantics are untouched.** Arrival points carry positions,
+  but populating the viewer's start position from them (in place of
+  `normalizeStart`) changes the login response and deserves its own
+  Firestorm-regression pass; the region still chooses the spawn.
+- **Needs one manual Firestorm login pass** before full trust, per the
+  original deferral's reasoning; the XML-RPC/LLSD shapes are covered by tests
+  and did not change.
+
 ## 2026-07-26 — notification delivery over the grid channel
 
 The channel's first server-initiated traffic. Scope was set by what actually
