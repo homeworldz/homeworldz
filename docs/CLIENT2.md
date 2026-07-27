@@ -87,6 +87,15 @@ The `client` object is the extra field the client reads; everything outside it i
 what the existing `/version` shape already carries, so a monitoring check does not
 have to learn a new document.
 
+Two of these fields are optional, and their absence is meaningful rather than
+an error. **`channelURL`** appears only when the deployment knows its public
+URL (`[website] public_url`); when absent, the client derives the channel URL
+from the API base it just probed — same host and port, `http` → `ws` and
+`https` → `wss`, path `/v1/client/channel`. That derivation is normative, not
+repair: a grid that omits the field is saying "the channel is where you found
+me." **`welcome`** appears only when the grid configures an arrival list; a
+grid without one simply has no advertised landing region.
+
 **Nothing in this document is allowed to be non-universal.** That rule is what
 keeps the probe honest, and it excludes more than it first appears — region size,
 for instance, is not a grid property at all. `validRegionSizes` is `{1, 2, 4}`
