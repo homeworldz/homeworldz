@@ -19,6 +19,8 @@ data_path = D:\Homeworldz\region
 asset_path = assets/region
 terrain_path = assets/region/terrain/plateau-square.raw
 lease_seconds = 60
+session_port = 42061
+session_public_url = wss://grid.example/session/welcome
 
 [grid]
 url = https://grid.example
@@ -26,7 +28,7 @@ public_url = https://grid.example
 service_token = secret
 )ini";
     const auto settings = homeworldz::config::parse_region_ini(input);
-    if (settings.size() != 15 || settings.at("region.name") != "Demo Region" ||
+    if (settings.size() != 17 || settings.at("region.name") != "Demo Region" ||
         settings.at("region.grid_x") != "1001" || settings.at("region.grid_y") != "1002" ||
         settings.at("region.public_endpoint") != "http://region.example:42001" ||
         settings.at("region.http_port") != "42001" || settings.at("region.viewer_port") != "42002" ||
@@ -36,6 +38,8 @@ service_token = secret
         settings.at("region.asset_path") != "assets/region" ||
         settings.at("region.terrain_path") != "assets/region/terrain/plateau-square.raw" ||
         settings.at("region.lease_seconds") != "60" ||
+        settings.at("region.session_port") != "42061" ||
+        settings.at("region.session_public_url") != "wss://grid.example/session/welcome" ||
         settings.at("grid.url") != "https://grid.example" ||
         settings.at("grid.public_url") != "https://grid.example" ||
         settings.at("grid.service_token") != "secret")

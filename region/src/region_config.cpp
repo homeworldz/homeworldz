@@ -19,7 +19,8 @@ const std::unordered_set<std::string> setting_names{
     "region.name", "region.grid_x", "region.grid_y", "region.public_endpoint",
     "region.http_port", "region.viewer_port", "region.bind_address",
     "region.viewer_bind_address", "region.data_path", "region.asset_path",
-    "region.terrain_path", "region.lease_seconds", "grid.url",
+    "region.terrain_path", "region.lease_seconds", "region.session_port",
+    "region.session_public_url", "region.connection_timeout_seconds", "grid.url",
     "grid.public_url", "grid.service_token"};
 
 } // namespace
