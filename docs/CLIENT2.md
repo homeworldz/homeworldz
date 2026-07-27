@@ -678,8 +678,8 @@ how this table accommodates variation.
 
 ## The communication mechanisms
 
-Six paths, of which five ship today and one does not. The legacy three are
-untouched by everything above.
+Six paths, all of which now ship — the region session in its observer
+milestone. The legacy three are untouched by everything above.
 
 | Path | Used by | Transport | Encoding | State |
 | --- | --- | --- | --- | --- |
@@ -688,7 +688,7 @@ untouched by everything above.
 | `EventQueueGet` | viewers | HTTP/1.1 long poll | LLSD | Shipped |
 | REST bootstrap | client | HTTPS | JSON | Shipped (probe, tokens, world entry) |
 | Grid channel | client | WebSocket | JSON | Shipped (system notices; IMs, presence, offers have no producers yet) |
-| Region session | client | TLS WebSocket now; WebTransport when the RFC lands ([CLIENT2-TRANSPORT.md](CLIENT2-TRANSPORT.md)) | JSON | Decided, not built |
+| Region session | client | TLS WebSocket now; WebTransport when the RFC lands ([CLIENT2-TRANSPORT.md](CLIENT2-TRANSPORT.md)) | JSON | Shipped (observer: ticket auth, ping, public chat out; embodiment pending) |
 
 ### Why the client holds two channels
 
