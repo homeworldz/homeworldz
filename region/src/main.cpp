@@ -1804,6 +1804,15 @@ int main(int argc, char* argv[]) {
                 session_server->send_to(participant.session_id, envelope);
         }
     };
+    // An entity with no object id is not a rezzed object — an avatar's own
+    // scene entity is the common case, and it persists after its owner
+    // leaves. The viewer path filters these out inside
+    // static_object_from_entity; session delivery must filter them too, or a
+    // client is told an offline avatar's body is an object (and sees its
+    // stale, possibly out-of-bounds, last position).
+    const auto session_object_visible = [](const homeworldz::scene::Entity& entity) {
+        return !entity.object_id.empty() && !entity.owner_id.empty();
+    };
     const auto session_object_envelope = [&](const homeworldz::scene::Entity& entity) {
         return homeworldz::session::encode_envelope("object", {},
             "{\"id\":\"" + std::to_string(entity.id) + "\"" +
@@ -1871,7 +1880,7 @@ int main(int argc, char* argv[]) {
                     true, when, true))
                 static_cast<void>(send_udp(viewer_server, recipient_endpoint, *sent));
         }
-        deliver_to_embodied(session_object_envelope(entity));
+        if (session_object_visible(entity)) deliver_to_embodied(session_object_envelope(entity));
     };
     // Restore enabled task scripts after a Region restart. VM state is not yet
     // persisted, so each restored script starts fresh and re-runs state_entry;
@@ -7490,7 +7499,8 @@ int main(int argc, char* argv[]) {
                                                 session_avatar_envelope(other));
                     }
                     for (const auto& [entity_id, scene_entity] : scene.entities()) {
-                        if (avatar_entities.count(entity_id) != 0) continue;
+                        if (avatar_entities.count(entity_id) != 0 ||
+                            !session_object_visible(scene_entity)) continue;
                         session_server->send_to(inbound.session_id,
                                                 session_object_envelope(scene_entity));
                     }
