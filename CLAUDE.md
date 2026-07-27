@@ -19,8 +19,9 @@ sessions in each folder and cross-repo edits interfere with work in flight.
 Reading them is expected and fine.
 
 The one tool here that deliberately crosses that border is `node syncweb.mjs`
-(see Documentation below). It writes only `../homeworldz.com/content/ROADMAP.md`
-and leaves it unstaged; do not stage, commit, or push in the website repo.
+(see Documentation below). It writes only
+`../homeworldz.com/content/roadmaps/SERVER.md` and leaves it unstaged; do not
+stage, commit, or push in the website repo.
 
 ## Naming and terminology
 
@@ -65,6 +66,7 @@ with `scripts/build-region.sh`, never cross-compiled from Windows.
 - ADRs in `docs/adr/` record decisions and are numbered sequentially; they state
   intent and are revised as evidence arrives rather than rewritten silently.
 - `docs/ROADMAP.md` is vendored into the website repo. After editing it, run
-  `node syncweb.mjs`, which copies it to `../homeworldz.com/content/ROADMAP.md`
+  `node syncweb.mjs`, which copies it to
+  `../homeworldz.com/content/roadmaps/SERVER.md`
   and leaves the change unstaged there for review.
 - Markdown and plain text use native line endings (CRLF on Windows).

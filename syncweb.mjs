@@ -18,7 +18,9 @@ const repoRoot = dirname(fileURLToPath(import.meta.url));
 const webRoot = resolve(repoRoot, "../homeworldz.com");
 
 // { from } is relative to this repo; { to } is relative to homeworldz.com.
-const files = [{ from: "docs/ROADMAP.md", to: "content/ROADMAP.md" }];
+// The website keeps per-project roadmaps under content/roadmaps/; this repo's
+// is the server roadmap.
+const files = [{ from: "docs/ROADMAP.md", to: "content/roadmaps/SERVER.md" }];
 
 const toLf = (text) => text.replace(/\r\n/g, "\n");
 
