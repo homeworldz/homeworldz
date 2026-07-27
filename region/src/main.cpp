@@ -1872,6 +1872,11 @@ int main(int argc, char* argv[]) {
             static_cast<void>(viewer_grid->clear_presence(found->second.user_id));
         session_draw_distances.erase(found->second.session_id);
         sent_dynamic_transforms.erase(participant_key);
+        avatar_appearances.erase(participant_key);
+        avatar_geometries.erase(participant_key);
+        avatar_animations.erase(participant_key);
+        next_animation_sequences.erase(participant_key);
+        movement_animations.erase(participant_key);
         avatars.erase(found);
         deliver_to_embodied(session_kill_envelope(entity_id));
         std::cout << "{\"level\":\"info\",\"message\":\"session avatar retired\",\"localId\":"
@@ -7466,10 +7471,33 @@ int main(int argc, char* argv[]) {
                         homeworldz::scene::Vector3{(*inbound.arrival)[0], (*inbound.arrival)[1],
                                                    (*inbound.arrival)[2]} :
                         (persisted ? persisted->position : initial_spawn);
+                    // A session client sends no appearance — texture-entry
+                    // blobs are a legacy shape it will never speak — so seed
+                    // the server-side default-outfit bake, exactly as an
+                    // appearance-less viewer gets. Without it viewers render
+                    // a default-shaped body, and the physics capsule keeps
+                    // default dimensions (the bent-knee stance).
+                    const auto session_agent = homeworldz::viewer::parse_uuid(inbound.user_id);
+                    if (session_agent && !avatar_appearances.contains(participant_key)) {
+                        if (const auto* bake = ensure_default_outfit_bake()) {
+                            homeworldz::viewer::AgentSetAppearance seeded;
+                            seeded.agent_id = *session_agent;
+                            seeded.serial = 1;
+                            seeded.texture_entry = bake->texture_entry;
+                            seeded.visual_params = default_outfit_visual_params;
+                            seeded.appearance_version = 1;
+                            avatar_appearances.insert_or_assign(participant_key, seeded);
+                            if (const auto geometry = homeworldz::viewer::avatar_geometry(seeded))
+                                avatar_geometries[participant_key] = *geometry;
+                        }
+                    }
+                    const auto known_session_geometry = avatar_geometries.find(participant_key);
+                    const auto session_geometry =
+                        known_session_geometry == avatar_geometries.end() ?
+                            homeworldz::viewer::AvatarGeometry{} : known_session_geometry->second;
                     homeworldz::viewer::AvatarController controller{
                         spawn, collision_ground_height(spawn),
-                        homeworldz::viewer::AvatarGeometry{}.height,
-                        homeworldz::viewer::AvatarGeometry{}.hip_offset,
+                        session_geometry.height, session_geometry.hip_offset,
                         static_cast<double>(region_size_x),
                         static_cast<double>(region_size_y)};
                     if (persisted)
@@ -7523,16 +7551,24 @@ int main(int argc, char* argv[]) {
                         session_server->send_to(inbound.session_id,
                                                 session_object_envelope(scene_entity));
                     }
-                    // Announce the arrival to viewers and other sessions.
-                    if (const auto agent = homeworldz::viewer::parse_uuid(inbound.user_id)) {
+                    // Announce the arrival to viewers and other sessions: the
+                    // avatar itself, then its appearance, so a viewer rezzes a
+                    // properly shaped and dressed body rather than a default.
+                    if (session_agent) {
                         const auto session_region_handle =
                             (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
                             static_cast<std::uint32_t>(region_grid_y * 256);
                         const auto announce = homeworldz::viewer::encode_avatar_object_update(
-                            session_region_handle, static_cast<std::uint32_t>(entity), *agent,
+                            session_region_handle, static_cast<std::uint32_t>(entity), *session_agent,
                             {static_cast<float>(live.controller.state().position.x),
                              static_cast<float>(live.controller.state().position.y),
                              static_cast<float>(live.controller.state().position.z)});
+                        std::vector<std::byte> appearance;
+                        if (const auto seeded = avatar_appearances.find(participant_key);
+                            seeded != avatar_appearances.end())
+                            appearance = homeworldz::viewer::encode_avatar_appearance({
+                                *session_agent, seeded->second.serial, seeded->second.texture_entry,
+                                seeded->second.visual_params, {}, seeded->second.appearance_version});
                         for (const auto& [recipient_endpoint, recipient] : avatars) {
                             static_cast<void>(recipient);
                             if (recipient_endpoint == participant_key) continue;
@@ -7540,6 +7576,11 @@ int main(int argc, char* argv[]) {
                                     recipient_endpoint, announce, true, now, true))
                                 static_cast<void>(send_udp(
                                     viewer_server, recipient_endpoint, *sent));
+                            if (appearance.empty()) continue;
+                            if (const auto dressed = circuits.send(
+                                    recipient_endpoint, appearance, true, now, true))
+                                static_cast<void>(send_udp(
+                                    viewer_server, recipient_endpoint, *dressed));
                         }
                     }
                     const auto arrival_envelope = session_avatar_envelope(live);
