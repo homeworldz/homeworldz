@@ -719,9 +719,13 @@ frontends — is developed and tracked in its own repository, with its own
 roadmap, status, and progress; phases 8 and 9 here are the server-side surface
 it builds against.
 
-- [ ] Serve avatar appearance to session clients
-  ([CLIENT2-EMBODIMENT.md](CLIENT2-EMBODIMENT.md) milestone E3); viewers see
-  session avatars with default geometry until then.
+- [x] Dress a session avatar for viewers: spawn seeds the server-side
+  default-outfit bake and derives body geometry from it, so a viewer rezzes
+  a properly shaped, clothed avatar rather than a default one
+  ([CLIENT2-EMBODIMENT.md](CLIENT2-EMBODIMENT.md) milestone E3, viewer half).
+- [ ] Serve appearance *to* session clients, so they can render each other —
+  the remaining half of E3, waiting on the asset formats below rather than
+  on legacy texture-entry blobs.
 - [ ] Store modern asset formats at rest — KTX2 textures, glTF meshes — with
   down-conversion serving legacy viewers the formats they expect.
 - [ ] Mesh prims server-side, so the client renders one geometry pipeline and
