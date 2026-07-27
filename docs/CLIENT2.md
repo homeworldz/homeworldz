@@ -687,7 +687,7 @@ milestone. The legacy three are untouched by everything above.
 | Capability HTTP | viewers | HTTP/1.1 | LLSD | Shipped |
 | `EventQueueGet` | viewers | HTTP/1.1 long poll | LLSD | Shipped |
 | REST bootstrap | client | HTTPS | JSON | Shipped (probe, tokens, world entry) |
-| Grid channel | client | WebSocket | JSON | Shipped (system notices; IMs, presence, offers have no producers yet) |
+| Grid channel | client | WebSocket | JSON | Shipped (system notices; instant messages with store-and-forward; presence and offers have no producers yet) |
 | Region session | client | TLS WebSocket now; WebTransport when the RFC lands ([CLIENT2-TRANSPORT.md](CLIENT2-TRANSPORT.md)) | JSON | Shipped (observer: ticket auth, ping, public chat out; embodiment pending) |
 
 ### Why the client holds two channels

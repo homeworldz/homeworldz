@@ -674,9 +674,12 @@ sequence this summarizes.
   first-message token auth, ping/pong, and error envelopes.
 - [x] Deliver server-initiated notifications to connected users (system
   notices via the per-user delivery hub; best-effort, honestly reported).
-- [ ] Add store-and-forward notification kinds — instant messages, inventory
-  offers, friendship requests — which need producers and tables that do not
-  exist yet.
+- [x] Add the first store-and-forward notification kind: instant messages,
+  stored before delivery, delivered live to open channels, and replayed in
+  sent order on the next connection otherwise.
+- [ ] Add the remaining store-and-forward kinds — inventory offers and
+  friendship requests — which need producers and tables that do not exist
+  yet.
 
 ### The region session
 
