@@ -1859,6 +1859,17 @@ int main(int argc, char* argv[]) {
         return homeworldz::session::encode_envelope("kill", {},
             "{\"ids\":[\"" + std::to_string(entity_id) + "\"]}");
     };
+    // Objects leave a scene as often as avatars do — deleted, derezzed,
+    // returned, expired — and a session client keeps what it was told about,
+    // so every kill the viewers get must reach sessions too.
+    const auto session_kill_many = [](const auto& local_ids) {
+        std::string list;
+        for (const auto id : local_ids) {
+            if (!list.empty()) list.push_back(',');
+            list += "\"" + std::to_string(id) + "\"";
+        }
+        return homeworldz::session::encode_envelope("kill", {}, "{\"ids\":[" + list + "]}");
+    };
     // retire_session_avatar removes an embodied session's avatar: kill to
     // viewers and other sessions, physics teardown, map erasure. The session
     // itself stays open (back to observer) unless the socket already closed.
@@ -3561,6 +3572,7 @@ int main(int argc, char* argv[]) {
                                     for (const auto entity_id : removed_ids)
                                         remove_physics_object(entity_id);
                                     const auto kill = homeworldz::viewer::encode_kill_object(removed_ids);
+                                    deliver_to_embodied(session_kill_many(removed_ids));
                                     for (const auto& [recipient_endpoint, recipient] : avatars) {
                                         static_cast<void>(recipient);
                                         if (const auto outgoing = circuits.send(
@@ -7158,6 +7170,7 @@ int main(int argc, char* argv[]) {
                             if (persisted && !removed_ids.empty()) {
                                 for (const auto entity_id : removed_ids) remove_physics_object(entity_id);
                                 const auto kill = homeworldz::viewer::encode_kill_object(removed_ids);
+                                deliver_to_embodied(session_kill_many(removed_ids));
                                 for (const auto& [recipient_endpoint, recipient] : avatars) {
                                     static_cast<void>(recipient);
                                     if (const auto outgoing = circuits.send(
@@ -8114,6 +8127,14 @@ int main(int argc, char* argv[]) {
                     if (!homeworldz::physics::within_viewer_interest(
                             recipient.controller.state().position, entity->position,
                             recipient.controller.state().draw_distance, radius)) {
+                        // A session keeps what it was told about, so leaving
+                        // interest must be said out loud — otherwise the object
+                        // sits in its scene at a stale position forever, the
+                        // same trap the avatar sweep exists to avoid.
+                        if (recipient.transport == AvatarTransport::session &&
+                            recipient_cache.count(entity_id) != 0 && session_server)
+                            session_server->send_to(recipient.session_id,
+                                                    session_kill_envelope(entity_id));
                         recipient_cache.erase(entity_id);
                         continue;
                     }
@@ -8125,6 +8146,16 @@ int main(int argc, char* argv[]) {
                             previous->second.state, state))
                         continue;
                     if (recipient.transport == AvatarTransport::session) {
+                        // First sight of this object on this session is an
+                        // introduction, not a transform: a client cannot move
+                        // something it was never told about.
+                        if (previous == recipient_cache.end()) {
+                            session_server->send_to(recipient.session_id,
+                                                    session_object_envelope(*entity));
+                            recipient_cache.insert_or_assign(
+                                entity_id, SentDynamicTransform{state, now});
+                            continue;
+                        }
                         // The session's transform message: interest-filtered
                         // above exactly as viewers are, object rotation as a
                         // quaternion (4 elements discriminates the form).
@@ -8190,6 +8221,7 @@ int main(int argc, char* argv[]) {
                 temporary_expirations.erase(part_id);
             }
             const auto payload = homeworldz::viewer::encode_kill_object(local_ids);
+            deliver_to_embodied(session_kill_many(local_ids));
             for (const auto& [recipient_endpoint, recipient] : avatars) {
                 static_cast<void>(recipient);
                 if (const auto outgoing = circuits.send(
@@ -8251,6 +8283,7 @@ int main(int argc, char* argv[]) {
                 }
                 for (const auto entity_id : auto_removed) remove_physics_object(entity_id);
                 const auto kill = homeworldz::viewer::encode_kill_object(auto_removed);
+                deliver_to_embodied(session_kill_many(auto_removed));
                 for (const auto& [recipient_endpoint, recipient] : avatars) {
                     static_cast<void>(recipient);
                     if (const auto outgoing = circuits.send(recipient_endpoint, kill, true, now))
