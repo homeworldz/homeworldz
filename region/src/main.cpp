@@ -7689,7 +7689,13 @@ int main(int argc, char* argv[]) {
             }
             avatar.controller.set_ground_height(
                 collision_ground_height(avatar.controller.state().position));
-            const bool has_online_neighbor = std::any_of(
+            // Session avatars do not cross regions yet: crossings are
+            // embodiment milestone E2 (one crossing envelope), so E1 contains
+            // them at the border instead of feeding them to the viewer
+            // transit machinery, which would prepare a handoff nothing can
+            // complete.
+            const bool may_cross = avatar.transport == AvatarTransport::lludp;
+            const bool has_online_neighbor = may_cross && std::any_of(
                 region_neighbors.begin(), region_neighbors.end(),
                 [](const auto& neighbor) { return neighbor.online; });
             avatar.controller.set_border_crossing_enabled(
@@ -7697,7 +7703,7 @@ int main(int argc, char* argv[]) {
             if (!avatar.outbound_transit_id.empty())
                 avatar.controller.expire_transient_controls();
             avatar.controller.step(elapsed);
-            if (avatar.outbound_transit_id.empty()) {
+            if (may_cross && avatar.outbound_transit_id.empty()) {
                 const auto& position = avatar.controller.state().position;
                 const auto crossing = homeworldz::region::plan_avatar_border_crossing(
                     region_grid_x, region_grid_y, region_size_x, region_size_y,
