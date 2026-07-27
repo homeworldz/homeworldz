@@ -28,6 +28,11 @@ channel WebSocket.
 
 ## Relationship to the 1.0 roadmap
 
+As of 2026-07-27 the client and transport work is **also tracked in the main
+roadmap** as phases 8-10 ([ROADMAP.md](ROADMAP.md)), which summarize at
+milestone level what this document sequences in detail; the two must not
+disagree, and this one carries the gates.
+
 2.0 is **additive and does not replace 1.0**. Firestorm and compatible viewers
 remain first-class throughout
 ([ADR 0016](adr/0016-firestorm-compatibility-target.md)), every region extension

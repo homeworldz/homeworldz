@@ -14,16 +14,18 @@ acceptance tests pass.
 
 ## Progress snapshot
 
-Updated 2026-07-24. These bars are effort-weighted engineering estimates, not
+Updated 2026-07-27. These bars are effort-weighted engineering estimates, not
 simple checkbox ratios. Later scripting, crossings, social systems, security,
 recovery, and scale items are substantially larger than many completed viewer
 protocol tasks. Percentages are deliberately approximate and should be revised
-when scope or implementation evidence changes.
+when scope or implementation evidence changes. The overall figure dropped with
+this revision because phases 8-10 brought new scope into the denominator, not
+because anything regressed.
 
 <label class="roadmap-overall-progress">
   <span>Overall progress</span>
-  <progress data-color="primary" max="100" value="30">30%</progress>
-  <strong>30%</strong>
+  <progress data-color="primary" max="100" value="27">27%</progress>
+  <strong>27%</strong>
 </label>
 
 | Phase | Progress | Estimate |
@@ -35,6 +37,9 @@ when scope or implementation evidence changes.
 | 5. Social and Creator Platform | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="9" aria-label="Phase 5 progress: 9%">9%</progress> | 9% |
 | 6. Reliable Operations and Distribution | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="12" aria-label="Phase 6 progress: 12%">12%</progress> | 12% |
 | 7. Scale, Compatibility, and Ecosystem | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="2" aria-label="Phase 7 progress: 2%">2%</progress> | 2% |
+| 8. Modernized Communications Transport | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="40" aria-label="Phase 8 progress: 40%">40%</progress> | 40% |
+| 9. Homeworldz Client | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="8" aria-label="Phase 9 progress: 8%">8%</progress> | 8% |
+| 10. Extended Client Functionality | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="3" aria-label="Phase 10 progress: 3%">3%</progress> | 3% |
 
 The overall estimate is weighted by expected effort and therefore is not the
 arithmetic mean of the phase percentages. The binary checkboxes below remain
@@ -44,8 +49,11 @@ but stays unchecked until its complete wording is satisfied.
 The phases are parallel workstreams, not completion gates. Work may advance in
 any phase when it delivers useful capability or evidence; dependencies constrain
 individual tasks rather than requiring an earlier phase to be complete. Current
-active work spans connected regions, the interactive physical world, and the
-Falcon LSL scripting foundation.
+active work spans connected regions, the interactive physical world, the
+Falcon LSL scripting foundation, and the modernized transport and first-party
+client of phases 8-10, which were promoted into this roadmap from the
+[2.0 roadmap](ROADMAP2.md) on 2026-07-27; that document keeps their detailed
+sequence and gates.
 
 ## Phase 1: Functional Single-region World
 
@@ -629,3 +637,88 @@ Falcon LSL scripting foundation.
   crossing, security, and viewer-compatibility findings.
 - [ ] Define the supported platform matrix, compatibility guarantees, upgrade
   policy, and long-term maintenance expectations for the first stable release.
+
+## Phase 8: Modernized Communications Transport
+
+The modern client-facing wire surface: REST bootstrap, a grid-anchored
+notification channel, and a region-anchored session — replacing LLUDP,
+capability HTTP, and long polling for the first-party client while legacy
+viewers keep all three untouched. [CLIENT2.md](CLIENT2.md) is the
+implementation companion, [CLIENT2-TRANSPORT.md](CLIENT2-TRANSPORT.md) records
+the transport decision, and [ROADMAP2.md](ROADMAP2.md) keeps the detailed
+sequence this summarizes.
+
+### Arrival and bootstrap
+
+- [x] Serve the unauthenticated compatibility probe at `GET /v1/version`,
+  reporting protocol versions, grid capabilities, and the welcome region.
+- [x] Open world entry at `POST /v1/client/session`: destination resolution on
+  the shared arrival logic, a session in the store viewer logins share, and a
+  short-lived region-scoped ticket so the account token never reaches a region.
+- [x] Enforce the grid-region protocol handshake in both directions, at
+  registration and at renewal, so the probe's region claims rest on enforced
+  leases.
+
+### The grid channel
+
+- [x] Serve the grid-anchored WebSocket at `GET /v1/client/channel` with
+  first-message token auth, ping/pong, and error envelopes.
+- [x] Deliver server-initiated notifications to connected users (system
+  notices via the per-user delivery hub; best-effort, honestly reported).
+- [ ] Add store-and-forward notification kinds — instant messages, inventory
+  offers, friendship requests — which need producers and tables that do not
+  exist yet.
+
+### The region session
+
+- [x] Decide the transport: TLS + WebSocket now on libwebsockets, with
+  QUIC/WebTransport revisited when the RFC lands or measurements demand it
+  ([CLIENT2-TRANSPORT.md](CLIENT2-TRANSPORT.md)).
+- [x] Serve the region-session listener with ticket authentication (validated
+  by a grid round trip — the signing secret never reaches a region), hello,
+  heartbeat, and the region's public chat delivered server-initiated.
+- [x] Advertise the session per region as data: registration reports the
+  session endpoint, and world entry's capability manifest carries
+  `transports` and `sessionURL`.
+- [ ] Carry scene traffic: avatar embodiment, object and avatar updates,
+  movement, and client-to-region chat over the session.
+- [ ] Serve home-hosted regions through the call-home relay — an outbound
+  connection to the grid in place of a listening socket and a certificate —
+  with direct service preferred and verified by dial-back.
+- [ ] Add WebTransport as a second advertised transport when its RFC
+  publishes, per the version-floor rule.
+
+## Phase 9: Homeworldz Client
+
+The first-party client — an engine-neutral C++ core with native and browser
+frontends — developed in its own repository against the Phase 8 surface.
+This roadmap tracks it at the milestone level; its own `PLAN.md` holds the
+engineering detail.
+
+- [x] Establish the client repository, its core boundary, and its ADRs:
+  native-and-WebAssembly builds, no legacy serialization, dependency-free
+  protocol layer, and the two-channel transport model.
+- [ ] Prove the arrival path end to end from a browser: probe, login, world
+  entry, both channels connected, and a server-initiated message surviving a
+  region crossing.
+- [ ] Build the engine-neutral core: protocol, replication, asset streaming,
+  avatar prediction — testable without any frontend.
+- [ ] Ship the Godot desktop frontend over the core.
+- [ ] Ship the browser frontend: the same core compiled to WebAssembly, the
+  browser supplying WebSocket and WebTransport natively.
+
+## Phase 10: Extended Client Functionality
+
+What the first-party client can do that a legacy viewer cannot — served
+through negotiated region extensions so Firestorm never sees a change
+([ADR 0032](adr/0032-region-extensions-for-new-client.md)).
+
+- [ ] Store modern asset formats at rest — KTX2 textures, glTF meshes — with
+  down-conversion serving legacy viewers the formats they expect.
+- [ ] Mesh prims server-side, so the client renders one geometry pipeline and
+  prim meshing logic is written once.
+- [ ] Extend the session's capability manifest as extensions ship, keeping
+  per-region capabilities data the client adapts to rather than negotiates.
+- [ ] Add voice and modern presence surfaces appropriate to the new client.
+- [ ] Build creator tooling on the modern pipeline: visual scripting and a
+  modern content workflow ([ROADMAP2.md](ROADMAP2.md) Phase 6).
