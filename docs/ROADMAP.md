@@ -692,8 +692,10 @@ sequence this summarizes.
 - [x] Advertise the session per region as data: registration reports the
   session endpoint, and world entry's capability manifest carries
   `transports` and `sessionURL`.
-- [ ] Carry scene traffic: avatar embodiment, object and avatar updates,
-  movement, and client-to-region chat over the session.
+- [x] Carry scene traffic: avatar embodiment, object and avatar updates,
+  movement, and client-to-region chat over the session
+  ([CLIENT2-EMBODIMENT.md](CLIENT2-EMBODIMENT.md) milestone E1; crossings
+  and appearance are its later milestones).
 - [ ] Serve home-hosted regions through the call-home relay — an outbound
   connection to the grid in place of a listening socket and a certificate —
   with direct service preferred and verified by dial-back.

@@ -123,6 +123,29 @@ a good "for now" state; individual calls may be reopened as evidence arrives.
 - No persistence of reported region protocols, no increment scheduling, no
   region session transport, no asset-format work.
 
+## 2026-07-27 — embodiment E1 ships
+
+Session avatars spawn, move, and speak, per [CLIENT2-EMBODIMENT.md](CLIENT2-EMBODIMENT.md)
+and its settled wire contract; E2E-proven on the test grid with two live
+accounts observing each other. Judgment calls within the contract:
+
+- **Avatar transforms reach sessions region-wide**, exactly as viewers get
+  them; the draw-distance interest filter applies to dynamic objects (where
+  viewers have it too). Narrowing avatar transforms is interest-management
+  work both transports need together.
+- **Session say uses the viewer chat radius** (`chat_range` of type say) for
+  viewer fan-out, and reaches all sessions region-wide with `fromId` and
+  `position` attached so a client can filter or place it — session-side
+  radius filtering lands with the interest work above.
+- **A session avatar spawns with a default appearance geometry** and no
+  parcel bookkeeping (`push_agent_parcel` is viewer reporting); the
+  default-outfit bake seeding for viewer eyes is deferred with E3 appearance
+  work — viewers currently see a default-shaped avatar.
+- **Spawn is idempotent**: a second spawn answers `spawned` with current
+  state rather than erroring, so a client can re-assert after uncertainty.
+- **The initial scene excludes the spawning session's own avatar** — the
+  client knows itself from `spawned` — and excludes terrain, per the design.
+
 ## 2026-07-27 — instant messages: the first store-and-forward kind
 
 - **Stored before any delivery is attempted** (`instant_messages` table,
