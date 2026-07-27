@@ -648,6 +648,7 @@ std::optional<std::vector<RegionNeighbor>> Client::find_region_neighbors(
         neighbor.id = json_field(object, "id");
         neighbor.name = json_field(object, "name");
         neighbor.public_endpoint = json_field(object, "publicEndpoint");
+        neighbor.session_endpoint = json_field(object, "sessionEndpoint");
         const auto grid_x = json_int(object, "gridX");
         const auto grid_y = json_int(object, "gridY");
         const auto viewer_port = json_int(object, "viewerPort");

@@ -146,6 +146,10 @@ type RegionTopology struct {
 	PublicEndpoint string `json:"publicEndpoint,omitempty"`
 	ViewerPort     int    `json:"viewerPort,omitempty"`
 	Online         bool   `json:"online"`
+	// SessionEndpoint is the neighbor's region-session URL when it is online
+	// and serves one, so a region crossing a session avatar can tell the
+	// client where to continue (docs/CLIENT2-EMBODIMENT.md milestone E2).
+	SessionEndpoint string `json:"sessionEndpoint,omitempty"`
 }
 
 type RegionNeighborList struct {

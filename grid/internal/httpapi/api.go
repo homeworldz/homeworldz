@@ -502,6 +502,7 @@ func (a *API) regionNeighbors(w http.ResponseWriter, r *http.Request, id string)
 				ViewerPort: item.ViewerPort}
 			if live, online := liveByID[item.ID]; online {
 				entry.PublicEndpoint, entry.ViewerPort, entry.Online = live.PublicEndpoint, live.ViewerPort, true
+				entry.SessionEndpoint = live.SessionEndpoint
 			}
 			topology = append(topology, entry)
 		}
@@ -509,7 +510,8 @@ func (a *API) regionNeighbors(w http.ResponseWriter, r *http.Request, id string)
 		for _, item := range liveItems {
 			topology = append(topology, RegionTopology{ID: item.ID, Name: item.Name,
 				GridX: item.GridX, GridY: item.GridY, SizeX: 256, SizeY: 256, Maturity: 0,
-				PublicEndpoint: item.PublicEndpoint, ViewerPort: item.ViewerPort, Online: true})
+				PublicEndpoint: item.PublicEndpoint, ViewerPort: item.ViewerPort, Online: true,
+				SessionEndpoint: item.SessionEndpoint})
 		}
 	}
 	neighbors := make([]RegionNeighbor, 0, len(directions))

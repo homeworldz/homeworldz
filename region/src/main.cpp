@@ -1856,6 +1856,17 @@ int main(int argc, char* argv[]) {
         }
         if (physics_world && found->second.physics_character != 0)
             physics_world->remove_character(found->second.physics_character);
+        if (viewer_grid && registration) {
+            // Persist where the avatar stood, so re-entry with start=last
+            // lands sensibly — including after a crossing the client never
+            // completes.
+            const auto& state = found->second.controller.state();
+            static_cast<void>(viewer_grid->update_last_location(
+                found->second.user_id, registration->region_id(),
+                {static_cast<float>(state.position.x), static_cast<float>(state.position.y),
+                 static_cast<float>(state.position.z)},
+                state.rotation, state.flying));
+        }
         if (viewer_grid)
             static_cast<void>(viewer_grid->clear_presence(found->second.user_id));
         session_draw_distances.erase(found->second.session_id);
@@ -7637,6 +7648,9 @@ int main(int argc, char* argv[]) {
         const auto elapsed = std::chrono::duration<double>(now - previous_tick).count();
         const auto fixed_steps = simulation.advance(elapsed);
         std::vector<std::pair<std::string, std::string>> departed_avatars;
+        // Session avatars that crossed a border this tick; retired after the
+        // loop so the map is not mutated while iterating.
+        std::vector<std::string> crossing_session_avatars;
         for (auto& [endpoint, avatar] : avatars) {
             if (!avatar.outbound_transit_id.empty() && now >= avatar.outbound_transit_expires) {
                 if (viewer_grid && registration)
@@ -7699,12 +7713,18 @@ int main(int argc, char* argv[]) {
             }
             avatar.controller.set_ground_height(
                 collision_ground_height(avatar.controller.state().position));
-            // Session avatars do not cross regions yet: crossings are
-            // embodiment milestone E2 (one crossing envelope), so E1 contains
-            // them at the border instead of feeding them to the viewer
-            // transit machinery, which would prepare a handoff nothing can
-            // complete.
-            const bool may_cross = avatar.transport == AvatarTransport::lludp;
+            // A session avatar crosses by re-entering the neighbor rather than
+            // by the viewers' transit handoff (docs/CLIENT2-EMBODIMENT.md
+            // milestone E2), so it only needs the border detected — and only
+            // toward a neighbor that serves sessions, since a client cannot
+            // continue anywhere else. Containment still applies otherwise,
+            // which is what keeps an avatar from walking into open space.
+            const bool session_avatar = avatar.transport == AvatarTransport::session;
+            const bool may_cross = !session_avatar || std::any_of(
+                region_neighbors.begin(), region_neighbors.end(),
+                [](const auto& neighbor) {
+                    return neighbor.online && !neighbor.session_endpoint.empty();
+                });
             const bool has_online_neighbor = may_cross && std::any_of(
                 region_neighbors.begin(), region_neighbors.end(),
                 [](const auto& neighbor) { return neighbor.online; });
@@ -7718,6 +7738,43 @@ int main(int argc, char* argv[]) {
                 const auto crossing = homeworldz::region::plan_avatar_border_crossing(
                     region_grid_x, region_grid_y, region_size_x, region_size_y,
                     {position.x, position.y, position.z}, region_neighbors);
+                // A session avatar's crossing is a re-entry: tell the client
+                // where to continue and retire the avatar here, in the same
+                // tick the border is detected so it never wanders outside the
+                // region. The transit machinery below stays viewer-only.
+                if (crossing && session_avatar) {
+                    if (crossing->destination.session_endpoint.empty()) {
+                        avatar.controller.set_border_crossing_enabled(false);
+                    } else {
+                        const auto arrival = crossing->position;
+                        const auto& rotation = avatar.controller.state().rotation;
+                        const double qx = rotation[0], qy = rotation[1], qz = rotation[2];
+                        const auto qw = session_quat_w(qx, qy, qz);
+                        // start is pre-formatted so the client hands it back
+                        // to world entry verbatim, with no float-format risk.
+                        const auto start = crossing->destination.name + "/" +
+                            std::to_string(static_cast<int>(arrival[0])) + "/" +
+                            std::to_string(static_cast<int>(arrival[1])) + "/" +
+                            std::to_string(static_cast<int>(arrival[2]));
+                        session_server->send_to(avatar.session_id,
+                            homeworldz::session::encode_envelope("crossing", {},
+                                "{\"region\":" +
+                                homeworldz::session::json_string(crossing->destination.name) +
+                                ",\"sessionURL\":" + homeworldz::session::json_string(
+                                    crossing->destination.session_endpoint) +
+                                ",\"start\":" + homeworldz::session::json_string(start) +
+                                ",\"position\":" + session_vec3(arrival[0], arrival[1], arrival[2]) +
+                                ",\"lookAt\":" + session_vec3(1.0 - 2.0 * (qy * qy + qz * qz),
+                                    2.0 * (qx * qy + qw * qz), 0.0) + "}"));
+                        std::cout << "{\"level\":\"info\",\"message\":\"session avatar crossing\",\"agent\":"
+                                  << homeworldz::api::json_string(avatar.user_id)
+                                  << ",\"destination\":"
+                                  << homeworldz::api::json_string(crossing->destination.name)
+                                  << "}" << std::endl;
+                        crossing_session_avatars.push_back(endpoint);
+                    }
+                    continue;
+                }
                 if (crossing && now >= avatar.next_crossing_attempt) {
                     const auto* identity = circuits.identity(endpoint);
                     const auto simulator = simulator_event_endpoint(
@@ -7889,6 +7946,8 @@ int main(int argc, char* argv[]) {
             std::cout << "{\"level\":\"info\",\"message\":\"departed avatar retired\",\"sessionId\":"
                       << homeworldz::api::json_string(session_id) << "}" << std::endl;
         }
+        for (const auto& participant_key : crossing_session_avatars)
+            retire_session_avatar(participant_key);
         if (physics_world)
             for (std::size_t step = 0; step < fixed_steps; ++step)
                 physics_world->step(simulation.step_seconds());

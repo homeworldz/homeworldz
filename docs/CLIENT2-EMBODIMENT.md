@@ -128,6 +128,52 @@ Server → client:
 JSON first, per the encoding decision; the first-byte rule leaves room for
 a packed transform encoding if Phase 2 measurement demands it.
 
+## E2: a session crossing is a re-entry, not a handoff
+
+The design left "one crossing envelope" unresolved on the question that
+actually decides the shape: **what credential does the client present at the
+destination?** Its region ticket names the region it was minted for, so it is
+refused next door — correctly, that is the audience and region claim doing
+their job.
+
+Two candidate answers. The **handoff** model mirrors viewers: the source
+region asks the grid to mint a ticket for the neighbor and hands it over with
+the crossing, keeping one grid session across the border. The **re-entry**
+model has the client run world entry again for the named destination,
+receiving a fresh ticket and session by the path it already used to arrive.
+
+**Decided: re-entry.** The handoff model would let a region obtain a
+credential for a *different* region — a new trust surface on machines
+[ADR 0028](adr/0028-untrusted-region-trust-model.md) explicitly does not
+trust — and it would need the destination to accept an avatar staged against
+a session id the client is about to replace. Re-entry needs no new endpoint,
+no new trust, and no change to the viewers' transit machinery, which stays
+exactly as it is. What the client already holds makes it cheap: world entry
+accepts `Region/x/y/z`, so the arrival point survives the crossing exactly.
+
+The honest cost: **a crossing is not atomic for sessions.** The avatar is
+retired here before it exists there, so there is a brief gap — a REST round
+trip plus a socket open — where it is in neither region, and other
+participants see it leave and arrive rather than slide across. Viewers keep
+the seamless path. This is acceptable because the grid channel, not the
+region session, is what must survive a crossing, and it does: instant
+messages and notices are unaffected by a region change, which is the whole
+reason that channel is anchored to the grid.
+
+The envelope, sent to the crossing session and then the avatar is retired
+in the same tick (so it never wanders outside the region):
+
+```json
+{ "region": "Welcome", "sessionURL": "wss://…/session/welcome",
+  "start": "Welcome/250/128/23", "position": [250, 128, 23], "lookAt": [1, 0, 0] }
+```
+
+`start` is pre-formatted for handing straight back to world entry, so no
+float formatting can drift between the two sides. A client that ignores the
+crossing simply stops moving: containment applies toward any neighbor that
+serves no session, and its last position is persisted, so `start=last`
+recovers it.
+
 ## A quiet client is not a dead client
 
 Established by the client core's browser work, 2026-07-27, and binding on

@@ -118,6 +118,10 @@ struct RegionNeighbor {
     std::string public_endpoint;
     int viewer_port{};
 	bool online{};
+    // session_endpoint is the neighbor's region-session URL when it serves
+    // one; empty means a session avatar cannot continue there
+    // (docs/CLIENT2-EMBODIMENT.md milestone E2).
+    std::string session_endpoint;
     bool operator==(const RegionNeighbor&) const = default;
 };
 
