@@ -701,8 +701,14 @@ sequence this summarizes.
   hands the client its continuation and the client re-enters next door,
   landing on the arrival point the grid resolved. Not atomic the way a
   viewer's handoff is, deliberately — the reasoning is in the design.
-- [ ] Narrow avatar transforms by interest, for viewers and sessions
-  together — both are region-wide today.
+- [x] Narrow avatar traffic by interest for sessions: transforms flow only
+  within draw distance, with arrival and departure emitted by a sweep that
+  evaluates both parties' motion
+  ([CLIENT2-EMBODIMENT.md](CLIENT2-EMBODIMENT.md)).
+- [ ] Narrow it for viewers too. The mechanism is the same, but it changes
+  what a legacy viewer sees (bodies killed and re-rezzed at the boundary),
+  so it needs a **manual Firestorm regression pass** before shipping —
+  viewers stay region-wide until then.
 - [ ] Serve home-hosted regions through the call-home relay — an outbound
   connection to the grid in place of a listening socket and a certificate —
   with direct service preferred and verified by dial-back.

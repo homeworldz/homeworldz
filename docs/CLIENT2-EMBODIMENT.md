@@ -174,6 +174,35 @@ crossing simply stops moving: containment applies toward any neighbor that
 serves no session, and its last position is persisted, so `start=last`
 recovers it.
 
+## Interest: sessions now, viewers on a Firestorm pass
+
+A session holds an **interest set** — the avatars it currently knows about.
+Avatar `transform` frames flow only for pairs already in that set, and a
+100 ms sweep emits the boundary events: an `avatar` message when a body comes
+into range, a `kill` when it leaves.
+
+**The sweep evaluates every observer-subject pair rather than reacting to the
+subject's motion**, because interest changes when *either* party moves. A
+subject-driven design looks correct in every test where the moving avatar is
+the one being watched, and is silently wrong the moment an observer walks
+away from someone standing still — that observer is never told, and its
+client holds a body frozen at a stale position forever. Verified in exactly
+that direction.
+
+Rules worth stating: **self is always in interest** (an avatar's own
+transforms are its authoritative position), spawn seeds the set from what is
+genuinely in range rather than announcing the whole region, and retirement
+forgets the avatar in every other session's set so a later arrival is
+announced afresh rather than assumed known. Draw distance is the session
+state described above, so it can never be the zero that means "no filter".
+
+**Viewers remain region-wide, deliberately.** The same narrowing for the
+LLUDP path changes what a legacy viewer sees — bodies would need killing and
+re-rezzing at the boundary — and that is a visible behavior change on the
+compatibility-critical path with no automated acceptance test behind it. It
+wants a manual Firestorm regression pass before it ships, and is left
+unchecked on the roadmap for that reason rather than forgotten.
+
 ## A quiet client is not a dead client
 
 Established by the client core's browser work, 2026-07-27, and binding on
