@@ -34,8 +34,8 @@ its own repository with its own roadmap and progress.
 
 <label class="roadmap-overall-progress">
   <span>Modern Homeworldz client: grid/region back end</span>
-  <progress data-color="primary" max="100" value="20">20%</progress>
-  <strong>20%</strong>
+  <progress data-color="primary" max="100" value="28">28%</progress>
+  <strong>28%</strong>
 </label>
 
 | Phase | Progress | Estimate |
@@ -47,7 +47,7 @@ its own repository with its own roadmap and progress.
 | 5. Social and Creator Platform | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="9" aria-label="Phase 5 progress: 9%">9%</progress> | 9% |
 | 6. Reliable Operations and Distribution | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="12" aria-label="Phase 6 progress: 12%">12%</progress> | 12% |
 | 7. Scale, Compatibility, and Ecosystem | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="2" aria-label="Phase 7 progress: 2%">2%</progress> | 2% |
-| 8. Modernized Communications Transport | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="40" aria-label="Phase 8 progress: 40%">40%</progress> | 40% |
+| 8. Modernized Communications Transport | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="55" aria-label="Phase 8 progress: 55%">55%</progress> | 55% |
 | 9. Modern Client Support | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="3" aria-label="Phase 9 progress: 3%">3%</progress> | 3% |
 
 The overall estimate is weighted by expected effort and therefore is not the
@@ -696,6 +696,11 @@ sequence this summarizes.
   movement, and client-to-region chat over the session
   ([CLIENT2-EMBODIMENT.md](CLIENT2-EMBODIMENT.md) milestone E1; crossings
   and appearance are its later milestones).
+- [ ] Carry a session avatar across a region border, at parity with a
+  viewer's crossing ([CLIENT2-EMBODIMENT.md](CLIENT2-EMBODIMENT.md)
+  milestone E2); session avatars are contained at borders until then.
+- [ ] Narrow avatar transforms by interest, for viewers and sessions
+  together — both are region-wide today.
 - [ ] Serve home-hosted regions through the call-home relay — an outbound
   connection to the grid in place of a listening socket and a certificate —
   with direct service preferred and verified by dial-back.
@@ -712,6 +717,9 @@ frontends — is developed and tracked in its own repository, with its own
 roadmap, status, and progress; phases 8 and 9 here are the server-side surface
 it builds against.
 
+- [ ] Serve avatar appearance to session clients
+  ([CLIENT2-EMBODIMENT.md](CLIENT2-EMBODIMENT.md) milestone E3); viewers see
+  session avatars with default geometry until then.
 - [ ] Store modern asset formats at rest — KTX2 textures, glTF meshes — with
   down-conversion serving legacy viewers the formats they expect.
 - [ ] Mesh prims server-side, so the client renders one geometry pipeline and
