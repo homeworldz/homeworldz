@@ -62,6 +62,12 @@ AvatarController::AvatarController(scene::Vector3 spawn, double ground_height, d
 }
 
 void AvatarController::apply(const AgentUpdate& update) {
+    apply(MovementInput{update.control_flags, update.body_rotation, update.camera_center,
+                        update.camera_at, update.camera_left, update.camera_up,
+                        update.draw_distance});
+}
+
+void AvatarController::apply(const MovementInput& update) {
     controls_ = update.control_flags;
     body_rotation_ = update.body_rotation;
     state_.rotation = update.body_rotation;

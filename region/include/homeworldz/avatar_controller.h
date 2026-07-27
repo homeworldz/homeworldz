@@ -64,6 +64,19 @@ public:
                               double ground_height = 25.0, double avatar_height = 1.56,
                               double hip_offset = 0.0, double region_width = 256.0,
                               double region_height = 256.0);
+    // MovementInput is the transport-neutral movement command: exactly the
+    // fields the controller consumes from a viewer's AgentUpdate, and what a
+    // region-session move message maps onto (docs/CLIENT2-EMBODIMENT.md).
+    struct MovementInput {
+        std::uint32_t control_flags{};
+        std::array<float, 3> body_rotation{};
+        std::array<float, 3> camera_center{};
+        std::array<float, 3> camera_at{};
+        std::array<float, 3> camera_left{};
+        std::array<float, 3> camera_up{};
+        float draw_distance{};
+    };
+    void apply(const MovementInput& input);
     void apply(const AgentUpdate& update);
     void expire_transient_controls();
     void set_avatar_geometry(double height, double hip_offset);
