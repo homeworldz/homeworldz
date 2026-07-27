@@ -28,10 +28,11 @@ channel WebSocket.
 
 ## Relationship to the 1.0 roadmap
 
-As of 2026-07-27 the client and transport work is **also tracked in the main
-roadmap** as phases 8-10 ([ROADMAP.md](ROADMAP.md)), which summarize at
+As of 2026-07-27 the server-side client-support work is **also tracked in the
+main roadmap** as phases 8-9 ([ROADMAP.md](ROADMAP.md)), which summarize at
 milestone level what this document sequences in detail; the two must not
-disagree, and this one carries the gates.
+disagree, and this one carries the gates. The first-party client itself is
+tracked in its own repository's roadmap.
 
 2.0 is **additive and does not replace 1.0**. Firestorm and compatible viewers
 remain first-class throughout
