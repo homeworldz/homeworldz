@@ -123,6 +123,36 @@ a good "for now" state; individual calls may be reopened as evidence arrives.
 - No persistence of reported region protocols, no increment scheduling, no
   region session transport, no asset-format work.
 
+## 2026-07-26 — notification delivery over the grid channel
+
+The channel's first server-initiated traffic. Scope was set by what actually
+exists: a survey found **no notification producers anywhere in the grid** — no
+instant messages, no inventory offers, no friendships, no groups — so the work
+is the delivery machinery plus the one producer that is real today, an
+operator notice.
+
+- **A per-user connection hub in `internal/api`** (`channel_hub.go`): the
+  channel handler registers the authenticated account's connection and
+  deregisters on exit; a user may hold several connections and each receives
+  every delivery. The hub lives in the same process as the channel, so no
+  cross-process bus was needed — that question arrives with region-originated
+  events (IMs), which do not exist yet.
+- **One writer goroutine per connection.** Hub deliveries and read-loop
+  replies both write to the socket, so all post-hello writes funnel through a
+  per-connection queue. Replies wait for space (their ordering matters); hub
+  deliveries drop when a consumer's queue is full rather than stalling
+  everyone else's.
+- **Best-effort, deliberately unpersisted.** A notice to an offline user
+  reports `delivered: 0` and stores nothing. Every notification the grid can
+  produce today describes durable state the client re-reads on reconnect;
+  store-and-forward is deferred to the notification kinds that genuinely need
+  it (IMs, offers), which also have no tables yet.
+- **The producer is `POST /v1/admin/users/{id}/notice`** (privilege `users`),
+  sending `kind: "system_notice"`. Automatic notices from admin actions (ban,
+  privilege change) were considered and deferred — a ban's delivery story
+  should arrive together with session-revocation eviction from the hub, which
+  needs a sessions-by-user query that does not exist.
+
 ## 2026-07-26 — step 2, region side
 
 The region binary now reports its grid-region protocol version, completing the

@@ -1,10 +1,12 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/homeworldz/server/grid/internal/webaccount"
 )
@@ -84,12 +86,19 @@ func (a *API) adminUserByID(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		a.adminSetUserTags(w, r, id)
+	case len(parts) == 2 && parts[1] == "notice" && r.Method == http.MethodPost:
+		if !a.requirePrivilege(w, account, webaccount.PrivUsers) {
+			return
+		}
+		a.adminSendNotice(w, r, id)
 	case len(parts) == 2 && parts[1] == "privileges":
 		methodNotAllowed(w, http.MethodPut)
 	case len(parts) == 2 && parts[1] == "ban":
 		methodNotAllowed(w, http.MethodPut, http.MethodDelete)
 	case len(parts) == 2 && parts[1] == "tags":
 		methodNotAllowed(w, http.MethodPut)
+	case len(parts) == 2 && parts[1] == "notice":
+		methodNotAllowed(w, http.MethodPost)
 	default:
 		a.notFound(w, r)
 	}
@@ -226,6 +235,39 @@ func (a *API) adminSetUserTags(w http.ResponseWriter, r *http.Request, id string
 		return
 	}
 	writeJSON(w, http.StatusOK, managedUserOf(managed))
+}
+
+// adminSendNotice delivers a system notice to the target user's open grid
+// channels (docs/CLIENT2.md, "The communication mechanisms") — the first
+// notification producer. Delivery is best-effort to what is connected now;
+// the result says how many connections took it, and zero is an honest answer
+// for a user who is offline, not a failure.
+func (a *API) adminSendNotice(w http.ResponseWriter, r *http.Request, id string) {
+	var request sendNoticeRequest
+	if !decodeJSON(w, r, &request) {
+		return
+	}
+	message := strings.TrimSpace(request.Message)
+	if message == "" || len(message) > 2048 {
+		writeError(w, http.StatusBadRequest, Error{Code: "invalid_message", Message: "message must be 1-2048 characters", Field: "message"})
+		return
+	}
+	if _, err := a.accounts.Get(r.Context(), id); errors.Is(err, webaccount.ErrNotFound) {
+		a.writeNotFound(w)
+		return
+	} else if err != nil {
+		a.internalError(w, r, "load user", err)
+		return
+	}
+	payload, err := json.Marshal(channelNotificationPayload{
+		Kind: "system_notice", Message: message, SentAt: time.Now().UTC()})
+	if err != nil {
+		a.internalError(w, r, "encode notice", err)
+		return
+	}
+	delivered := a.channels.deliver(id, channelEnvelope{
+		Type: "notification", Version: channelEnvelopeVersion, Payload: payload})
+	writeJSON(w, http.StatusOK, NoticeResult{Delivered: delivered})
 }
 
 func (a *API) writeManaged(w http.ResponseWriter, r *http.Request, id, operation string) {

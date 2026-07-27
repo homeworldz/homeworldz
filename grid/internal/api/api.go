@@ -139,6 +139,7 @@ type API struct {
 	locations       LocationStore
 	ticketSigner    *webtoken.Signer
 	channelURL      string
+	channels        *channelHub
 }
 
 // New validates options and returns the composed website API handler.
@@ -182,6 +183,7 @@ func New(options Options) (http.Handler, error) {
 		locations:       options.Locations,
 		ticketSigner:    options.TicketSigner,
 		channelURL:      options.ChannelURL,
+		channels:        newChannelHub(),
 	}
 
 	mux := http.NewServeMux()

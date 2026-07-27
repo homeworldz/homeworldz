@@ -140,6 +140,17 @@ type setTagsRequest struct {
 	Tags string `json:"tags"`
 }
 
+type sendNoticeRequest struct {
+	Message string `json:"message"`
+}
+
+// NoticeResult reports how many of the target user's open grid-channel
+// connections accepted a notice. Zero means the user was not connected;
+// notices are not stored for later.
+type NoticeResult struct {
+	Delivered int `json:"delivered"`
+}
+
 type updateRegionRequest struct {
 	Name           *string `json:"name"`
 	OwnerUserID    *string `json:"ownerUserId"`

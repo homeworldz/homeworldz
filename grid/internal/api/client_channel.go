@@ -57,6 +57,14 @@ type channelErrorPayload struct {
 	Message string `json:"message"`
 }
 
+// channelNotificationPayload is a server-initiated notification. Kind names
+// the notification family; message is its operator- or sender-authored text.
+type channelNotificationPayload struct {
+	Kind    string    `json:"kind"`
+	Message string    `json:"message"`
+	SentAt  time.Time `json:"sentAt"`
+}
+
 // clientChannel upgrades GET /v1/client/channel.
 func (a *API) clientChannel(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -109,6 +117,28 @@ func (a *API) serveChannel(ctx context.Context, conn *websocket.Conn) {
 		return
 	}
 
+	// From here the connection has two message sources — replies to what the
+	// read loop receives, and hub deliveries initiated elsewhere — so every
+	// write funnels through one queue drained by a single writer goroutine.
+	client := a.channels.register(account.ID)
+	defer a.channels.deregister(client)
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go func() {
+		defer cancel()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case message := <-client.send:
+				if !a.channelWrite(ctx, conn, message) {
+					return
+				}
+			}
+		}
+	}()
+
 	for {
 		message, ok := a.channelRead(ctx, conn, 0)
 		if !ok {
@@ -116,17 +146,35 @@ func (a *API) serveChannel(ctx context.Context, conn *websocket.Conn) {
 		}
 		switch message.Type {
 		case "ping":
-			if !a.channelWrite(ctx, conn, channelEnvelope{
+			if !client.enqueue(ctx, channelEnvelope{
 				Type: "pong", Version: channelEnvelopeVersion, CorrelationID: message.CorrelationID,
 			}) {
 				return
 			}
 		default:
-			if !a.channelWriteError(ctx, conn, message.CorrelationID, "unsupported_type",
-				"this message type is not supported") {
+			payload, err := json.Marshal(channelErrorPayload{Code: "unsupported_type",
+				Message: "this message type is not supported"})
+			if err != nil {
+				return
+			}
+			if !client.enqueue(ctx, channelEnvelope{
+				Type: "error", Version: channelEnvelopeVersion, CorrelationID: message.CorrelationID, Payload: payload,
+			}) {
 				return
 			}
 		}
+	}
+}
+
+// enqueue queues a reply from the read loop, waiting for space rather than
+// dropping: unlike a hub delivery, a reply's ordering with respect to the
+// request matters, and the writer goroutine is draining continuously.
+func (c *channelClient) enqueue(ctx context.Context, message channelEnvelope) bool {
+	select {
+	case c.send <- message:
+		return true
+	case <-ctx.Done():
+		return false
 	}
 }
 
@@ -196,12 +244,3 @@ func (a *API) channelWrite(ctx context.Context, conn *websocket.Conn, message ch
 	return conn.Write(ctx, websocket.MessageText, encoded) == nil
 }
 
-func (a *API) channelWriteError(ctx context.Context, conn *websocket.Conn, correlationID, code, text string) bool {
-	payload, err := json.Marshal(channelErrorPayload{Code: code, Message: text})
-	if err != nil {
-		return false
-	}
-	return a.channelWrite(ctx, conn, channelEnvelope{
-		Type: "error", Version: channelEnvelopeVersion, CorrelationID: correlationID, Payload: payload,
-	})
-}

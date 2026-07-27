@@ -666,7 +666,7 @@ untouched by everything above.
 | Capability HTTP | viewers | HTTP/1.1 | LLSD | Shipped |
 | `EventQueueGet` | viewers | HTTP/1.1 long poll | LLSD | Shipped |
 | REST bootstrap | client | HTTPS | JSON | Shipped (probe, tokens, world entry) |
-| Grid channel | client | WebSocket | JSON | Shipped (carries no notification traffic yet) |
+| Grid channel | client | WebSocket | JSON | Shipped (system notices; IMs, presence, offers have no producers yet) |
 | Region session | client | WebTransport/QUIC, WebSocket fallback | JSON | Not built |
 
 ### Why the client holds two channels
@@ -720,6 +720,43 @@ would. That yields three properties for free:
 - **Nothing to build now.** The rule costs one documented sentence and one
   `switch` on a byte. The binary format it leaves room for is deferred until
   needed, which may be never.
+
+### What the grid channel carries today
+
+As implemented in
+[grid/internal/api/client_channel.go](../grid/internal/api/client_channel.go).
+Every message either way is one envelope:
+
+```json
+{ "type": "…", "version": 1, "correlationId": "…", "payload": { } }
+```
+
+`version` versions the envelope shape. `correlationId` is optional and pairs a
+reply with its request; server-initiated messages omit it.
+
+Client → server: **`auth`** (`{token}`, mandatory first message, within 10
+seconds — a browser cannot set an `Authorization` header on a WebSocket; the
+account token is resolved exactly as REST `requireAuth` resolves it, and a
+region ticket is refused on its audience) and **`ping`**.
+
+Server → client: **`hello`** (`{grid, identity}`, confirms auth), **`pong`**
+(echoes the ping's `correlationId`), **`error`** (`{code, message}`, answers a
+bad message without costing the connection), and **`notification`** —
+server-initiated, no correlation:
+
+```json
+{ "kind": "system_notice", "message": "maintenance in ten minutes", "sentAt": "2026-07-26T22:40:00Z" }
+```
+
+`kind` names the notification family; `system_notice` is the first, produced
+by `POST /v1/admin/users/{id}/notice` (privilege `users`, body `{message}`,
+reply `{delivered}` counting the connections that took it). Delivery is
+**best-effort to currently open channels** — nothing is stored for an offline
+user, because every notification the grid can produce today describes durable
+state a client re-reads on its next connection anyway. Store-and-forward
+arrives with the kinds that need it: instant messages, inventory offers,
+friendship requests, each of which today has no producer, no table, and no
+endpoint anywhere in the grid.
 
 Message envelopes are versioned from day one — `{type, version, correlationId,
 payload}` — so a message shape can evolve without a flag day of its own. The
