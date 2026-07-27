@@ -48,7 +48,7 @@ its own repository with its own roadmap and progress.
 | 6. Reliable Operations and Distribution | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="12" aria-label="Phase 6 progress: 12%">12%</progress> | 12% |
 | 7. Scale, Compatibility, and Ecosystem | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="2" aria-label="Phase 7 progress: 2%">2%</progress> | 2% |
 | 8. Modernized Communications Transport | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="40" aria-label="Phase 8 progress: 40%">40%</progress> | 40% |
-| 9. Extended Client Support | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="3" aria-label="Phase 9 progress: 3%">3%</progress> | 3% |
+| 9. Modern Client Support | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="3" aria-label="Phase 9 progress: 3%">3%</progress> | 3% |
 
 The overall estimate is weighted by expected effort and therefore is not the
 arithmetic mean of the phase percentages. The binary checkboxes below remain
@@ -697,7 +697,7 @@ sequence this summarizes.
 - [ ] Add WebTransport as a second advertised transport when its RFC
   publishes, per the version-floor rule.
 
-## Phase 9: Extended Client Support
+## Phase 9: Modern Client Support
 
 The grid/region back end for what the first-party client can do that a legacy
 viewer cannot — served through negotiated region extensions so Firestorm never
