@@ -7,19 +7,25 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/homeworldz/server/grid/internal/messages"
 )
 
-// memoryMessageStore satisfies messages.Store for the delivery tests.
+// memoryMessageStore satisfies messages.Store for the delivery tests. The
+// mutex mirrors the concurrency the real store gets from the database: the
+// HTTP handler and the channel's serve goroutine call in concurrently.
 type memoryMessageStore struct {
+	mu     sync.Mutex
 	stored []messages.Message
 	nextID int
 }
 
 func (s *memoryMessageStore) Create(_ context.Context, fromUserID, toUserID, text string) (messages.Message, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.nextID++
 	message := messages.Message{
 		ID:         fmt.Sprintf("50000000-0000-4000-8000-%012d", s.nextID),
@@ -31,6 +37,8 @@ func (s *memoryMessageStore) Create(_ context.Context, fromUserID, toUserID, tex
 }
 
 func (s *memoryMessageStore) Undelivered(_ context.Context, toUserID string, limit int) ([]messages.Message, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	result := make([]messages.Message, 0)
 	for _, message := range s.stored {
 		if message.ToUserID == toUserID && message.DeliveredAt == nil && len(result) < limit {
@@ -41,6 +49,8 @@ func (s *memoryMessageStore) Undelivered(_ context.Context, toUserID string, lim
 }
 
 func (s *memoryMessageStore) MarkDelivered(_ context.Context, ids []string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	now := time.Now()
 	for _, id := range ids {
 		for index := range s.stored {
@@ -53,6 +63,8 @@ func (s *memoryMessageStore) MarkDelivered(_ context.Context, ids []string) erro
 }
 
 func (s *memoryMessageStore) undeliveredCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	count := 0
 	for _, message := range s.stored {
 		if message.DeliveredAt == nil {
