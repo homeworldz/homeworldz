@@ -76,6 +76,12 @@ constexpr std::string_view system_creator_id = "00000000-0000-0000-0000-00000000
 constexpr std::string_view default_map_tile_asset_id = "00000000-0000-1111-9999-000000000100";
 homeworldz::config::RegionSettings configured_values;
 
+// AvatarTransport names which wire drives a participant: the legacy LLUDP
+// circuit, or the WebSocket region session (docs/CLIENT2-EMBODIMENT.md). The
+// avatars map is keyed by participant — "ip:port" for LLUDP so existing send
+// sites keep working verbatim, "ws:<session_id>" for sessions.
+enum class AvatarTransport { lludp, session };
+
 struct LiveAvatar {
     LiveAvatar(homeworldz::viewer::AvatarController initial_controller,
                homeworldz::scene::EntityId initial_entity_id, std::string initial_user_id,
@@ -90,8 +96,10 @@ struct LiveAvatar {
 
     homeworldz::viewer::AvatarController controller;
     homeworldz::scene::EntityId entity_id{};
+    AvatarTransport transport{AvatarTransport::lludp};
     std::string user_id;
     std::string session_id;              // formatted UUID, for Event Queue delivery
+    std::uint32_t circuit_code{};        // LLUDP only; stored so identity needs no circuit lookup
     std::int32_t last_agent_parcel{};    // local id of the parcel last reported to this viewer
     std::chrono::steady_clock::time_point next_ping{};
     std::chrono::steady_clock::time_point next_presence{};
@@ -5419,6 +5427,8 @@ int main(int argc, char* argv[]) {
                                     now + std::chrono::milliseconds(100), initial_viewer_position});
                                 static_cast<void>(inserted);
                                 avatar_iterator->second.last_pong = now;
+                                avatar_iterator->second.transport = AvatarTransport::lludp;
+                                avatar_iterator->second.circuit_code = identity->circuit_code;
                                 avatar_iterator->second.session_id =
                                     homeworldz::viewer::format_uuid(identity->session_id);
                                 push_agent_parcel(avatar_iterator->second);
