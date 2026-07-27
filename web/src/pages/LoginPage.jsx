@@ -46,7 +46,6 @@ export function LoginPage() {
             name="userid"
             type="text"
             autocomplete="username"
-            placeholder="My Avatar or my.avatar"
             value={userid()}
             onInput={(event) => setUserid(event.currentTarget.value)}
             required
