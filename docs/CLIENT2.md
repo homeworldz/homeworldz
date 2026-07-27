@@ -769,15 +769,25 @@ server-initiated, no correlation:
 { "kind": "system_notice", "message": "maintenance in ten minutes", "sentAt": "2026-07-26T22:40:00Z" }
 ```
 
-`kind` names the notification family; `system_notice` is the first, produced
-by `POST /v1/admin/users/{id}/notice` (privilege `users`, body `{message}`,
-reply `{delivered}` counting the connections that took it). Delivery is
-**best-effort to currently open channels** — nothing is stored for an offline
-user, because every notification the grid can produce today describes durable
-state a client re-reads on its next connection anyway. Store-and-forward
-arrives with the kinds that need it: instant messages, inventory offers,
-friendship requests, each of which today has no producer, no table, and no
-endpoint anywhere in the grid.
+`kind` names the notification family. Two exist:
+
+- **`system_notice`** — produced by `POST /v1/admin/users/{id}/notice`
+  (privilege `users`, body `{message}`, reply `{delivered}` counting the
+  connections that took it). Best-effort to currently open channels; nothing
+  is stored for an offline user, because a notice describes durable state a
+  client re-reads on its next connection anyway.
+- **`instant_message`** — the first store-and-forward kind, produced by
+  `POST /v1/client/messages` (body `{to, message}`, the sender is the bearer
+  token's account, reply `{id, sentAt, delivered}`). Payload:
+  `{kind, id, from: {id, userid, displayName}, message, sentAt}`. A message
+  is **stored before any delivery is attempted**; live delivery reaches the
+  recipient's open channels, and otherwise the message replays — in sent
+  order, before anything else — on the next channel connection they open.
+  The `id` is stable across live delivery and replay so a client can
+  de-duplicate. "Handed to a connection" counts as delivered; there are no
+  read receipts.
+
+Still without producers or tables: inventory offers and friendship requests.
 
 Message envelopes are versioned from day one — `{type, version, correlationId,
 payload}` — so a message shape can evolve without a flag day of its own. The

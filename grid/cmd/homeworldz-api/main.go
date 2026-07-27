@@ -27,6 +27,7 @@ import (
 	"github.com/homeworldz/server/grid/internal/presence"
 	"github.com/homeworldz/server/grid/internal/provisioning"
 	"github.com/homeworldz/server/grid/internal/regions"
+	"github.com/homeworldz/server/grid/internal/messages"
 	"github.com/homeworldz/server/grid/internal/webaccount"
 	"github.com/homeworldz/server/grid/internal/api"
 	"github.com/homeworldz/server/grid/internal/webtoken"
@@ -101,6 +102,7 @@ func main() {
 		GridName:        settings.Name,
 		Welcome:         welcome,
 		Sessions:        identity.NewPostgresStore(db),
+		Messages:        messages.NewPostgresStore(db),
 		Locations:       locations.NewPostgresStore(db),
 		TicketSigner:    ticketSigner,
 		ChannelURL:      channelURL(settings.WebsitePublicURL),

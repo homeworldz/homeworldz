@@ -151,6 +151,27 @@ type NoticeResult struct {
 	Delivered int `json:"delivered"`
 }
 
+type sendMessageRequest struct {
+	To      string `json:"to"`
+	Message string `json:"message"`
+}
+
+// MessageSender identifies who sent an instant message, resolved for display.
+type MessageSender struct {
+	ID          string `json:"id"`
+	Userid      string `json:"userid"`
+	DisplayName string `json:"displayName"`
+}
+
+// MessageResult acknowledges a stored instant message. Delivered counts the
+// recipient connections it reached live; zero means it waits in the backlog
+// for their next channel connection — stored either way.
+type MessageResult struct {
+	ID        string    `json:"id"`
+	SentAt    time.Time `json:"sentAt"`
+	Delivered int       `json:"delivered"`
+}
+
 type updateRegionRequest struct {
 	Name           *string `json:"name"`
 	OwnerUserID    *string `json:"ownerUserId"`

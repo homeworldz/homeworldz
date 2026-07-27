@@ -16,14 +16,14 @@ const testAdminID = "55555555-5555-4555-8555-555555555555"
 
 // newDeliveryHarness is the world-entry harness plus an admin account able to
 // send notices, with a bearer token for each.
-func newDeliveryHarness(t *testing.T) (*worldEntryHarness, string) {
+func newDeliveryHarness(t *testing.T, mutate ...func(*Options)) (*worldEntryHarness, string) {
 	t.Helper()
 	admin := webaccount.Account{ID: testAdminID, Userid: "admin.user", DisplayName: "Admin User",
 		RezDate: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), Privileges: webaccount.PrivUsers, AuthVersion: 1}
-	harness := newWorldEntryHarness(t, func(options *Options) {
+	harness := newWorldEntryHarness(t, append([]func(*Options){func(options *Options) {
 		store := options.Accounts.(*memoryAccountStore)
 		store.accounts[testAdminID] = admin
-	})
+	}}, mutate...)...)
 	adminToken, _, err := harness.signer.Sign(time.Now(), admin.ID, admin.Userid, admin.DisplayName,
 		admin.RezDate, admin.Privileges, admin.AuthVersion)
 	if err != nil {

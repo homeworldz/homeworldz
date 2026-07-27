@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/homeworldz/server/grid/internal/mailer"
+	"github.com/homeworldz/server/grid/internal/messages"
 	"github.com/homeworldz/server/grid/internal/presence"
 	"github.com/homeworldz/server/grid/internal/provisioning"
 	"github.com/homeworldz/server/grid/internal/arrival"
@@ -118,6 +119,9 @@ type Options struct {
 	// the probe when the deployment knows its public URL; a client that
 	// probed can otherwise derive it from the API base it already used.
 	ChannelURL string
+	// Messages persists instant messages for store-and-forward delivery over
+	// the grid channel. Nil disables POST /v1/client/messages.
+	Messages messages.Store
 }
 
 // API is the website API handler.
@@ -140,6 +144,7 @@ type API struct {
 	ticketSigner    *webtoken.Signer
 	channelURL      string
 	channels        *channelHub
+	messages        messages.Store
 }
 
 // New validates options and returns the composed website API handler.
@@ -184,6 +189,7 @@ func New(options Options) (http.Handler, error) {
 		ticketSigner:    options.TicketSigner,
 		channelURL:      options.ChannelURL,
 		channels:        newChannelHub(),
+		messages:        options.Messages,
 	}
 
 	mux := http.NewServeMux()
@@ -193,6 +199,7 @@ func New(options Options) (http.Handler, error) {
 	mux.HandleFunc("/v1/version", a.clientVersion)
 	mux.HandleFunc("/v1/client/session", a.clientSession)
 	mux.HandleFunc("/v1/client/channel", a.clientChannel)
+	mux.HandleFunc("/v1/client/messages", a.clientMessages)
 	mux.HandleFunc("/v1/registrations", a.registrations)
 	mux.HandleFunc("/v1/verifications", a.verifications)
 	mux.HandleFunc("/v1/verifications/resend", a.resendVerification)

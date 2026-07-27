@@ -65,6 +65,17 @@ type channelNotificationPayload struct {
 	SentAt  time.Time `json:"sentAt"`
 }
 
+// channelMessagePayload is the instant_message notification kind: a stored,
+// sender-attributed message with its stable identifier, so a client can
+// de-duplicate a live delivery against a later backlog replay.
+type channelMessagePayload struct {
+	Kind    string        `json:"kind"`
+	ID      string        `json:"id"`
+	From    MessageSender `json:"from"`
+	Message string        `json:"message"`
+	SentAt  time.Time     `json:"sentAt"`
+}
+
 // clientChannel upgrades GET /v1/client/channel.
 func (a *API) clientChannel(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -138,6 +149,11 @@ func (a *API) serveChannel(ctx context.Context, conn *websocket.Conn) {
 			}
 		}
 	}()
+
+	// The store-and-forward backlog replays before this connection is told
+	// anything else: it is already in sent order, the writer above preserves
+	// queue order, and live deliveries land behind it.
+	a.deliverMessageBacklog(ctx, client, account.ID)
 
 	for {
 		message, ok := a.channelRead(ctx, conn, 0)

@@ -123,6 +123,24 @@ a good "for now" state; individual calls may be reopened as evidence arrives.
 - No persistence of reported region protocols, no increment scheduling, no
   region session transport, no asset-format work.
 
+## 2026-07-27 — instant messages: the first store-and-forward kind
+
+- **Stored before any delivery is attempted** (`instant_messages` table,
+  migration 000026): durability is the point of the kind, so the store write
+  is not conditional on the recipient being offline.
+- **"Handed to a connection" counts as delivered.** A connection that dies
+  mid-write loses the message exactly as it would have live; read receipts
+  are a client feature for later, not a delivery-marking mechanism.
+- **The backlog replays on channel connect, before anything else**, in sent
+  order, capped at 100 per connection; the stable message `id` lets a client
+  de-duplicate a live delivery against a replay race.
+- **No history endpoint yet** — the table is the durable record and a
+  paginated `GET` over it is management-surface work, deliberately not
+  smuggled in here.
+- **Anyone authenticated can message anyone.** Blocking, muting, and rate
+  policy beyond the tier's existing per-IP limiter are social-platform work
+  (ROADMAP Phase 5), not transport work.
+
 ## 2026-07-27 — step 5, the region session (WebSocket, option A)
 
 The region session ships over TLS + WebSocket per the accepted decision in
