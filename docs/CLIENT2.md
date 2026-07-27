@@ -789,7 +789,11 @@ server-initiated, no correlation:
   order, before anything else — on the next channel connection they open.
   The `id` is stable across live delivery and replay so a client can
   de-duplicate. "Handed to a connection" counts as delivered; there are no
-  read receipts.
+  read receipts. **A sender is never sent their own message** — the POST
+  reply is the outgoing side of the conversation (it carries the `id` and
+  `sentAt` a rendered line needs), so a client that renders conversations
+  from channel traffic alone shows only half of every exchange, and a
+  self-send test hides exactly that mistake.
 
 Still without producers or tables: inventory offers and friendship requests.
 
