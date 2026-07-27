@@ -1041,7 +1041,8 @@ int main(int argc, char* argv[]) {
                             validation_client->validate_region_ticket(session_region_id, token);
                         if (!resolved) return std::nullopt;
                         return homeworldz::session::SessionIdentity{resolved->user_id,
-                            resolved->userid, resolved->display_name, resolved->session_id};
+                            resolved->userid, resolved->display_name, resolved->session_id,
+                            resolved->arrival};
                     }});
                 if (!session_server) {
                     std::cerr << "{\"level\":\"error\",\"message\":\"region session listener failed\",\"port\":"
@@ -7457,7 +7458,14 @@ int main(int argc, char* argv[]) {
                     for (const auto duplicate : duplicates) scene.remove(duplicate);
                     if (entity == 0) entity = scene.create(inbound.user_id, initial_spawn);
                     auto* persisted = scene.find(entity);
-                    const auto spawn = persisted ? persisted->position : initial_spawn;
+                    // World entry's resolved arrival point wins — that is how
+                    // a named start, and a crossing's continuation, land where
+                    // they were asked to. The controller clamps it into the
+                    // region, so an out-of-bounds value cannot take effect.
+                    const auto spawn = inbound.arrival ?
+                        homeworldz::scene::Vector3{(*inbound.arrival)[0], (*inbound.arrival)[1],
+                                                   (*inbound.arrival)[2]} :
+                        (persisted ? persisted->position : initial_spawn);
                     homeworldz::viewer::AvatarController controller{
                         spawn, collision_ground_height(spawn),
                         homeworldz::viewer::AvatarGeometry{}.height,

@@ -48,6 +48,11 @@ type Claims struct {
 	// Both are empty on account tokens.
 	RegionID  string
 	SessionID string
+	// Arrival is the region-local position world entry resolved for this
+	// session, when it resolved one: three elements, or nil. It rides the
+	// ticket because the region must not take a spawn position from the
+	// client, and the grid is what resolved it.
+	Arrival []float64
 }
 
 type payload struct {
@@ -63,8 +68,9 @@ type payload struct {
 	ExpiresAt   int64  `json:"exp"`
 	// omitempty keeps account tokens byte-compatible with tokens issued before
 	// these fields existed, which the strict decoder in Verify requires.
-	RegionID  string `json:"regionId,omitempty"`
-	SessionID string `json:"sessionId,omitempty"`
+	RegionID  string    `json:"regionId,omitempty"`
+	SessionID string    `json:"sessionId,omitempty"`
+	Arrival   []float64 `json:"arrival,omitempty"`
 }
 
 const header = `{"alg":"HS256","typ":"JWT"}`
@@ -123,9 +129,13 @@ func (s *Signer) Sign(now time.Time, subject, userid, displayName string, rezDat
 // this is called on must carry the region-ticket audience and a short TTL —
 // the audience is what makes an account route refuse a ticket structurally.
 func (s *Signer) SignRegionTicket(now time.Time, subject, userid, displayName string,
-	rezDate time.Time, privs string, version int, regionID, sessionID string) (string, time.Time, error) {
+	rezDate time.Time, privs string, version int, regionID, sessionID string,
+	arrival []float64) (string, time.Time, error) {
 	if strings.TrimSpace(regionID) == "" || strings.TrimSpace(sessionID) == "" {
 		return "", time.Time{}, errors.New("webtoken: a region ticket requires a region and a session")
+	}
+	if arrival != nil && len(arrival) != 3 {
+		return "", time.Time{}, errors.New("webtoken: an arrival position needs three components")
 	}
 	return s.sign(payload{
 		Subject:     subject,
@@ -136,6 +146,7 @@ func (s *Signer) SignRegionTicket(now time.Time, subject, userid, displayName st
 		Version:     version,
 		RegionID:    regionID,
 		SessionID:   sessionID,
+		Arrival:     arrival,
 	}, now)
 }
 
@@ -216,6 +227,7 @@ func (s *Signer) Verify(token string, now time.Time) (Claims, error) {
 		ExpiresAt:   time.Unix(body.ExpiresAt, 0).UTC(),
 		RegionID:    body.RegionID,
 		SessionID:   body.SessionID,
+		Arrival:     body.Arrival,
 	}, nil
 }
 

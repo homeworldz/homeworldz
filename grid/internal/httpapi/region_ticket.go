@@ -60,5 +60,6 @@ func (a *API) validateRegionTicket(w http.ResponseWriter, r *http.Request, regio
 		DisplayName: claims.DisplayName,
 		SessionID:   claims.SessionID,
 		ExpiresAt:   claims.ExpiresAt,
+		Position:    claims.Arrival,
 	})
 }

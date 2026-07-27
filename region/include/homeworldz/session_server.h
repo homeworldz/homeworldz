@@ -45,6 +45,7 @@ public:
         std::string session_id;
         std::string user_id;
         std::string display_name;
+        std::optional<std::array<float, 3>> arrival;
         Command command;
         bool disconnect{};
     };

@@ -107,9 +107,16 @@ func (a *API) clientSession(w http.ResponseWriter, r *http.Request) {
 		a.internalError(w, r, "create client session", err)
 		return
 	}
+	// The arrival position rides the ticket so the region learns where world
+	// entry placed this session without taking a spawn position from the
+	// client (docs/CLIENT2-EMBODIMENT.md milestone E2).
+	var arrival []float64
+	if position != nil {
+		arrival = []float64{position[0], position[1], position[2]}
+	}
 	ticket, ticketExpiry, err := a.ticketSigner.SignRegionTicket(time.Now(), account.ID, account.Userid,
 		account.DisplayName, account.RezDate, account.Privileges, account.AuthVersion,
-		destination.Region.ID, session.ID)
+		destination.Region.ID, session.ID, arrival)
 	if err != nil {
 		a.internalError(w, r, "sign region ticket", err)
 		return

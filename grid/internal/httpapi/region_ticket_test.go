@@ -66,7 +66,7 @@ func postTicket(t *testing.T, handler http.Handler, body string) *httptest.Respo
 func TestValidateRegionTicketResolvesIdentity(t *testing.T) {
 	handler, verifier, userID, sessionID := newTicketHarness(t)
 	ticket, _, err := verifier.SignRegionTicket(time.Now(), userID, "ticket.user", "Ticket User",
-		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), "", 1, sandboxRegionID, sessionID)
+		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), "", 1, sandboxRegionID, sessionID, []float64{200, 210, 24})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,6 +83,12 @@ func TestValidateRegionTicketResolvesIdentity(t *testing.T) {
 		result.DisplayName != "Ticket User" || result.SessionID != sessionID || result.ExpiresAt.IsZero() {
 		t.Fatalf("unexpected identity: %+v", result)
 	}
+	// The arrival position world entry resolved rides the ticket, so the
+	// region spawns there rather than trusting the client.
+	if len(result.Position) != 3 || result.Position[0] != 200 ||
+		result.Position[1] != 210 || result.Position[2] != 24 {
+		t.Fatalf("unexpected arrival position: %v", result.Position)
+	}
 }
 
 func TestValidateRegionTicketRefusesWrongRegion(t *testing.T) {
@@ -91,7 +97,7 @@ func TestValidateRegionTicketRefusesWrongRegion(t *testing.T) {
 	// region binding is not.
 	ticket, _, err := verifier.SignRegionTicket(time.Now(), userID, "ticket.user", "Ticket User",
 		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), "", 1,
-		"33333333-3333-4333-8333-333333333333", sessionID)
+		"33333333-3333-4333-8333-333333333333", sessionID, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +111,7 @@ func TestValidateRegionTicketRefusesUnknownSessionAndGarbage(t *testing.T) {
 	handler, verifier, userID, _ := newTicketHarness(t)
 	ticket, _, err := verifier.SignRegionTicket(time.Now(), userID, "ticket.user", "Ticket User",
 		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), "", 1,
-		sandboxRegionID, "40000000-0000-4000-8000-000000000000")
+		sandboxRegionID, "40000000-0000-4000-8000-000000000000", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

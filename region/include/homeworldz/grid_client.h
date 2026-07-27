@@ -54,6 +54,10 @@ struct TicketIdentity {
     std::string userid;
     std::string display_name;
     std::string session_id;
+    // arrival is the region-local position world entry resolved for this
+    // session, when it resolved one. It comes from the grid rather than the
+    // client, which must never choose where it spawns.
+    std::optional<std::array<float, 3>> arrival;
 };
 
 struct Estate {

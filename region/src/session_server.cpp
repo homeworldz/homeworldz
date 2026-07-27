@@ -143,7 +143,8 @@ int Server::State::callback(lws* wsi, lws_callback_reasons reason, void* user, v
                 std::lock_guard<std::mutex> hold(state->inbound_mutex);
                 state->inbound.push_back({(*slot)->core.identity().session_id,
                                           (*slot)->core.identity().user_id,
-                                          (*slot)->core.identity().display_name, {}, true});
+                                          (*slot)->core.identity().display_name,
+                                          (*slot)->core.identity().arrival, {}, true});
             }
             delete *slot;
             *slot = nullptr;
@@ -174,6 +175,7 @@ int Server::State::callback(lws* wsi, lws_callback_reasons reason, void* user, v
             state->inbound.push_back({connection->core.identity().session_id,
                                       connection->core.identity().user_id,
                                       connection->core.identity().display_name,
+                                      connection->core.identity().arrival,
                                       std::move(*result.command), false});
         }
         queue_messages(wsi, connection, result.send, result.close, result.close_reason);

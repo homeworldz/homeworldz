@@ -1130,6 +1130,22 @@ std::optional<TicketIdentity> Client::validate_region_ticket(std::string_view re
     identity.display_name = json_field(response.body, "displayName");
     identity.session_id = json_field(response.body, "sessionId");
     if (identity.user_id.empty() || identity.session_id.empty()) return std::nullopt;
+    // position marshals as a JSON array and is absent when world entry
+    // resolved no explicit arrival point.
+    if (const auto marker = response.body.find("\"position\":[");
+        marker != std::string::npos) {
+        std::array<float, 3> arrival{};
+        const char* cursor = response.body.c_str() + marker + 12;
+        bool parsed = true;
+        for (auto& component : arrival) {
+            char* next = nullptr;
+            component = std::strtof(cursor, &next);
+            if (next == cursor) { parsed = false; break; }
+            cursor = next;
+            while (*cursor == ',' || *cursor == ' ') ++cursor;
+        }
+        if (parsed) identity.arrival = arrival;
+    }
     return identity;
 }
 

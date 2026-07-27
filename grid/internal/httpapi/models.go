@@ -67,12 +67,16 @@ type ValidateRegionTicketRequest struct {
 }
 
 // ValidateRegionTicketResult is the identity a valid ticket resolves to.
+// Position is the region-local arrival point world entry resolved, present
+// only when it resolved one; a region spawns there rather than trusting any
+// position from the client.
 type ValidateRegionTicketResult struct {
 	UserID      string    `json:"userId"`
 	Userid      string    `json:"userid"`
 	DisplayName string    `json:"displayName"`
 	SessionID   string    `json:"sessionId"`
 	ExpiresAt   time.Time `json:"expiresAt"`
+	Position    []float64 `json:"position,omitempty"`
 }
 
 type ProvisionedRegionRuntimeResult struct {

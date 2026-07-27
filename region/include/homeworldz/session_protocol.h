@@ -67,6 +67,9 @@ struct SessionIdentity {
     std::string userid;
     std::string display_name;
     std::string session_id;
+    // arrival is where world entry placed this session, when it said; the
+    // host spawns there in preference to a persisted position.
+    std::optional<std::array<float, 3>> arrival;
 };
 
 // TicketValidator resolves a presented region ticket, or nothing when it is
