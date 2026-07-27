@@ -77,23 +77,52 @@ seam above encoding.
 
 ## Wire messages (session envelope kinds)
 
+Field-level contract, agreed with the client core 2026-07-27. Conventions
+as everywhere on this surface: the `{type, version, correlationId?,
+payload}` envelope, camelCase keys, vectors as 3-element JSON arrays,
+errors as `{code, message, field?}`. Optional fields are omitted, never
+sent as zero values. Fields are only ever added to these payloads, never
+repurposed.
+
 Client → server, after auth:
 
 - `spawn` `{drawDistance?}` — requests embodiment; answered by `spawned`
-  `{entityId, position, lookAt}` or an `error`. An observer session stays
-  legal: no spawn, no scene traffic, chat region-wide as today.
-- `move` `{controls, bodyRotation, camera?}` — the `MovementInput` fields;
-  applied at most once per tick, last-write-wins within a tick.
-- `say` `{message}` — public chat at the avatar's position, normal radius.
-- `leave` `{}` — retire the avatar, keep the session open.
+  or an `error`. An observer session stays legal: no spawn, no scene
+  traffic, chat region-wide as today.
+- `move` `{controls, bodyRotation: [x,y,z], camera?: {center, at, left,
+  up (each [x,y,z])}, drawDistance?}` — `controls` is the `control_flags`
+  bitfield unchanged. Applied at most once per tick, last-write-wins
+  within a tick. **Draw distance is session state, not per-move input**:
+  the server keeps the last value (from `spawn` or a `move` that carried
+  one) and re-fills it into every `MovementInput`, so a `move` without it
+  can never write the zero that means "no filter". Values clamp to
+  [16, 512]; a session that never sends one gets 128. A `move` without
+  `camera` keeps the previous camera.
+- `say` `{message}` — public chat at the avatar's position, normal radius,
+  same 1-2048 character rule as instant messages.
+- `leave` — payload omitted entirely; retires the avatar, keeps the
+  session open (back to observer).
 
 Server → client:
 
-- `spawned`, then an initial scene: `object` per entity, `avatar` per
-  avatar, then live `transform`, `kill`, `chat` as they occur.
-- `transform` `{id, position, velocity, rotation}` — avatar and dynamic
-  object updates, interest-filtered by draw distance.
-- `object` `{...}` / `kill` `{ids}` — object add/change and removal.
+- `spawned` `{entityId, position: [x,y,z], lookAt: [x,y,z]}` — `entityId`
+  is the scene entity id as a decimal string, the same id `transform` and
+  `kill` use.
+- Initial scene after `spawned`: one `avatar` per present avatar, one
+  `object` per entity, then live traffic.
+- `avatar` `{id, userId, position: [x,y,z], rotation: [x,y,z]}` — display
+  names arrive with the name-resolution work, additively.
+- `object` `{id, objectId, ownerId, name, position: [x,y,z],
+  rotation: [x,y,z,w], scale: [x,y,z]}` — enough to place a box; prim
+  shape and materials arrive with the Phase 9 asset work, additively.
+- `transform` `{id, position: [x,y,z], velocity: [x,y,z], rotation}` —
+  interest-filtered by draw distance. **`rotation` length discriminates
+  the form**: 3 elements is an avatar's body rotation (the same triplet
+  the LLUDP path carries today), 4 is an object's quaternion `[x,y,z,w]`.
+- `kill` `{ids: [...]}` — entity ids leaving the scene.
+- `chat` `{from, message}` today; grows additively to `{from, fromId?,
+  position?, message}` when embodied chat lands — existing readers keep
+  working.
 - `crossing` (second cut) as above.
 
 JSON first, per the encoding decision; the first-byte rule leaves room for
