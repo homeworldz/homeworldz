@@ -38,9 +38,16 @@ struct Server::State {
     std::atomic<bool> running{true};
     std::atomic<int> established{0};
 
-    // Chat queued by the simulation thread, drained on the service thread.
+    // Outbound messages queued by the simulation thread, drained on the
+    // service thread. An empty session id targets every authenticated
+    // session.
     std::mutex pending_mutex;
-    std::vector<std::string> pending_broadcasts;
+    std::vector<std::pair<std::string, std::string>> pending_sends;
+
+    // Inbound embodiment commands queued on the service thread, drained by
+    // the simulation thread once per tick.
+    std::mutex inbound_mutex;
+    std::vector<Server::InboundCommand> inbound;
 
     // Live connections; service-thread only.
     std::unordered_set<lws*> connections;
@@ -78,7 +85,14 @@ int Server::State::callback(lws* wsi, lws_callback_reasons reason, void* user, v
     }
     case LWS_CALLBACK_CLOSED: {
         if (slot && *slot) {
-            if ((*slot)->core.established()) state->established.fetch_sub(1);
+            if ((*slot)->core.established()) {
+                state->established.fetch_sub(1);
+                // The simulation retires whatever this session embodied.
+                std::lock_guard<std::mutex> hold(state->inbound_mutex);
+                state->inbound.push_back({(*slot)->core.identity().session_id,
+                                          (*slot)->core.identity().user_id,
+                                          (*slot)->core.identity().display_name, {}, true});
+            }
             delete *slot;
             *slot = nullptr;
         }
@@ -102,6 +116,13 @@ int Server::State::callback(lws* wsi, lws_callback_reasons reason, void* user, v
             state->established.fetch_add(1);
             // Authenticated: the auth deadline no longer applies.
             lws_set_timeout(wsi, NO_PENDING_TIMEOUT, 0);
+        }
+        if (result.command && connection->core.established()) {
+            std::lock_guard<std::mutex> hold(state->inbound_mutex);
+            state->inbound.push_back({connection->core.identity().session_id,
+                                      connection->core.identity().user_id,
+                                      connection->core.identity().display_name,
+                                      std::move(*result.command), false});
         }
         queue_messages(wsi, connection, result.send, result.close, result.close_reason);
         if (result.close && result.send.empty()) return -1;
@@ -134,18 +155,23 @@ bool Server::State::flush_one(lws* wsi, Connection* connection) {
 }
 
 void Server::State::drain_broadcasts() {
-    std::vector<std::string> drained;
+    std::vector<std::pair<std::string, std::string>> drained;
     {
         std::lock_guard<std::mutex> hold(pending_mutex);
-        drained.swap(pending_broadcasts);
+        drained.swap(pending_sends);
     }
     if (drained.empty()) return;
     for (auto* wsi : connections) {
         void* user = lws_wsi_user(wsi);
         auto* connection = user ? *static_cast<Connection**>(user) : nullptr;
         if (!connection || !connection->core.established()) continue;
-        for (const auto& message : drained) connection->outbox.push_back(message);
-        lws_callback_on_writable(wsi);
+        bool queued = false;
+        for (const auto& [target, message] : drained) {
+            if (!target.empty() && target != connection->core.identity().session_id) continue;
+            connection->outbox.push_back(message);
+            queued = true;
+        }
+        if (queued) lws_callback_on_writable(wsi);
     }
 }
 
@@ -198,14 +224,34 @@ Server::~Server() {
 }
 
 void Server::broadcast_chat(std::string_view from_name, std::string_view message) {
+    broadcast(encode_envelope("chat", {},
+        "{\"from\":" + json_string(from_name) + ",\"message\":" + json_string(message) + "}"));
+}
+
+void Server::broadcast(std::string message) {
     if (!state_) return;
-    const auto rendered = encode_envelope("chat", {},
-        "{\"from\":" + json_string(from_name) + ",\"message\":" + json_string(message) + "}");
     {
         std::lock_guard<std::mutex> hold(state_->pending_mutex);
-        state_->pending_broadcasts.push_back(rendered);
+        state_->pending_sends.emplace_back(std::string{}, std::move(message));
     }
     lws_cancel_service(state_->context);
+}
+
+void Server::send_to(std::string_view session_id, std::string message) {
+    if (!state_ || session_id.empty()) return;
+    {
+        std::lock_guard<std::mutex> hold(state_->pending_mutex);
+        state_->pending_sends.emplace_back(std::string(session_id), std::move(message));
+    }
+    lws_cancel_service(state_->context);
+}
+
+std::vector<Server::InboundCommand> Server::drain_commands() {
+    std::vector<InboundCommand> drained;
+    if (!state_) return drained;
+    std::lock_guard<std::mutex> hold(state_->inbound_mutex);
+    drained.swap(state_->inbound);
+    return drained;
 }
 
 int Server::session_count() const {

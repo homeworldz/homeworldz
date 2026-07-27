@@ -176,6 +176,42 @@ std::string json_field(std::string_view object, std::string_view name) {
     return parse_string_at(object, position).value_or(std::string{});
 }
 
+std::optional<double> json_number(std::string_view object, std::string_view name) {
+    const auto position = find_field(object, name);
+    if (position == std::string_view::npos) return std::nullopt;
+    double value{};
+    const auto begin = object.data() + position;
+    const auto result = std::from_chars(begin, object.data() + object.size(), value);
+    if (result.ec != std::errc{} || result.ptr == begin) return std::nullopt;
+    return value;
+}
+
+std::optional<std::array<float, 3>> json_vector3(std::string_view object, std::string_view name) {
+    const auto position = find_field(object, name);
+    if (position == std::string_view::npos || position >= object.size() ||
+        object[position] != '[')
+        return std::nullopt;
+    std::array<float, 3> value{};
+    auto cursor = position + 1;
+    for (std::size_t axis = 0; axis < 3; ++axis) {
+        while (cursor < object.size() && (object[cursor] == ' ' || object[cursor] == ','))
+            ++cursor;
+        const auto begin = object.data() + cursor;
+        const auto result = std::from_chars(begin, object.data() + object.size(), value[axis]);
+        if (result.ec != std::errc{} || result.ptr == begin) return std::nullopt;
+        cursor = static_cast<std::size_t>(result.ptr - object.data());
+    }
+    while (cursor < object.size() && object[cursor] == ' ') ++cursor;
+    if (cursor >= object.size() || object[cursor] != ']') return std::nullopt;
+    return value;
+}
+
+std::string json_object_field(std::string_view object, std::string_view name) {
+    const auto position = find_field(object, name);
+    if (position == std::string_view::npos) return {};
+    return object_extent(object, position).value_or(std::string{});
+}
+
 std::optional<Envelope> parse_envelope(std::string_view text, ParseError& error) {
     error = ParseError::none;
     if (text.empty() || text.front() != '{') {
@@ -275,6 +311,63 @@ SessionCore::Result SessionCore::handle_text(std::string_view text) {
     Result result;
     if (envelope->type == "ping") {
         result.send.push_back(encode_envelope("pong", envelope->correlation_id, {}));
+        return result;
+    }
+    if (envelope->type == "spawn") {
+        Command command;
+        command.kind = Command::Kind::spawn;
+        if (const auto requested = json_number(envelope->payload, "drawDistance"))
+            command.draw_distance = *requested;
+        result.command = std::move(command);
+        return result;
+    }
+    if (envelope->type == "move") {
+        Command command;
+        command.kind = Command::Kind::move;
+        if (const auto controls = json_number(envelope->payload, "controls"))
+            command.controls = static_cast<std::uint32_t>(*controls);
+        if (const auto rotation = json_vector3(envelope->payload, "bodyRotation"))
+            command.body_rotation = *rotation;
+        if (const auto requested = json_number(envelope->payload, "drawDistance"))
+            command.draw_distance = *requested;
+        if (const auto camera = json_object_field(envelope->payload, "camera"); !camera.empty()) {
+            const auto center = json_vector3(camera, "center");
+            const auto at = json_vector3(camera, "at");
+            const auto left = json_vector3(camera, "left");
+            const auto up = json_vector3(camera, "up");
+            if (center && at && left && up) {
+                command.has_camera = true;
+                command.camera_center = *center;
+                command.camera_at = *at;
+                command.camera_left = *left;
+                command.camera_up = *up;
+            }
+        }
+        result.command = std::move(command);
+        return result;
+    }
+    if (envelope->type == "say") {
+        const auto message = json_field(envelope->payload, "message");
+        // Characters, not bytes, matching the instant-message rule: count
+        // UTF-8 code points as non-continuation bytes.
+        std::size_t characters = 0;
+        for (const auto byte : message)
+            if ((static_cast<unsigned char>(byte) & 0xc0) != 0x80) ++characters;
+        if (characters == 0 || characters > 2048) {
+            result.send.push_back(encode_envelope("error", envelope->correlation_id,
+                "{\"code\":\"invalid_message\",\"message\":\"message must be 1-2048 characters\",\"field\":\"message\"}"));
+            return result;
+        }
+        Command command;
+        command.kind = Command::Kind::say;
+        command.message = message;
+        result.command = std::move(command);
+        return result;
+    }
+    if (envelope->type == "leave") {
+        Command command;
+        command.kind = Command::Kind::leave;
+        result.command = std::move(command);
         return result;
     }
     result.send.push_back(encode_envelope("error", envelope->correlation_id,

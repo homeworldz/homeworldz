@@ -109,5 +109,47 @@ int main() {
     // Binary frames are refused: no binary encoding exists yet.
     if (const auto result = session.handle_binary(); !result.close) return 15;
 
+    // --- Embodiment commands (docs/CLIENT2-EMBODIMENT.md) parse into host
+    // commands rather than being answered at the protocol layer.
+    using Kind = homeworldz::session::Command::Kind;
+    const auto spawn = session.handle_text(
+        R"({"type":"spawn","version":1,"payload":{"drawDistance":96}})");
+    if (spawn.close || !spawn.send.empty() || !spawn.command ||
+        spawn.command->kind != Kind::spawn || spawn.command->draw_distance != 96.0)
+        return 19;
+    // Absent drawDistance stays negative: "not carried", never zero.
+    const auto bare_spawn = session.handle_text(R"({"type":"spawn","version":1})");
+    if (!bare_spawn.command || bare_spawn.command->draw_distance >= 0.0) return 20;
+
+    const auto move = session.handle_text(
+        R"({"type":"move","version":1,"payload":{"controls":2049,"bodyRotation":[0,0,0.7],)"
+        R"("camera":{"center":[1,2,3],"at":[1,0,0],"left":[0,1,0],"up":[0,0,1]}}})");
+    if (!move.command || move.command->kind != Kind::move || move.command->controls != 2049 ||
+        move.command->body_rotation[2] < 0.69F || !move.command->has_camera ||
+        move.command->camera_center[2] != 3.0F || move.command->draw_distance >= 0.0)
+        return 21;
+    const auto bare_move = session.handle_text(
+        R"({"type":"move","version":1,"payload":{"controls":0,"bodyRotation":[0,0,0]}})");
+    if (!bare_move.command || bare_move.command->has_camera) return 22;
+
+    const auto say = session.handle_text(
+        R"({"type":"say","version":1,"payload":{"message":"hello world"}})");
+    if (!say.command || say.command->kind != Kind::say || say.command->message != "hello world")
+        return 23;
+    const auto empty_say = session.handle_text(
+        R"({"type":"say","version":1,"payload":{"message":""}})");
+    if (empty_say.command || empty_say.send.size() != 1 ||
+        empty_say.send.front().find("invalid_message") == std::string::npos)
+        return 24;
+
+    const auto leave = session.handle_text(R"({"type":"leave","version":1})");
+    if (!leave.command || leave.command->kind != Kind::leave) return 25;
+
+    // Commands from an unauthenticated connection never reach the host.
+    SessionCore stranger("Sandbox", validator);
+    if (const auto result = stranger.handle_text(R"({"type":"spawn","version":1})");
+        !result.close)
+        return 26;
+
     return 0;
 }

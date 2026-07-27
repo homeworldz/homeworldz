@@ -1785,6 +1785,77 @@ int main(int argc, char* argv[]) {
     // recompile, enable, disable, or removal changes the SCRIPTED / HANDLE_TOUCH
     // flags, and the viewer only learns the new flags from a fresh update; without
     // this it keeps showing Touch as disabled on a freshly touch-enabled prim.
+    // --- Region-session embodiment (docs/CLIENT2-EMBODIMENT.md, milestone E1).
+    // Session participants live in the same avatars map under "ws:<session>"
+    // keys; every UDP loop is inert for them (no circuit), and these helpers
+    // are the session-facing halves of the fan-outs that matter for E1.
+    std::unordered_map<std::string, double> session_draw_distances;
+    const auto session_vec3 = [](double x, double y, double z) {
+        return "[" + std::to_string(x) + "," + std::to_string(y) + "," + std::to_string(z) + "]";
+    };
+    const auto session_quat_w = [](double x, double y, double z) {
+        return std::sqrt((std::max)(0.0, 1.0 - x * x - y * y - z * z));
+    };
+    const auto deliver_to_embodied = [&](const std::string& envelope) {
+        if (!session_server) return;
+        for (const auto& [key, participant] : avatars) {
+            static_cast<void>(key);
+            if (participant.transport == AvatarTransport::session)
+                session_server->send_to(participant.session_id, envelope);
+        }
+    };
+    const auto session_object_envelope = [&](const homeworldz::scene::Entity& entity) {
+        return homeworldz::session::encode_envelope("object", {},
+            "{\"id\":\"" + std::to_string(entity.id) + "\"" +
+            ",\"objectId\":" + homeworldz::session::json_string(entity.object_id) +
+            ",\"ownerId\":" + homeworldz::session::json_string(entity.owner_id) +
+            ",\"name\":" + homeworldz::session::json_string(entity.name) +
+            ",\"position\":" + session_vec3(entity.position.x, entity.position.y, entity.position.z) +
+            ",\"rotation\":[" + std::to_string(entity.rotation.x) + "," +
+                std::to_string(entity.rotation.y) + "," + std::to_string(entity.rotation.z) + "," +
+                std::to_string(session_quat_w(entity.rotation.x, entity.rotation.y, entity.rotation.z)) + "]" +
+            ",\"scale\":" + session_vec3(entity.scale.x, entity.scale.y, entity.scale.z) + "}");
+    };
+    const auto session_avatar_envelope = [&](const LiveAvatar& participant) {
+        const auto& state = participant.controller.state();
+        return homeworldz::session::encode_envelope("avatar", {},
+            "{\"id\":\"" + std::to_string(participant.entity_id) + "\"" +
+            ",\"userId\":" + homeworldz::session::json_string(participant.user_id) +
+            ",\"position\":" + session_vec3(state.position.x, state.position.y, state.position.z) +
+            ",\"rotation\":[" + std::to_string(state.rotation[0]) + "," +
+                std::to_string(state.rotation[1]) + "," + std::to_string(state.rotation[2]) + "]}");
+    };
+    const auto session_kill_envelope = [](homeworldz::scene::EntityId entity_id) {
+        return homeworldz::session::encode_envelope("kill", {},
+            "{\"ids\":[\"" + std::to_string(entity_id) + "\"]}");
+    };
+    // retire_session_avatar removes an embodied session's avatar: kill to
+    // viewers and other sessions, physics teardown, map erasure. The session
+    // itself stays open (back to observer) unless the socket already closed.
+    const auto retire_session_avatar = [&](const std::string& participant_key) {
+        const auto found = avatars.find(participant_key);
+        if (found == avatars.end()) return;
+        const auto entity_id = found->second.entity_id;
+        const std::array<std::uint32_t, 1> kill_ids{static_cast<std::uint32_t>(entity_id)};
+        const auto kill = homeworldz::viewer::encode_kill_object(kill_ids);
+        const auto kill_now = std::chrono::steady_clock::now();
+        for (const auto& [recipient_endpoint, recipient] : avatars) {
+            static_cast<void>(recipient);
+            if (recipient_endpoint == participant_key) continue;
+            if (const auto outgoing = circuits.send(recipient_endpoint, kill, true, kill_now, true))
+                static_cast<void>(send_udp(viewer_server, recipient_endpoint, *outgoing));
+        }
+        if (physics_world && found->second.physics_character != 0)
+            physics_world->remove_character(found->second.physics_character);
+        if (viewer_grid)
+            static_cast<void>(viewer_grid->clear_presence(found->second.user_id));
+        session_draw_distances.erase(found->second.session_id);
+        sent_dynamic_transforms.erase(participant_key);
+        avatars.erase(found);
+        deliver_to_embodied(session_kill_envelope(entity_id));
+        std::cout << "{\"level\":\"info\",\"message\":\"session avatar retired\",\"localId\":"
+                  << static_cast<std::uint64_t>(entity_id) << "}" << std::endl;
+    };
     const auto broadcast_object_update = [&](const homeworldz::scene::Entity& entity,
                                              std::chrono::steady_clock::time_point when) {
         const auto region_handle =
@@ -1800,6 +1871,7 @@ int main(int argc, char* argv[]) {
                     true, when, true))
                 static_cast<void>(send_udp(viewer_server, recipient_endpoint, *sent));
         }
+        deliver_to_embodied(session_object_envelope(entity));
     };
     // Restore enabled task scripts after a Region restart. VM state is not yet
     // persisted, so each restored script starts fresh and re-runs state_entry;
@@ -1855,6 +1927,7 @@ int main(int argc, char* argv[]) {
             std::cout << "{\"level\":\"info\",\"message\":\"avatar departure kill broadcast\","
                          "\"localId\":" << kill_ids[0] << ",\"recipients\":" << kill_recipients
                       << "}" << std::endl;
+            deliver_to_embodied(session_kill_envelope(departing->second.entity_id));
         }
         if (const auto live = avatars.find(endpoint); live != avatars.end() &&
             physics_world && live->second.physics_character != 0)
@@ -7310,6 +7383,219 @@ int main(int argc, char* argv[]) {
                 }
             }
         }
+        // Embodiment commands from region sessions, drained once per tick
+        // (docs/CLIENT2-EMBODIMENT.md). The lws thread never touches the
+        // scene; everything scene-facing happens here.
+        if (session_server) {
+            using SessionKind = homeworldz::session::Command::Kind;
+            for (auto& inbound : session_server->drain_commands()) {
+                const auto participant_key = "ws:" + inbound.session_id;
+                if (inbound.disconnect) {
+                    retire_session_avatar(participant_key);
+                    continue;
+                }
+                switch (inbound.command.kind) {
+                case SessionKind::leave:
+                    retire_session_avatar(participant_key);
+                    break;
+                case SessionKind::spawn: {
+                    if (inbound.command.draw_distance >= 0.0)
+                        session_draw_distances[inbound.session_id] =
+                            std::clamp(inbound.command.draw_distance, 16.0, 512.0);
+                    else
+                        session_draw_distances.emplace(inbound.session_id, 128.0);
+                    const auto spawned_reply = [&](const LiveAvatar& live) {
+                        const auto& state = live.controller.state();
+                        const double qx = state.rotation[0], qy = state.rotation[1],
+                                     qz = state.rotation[2];
+                        const auto qw = session_quat_w(qx, qy, qz);
+                        session_server->send_to(inbound.session_id,
+                            homeworldz::session::encode_envelope("spawned", {},
+                                "{\"entityId\":\"" + std::to_string(live.entity_id) + "\"" +
+                                ",\"position\":" + session_vec3(state.position.x,
+                                    state.position.y, state.position.z) +
+                                ",\"lookAt\":" + session_vec3(
+                                    1.0 - 2.0 * (qy * qy + qz * qz),
+                                    2.0 * (qx * qy + qw * qz), 0.0) + "}"));
+                    };
+                    if (const auto existing = avatars.find(participant_key);
+                        existing != avatars.end()) {
+                        spawned_reply(existing->second);  // idempotent
+                        break;
+                    }
+                    homeworldz::scene::EntityId entity{};
+                    std::vector<homeworldz::scene::EntityId> duplicates;
+                    for (const auto& [candidate_id, candidate] : scene.entities()) {
+                        if (candidate.name != inbound.user_id) continue;
+                        if (candidate_id > entity) {
+                            if (entity != 0) duplicates.push_back(entity);
+                            entity = candidate_id;
+                        } else {
+                            duplicates.push_back(candidate_id);
+                        }
+                    }
+                    for (const auto duplicate : duplicates) scene.remove(duplicate);
+                    if (entity == 0) entity = scene.create(inbound.user_id, initial_spawn);
+                    auto* persisted = scene.find(entity);
+                    const auto spawn = persisted ? persisted->position : initial_spawn;
+                    homeworldz::viewer::AvatarController controller{
+                        spawn, collision_ground_height(spawn),
+                        homeworldz::viewer::AvatarGeometry{}.height,
+                        homeworldz::viewer::AvatarGeometry{}.hip_offset,
+                        static_cast<double>(region_size_x),
+                        static_cast<double>(region_size_y)};
+                    if (persisted)
+                        controller.restore_motion(persisted->velocity,
+                            {static_cast<float>(persisted->rotation.x),
+                             static_cast<float>(persisted->rotation.y),
+                             static_cast<float>(persisted->rotation.z)},
+                            persisted->avatar_flying);
+                    const auto initial_viewer_position = controller.viewer_position();
+                    const auto [iterator, inserted] = avatars.emplace(participant_key,
+                        LiveAvatar{std::move(controller), entity, inbound.user_id,
+                                   now + std::chrono::seconds(5), now + std::chrono::seconds(30),
+                                   now + std::chrono::milliseconds(100), initial_viewer_position});
+                    static_cast<void>(inserted);
+                    auto& live = iterator->second;
+                    live.transport = AvatarTransport::session;
+                    live.session_id = inbound.session_id;
+                    live.last_pong = now;
+                    // Seed the stored draw distance into controller state so
+                    // the dynamic-object interest check never sees zero.
+                    homeworldz::viewer::AvatarController::MovementInput seed{};
+                    seed.body_rotation = live.controller.state().rotation;
+                    seed.draw_distance = static_cast<float>(
+                        session_draw_distances[inbound.session_id]);
+                    live.controller.apply(seed);
+                    if (physics_world) {
+                        live.physics_character = physics_world->create_character({
+                            entity, live.controller.state().position, 0.3,
+                            live.controller.state().height, 0.4});
+                        physics_world->set_character_velocity(
+                            live.physics_character, live.controller.state().velocity);
+                        physics_world->set_character_flying(
+                            live.physics_character, live.controller.state().flying);
+                    }
+                    if (viewer_grid && registration)
+                        static_cast<void>(viewer_grid->update_presence(
+                            inbound.user_id, registration->region_id()));
+                    spawned_reply(live);
+                    // Initial scene: every other avatar, then every non-avatar
+                    // entity. Terrain deliberately not sent (design decision 4).
+                    std::unordered_set<homeworldz::scene::EntityId> avatar_entities;
+                    for (const auto& [other_key, other] : avatars) {
+                        avatar_entities.insert(other.entity_id);
+                        if (other_key == participant_key) continue;
+                        session_server->send_to(inbound.session_id,
+                                                session_avatar_envelope(other));
+                    }
+                    for (const auto& [entity_id, scene_entity] : scene.entities()) {
+                        if (avatar_entities.count(entity_id) != 0) continue;
+                        session_server->send_to(inbound.session_id,
+                                                session_object_envelope(scene_entity));
+                    }
+                    // Announce the arrival to viewers and other sessions.
+                    if (const auto agent = homeworldz::viewer::parse_uuid(inbound.user_id)) {
+                        const auto session_region_handle =
+                            (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
+                            static_cast<std::uint32_t>(region_grid_y * 256);
+                        const auto announce = homeworldz::viewer::encode_avatar_object_update(
+                            session_region_handle, static_cast<std::uint32_t>(entity), *agent,
+                            {static_cast<float>(live.controller.state().position.x),
+                             static_cast<float>(live.controller.state().position.y),
+                             static_cast<float>(live.controller.state().position.z)});
+                        for (const auto& [recipient_endpoint, recipient] : avatars) {
+                            static_cast<void>(recipient);
+                            if (recipient_endpoint == participant_key) continue;
+                            if (const auto sent = circuits.send(
+                                    recipient_endpoint, announce, true, now, true))
+                                static_cast<void>(send_udp(
+                                    viewer_server, recipient_endpoint, *sent));
+                        }
+                    }
+                    const auto arrival_envelope = session_avatar_envelope(live);
+                    for (const auto& [other_key, other] : avatars) {
+                        if (other_key == participant_key ||
+                            other.transport != AvatarTransport::session) continue;
+                        session_server->send_to(other.session_id, arrival_envelope);
+                    }
+                    std::cout << "{\"level\":\"info\",\"message\":\"session avatar spawned\",\"agent\":"
+                              << homeworldz::api::json_string(inbound.user_id)
+                              << ",\"localId\":" << static_cast<std::uint64_t>(entity)
+                              << "}" << std::endl;
+                    break;
+                }
+                case SessionKind::move: {
+                    const auto found = avatars.find(participant_key);
+                    if (found == avatars.end()) break;
+                    if (inbound.command.draw_distance >= 0.0)
+                        session_draw_distances[inbound.session_id] =
+                            std::clamp(inbound.command.draw_distance, 16.0, 512.0);
+                    const auto& state = found->second.controller.state();
+                    homeworldz::viewer::AvatarController::MovementInput input{};
+                    input.control_flags = inbound.command.controls;
+                    input.body_rotation = inbound.command.body_rotation;
+                    if (inbound.command.has_camera) {
+                        input.camera_center = inbound.command.camera_center;
+                        input.camera_at = inbound.command.camera_at;
+                        input.camera_left = inbound.command.camera_left;
+                        input.camera_up = inbound.command.camera_up;
+                    } else {
+                        input.camera_center = state.camera_center;
+                        input.camera_at = state.camera_at;
+                        input.camera_left = state.camera_left;
+                        input.camera_up = state.camera_up;
+                    }
+                    input.draw_distance = static_cast<float>(
+                        session_draw_distances[inbound.session_id]);
+                    found->second.controller.apply(input);
+                    found->second.last_agent_update = now;
+                    break;
+                }
+                case SessionKind::say: {
+                    const auto found = avatars.find(participant_key);
+                    if (found == avatars.end()) {
+                        session_server->send_to(inbound.session_id,
+                            homeworldz::session::encode_envelope("error", {},
+                                "{\"code\":\"not_spawned\",\"message\":\"say requires an avatar; send spawn first\"}"));
+                        break;
+                    }
+                    const auto agent = homeworldz::viewer::parse_uuid(inbound.user_id);
+                    if (!agent) break;
+                    const auto& origin = found->second.controller.state().position;
+                    homeworldz::viewer::ChatFromSimulator outgoing;
+                    outgoing.from_name = inbound.display_name.empty() ?
+                        inbound.user_id : inbound.display_name;
+                    outgoing.source_id = *agent;
+                    outgoing.owner_id = *agent;
+                    outgoing.chat_type = 1;  // say
+                    outgoing.position = {static_cast<float>(origin.x),
+                                         static_cast<float>(origin.y),
+                                         static_cast<float>(origin.z)};
+                    outgoing.message = inbound.command.message;
+                    const auto payload = homeworldz::viewer::encode_chat_from_simulator(outgoing);
+                    const double radius = homeworldz::viewer::chat_range(outgoing.chat_type);
+                    for (const auto& [recipient_endpoint, recipient] : avatars) {
+                        const auto& target = recipient.controller.state().position;
+                        const auto dx = target.x - origin.x, dy = target.y - origin.y,
+                                   dz = target.z - origin.z;
+                        if (dx * dx + dy * dy + dz * dz > radius * radius) continue;
+                        if (const auto sent = circuits.send(
+                                recipient_endpoint, payload, true, now, true))
+                            static_cast<void>(send_udp(
+                                viewer_server, recipient_endpoint, *sent));
+                    }
+                    session_server->broadcast(homeworldz::session::encode_envelope("chat", {},
+                        "{\"from\":" + homeworldz::session::json_string(outgoing.from_name) +
+                        ",\"fromId\":" + homeworldz::session::json_string(inbound.user_id) +
+                        ",\"position\":" + session_vec3(origin.x, origin.y, origin.z) +
+                        ",\"message\":" +
+                        homeworldz::session::json_string(inbound.command.message) + "}"));
+                    break;
+                }
+                }
+            }
+        }
         for (const auto& outgoing : circuits.poll(now))
             static_cast<void>(send_udp(viewer_server, outgoing.endpoint, outgoing.bytes));
         for (auto iterator = texture_packets.begin(); iterator != texture_packets.end();) {
@@ -7359,7 +7645,10 @@ int main(int argc, char* argv[]) {
             if (avatar.has_agent_update &&
                 now - avatar.last_agent_update > std::chrono::seconds(1))
                 avatar.controller.expire_transient_controls();
-            if (now >= avatar.next_ping) {
+            // LLUDP liveness only: a session participant's liveness is its
+            // socket (close synthesizes a disconnect command), and its ticket
+            // was grid-validated at auth.
+            if (avatar.transport == AvatarTransport::lludp && now >= avatar.next_ping) {
                 const auto* circuit_identity = circuits.identity(endpoint);
                 const auto session_id = circuit_identity ?
                     homeworldz::viewer::format_uuid(circuit_identity->session_id) : std::string{};
@@ -7562,6 +7851,15 @@ int main(int argc, char* argv[]) {
                         if (const auto outgoing = circuits.send(recipient_endpoint, update, false, now, true))
                             static_cast<void>(send_udp(viewer_server, recipient_endpoint, *outgoing));
                     }
+                    deliver_to_embodied(homeworldz::session::encode_envelope("transform", {},
+                        "{\"id\":\"" + std::to_string(avatar.entity_id) + "\"" +
+                        ",\"position\":" + session_vec3(viewer_position.x, viewer_position.y,
+                                                        viewer_position.z) +
+                        ",\"velocity\":" + session_vec3(state.velocity.x, state.velocity.y,
+                                                        state.velocity.z) +
+                        ",\"rotation\":[" + std::to_string(state.rotation[0]) + "," +
+                            std::to_string(state.rotation[1]) + "," +
+                            std::to_string(state.rotation[2]) + "]}"));
                     avatar.last_sent_position = viewer_position;
                     avatar.last_sent_velocity = state.velocity;
                     avatar.last_sent_rotation = state.rotation;
@@ -7623,6 +7921,25 @@ int main(int argc, char* argv[]) {
                         !homeworldz::physics::body_transform_changed(
                             previous->second.state, state))
                         continue;
+                    if (recipient.transport == AvatarTransport::session) {
+                        // The session's transform message: interest-filtered
+                        // above exactly as viewers are, object rotation as a
+                        // quaternion (4 elements discriminates the form).
+                        session_server->send_to(recipient.session_id,
+                            homeworldz::session::encode_envelope("transform", {},
+                                "{\"id\":\"" + std::to_string(entity_id) + "\"" +
+                                ",\"position\":" + session_vec3(state.position.x,
+                                    state.position.y, state.position.z) +
+                                ",\"velocity\":" + session_vec3(state.linear_velocity.x,
+                                    state.linear_velocity.y, state.linear_velocity.z) +
+                                ",\"rotation\":[" + std::to_string(state.rotation[0]) + "," +
+                                    std::to_string(state.rotation[1]) + "," +
+                                    std::to_string(state.rotation[2]) + "," +
+                                    std::to_string(state.rotation[3]) + "]}"));
+                        recipient_cache.insert_or_assign(
+                            entity_id, SentDynamicTransform{state, now});
+                        continue;
+                    }
                     const auto object = static_object_from_entity(scene, *entity, recipient.user_id, falcon);
                     if (!object) continue;
                     if (const auto sent = circuits.send(recipient_endpoint,

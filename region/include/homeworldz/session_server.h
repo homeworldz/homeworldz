@@ -37,6 +37,30 @@ public:
     // session. Thread-safe; called from the simulation thread.
     void broadcast_chat(std::string_view from_name, std::string_view message);
 
+    // InboundCommand is an embodiment command an authenticated session
+    // issued, tagged with who issued it. kind==disconnect is synthesized
+    // when an embodied session's socket closes, so the simulation retires
+    // the avatar; it is not a client message.
+    struct InboundCommand {
+        std::string session_id;
+        std::string user_id;
+        std::string display_name;
+        Command command;
+        bool disconnect{};
+    };
+
+    // drain_commands returns and clears the queued inbound commands, in
+    // arrival order. Thread-safe; called once per simulation tick.
+    std::vector<InboundCommand> drain_commands();
+
+    // send_to delivers one pre-encoded envelope to every connection of one
+    // session (normally exactly one). Thread-safe.
+    void send_to(std::string_view session_id, std::string message);
+
+    // broadcast delivers one pre-encoded envelope to every authenticated
+    // session. Thread-safe.
+    void broadcast(std::string message);
+
     // session_count reports authenticated sessions, for logs and tests.
     int session_count() const;
 

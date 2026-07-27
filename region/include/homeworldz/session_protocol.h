@@ -7,6 +7,8 @@
 // the client core later, so it depends on nothing beyond the standard
 // library.
 
+#include <array>
+#include <cstdint>
 #include <functional>
 #include <optional>
 #include <string>
@@ -48,6 +50,16 @@ std::string json_string(std::string_view value);
 // when absent. Sufficient for the session protocol's flat payloads.
 std::string json_field(std::string_view object, std::string_view name);
 
+// json_number extracts a top-level numeric field; nullopt when absent or
+// not a number.
+std::optional<double> json_number(std::string_view object, std::string_view name);
+
+// json_vector3 extracts a top-level [x,y,z] array field.
+std::optional<std::array<float, 3>> json_vector3(std::string_view object, std::string_view name);
+
+// json_object_field extracts a nested object field's raw text.
+std::string json_object_field(std::string_view object, std::string_view name);
+
 // SessionIdentity is who an authenticated session belongs to, as resolved by
 // the grid from the region ticket.
 struct SessionIdentity {
@@ -62,6 +74,29 @@ struct SessionIdentity {
 // never reaches a region).
 using TicketValidator = std::function<std::optional<SessionIdentity>(const std::string& token)>;
 
+// Command is an embodiment request an authenticated session made
+// (docs/CLIENT2-EMBODIMENT.md): parsed and validated at the protocol layer,
+// executed by the host simulation, which owns the scene and replies on its
+// own clock. Fields are meaningful per kind.
+struct Command {
+    enum class Kind { spawn, move, say, leave };
+    Kind kind{};
+    // spawn/move: requested draw distance; negative means "not carried" —
+    // the host keeps its stored per-session value (never zero: zero means
+    // no-filter to the interest check, which is what decision 6 forbids).
+    double draw_distance{-1.0};
+    // move fields, mirroring AvatarController::MovementInput.
+    std::uint32_t controls{};
+    std::array<float, 3> body_rotation{};
+    bool has_camera{};
+    std::array<float, 3> camera_center{};
+    std::array<float, 3> camera_at{};
+    std::array<float, 3> camera_left{};
+    std::array<float, 3> camera_up{};
+    // say.
+    std::string message;
+};
+
 // SessionCore is one connection's protocol state machine, transport-free so
 // it is testable and shareable: the transport feeds it inbound text and
 // carries away what it says to send.
@@ -73,6 +108,9 @@ public:
         std::vector<std::string> send;
         bool close{};
         std::string close_reason;
+        // An embodiment command for the host simulation; the protocol layer
+        // answered nothing yet (the host replies when it acts).
+        std::optional<Command> command;
     };
 
     // handle_text processes one complete text message.
