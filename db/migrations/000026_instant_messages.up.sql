@@ -15,3 +15,5 @@ CREATE TABLE instant_messages (
 CREATE INDEX instant_messages_undelivered
     ON instant_messages (to_user_id, sent_at)
     WHERE delivered_at IS NULL;
+
+INSERT INTO schema_metadata (version) VALUES (26);
