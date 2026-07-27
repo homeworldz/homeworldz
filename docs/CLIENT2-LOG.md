@@ -146,6 +146,27 @@ accounts observing each other. Judgment calls within the contract:
 - **The initial scene excludes the spawning session's own avatar** — the
   client knows itself from `spawned` — and excludes terrain, per the design.
 
+## 2026-07-27 — embodiment E2: crossings, and the arrival gap it exposed
+
+- **Crossings are re-entry, not handoff**, decided on the credential
+  question and argued in [CLIENT2-EMBODIMENT.md](CLIENT2-EMBODIMENT.md).
+- **The probe found a gap older than E2:** world entry resolved an arrival
+  position, returned it to the client, and never told the region — so both
+  a named `start` and a crossing landed wherever the region defaulted. Fixed
+  by carrying the position as a **signed ticket claim**, returned from
+  validate-ticket: the region learns it from the grid, never from the
+  client, so no client can choose where it spawns. A schema change was the
+  alternative and the ticket is the better carrier — it already binds region
+  and session, and the position is only meaningful for the ticket's life.
+- **Neighbor session endpoints ride the grid's topology response**, so a
+  region knows whether a neighbor can receive a session at all; toward one
+  that cannot, containment still applies.
+- **A retiring session avatar persists its last location**, so an abandoned
+  crossing recovers with `start=last` rather than stranding the avatar at a
+  border.
+- Verified live: crossing envelope, re-entry, and landing at the resolved
+  point on the neighbor's edge, handoff about 90 ms.
+
 ## 2026-07-27 — instant messages: the first store-and-forward kind
 
 - **Stored before any delivery is attempted** (`instant_messages` table,

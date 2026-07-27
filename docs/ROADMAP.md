@@ -696,9 +696,11 @@ sequence this summarizes.
   movement, and client-to-region chat over the session
   ([CLIENT2-EMBODIMENT.md](CLIENT2-EMBODIMENT.md) milestone E1; crossings
   and appearance are its later milestones).
-- [ ] Carry a session avatar across a region border, at parity with a
-  viewer's crossing ([CLIENT2-EMBODIMENT.md](CLIENT2-EMBODIMENT.md)
-  milestone E2); session avatars are contained at borders until then.
+- [x] Carry a session avatar across a region border
+  ([CLIENT2-EMBODIMENT.md](CLIENT2-EMBODIMENT.md) milestone E2): the region
+  hands the client its continuation and the client re-enters next door,
+  landing on the arrival point the grid resolved. Not atomic the way a
+  viewer's handoff is, deliberately — the reasoning is in the design.
 - [ ] Narrow avatar transforms by interest, for viewers and sessions
   together — both are region-wide today.
 - [ ] Serve home-hosted regions through the call-home relay — an outbound
