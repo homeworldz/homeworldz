@@ -196,6 +196,15 @@ forgets the avatar in every other session's set so a later arrival is
 announced afresh rather than assumed known. Draw distance is the session
 state described above, so it can never be the zero that means "no filter".
 
+**Objects follow the same discipline**, and for the same reason: a client
+keeps what it was told about. Every path that kills an object for viewers —
+link-set removal, derez, temporary expiry, auto-return — kills it for
+sessions too, a dynamic object leaving interest is said out loud rather than
+having its transforms silently stop, and first sight of one is an `object`
+introduction rather than a `transform` for an id the client never learned.
+So for both kinds: **a `kill` means gone or out of view, and either way
+remove it** — if it matters again, an introduction follows.
+
 **Viewers remain region-wide, deliberately.** The same narrowing for the
 LLUDP path changes what a legacy viewer sees — bodies would need killing and
 re-rezzing at the boundary — and that is a visible behavior change on the
