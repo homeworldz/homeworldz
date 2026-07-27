@@ -52,7 +52,16 @@ struct Server::State {
     // Live connections; service-thread only.
     std::unordered_set<lws*> connections;
 
+    // The flush sweep: a service-thread timer that drains cross-thread sends
+    // and re-arms writability for any connection with a queued outbox. The
+    // cancel-service wake remains the fast path; the sweep bounds worst-case
+    // delivery at its period after a missed wake — the client core measured
+    // ~60 s stalls when a wake was lost.
+    static constexpr unsigned sweep_period_us = 25 * LWS_US_PER_MS;
+    lws_sorted_usec_list_t sweep{};
+
     static int callback(lws* wsi, lws_callback_reasons reason, void* user, void* in, size_t len);
+    static void sweep_callback(lws_sorted_usec_list_t* scheduled);
     void service_loop();
     void drain_broadcasts();
     bool flush_one(lws* wsi, Connection* connection);
@@ -154,6 +163,18 @@ bool Server::State::flush_one(lws* wsi, Connection* connection) {
     return true;
 }
 
+void Server::State::sweep_callback(lws_sorted_usec_list_t* scheduled) {
+    auto* state = lws_container_of(scheduled, State, sweep);
+    state->drain_broadcasts();
+    for (auto* wsi : state->connections) {
+        void* user = lws_wsi_user(wsi);
+        auto* connection = user ? *static_cast<Connection**>(user) : nullptr;
+        if (connection && !connection->outbox.empty()) lws_callback_on_writable(wsi);
+    }
+    lws_sul_schedule(state->context, 0, &state->sweep, &State::sweep_callback,
+                     sweep_period_us);
+}
+
 void Server::State::drain_broadcasts() {
     std::vector<std::pair<std::string, std::string>> drained;
     {
@@ -211,6 +232,8 @@ std::unique_ptr<Server> Server::start(Options options) {
     lws_set_log_level(LLL_ERR | LLL_WARN, nullptr);
     server->state_->context = lws_create_context(&info);
     if (!server->state_->context) return nullptr;
+    lws_sul_schedule(server->state_->context, 0, &server->state_->sweep,
+                     &State::sweep_callback, State::sweep_period_us);
     server->state_->service = std::thread([state = server->state_.get()] { state->service_loop(); });
     return server;
 }
