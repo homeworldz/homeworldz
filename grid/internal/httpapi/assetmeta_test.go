@@ -44,6 +44,17 @@ func (s *memoryAssetStore) Get(_ context.Context, id string) (assetmeta.Asset, e
 	return asset, nil
 }
 
+// Blob stands in for the blob an asset names; the fake keys blobs by asset,
+// which is enough for callers that only need the checksum and length.
+func (s *memoryAssetStore) Blob(_ context.Context, assetID string) (assetmeta.Blob, error) {
+	asset, found := s.assets[assetID]
+	if !found {
+		return assetmeta.Blob{}, assetmeta.ErrNotFound
+	}
+	return assetmeta.Blob{BlobID: "b" + assetID[1:], ByteLength: asset.Size,
+		Checksum: asset.SHA256, ChecksumAlgorithm: "sha256"}, nil
+}
+
 func TestAssetMetadataEndpoints(t *testing.T) {
 	store := &memoryAssetStore{assets: make(map[string]assetmeta.Asset)}
 	handler := New(checker{}, "test", Options{ServiceToken: "secret", Assets: store})

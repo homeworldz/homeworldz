@@ -31,6 +31,14 @@ func (s *eventualAssetStore) Get(_ context.Context, id string) (assetmeta.Asset,
 	return s.asset, nil
 }
 
+func (s *eventualAssetStore) Blob(_ context.Context, assetID string) (assetmeta.Blob, error) {
+	if assetID != s.asset.ID {
+		return assetmeta.Blob{}, assetmeta.ErrNotFound
+	}
+	return assetmeta.Blob{BlobID: "b" + assetID[1:], ByteLength: s.asset.Size,
+		Checksum: s.asset.SHA256, ChecksumAlgorithm: "sha256"}, nil
+}
+
 func TestAISWearableHashIDUpdatesAsset(t *testing.T) {
 	if combined, ok := combineViewerAssetID(
 		"99999999-8888-4777-8666-555555555555",
