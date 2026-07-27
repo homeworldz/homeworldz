@@ -24,15 +24,20 @@ type Region struct {
 	PublicEndpoint string    `json:"publicEndpoint"`
 	ViewerPort     int       `json:"viewerPort"`
 	LeaseExpiresAt time.Time `json:"leaseExpiresAt"`
+	// SessionEndpoint is the public ws:// or wss:// URL of the region's
+	// session transport (docs/CLIENT2-TRANSPORT.md). Empty means the region
+	// does not serve it.
+	SessionEndpoint string `json:"sessionEndpoint,omitempty"`
 }
 
 type Registration struct {
-	Name           string
-	GridX          int
-	GridY          int
-	PublicEndpoint string
-	ViewerPort     int
-	LeaseDuration  time.Duration
+	Name            string
+	GridX           int
+	GridY           int
+	PublicEndpoint  string
+	ViewerPort      int
+	LeaseDuration   time.Duration
+	SessionEndpoint string
 }
 
 type Store interface {
@@ -58,17 +63,19 @@ func (s *PostgresStore) RegisterProvisioned(ctx context.Context, id string, inpu
 	var region Region
 	err = tx.QueryRowContext(ctx, `
         INSERT INTO regions (id, name, grid_x, grid_y, public_endpoint, viewer_port,
-                             lease_expires_at, provisioned)
-        VALUES ($1, $2, $3, $4, $5, $6, now() + $7 * interval '1 second', true)
+                             lease_expires_at, provisioned, session_endpoint)
+        VALUES ($1, $2, $3, $4, $5, $6, now() + $7 * interval '1 second', true, $8)
         ON CONFLICT (id) DO UPDATE
         SET name = EXCLUDED.name, grid_x = EXCLUDED.grid_x, grid_y = EXCLUDED.grid_y,
             public_endpoint = EXCLUDED.public_endpoint, viewer_port = EXCLUDED.viewer_port,
-            lease_expires_at = EXCLUDED.lease_expires_at, provisioned = true, updated_at = now()
-        RETURNING id, name, grid_x, grid_y, public_endpoint, viewer_port, lease_expires_at`,
+            lease_expires_at = EXCLUDED.lease_expires_at, provisioned = true,
+            session_endpoint = EXCLUDED.session_endpoint, updated_at = now()
+        RETURNING id, name, grid_x, grid_y, public_endpoint, viewer_port, lease_expires_at,
+                  session_endpoint`,
 		id, input.Name, input.GridX, input.GridY, input.PublicEndpoint, input.ViewerPort,
-		int64(input.LeaseDuration/time.Second),
+		int64(input.LeaseDuration/time.Second), input.SessionEndpoint,
 	).Scan(&region.ID, &region.Name, &region.GridX, &region.GridY,
-		&region.PublicEndpoint, &region.ViewerPort, &region.LeaseExpiresAt)
+		&region.PublicEndpoint, &region.ViewerPort, &region.LeaseExpiresAt, &region.SessionEndpoint)
 	if err != nil {
 		var databaseError *pgconn.PgError
 		if errors.As(err, &databaseError) && databaseError.Code == "23505" {
@@ -109,18 +116,21 @@ func (s *PostgresStore) Register(ctx context.Context, input Registration) (Regio
 	}
 	region := Region{ID: id}
 	err = tx.QueryRowContext(ctx, `
-        INSERT INTO regions (id, name, grid_x, grid_y, public_endpoint, viewer_port, lease_expires_at)
-        VALUES ($1, $2, $3, $4, $5, $6, now() + $7 * interval '1 second')
+        INSERT INTO regions (id, name, grid_x, grid_y, public_endpoint, viewer_port,
+                             lease_expires_at, session_endpoint)
+        VALUES ($1, $2, $3, $4, $5, $6, now() + $7 * interval '1 second', $8)
         ON CONFLICT (grid_x, grid_y) DO UPDATE
-        SET lease_expires_at = EXCLUDED.lease_expires_at, updated_at = now()
+        SET lease_expires_at = EXCLUDED.lease_expires_at,
+            session_endpoint = EXCLUDED.session_endpoint, updated_at = now()
         WHERE regions.name = EXCLUDED.name
           AND regions.public_endpoint = EXCLUDED.public_endpoint
           AND regions.viewer_port = EXCLUDED.viewer_port
-        RETURNING id, name, grid_x, grid_y, public_endpoint, viewer_port, lease_expires_at`,
+        RETURNING id, name, grid_x, grid_y, public_endpoint, viewer_port, lease_expires_at,
+                  session_endpoint`,
 		region.ID, input.Name, input.GridX, input.GridY, input.PublicEndpoint, input.ViewerPort,
-		int64(input.LeaseDuration/time.Second),
+		int64(input.LeaseDuration/time.Second), input.SessionEndpoint,
 	).Scan(&region.ID, &region.Name, &region.GridX, &region.GridY,
-		&region.PublicEndpoint, &region.ViewerPort, &region.LeaseExpiresAt)
+		&region.PublicEndpoint, &region.ViewerPort, &region.LeaseExpiresAt, &region.SessionEndpoint)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Region{}, ErrConflict
 	}
@@ -148,10 +158,11 @@ func (s *PostgresStore) renew(ctx context.Context, id string, duration time.Dura
         SET lease_expires_at = now() + $2 * interval '1 second',
             provisioned = provisioned OR $3, updated_at = now()
         WHERE id = $1 AND lease_expires_at > now()
-        RETURNING id, name, grid_x, grid_y, public_endpoint, viewer_port, lease_expires_at`,
+        RETURNING id, name, grid_x, grid_y, public_endpoint, viewer_port, lease_expires_at,
+                  session_endpoint`,
 		id, int64(duration/time.Second), provisioned,
 	).Scan(&region.ID, &region.Name, &region.GridX, &region.GridY,
-		&region.PublicEndpoint, &region.ViewerPort, &region.LeaseExpiresAt)
+		&region.PublicEndpoint, &region.ViewerPort, &region.LeaseExpiresAt, &region.SessionEndpoint)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Region{}, ErrNotFound
 	}
@@ -196,10 +207,11 @@ func (s *PostgresStore) DeregisterProvisioned(ctx context.Context, id string) er
 func (s *PostgresStore) Get(ctx context.Context, id string) (Region, error) {
 	var region Region
 	err := s.db.QueryRowContext(ctx, `
-        SELECT id, name, grid_x, grid_y, public_endpoint, viewer_port, lease_expires_at
+        SELECT id, name, grid_x, grid_y, public_endpoint, viewer_port, lease_expires_at,
+               session_endpoint
         FROM regions WHERE id = $1 AND lease_expires_at > now()`, id,
 	).Scan(&region.ID, &region.Name, &region.GridX, &region.GridY,
-		&region.PublicEndpoint, &region.ViewerPort, &region.LeaseExpiresAt)
+		&region.PublicEndpoint, &region.ViewerPort, &region.LeaseExpiresAt, &region.SessionEndpoint)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Region{}, ErrNotFound
 	}
@@ -211,7 +223,8 @@ func (s *PostgresStore) Get(ctx context.Context, id string) (Region, error) {
 
 func (s *PostgresStore) List(ctx context.Context) ([]Region, error) {
 	rows, err := s.db.QueryContext(ctx, `
-        SELECT id, name, grid_x, grid_y, public_endpoint, viewer_port, lease_expires_at
+        SELECT id, name, grid_x, grid_y, public_endpoint, viewer_port, lease_expires_at,
+               session_endpoint
         FROM regions WHERE lease_expires_at > now() ORDER BY grid_y, grid_x`)
 	if err != nil {
 		return nil, fmt.Errorf("list regions: %w", err)
@@ -221,7 +234,8 @@ func (s *PostgresStore) List(ctx context.Context) ([]Region, error) {
 	for rows.Next() {
 		var region Region
 		if err := rows.Scan(&region.ID, &region.Name, &region.GridX, &region.GridY,
-			&region.PublicEndpoint, &region.ViewerPort, &region.LeaseExpiresAt); err != nil {
+			&region.PublicEndpoint, &region.ViewerPort, &region.LeaseExpiresAt,
+			&region.SessionEndpoint); err != nil {
 			return nil, fmt.Errorf("scan region: %w", err)
 		}
 		regions = append(regions, region)

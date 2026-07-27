@@ -33,6 +33,7 @@ import (
 	"github.com/homeworldz/server/grid/internal/tasktransfer"
 	"github.com/homeworldz/server/grid/internal/transit"
 	"github.com/homeworldz/server/grid/internal/vault"
+	"github.com/homeworldz/server/grid/internal/webtoken"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -125,6 +126,19 @@ func main() {
 		os.Exit(1)
 	}
 
+	// The region-ticket verifier answers regions' validate-ticket calls; the
+	// signing secret stays here. Absent a configured secret the route reports
+	// itself unavailable rather than the binary failing to start.
+	var ticketVerifier *webtoken.Signer
+	if settings.WebsiteJWTSecret != "" {
+		ticketVerifier, err = webtoken.NewSigner([]byte(settings.WebsiteJWTSecret),
+			settings.WebsiteJWTIssuer, webtoken.RegionTicketAudience, settings.RegionTicketTTL)
+		if err != nil {
+			logger.Error("configure region ticket verifier", "error", err)
+			os.Exit(1)
+		}
+	}
+
 	server := &http.Server{
 		Addr: settings.Address,
 		Handler: httpapi.New(db, version, httpapi.Options{
@@ -146,6 +160,7 @@ func main() {
 			Gestures:          gestureStore(db),
 			Estates:           estate.NewPostgresStore(db),
 			Welcome:           welcome,
+			TicketVerifier:    ticketVerifier,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}

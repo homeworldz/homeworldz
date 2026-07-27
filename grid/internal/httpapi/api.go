@@ -25,6 +25,7 @@ import (
 	"github.com/homeworldz/server/grid/internal/tasktransfer"
 	"github.com/homeworldz/server/grid/internal/transit"
 	"github.com/homeworldz/server/grid/internal/vault"
+	"github.com/homeworldz/server/grid/internal/webtoken"
 )
 
 type ReadinessChecker interface {
@@ -48,10 +49,11 @@ type API struct {
 	terrainCache  terrainTileCache
 	transits      transit.Store
 	taskTransfers tasktransfer.Store
-	locations     locations.Store
-	gestures      gestures.Store
-	estates       estate.Store
-	welcomePoints []arrival.Point
+	locations      locations.Store
+	gestures       gestures.Store
+	estates        estate.Store
+	welcomePoints  []arrival.Point
+	ticketVerifier *webtoken.Signer
 }
 
 func (a *API) regionExtent(ctx context.Context, id string) float32 {
@@ -86,6 +88,10 @@ type Options struct {
 	// no stored location decides it, and where it is diverted when the stored
 	// region is offline. Empty preserves the legacy first-region fallback.
 	Welcome []arrival.Point
+	// TicketVerifier verifies region tickets on behalf of regions (the
+	// signing secret never leaves the grid). It must carry the region-ticket
+	// audience. Nil disables /region-runtime/{id}/validate-ticket.
+	TicketVerifier *webtoken.Signer
 }
 
 func New(ready ReadinessChecker, version string, options Options) http.Handler {
@@ -98,7 +104,7 @@ func New(ready ReadinessChecker, version string, options Options) http.Handler {
 		terrainCache: newTerrainTileCache(), transits: options.Transits,
 		taskTransfers: options.TaskTransfers, locations: options.Locations,
 		gestures: options.Gestures, estates: options.Estates,
-		welcomePoints: options.Welcome}
+		welcomePoints: options.Welcome, ticketVerifier: options.TicketVerifier}
 	if a.publicURL == "" {
 		a.publicURL = "http://127.0.0.1:42000"
 	}
@@ -178,6 +184,22 @@ func regionProtocolAccepted(w http.ResponseWriter, reported int) bool {
 	return false
 }
 
+// validSessionEndpoint accepts an absent session endpoint, or a ws:// or
+// wss:// URL with a host — WebSocket is the region-session transport by
+// decision (docs/CLIENT2-TRANSPORT.md).
+func validSessionEndpoint(w http.ResponseWriter, endpoint string) bool {
+	if endpoint == "" {
+		return true
+	}
+	parsed, err := url.Parse(endpoint)
+	if err == nil && (parsed.Scheme == "ws" || parsed.Scheme == "wss") && parsed.Host != "" {
+		return true
+	}
+	writeJSON(w, http.StatusBadRequest, Error{Code: "invalid_session_endpoint",
+		Message: "sessionEndpoint must be a ws:// or wss:// URL"})
+	return false
+}
+
 func (a *API) provisionedRegionRuntime(w http.ResponseWriter, r *http.Request) {
 	if a.regions == nil || a.provisioned == nil {
 		writeJSON(w, http.StatusServiceUnavailable, Error{Code: "region_registration_unavailable", Message: "provisioned region registration is unavailable"})
@@ -212,12 +234,14 @@ func (a *API) provisionedRegionRuntime(w http.ResponseWriter, r *http.Request) {
 		}
 		validation := RegisterRegionRequest{Name: provisioned.Name, GridX: provisioned.MapX, GridY: provisioned.MapY,
 			PublicEndpoint: publicEndpoint, ViewerPort: viewerPort}
-		if !ok || !validateRegistration(w, validation) || !regionProtocolAccepted(w, request.RegionProtocol) {
+		if !ok || !validateRegistration(w, validation) || !regionProtocolAccepted(w, request.RegionProtocol) ||
+			!validSessionEndpoint(w, request.SessionEndpoint) {
 			return
 		}
 		region, err := a.regions.RegisterProvisioned(r.Context(), id, regions.Registration{
 			Name: provisioned.Name, GridX: provisioned.MapX, GridY: provisioned.MapY,
 			PublicEndpoint: publicEndpoint, ViewerPort: viewerPort, LeaseDuration: lease,
+			SessionEndpoint: request.SessionEndpoint,
 		})
 		if errors.Is(err, regions.ErrConflict) {
 			writeJSON(w, http.StatusConflict, Error{Code: "region_coordinates_in_use", Message: "region coordinates are already leased"})
@@ -240,6 +264,10 @@ func (a *API) provisionedRegionRuntime(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(parts) >= 2 && parts[1] == "estate" {
 		a.provisionedRegionEstate(w, r, id, provisioned.OwnerUserID, parts)
+		return
+	}
+	if len(parts) == 2 && parts[1] == "validate-ticket" && r.Method == http.MethodPost {
+		a.validateRegionTicket(w, r, id)
 		return
 	}
 	if len(parts) == 2 && parts[1] == "lease" && r.Method == http.MethodPut {

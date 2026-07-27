@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"time"
+
 	"github.com/homeworldz/server/grid/internal/estate"
 	"github.com/homeworldz/server/grid/internal/inventory"
 	"github.com/homeworldz/server/grid/internal/presence"
@@ -52,6 +54,25 @@ type StartProvisionedRegionRequest struct {
 	LeaseSeconds   int    `json:"leaseSeconds"`
 	// RegionProtocol, as on RenewRegionLeaseRequest.
 	RegionProtocol int `json:"regionProtocol,omitempty"`
+	// SessionEndpoint is the public ws:// or wss:// URL of the region's
+	// session transport, when it serves one (docs/CLIENT2-TRANSPORT.md).
+	SessionEndpoint string `json:"sessionEndpoint,omitempty"`
+}
+
+// ValidateRegionTicketRequest carries the region ticket a client presented to
+// a region; the region forwards it here because the signing secret never
+// leaves the grid.
+type ValidateRegionTicketRequest struct {
+	Token string `json:"token"`
+}
+
+// ValidateRegionTicketResult is the identity a valid ticket resolves to.
+type ValidateRegionTicketResult struct {
+	UserID      string    `json:"userId"`
+	Userid      string    `json:"userid"`
+	DisplayName string    `json:"displayName"`
+	SessionID   string    `json:"sessionId"`
+	ExpiresAt   time.Time `json:"expiresAt"`
 }
 
 type ProvisionedRegionRuntimeResult struct {

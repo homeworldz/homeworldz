@@ -62,12 +62,15 @@ type ClientTicket struct {
 	ExpiresAt time.Time `json:"expiresAt"`
 }
 
-// ClientCapabilities is the versioned per-region manifest. Transports is empty
-// until the region session transport exists; a client treats this as data and
-// adapts rather than negotiating.
+// ClientCapabilities is the versioned per-region manifest. Transports lists
+// what this region's session transport serves — ["websocket"] once the region
+// reports a session endpoint, empty for a region that serves none — and
+// SessionURL is where to connect. A client treats this as data and adapts
+// rather than negotiating (docs/CLIENT2-TRANSPORT.md).
 type ClientCapabilities struct {
 	Version    int      `json:"version"`
 	Transports []string `json:"transports"`
+	SessionURL string   `json:"sessionURL,omitempty"`
 }
 
 func (a *API) clientSession(w http.ResponseWriter, r *http.Request) {
@@ -123,12 +126,21 @@ func (a *API) clientSession(w http.ResponseWriter, r *http.Request) {
 			Endpoint: strings.TrimRight(destination.Region.PublicEndpoint, "/"),
 			Position: position,
 		},
-		Ticket: ClientTicket{Token: ticket, ExpiresAt: ticketExpiry},
-		Capabilities: ClientCapabilities{
-			Version:    capabilityManifestVersion,
-			Transports: []string{},
-		},
+		Ticket:       ClientTicket{Token: ticket, ExpiresAt: ticketExpiry},
+		Capabilities: capabilitiesOf(destination.Region.SessionEndpoint),
 	})
+}
+
+// capabilitiesOf derives the per-region manifest from what the region
+// reported at registration: a session endpoint means the WebSocket transport
+// is served there, and none means the region predates or disables it.
+func capabilitiesOf(sessionEndpoint string) ClientCapabilities {
+	capabilities := ClientCapabilities{Version: capabilityManifestVersion, Transports: []string{}}
+	if sessionEndpoint != "" {
+		capabilities.Transports = []string{"websocket"}
+		capabilities.SessionURL = sessionEndpoint
+	}
+	return capabilities
 }
 
 // resolveClientDestination picks the destination region and arrival position

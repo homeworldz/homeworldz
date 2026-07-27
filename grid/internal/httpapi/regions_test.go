@@ -48,7 +48,8 @@ func (s *memoryRegionStore) Register(_ context.Context, input regions.Registrati
 		ID:   fmt.Sprintf("00000000-0000-4000-8000-%012d", s.nextID),
 		Name: input.Name, GridX: input.GridX, GridY: input.GridY,
 		PublicEndpoint: input.PublicEndpoint, ViewerPort: input.ViewerPort,
-		LeaseExpiresAt: s.now.Add(input.LeaseDuration),
+		LeaseExpiresAt:  s.now.Add(input.LeaseDuration),
+		SessionEndpoint: input.SessionEndpoint,
 	}
 	s.regions[region.ID] = region
 	return region, nil
@@ -61,7 +62,8 @@ func (s *memoryRegionStore) RegisterProvisioned(_ context.Context, id string, in
 		}
 	}
 	region := regions.Region{ID: id, Name: input.Name, GridX: input.GridX, GridY: input.GridY,
-		PublicEndpoint: input.PublicEndpoint, ViewerPort: input.ViewerPort, LeaseExpiresAt: s.now.Add(input.LeaseDuration)}
+		PublicEndpoint: input.PublicEndpoint, ViewerPort: input.ViewerPort,
+		LeaseExpiresAt: s.now.Add(input.LeaseDuration), SessionEndpoint: input.SessionEndpoint}
 	s.regions[id] = region
 	return region, nil
 }

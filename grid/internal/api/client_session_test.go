@@ -158,7 +158,8 @@ func newWorldEntryHarness(t *testing.T, mutate ...func(*Options)) *worldEntryHar
 		options.TicketSigner = ticketSigner
 		options.Leases = &memoryLeaseStore{items: []regions.Region{
 			{ID: "aaaaaaaa-0000-4000-8000-000000000001", Name: "Welcome", GridX: 1000, GridY: 1000,
-				PublicEndpoint: "http://welcome.example:9000/", ViewerPort: 9001},
+				PublicEndpoint: "http://welcome.example:9000/", ViewerPort: 9001,
+				SessionEndpoint: "wss://welcome.example/session"},
 			{ID: "aaaaaaaa-0000-4000-8000-000000000002", Name: "Sandbox", GridX: 1001, GridY: 1000,
 				PublicEndpoint: "http://sandbox.example:9000", ViewerPort: 9001},
 		}}
@@ -235,9 +236,22 @@ func TestClientSessionWelcomeArrival(t *testing.T) {
 		t.Fatalf("session id mismatch: %q != %q", opened.Session.ID, created.ID)
 	}
 
-	// The manifest is versioned data, honest about the unbuilt transport.
-	if opened.Capabilities.Version != 1 || len(opened.Capabilities.Transports) != 0 {
+	// The manifest is versioned data derived from what the region reported:
+	// this region serves the WebSocket session transport.
+	if opened.Capabilities.Version != 1 || len(opened.Capabilities.Transports) != 1 ||
+		opened.Capabilities.Transports[0] != "websocket" ||
+		opened.Capabilities.SessionURL != "wss://welcome.example/session" {
 		t.Fatalf("unexpected capabilities: %+v", opened.Capabilities)
+	}
+
+	// A region that reported no session endpoint advertises no transport.
+	sandbox := harness.open(t, `{"start":"Sandbox/10/20/30"}`, harness.token)
+	var sandboxSession ClientSession
+	if err := json.Unmarshal(sandbox.Body.Bytes(), &sandboxSession); err != nil {
+		t.Fatal(err)
+	}
+	if len(sandboxSession.Capabilities.Transports) != 0 || sandboxSession.Capabilities.SessionURL != "" {
+		t.Fatalf("unexpected sandbox capabilities: %+v", sandboxSession.Capabilities)
 	}
 
 	// The ticket verifies against the region-ticket signer and binds the
