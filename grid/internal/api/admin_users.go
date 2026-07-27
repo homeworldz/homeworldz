@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/homeworldz/server/grid/internal/webaccount"
 )
@@ -248,7 +249,7 @@ func (a *API) adminSendNotice(w http.ResponseWriter, r *http.Request, id string)
 		return
 	}
 	message := strings.TrimSpace(request.Message)
-	if message == "" || len(message) > 2048 {
+	if message == "" || utf8.RuneCountInString(message) > 2048 {
 		writeError(w, http.StatusBadRequest, Error{Code: "invalid_message", Message: "message must be 1-2048 characters", Field: "message"})
 		return
 	}

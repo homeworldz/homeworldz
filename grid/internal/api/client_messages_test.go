@@ -179,6 +179,18 @@ func TestMessageValidation(t *testing.T) {
 		`{"to":"99999999-9999-4999-8999-999999999999","message":"hi"}`); response.Code != http.StatusNotFound {
 		t.Fatalf("unknown recipient status = %d", response.Code)
 	}
+	// The limit counts characters, not bytes: 700 emoji are 2,800 bytes and
+	// well inside the documented 2,048 characters.
+	emoji := strings.Repeat("\U0001F600", 700)
+	if response := postMessage(t, harness.handler, adminToken,
+		fmt.Sprintf(`{"to":%q,"message":%q}`, testUserID, emoji)); response.Code != http.StatusOK {
+		t.Fatalf("emoji message status = %d: %s", response.Code, response.Body.String())
+	}
+	over := strings.Repeat("\U0001F600", 2049)
+	if response := postMessage(t, harness.handler, adminToken,
+		fmt.Sprintf(`{"to":%q,"message":%q}`, testUserID, over)); response.Code != http.StatusBadRequest {
+		t.Fatalf("over-limit message status = %d", response.Code)
+	}
 	request := httptest.NewRequest(http.MethodPost, "/v1/client/messages",
 		strings.NewReader(`{"to":"x","message":"hi"}`))
 	request.Header.Set("Content-Type", "application/json")

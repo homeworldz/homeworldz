@@ -435,7 +435,11 @@ The response is `200` with `Cache-Control: no-store`:
   region's public chat. A client treats the manifest as data and adapts
   rather than negotiating.
 
-Errors are the flat `{code, message}` object every `/v1` route uses:
+Errors are the flat object every `/v1` route uses: `{code, message}` plus an
+optional **`field`** naming the request field at fault (`"message"`, `"to"`,
+…) when the error is about one input rather than the request as a whole — it
+is what lets a client highlight the offending input instead of the form.
+The table below omits `field` for brevity:
 
 | Status | `code` | Meaning |
 | --- | --- | --- |

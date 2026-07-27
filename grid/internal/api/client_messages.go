@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/homeworldz/server/grid/internal/messages"
 	"github.com/homeworldz/server/grid/internal/webaccount"
@@ -36,8 +37,11 @@ func (a *API) clientMessages(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &request) {
 		return
 	}
+	// Validation order (message, then recipient) is observed behavior clients
+	// mirror; change it only deliberately. The limit counts characters, as
+	// documented — not bytes, which would shrink it up to 4x for non-ASCII.
 	text := strings.TrimSpace(request.Message)
-	if text == "" || len(text) > 2048 {
+	if text == "" || utf8.RuneCountInString(text) > 2048 {
 		writeError(w, http.StatusBadRequest, Error{Code: "invalid_message", Message: "message must be 1-2048 characters", Field: "message"})
 		return
 	}
