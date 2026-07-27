@@ -95,30 +95,45 @@ func (a *API) messagePayload(ctx context.Context, stored messages.Message) (json
 
 // deliverMessageBacklog replays a user's undelivered messages onto a newly
 // authenticated channel connection, in sent order, marking what was handed
-// over. Called from the channel's serve loop after hello.
+// over. Called from the channel's serve loop after hello. 100 is a batch
+// size, not a total: batches repeat until one comes back short, so a backlog
+// of any depth drains on one connection — the client core caught the earlier
+// version stranding everything past the first batch until the next connect.
 func (a *API) deliverMessageBacklog(ctx context.Context, client *channelClient, userID string) {
 	if a.messages == nil {
 		return
 	}
-	backlog, err := a.messages.Undelivered(ctx, userID, 100)
-	if err != nil || len(backlog) == 0 {
-		return
-	}
-	handed := make([]string, 0, len(backlog))
-	for _, stored := range backlog {
-		payload, err := a.messagePayload(ctx, stored)
-		if err != nil {
-			continue
+	const batchSize = 100
+	for {
+		backlog, err := a.messages.Undelivered(ctx, userID, batchSize)
+		if err != nil || len(backlog) == 0 {
+			return
 		}
-		if !client.enqueue(ctx, channelEnvelope{
-			Type: "notification", Version: channelEnvelopeVersion, Payload: payload}) {
-			break
+		handed := make([]string, 0, len(backlog))
+		for _, stored := range backlog {
+			payload, err := a.messagePayload(ctx, stored)
+			if err != nil {
+				continue
+			}
+			if !client.enqueue(ctx, channelEnvelope{
+				Type: "notification", Version: channelEnvelopeVersion, Payload: payload}) {
+				return
+			}
+			handed = append(handed, stored.ID)
 		}
-		handed = append(handed, stored.ID)
-	}
-	if len(handed) > 0 {
-		if err := a.messages.MarkDelivered(ctx, handed); err != nil && a.logger != nil {
-			a.logger.Error("mark message backlog delivered", "error", err)
+		if len(handed) == 0 {
+			// Nothing marked means the same batch would return forever.
+			return
+		}
+		if err := a.messages.MarkDelivered(ctx, handed); err != nil {
+			if a.logger != nil {
+				a.logger.Error("mark message backlog delivered", "error", err)
+			}
+			// Unmarked messages would return in the next batch forever.
+			return
+		}
+		if len(backlog) < batchSize {
+			return
 		}
 	}
 }

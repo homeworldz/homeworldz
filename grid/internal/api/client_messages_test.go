@@ -168,6 +168,39 @@ func TestMessageToOfflineUserWaitsInBacklogUntilConnect(t *testing.T) {
 	}
 }
 
+// A backlog deeper than one batch drains fully on a single connection: 100
+// is a batch size, not a total.
+func TestMessageBacklogDeeperThanOneBatchDrains(t *testing.T) {
+	harness, adminToken, store := newMessagingHarness(t)
+	for index := 0; index < 150; index++ {
+		response := postMessage(t, harness.handler, adminToken,
+			fmt.Sprintf(`{"to":%q,"message":"backlog %03d"}`, testUserID, index))
+		if response.Code != http.StatusOK {
+			t.Fatalf("send %d status = %d", index, response.Code)
+		}
+	}
+	if store.undeliveredCount() != 150 {
+		t.Fatalf("undelivered = %d, want 150", store.undeliveredCount())
+	}
+
+	conn, done := dialChannel(t, harness)
+	defer done()
+	authenticate(t, conn, harness.token)
+	for index := 0; index < 150; index++ {
+		envelope := readEnvelope(t, conn)
+		var payload channelMessagePayload
+		if err := json.Unmarshal(envelope.Payload, &payload); err != nil {
+			t.Fatal(err)
+		}
+		if payload.Message != fmt.Sprintf("backlog %03d", index) {
+			t.Fatalf("replay %d out of order: %q", index, payload.Message)
+		}
+	}
+	if store.undeliveredCount() != 0 {
+		t.Fatalf("undelivered after replay = %d, want 0", store.undeliveredCount())
+	}
+}
+
 func TestMessageValidation(t *testing.T) {
 	harness, adminToken, _ := newMessagingHarness(t)
 
