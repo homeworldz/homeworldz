@@ -7487,8 +7487,12 @@ int main(int argc, char* argv[]) {
                             seeded.visual_params = default_outfit_visual_params;
                             seeded.appearance_version = 1;
                             avatar_appearances.insert_or_assign(participant_key, seeded);
-                            if (const auto geometry = homeworldz::viewer::avatar_geometry(seeded))
-                                avatar_geometries[participant_key] = *geometry;
+                            const auto geometry = homeworldz::viewer::avatar_geometry(seeded);
+                            if (geometry) avatar_geometries[participant_key] = *geometry;
+                            std::cout << "{\"level\":\"info\",\"message\":\"session avatar appearance seeded\""
+                                      << ",\"agent\":" << homeworldz::api::json_string(inbound.user_id)
+                                      << ",\"height\":" << (geometry ? geometry->height : 0.0)
+                                      << "}" << std::endl;
                         }
                     }
                     const auto known_session_geometry = avatar_geometries.find(participant_key);
