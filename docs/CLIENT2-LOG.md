@@ -166,6 +166,26 @@ has its own design surface (spawn, appearance, interest management).
   platforms), taken per the decision document; the region's own hand-rolled
   HTTP/1.1 listener is untouched.
 
+Follow-ups from the client core's review, same day:
+
+- **`\u` escape decoding now handles surrogate pairs** (one supplementary
+  code point, proper UTF-8) and refuses lone or unpaired surrogates rather
+  than substituting — emitting CESU-8 was a latent bug the client core
+  caught; nothing sends surrogate escapes today, but any JSON encoder that
+  escapes non-ASCII would have surfaced it.
+- **No origin enforcement on the session listener.** lws's
+  security-best-practices option refuses cross-origin upgrades, and every
+  browser client is cross-origin by design; the region ticket is the
+  credential.
+- **The client core is not adopting `session_protocol.h`**, for reasons it
+  argued and this log accepts: `SessionCore` is the server role (there is no
+  client mirror in it), and the client's own reader is deliberately stricter
+  (bounded depth and length, absent-versus-empty `correlationId`) because it
+  meets a grid before deciding to trust it — client ADR 0005 territory. The
+  anti-drift mechanism is documented wire examples used as test specimens on
+  both sides, not shared code; if a shared codec is wanted later, the
+  stricter reader is the one to lift into the shared position.
+
 ## 2026-07-26 — viewer destination resolution moves onto the arrival package
 
 The follow-up the world-entry work deferred: `httpapi.resolveDestination` now

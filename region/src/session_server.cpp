@@ -175,7 +175,12 @@ std::unique_ptr<Server> Server::start(Options options) {
     info.user = server->state_.get();
     info.gid = static_cast<gid_t>(-1);
     info.uid = static_cast<uid_t>(-1);
-    info.options = LWS_SERVER_OPTION_HTTP_HEADERS_SECURITY_BEST_PRACTICES_ENFORCE;
+    // No origin enforcement: the session is credentialed by the region
+    // ticket in the first message, and every browser client is cross-origin
+    // by design (the page comes from the client's own host, never from a
+    // region). lws's security-best-practices option would refuse exactly
+    // those upgrades.
+    info.options = 0;
 
     lws_set_log_level(LLL_ERR | LLL_WARN, nullptr);
     server->state_->context = lws_create_context(&info);

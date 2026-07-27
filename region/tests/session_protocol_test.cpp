@@ -40,6 +40,21 @@ int main() {
                        "with \"quotes\" and {braces}")
         return 6;
 
+    // A surrogate pair decodes to one supplementary code point (proper
+    // UTF-8, never CESU-8), and a lone surrogate is refused rather than
+    // substituted.
+    const auto emoji = homeworldz::session::parse_envelope(
+        "{\"type\":\"chat\",\"version\":1,\"payload\":{\"message\":\"\\ud83d\\ude00 hi\"}}", error);
+    if (!emoji || homeworldz::session::json_field(emoji->payload, "message") !=
+                      "\xf0\x9f\x98\x80 hi")
+        return 16;
+    const auto lone = homeworldz::session::parse_envelope(
+        R"({"type":"chat","version":1,"payload":{"message":"\ud83d oops"}})", error);
+    if (!lone || !homeworldz::session::json_field(lone->payload, "message").empty()) return 17;
+    if (homeworldz::session::parse_envelope(R"({"type":"\udc00","version":1})", error) ||
+        error != ParseError::malformed)
+        return 18;
+
     // A field named inside a nested payload must not satisfy a top-level
     // lookup: the envelope's own type wins.
     const auto nested = homeworldz::session::parse_envelope(

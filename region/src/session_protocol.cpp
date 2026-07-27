@@ -76,19 +76,40 @@ std::optional<std::string> parse_string_at(std::string_view text, std::size_t po
             unsigned code = 0;
             const auto begin = text.data() + cursor + 1;
             if (std::from_chars(begin, begin + 4, code, 16).ec != std::errc{}) return std::nullopt;
-            // The protocol only escapes control characters this way; encode
-            // the code point as UTF-8 for completeness.
+            cursor += 4;
+            // Surrogate pairs name one supplementary code point and must be
+            // decoded as one — encoding each half separately would emit
+            // CESU-8, which is not UTF-8. A lone or unpaired surrogate is
+            // refused rather than substituted: replacing it would silently
+            // alter the string the sender wrote.
+            if (code >= 0xdc00 && code <= 0xdfff) return std::nullopt;
+            if (code >= 0xd800 && code <= 0xdbff) {
+                if (cursor + 6 >= text.size() || text[cursor + 1] != '\\' ||
+                    text[cursor + 2] != 'u')
+                    return std::nullopt;
+                unsigned low = 0;
+                const auto low_begin = text.data() + cursor + 3;
+                if (std::from_chars(low_begin, low_begin + 4, low, 16).ec != std::errc{} ||
+                    low < 0xdc00 || low > 0xdfff)
+                    return std::nullopt;
+                code = 0x10000 + ((code - 0xd800) << 10) + (low - 0xdc00);
+                cursor += 6;
+            }
             if (code < 0x80) {
                 value.push_back(static_cast<char>(code));
             } else if (code < 0x800) {
                 value.push_back(static_cast<char>(0xc0 | (code >> 6)));
                 value.push_back(static_cast<char>(0x80 | (code & 0x3f)));
-            } else {
+            } else if (code < 0x10000) {
                 value.push_back(static_cast<char>(0xe0 | (code >> 12)));
                 value.push_back(static_cast<char>(0x80 | ((code >> 6) & 0x3f)));
                 value.push_back(static_cast<char>(0x80 | (code & 0x3f)));
+            } else {
+                value.push_back(static_cast<char>(0xf0 | (code >> 18)));
+                value.push_back(static_cast<char>(0x80 | ((code >> 12) & 0x3f)));
+                value.push_back(static_cast<char>(0x80 | ((code >> 6) & 0x3f)));
+                value.push_back(static_cast<char>(0x80 | (code & 0x3f)));
             }
-            cursor += 4;
             break;
         }
         default:
