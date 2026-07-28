@@ -2647,7 +2647,16 @@ int main(int argc, char* argv[]) {
                         if (response.method == "POST" && authorization.starts_with(bearer) &&
                             viewer_grid && registration) {
                             try {
-                                uploader = viewer_grid->validate_region_ticket(
+                                // Validation runs on the region's own
+                                // credential (the access key), exactly as the
+                                // WebSocket validator does: validate-ticket is
+                                // a region-runtime endpoint and the ticket
+                                // secret never reaches the region.
+                                homeworldz::grid::Client ticket_client(
+                                    homeworldz::grid::socket_transport(
+                                        configured_value("grid.url", "http://localhost:42000"),
+                                        region_access_key));
+                                uploader = ticket_client.validate_region_ticket(
                                     provisioned_region_id, authorization.substr(bearer.size()));
                             } catch (const std::exception&) {
                             }
