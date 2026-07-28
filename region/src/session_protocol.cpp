@@ -1,6 +1,7 @@
 #include "homeworldz/session_protocol.h"
 
 #include "homeworldz/avatar_controller.h"
+#include "homeworldz/mesh_acceptance.h"
 
 #include <charconv>
 
@@ -327,7 +328,10 @@ SessionCore::Result SessionCore::handle_text(std::string_view text) {
             ",\"runSpeed\":" + json_number_text(homeworldz::viewer::avatar_fast_speed) +
             ",\"jumpVelocity\":" + json_number_text(homeworldz::viewer::avatar_jump_velocity) +
             ",\"gravity\":" + json_number_text(homeworldz::viewer::avatar_gravity) +
-            "},\"interestSweepMs\":100}"));
+            "},\"interestSweepMs\":100" +
+            // The mesh acceptance gate, published so importing clients refuse
+            // exactly what upload would refuse (ADR 0033: read, never encode).
+            ",\"meshAcceptance\":" + homeworldz::mesh::acceptance_policy_json() + "}"));
         return result;
     }
 

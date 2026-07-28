@@ -1,3 +1,4 @@
+#include "homeworldz/mesh_acceptance.h"
 #include "homeworldz/session_protocol.h"
 
 #include <string>
@@ -99,6 +100,11 @@ int main() {
                                "\"jumpVelocity\":5,\"gravity\":9.81}") == std::string::npos ||
         greeting->payload.find("\"interestSweepMs\":100") == std::string::npos)
         return 27;
+    // The mesh acceptance gate rides in the hello too, and is the same JSON
+    // the validator's constants produce — read, never encode (ADR 0033).
+    if (greeting->payload.find("\"meshAcceptance\":" +
+                               homeworldz::mesh::acceptance_policy_json()) == std::string::npos)
+        return 28;
 
     // Ping answers pong carrying the correlation identifier.
     const auto pong = session.handle_text(

@@ -26,6 +26,9 @@ target_sources(homeworldz-region-core PRIVATE src/viewer_protocol.cpp)
 target_sources(homeworldz-region-core PRIVATE src/viewer_capabilities.cpp)
 target_sources(homeworldz-region-core PRIVATE src/session_protocol.cpp)
 target_sources(homeworldz-region-core PRIVATE src/session_server.cpp)
+target_sources(homeworldz-region-core PRIVATE src/mesh_acceptance.cpp)
+find_path(HOMEWORLDZ_CGLTF_INCLUDE_DIR cgltf.h REQUIRED)
+target_include_directories(homeworldz-region-core PRIVATE ${HOMEWORLDZ_CGLTF_INCLUDE_DIR})
 find_package(libwebsockets CONFIG REQUIRED)
 # vcpkg's dynamic triplets export websockets_shared; static ones export
 # websockets. Take whichever this build provides.
@@ -98,6 +101,8 @@ add_test(NAME region-scene COMMAND homeworldz-scene-tests)
 
 add_executable(homeworldz-session-protocol-tests tests/session_protocol_test.cpp)
 target_link_libraries(homeworldz-session-protocol-tests PRIVATE homeworldz-region-core)
+add_executable(homeworldz-mesh-acceptance-tests tests/mesh_acceptance_test.cpp)
+target_link_libraries(homeworldz-mesh-acceptance-tests PRIVATE homeworldz-region-core)
 add_test(NAME region-session-protocol COMMAND homeworldz-session-protocol-tests)
 
 add_executable(homeworldz-grid-client-tests tests/grid_client_test.cpp)
