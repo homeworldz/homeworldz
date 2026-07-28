@@ -95,6 +95,22 @@ count caps, and a glTF extension allowlist (the KHR material and texture
 extensions; anything unknown is refused, not ignored, so content never
 renders differently on the client that understands more).
 
+**The acceptance policy is published, not mirrored** (client core pushback,
+2026-07-28 — the movement-constants lesson applied before the mistake is
+made). A client that validates at import time must refuse exactly what
+upload would refuse, and two hand-maintained copies of one policy drift: a
+grid that widens its allowlist has no way to tell a client that kept the old
+copy, and the creator meets a refusal no error message explains. So the
+whole gate — the extension allowlist, the Draco stance, the triangle,
+texture, and material caps, and the rig limits (the Bento influence maximum
+included, fixed as it is: published beats permanent) — is served in the
+region capability manifest (ADR 0032), the same surface that already tells a
+client what a region can do. The concrete field shape is defined with M1,
+because the numbers are; the contract that they are read, never encoded, is
+decided now. Import-time validation in the Homeworldz client reads the same
+block, so a creator with an over-weighted FBX rig hears about it while the
+source file is still in front of them, not after the upload.
+
 ## Upload paths
 
 - **Homeworldz client → GLB.** An HTTP upload capability on the region (the
