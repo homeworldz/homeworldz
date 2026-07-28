@@ -46,6 +46,11 @@ inline constexpr std::string_view allowed_extensions[] = {
     "KHR_texture_transform",
 };
 
+// Where a session client uploads: POST, body is the GLB, authorized by the
+// same region ticket the WebSocket authenticates with, as a bearer token —
+// one credential, both transports.
+inline constexpr std::string_view upload_path = "/session/uploads/mesh";
+
 // The acceptance policy as the JSON object served in the session hello
 // (the read-never-encode contract of ADR 0033).
 std::string acceptance_policy_json();

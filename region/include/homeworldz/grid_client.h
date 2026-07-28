@@ -379,6 +379,9 @@ public:
     // raw bytes; the caller still verifies them against the registry checksum,
     // as it does for a peer region.
     std::optional<std::string> fetch_vault_asset(std::string_view asset_id);
+    // Queue a derived-encoding conversion for an asset (ADR 0033); idempotent
+    // on the grid side, so re-requesting is safe.
+    bool request_asset_rendition(std::string_view asset_id, std::string_view kind);
     std::optional<InventoryItem> copy_library_item(std::string_view user_id,
                                                    std::string_view source_item_id,
                                                    std::string_view destination_folder_id,

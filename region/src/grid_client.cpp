@@ -1031,6 +1031,12 @@ bool Client::register_asset(std::string_view asset_id, std::string_view creator_
     return transport_->send("POST", "/api/v1/assets", body).status_code == 201;
 }
 
+bool Client::request_asset_rendition(std::string_view asset_id, std::string_view kind) {
+    const auto body = "{\"kind\":" + api::json_string(kind) + '}';
+    return transport_->send("POST", "/api/v1/assets/" + path_segment(asset_id) + "/renditions",
+                            body).status_code == 200;
+}
+
 std::optional<std::string> Client::fetch_vault_asset(std::string_view asset_id) {
     const auto response = transport_->send(
         "GET", "/api/v1/vault/assets/" + path_segment(asset_id), {});

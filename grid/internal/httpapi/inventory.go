@@ -452,6 +452,9 @@ func (a *API) inventoryItemsByUser(w http.ResponseWriter, r *http.Request, userI
 		(request.AssetType == 20 && request.InventoryType == 19) ||
 		(request.AssetType == 21 && request.InventoryType == 20) ||
 		(request.AssetType == 6 && request.InventoryType == 6) ||
+		// Mesh (ADR 0033): asset type 49, inventory type 22, the pair viewers
+		// use for mesh items.
+		(request.AssetType == 49 && request.InventoryType == 22) ||
 		((request.AssetType == 5 || request.AssetType == 13) && request.InventoryType == 18)
 	if !validUUID(request.ID) || !validUUID(request.CreatorUserID) ||
 		!validUUID(request.FolderID) ||

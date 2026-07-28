@@ -111,7 +111,8 @@ int main() {
 
     // The published policy carries the same numbers the validator enforces.
     const auto policy = homeworldz::mesh::acceptance_policy_json();
-    if (policy.find("\"maxTriangles\":262144") == std::string::npos ||
+    if (policy.find("\"uploadPath\":\"/session/uploads/mesh\"") == std::string::npos ||
+        policy.find("\"maxTriangles\":262144") == std::string::npos ||
         policy.find("\"maxRigInfluences\":4") == std::string::npos ||
         policy.find("\"draco\":false") == std::string::npos ||
         policy.find("\"rigged\":false") == std::string::npos ||

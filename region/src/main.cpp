@@ -42,6 +42,7 @@
 #include "homeworldz/physics_scene.h"
 #include "homeworldz/region_config.h"
 #include "homeworldz/region_storage.h"
+#include "homeworldz/mesh_acceptance.h"
 #include "homeworldz/region_transit.h"
 #include "homeworldz/scene.h"
 #include "homeworldz/sha256.h"
@@ -402,10 +403,15 @@ bool send_udp(socket_handle socket, std::string_view endpoint, std::span<const s
 std::optional<std::string> receive_http_request(socket_handle client) {
     constexpr std::size_t maximum_header_size = 64 * 1024;
     constexpr std::size_t maximum_body_size = 1024 * 1024;
+    // The mesh upload route alone accepts a body up to the published GLB cap
+    // (plus header slack); every other route keeps the tight general bound.
+    const std::size_t maximum_mesh_body =
+        homeworldz::mesh::max_glb_bytes + 64 * 1024;
     std::string request;
     std::array<char, 4096> buffer{};
     std::optional<std::size_t> expected_size;
-    while (request.size() <= maximum_header_size + maximum_body_size) {
+    std::size_t body_limit = maximum_body_size;
+    while (request.size() <= maximum_header_size + body_limit) {
         const auto received = recv(client, buffer.data(), static_cast<int>(buffer.size()), 0);
         if (received <= 0) return std::nullopt;
         request.append(buffer.data(), static_cast<std::size_t>(received));
@@ -415,9 +421,11 @@ std::optional<std::string> receive_http_request(socket_handle client) {
                 if (request.size() > maximum_header_size) return std::nullopt;
                 continue;
             }
-            const auto content_length = homeworldz::http::request_content_length(
-                std::string_view(request).substr(0, header_end + 4));
-            if (!content_length || *content_length > maximum_body_size) return std::nullopt;
+            const std::string_view head(request.data(), header_end + 4);
+            if (head.starts_with("POST " + std::string(homeworldz::mesh::upload_path)))
+                body_limit = maximum_mesh_body;
+            const auto content_length = homeworldz::http::request_content_length(head);
+            if (!content_length || *content_length > body_limit) return std::nullopt;
             expected_size = header_end + 4 + *content_length;
         }
         if (request.size() >= *expected_size) {
@@ -2623,6 +2631,108 @@ int main(int argc, char* argv[]) {
                             response = homeworldz::http::response_for_content(
                                 request, 200, "application/vnd.homeworldz.heightmap-f32le",
                                 encode_heightmap(*terrain_heightmap));
+                        }
+                    }
+                    if (response.path == homeworldz::mesh::upload_path) {
+                        // The session client's GLB upload (ADR 0033 M1),
+                        // authorized by the same region ticket the WebSocket
+                        // authenticates with — one credential, both
+                        // transports. The gate is the published policy;
+                        // refusals carry the validator's own reason, sized
+                        // for showing a creator verbatim.
+                        const auto authorization =
+                            homeworldz::http::request_header_value(request, "Authorization");
+                        constexpr std::string_view bearer = "Bearer ";
+                        std::optional<homeworldz::grid::TicketIdentity> uploader;
+                        if (response.method == "POST" && authorization.starts_with(bearer) &&
+                            viewer_grid && registration) {
+                            try {
+                                uploader = viewer_grid->validate_region_ticket(
+                                    provisioned_region_id, authorization.substr(bearer.size()));
+                            } catch (const std::exception&) {
+                            }
+                        }
+                        if (response.method != "POST") {
+                            response = homeworldz::http::response_for_content(
+                                request, 405, "application/json",
+                                homeworldz::api::to_json(homeworldz::api::Error{
+                                    "method_not_allowed", "mesh upload requires POST"}));
+                        } else if (!uploader) {
+                            response = homeworldz::http::response_for_content(
+                                request, 401, "application/json",
+                                homeworldz::api::to_json(homeworldz::api::Error{
+                                    "unauthorized",
+                                    "a valid region ticket bearer token is required"}));
+                        } else {
+                            const auto body = http_request_body(request);
+                            const auto content = std::span(
+                                reinterpret_cast<const std::byte*>(body.data()), body.size());
+                            const auto acceptance = homeworldz::mesh::validate_glb(content);
+                            if (!acceptance.accepted) {
+                                response = homeworldz::http::response_for_content(
+                                    request, 422, "application/json",
+                                    homeworldz::api::to_json(homeworldz::api::Error{
+                                        "mesh_refused", acceptance.reason}));
+                            } else {
+                                try {
+                                    auto name = homeworldz::http::request_header_value(
+                                        request, "X-Homeworldz-Name");
+                                    if (name.empty()) name = "Mesh";
+                                    if (name.size() > 255) name.resize(255);
+                                    const auto stored = storage->store_asset(
+                                        homeworldz::viewer::random_uuid(),
+                                        uploader->user_id, content);
+                                    if (!viewer_grid->register_asset(
+                                            stored.viewer_id, stored.creator_id, stored.sha256,
+                                            stored.size, region_public_endpoint, true))
+                                        throw std::runtime_error("mesh asset registration failed");
+                                    const auto folder = viewer_grid->find_system_inventory_folder(
+                                        uploader->user_id, 6);
+                                    if (!folder)
+                                        throw std::runtime_error("objects folder unavailable");
+                                    homeworldz::grid::InventoryItem item;
+                                    item.item_id = homeworldz::viewer::random_uuid();
+                                    item.creator_id = uploader->user_id;
+                                    item.owner_id = uploader->user_id;
+                                    item.folder_id = *folder;
+                                    item.asset_id = stored.viewer_id;
+                                    item.asset_type = 49;
+                                    item.inventory_type = 22;
+                                    item.name = name;
+                                    item.base_permissions = 0x7fffffff;
+                                    item.current_permissions = 0x7fffffff;
+                                    item.everyone_permissions = 0;
+                                    item.next_permissions = 581632;
+                                    // The grid's commit invariant pulls the GLB
+                                    // into the vault here; self-containment
+                                    // (enforced above) makes its closure one
+                                    // blob, so this is one fetch.
+                                    if (!viewer_grid->create_inventory_item(
+                                            uploader->user_id, item))
+                                        throw std::runtime_error(
+                                            "inventory commit was refused");
+                                    static_cast<void>(viewer_grid->request_asset_rendition(
+                                        stored.viewer_id, "sl-mesh"));
+                                    response = homeworldz::http::response_for_content(
+                                        request, 201, "application/json",
+                                        "{\"assetId\":" + homeworldz::api::json_string(stored.viewer_id) +
+                                        ",\"itemId\":" + homeworldz::api::json_string(item.item_id) +
+                                        ",\"triangles\":" + std::to_string(acceptance.triangles) +
+                                        ",\"materials\":" + std::to_string(acceptance.materials) +
+                                        ",\"renditions\":{\"sl-mesh\":\"queued\"}}");
+                                    std::cout << "{\"level\":\"info\",\"message\":\"mesh uploaded\",\"assetId\":"
+                                              << homeworldz::api::json_string(stored.viewer_id)
+                                              << ",\"creator\":" << homeworldz::api::json_string(uploader->userid)
+                                              << ",\"triangles\":" << acceptance.triangles << "}" << std::endl;
+                                } catch (const std::exception& error) {
+                                    std::cout << "{\"level\":\"error\",\"message\":\"mesh upload failed\",\"error\":"
+                                              << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+                                    response = homeworldz::http::response_for_content(
+                                        request, 502, "application/json",
+                                        homeworldz::api::to_json(homeworldz::api::Error{
+                                            "mesh_upload_failed", error.what()}));
+                                }
+                            }
                         }
                     }
                     constexpr std::string_view arrival_prefix = "/api/v1/transits/";

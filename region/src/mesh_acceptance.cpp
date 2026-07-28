@@ -34,7 +34,8 @@ std::string acceptance_policy_json() {
         extensions += allowed;
         extensions += '"';
     }
-    return "{\"format\":\"glb\",\"maxFileBytes\":" + std::to_string(max_glb_bytes) +
+    return "{\"format\":\"glb\",\"uploadPath\":\"" + std::string(upload_path) +
+        "\",\"maxFileBytes\":" + std::to_string(max_glb_bytes) +
         ",\"maxTriangles\":" + std::to_string(max_triangles) +
         ",\"maxMaterials\":" + std::to_string(max_materials) +
         ",\"maxTextures\":" + std::to_string(max_textures) +
