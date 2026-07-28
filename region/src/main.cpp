@@ -2695,6 +2695,14 @@ int main(int argc, char* argv[]) {
                                             stored.viewer_id, stored.creator_id, stored.sha256,
                                             stored.size, region_public_endpoint, true))
                                         throw std::runtime_error("mesh asset registration failed");
+                                    // Write-through before the commit. Load-
+                                    // bearing here, not just the ADR 0026
+                                    // optimization: this thread is the one
+                                    // that would serve the grid's fetch-back,
+                                    // so the commit must find the blob
+                                    // already vault-held.
+                                    if (!viewer_grid->store_vault_asset(stored.viewer_id, content))
+                                        throw std::runtime_error("vault write-through failed");
                                     const auto folder = viewer_grid->find_system_inventory_folder(
                                         uploader->user_id, 6);
                                     if (!folder)

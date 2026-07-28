@@ -6,6 +6,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <span>
 #include <string_view>
 #include <unordered_map>
 #include <utility>
@@ -382,6 +383,13 @@ public:
     // Queue a derived-encoding conversion for an asset (ADR 0033); idempotent
     // on the grid side, so re-requesting is safe.
     bool request_asset_rendition(std::string_view asset_id, std::string_view kind);
+    // Write asset bytes through to the grid vault (ADR 0026). The vault
+    // verifies them against the registered checksum, so this cannot vouch for
+    // wrong bytes. On the upload path it is load-bearing, not just an
+    // optimization: the inventory commit's durability check must find the
+    // blob already held, because this region's single HTTP thread is busy
+    // with the upload and cannot answer a fetch-back until it returns.
+    bool store_vault_asset(std::string_view asset_id, std::span<const std::byte> content);
     std::optional<InventoryItem> copy_library_item(std::string_view user_id,
                                                    std::string_view source_item_id,
                                                    std::string_view destination_folder_id,
