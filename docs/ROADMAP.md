@@ -432,12 +432,14 @@ operates on this content, which is why it now follows rather than precedes it.
 
 ### Economy and marketplace boundary
 
+What a creator can sell and how the value moves. Whether a given grid runs an
+economy at all is deployment configuration rather than creator tooling, and
+lives with the operator's other settings in Phase 7.
+
 - [ ] Define whether credits remain display-only or become a transferable grid
   balance before implementing paid behavior.
 - [ ] If enabled, implement auditable balances, idempotent transactions, object
-  sales, parcel payments, gifts, refunds, and operator controls.
-- [ ] Keep texture uploads free and preserve a useful no-economy deployment
-  mode.
+  sales, parcel payments, gifts, and refunds.
 - [ ] Treat external payment processing and marketplace integration as separate,
   explicitly approved security projects.
 
@@ -612,6 +614,10 @@ role machinery that shared ownership rests on.
   actionable alerts for grid and region owners.
 - [ ] Add command-line and authenticated web administration for users, regions,
   estates, assets, inventory repair, scripts, crossings, and moderation.
+- [ ] Make the economy an operator setting: enable or disable it per grid, keep
+  texture uploads free, preserve a useful no-economy deployment mode, and
+  provide the controls a running economy needs — limits, freezes, corrections,
+  and their audit trail. The mechanics themselves are Phase 4.
 - [ ] Record tamper-evident audit events for privileged and security-sensitive
   operations.
 - [ ] Define capacity indicators and load-shedding behavior before a region
