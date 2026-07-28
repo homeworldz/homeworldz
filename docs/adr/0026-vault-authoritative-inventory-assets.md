@@ -29,6 +29,37 @@ inventory churn for rejected attempts — is a separate, unresolved question; th
 invariant only cares whether an inventory reference exists, not how the bytes
 arrived.)
 
+## Completeness is transitive, at both ends (2026-07-28)
+
+"Stored centrally" means the full chain — the inventory item row, the asset
+record, and the blob — and *asset* means the item's whole reference closure,
+not just the UUID on the row. Inventory-to-asset is 1:N. An object asset names
+the textures on its faces and the assets in its task inventory, a nested
+object is itself an asset with a closure of its own, wearables name textures,
+gestures name animations and sounds, and notecards can embed items. An
+inventory item is only durable when every asset in that closure is vault-held,
+so the commit invariant gathers: ingest the direct asset, parse it by type,
+recurse over its references. Parsing happens grid-side, on the vault's own
+copy of the bytes — ADR 0028 forbids trusting a region-supplied reference
+list, and verifying one means parsing anyway. Reference UUIDs that name no
+registered asset are treated as external (viewer built-in textures, plain
+colors, cross-grid content) and recorded rather than fatal: failing the commit
+would block every object wearing a stock texture, and the grid cannot fetch
+what was never registered with it. The adoption backfill must walk the same
+closure, since object assets vaulted before this section existed cover only
+their own bytes.
+
+The mirror requirement holds region-side, for content rezzed into the world: a
+rezzed object is only region-durable when the region *locally* holds its
+transitive closure — the scene object, its referenced assets, its task
+inventory items' assets including unrezzed nested objects, and all their
+blobs — so that a backup of the region's own storage reconstructs it without
+reaching any other server. A region-local blob store separate from the task
+inventory record is the expected shape; what matters is locality, not layout.
+Lazy materialization on first read does not meet this: rez, arrival from
+another region, and adding an item to an object's contents must each
+materialize the closure.
+
 Region blob stores are reframed as two tiers. Blobs the vault holds are a
 cache: evictable at will and re-fetchable on demand, which unblocks the
 region-side unreferenced-blob collection deferred by ADR 0014. Blobs

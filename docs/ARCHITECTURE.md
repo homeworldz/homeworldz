@@ -366,7 +366,10 @@ durability on top.
 The asset model supports:
 
 - Region-local asset storage and viewer-facing serving.
-- Write-through vault ingest for every inventory-creating operation.
+- Write-through vault ingest for every inventory-creating operation, covering
+  the item's whole reference closure (1:N — face textures, task inventory,
+  nested objects), not just the asset UUID on the row; the mirror closure must
+  be region-local for rezzed content so region backups are self-contained.
 - Authorized asset fetch between regions as an optimization, with the vault as
   the always-available source for inventory-referenced assets.
 - Authorized asset copy or replication when content moves between regions.
