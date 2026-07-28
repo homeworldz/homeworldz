@@ -334,7 +334,9 @@ inventories intact when independently operated regions disappear without
 warning. Region copies of vault-held blobs are caches; blobs referenced only
 by rezzed scene content are region-owned and share the fate of the region's
 scene, except that a no-copy item rezzed out of inventory stays vault-durable
-because the rezzed instance is the owner's only copy. The vault never
+because the rezzed instance is the owner's only copy; the grid also keeps a
+hidden retained record of the departed item — never shown in inventory views
+or included in exports — so region loss cannot permanently destroy it. The vault never
 originates assets, never hosts agents, is never in the viewer data path, and
 may internally tier rarely accessed blobs onto slower S3-compatible storage.
 

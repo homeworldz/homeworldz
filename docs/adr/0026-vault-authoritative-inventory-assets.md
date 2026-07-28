@@ -51,6 +51,24 @@ user actions cross the inventory/scene boundary:
   This is a **present durability invariant, not a deferred garbage-collection
   nicety**: it must hold the day the vault ships, because a no-copy item rezzed
   today must be take-back recoverable even before any collection exists.
+
+  Reaffirmed and extended 2026-07-28. The cost argument is sharper than the
+  original text made it: these cases are a small fraction of any inventory, and
+  the blob behind a no-copy item is usually already vault-held through someone
+  else's copyable reference (typically the creator's), so retention normally
+  adds only metadata — an asset link and an item record — not bytes. And bytes
+  alone are not enough: once the rez deletes the inventory row, the item's
+  metadata (name, permissions, creator, asset link) survives only in the
+  region's task inventory, so a region bug, total data loss, or a malicious
+  region would leave the vault holding bytes nothing can reconstitute. The
+  grid therefore also keeps a **hidden retained record** of a no-copy item
+  that leaves inventory into the scene. A retained record is not inventory:
+  it is excluded from inventory views, viewer fetches, and inventory exports
+  by default — the item genuinely left the inventory, and an export must not
+  include it. It exists "just in case": recovery from it is a deliberate
+  (operator or explicit-user) action, and an ordinary take-back through the
+  live region path clears it. Retained records fold into the conservative
+  garbage-collection posture below: kept until proven dead.
 - **Copy content whose inventory master is deleted while a rezzed copy
   remains** transitions cleanly from vault-cache to region-owned. The user
   discarded the master by choice, and the remaining copy is ordinary scene
