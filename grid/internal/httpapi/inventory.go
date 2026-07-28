@@ -153,6 +153,7 @@ func (a *API) inventoryItemAssetByUser(w http.ResponseWriter, r *http.Request, u
 	}
 	item, err := a.inventory.UpdateItemAsset(r.Context(), userID, itemID, request.AssetID)
 	switch {
+	case writeDurabilityError(w, err):
 	case errors.Is(err, inventory.ErrInvalidItem):
 		writeJSON(w, http.StatusForbidden, Error{Code: "inventory_item_not_editable", Message: "inventory item cannot accept an asset update"})
 	case errors.Is(err, inventory.ErrItemNotFound):
@@ -224,6 +225,7 @@ func (a *API) inventoryItemByUser(w http.ResponseWriter, r *http.Request, userID
 	}
 	item, err = a.inventory.UpdateItem(r.Context(), item)
 	switch {
+	case writeDurabilityError(w, err):
 	case errors.Is(err, inventory.ErrInvalidItem):
 		writeJSON(w, http.StatusBadRequest, Error{Code: "invalid_inventory_item_move", Message: "inventory item move is invalid"})
 	case errors.Is(err, inventory.ErrItemFolderNotFound):
@@ -338,6 +340,7 @@ func (a *API) copyLibraryInventoryItem(w http.ResponseWriter, r *http.Request, u
 		NextPermissions: source.NextPermissions, SaleType: source.SaleType, SalePrice: source.SalePrice,
 	})
 	switch {
+	case writeDurabilityError(w, err):
 	case errors.Is(err, inventory.ErrItemFolderNotFound):
 		writeJSON(w, http.StatusNotFound, Error{Code: "inventory_folder_not_found", Message: "inventory destination folder was not found"})
 	case errors.Is(err, inventory.ErrInvalidItem):
@@ -407,6 +410,7 @@ func (a *API) copyInventoryItem(w http.ResponseWriter, r *http.Request, userID s
 		NextPermissions: source.NextPermissions, SaleType: source.SaleType, SalePrice: source.SalePrice,
 	})
 	switch {
+	case writeDurabilityError(w, err):
 	case errors.Is(err, inventory.ErrItemFolderNotFound):
 		writeJSON(w, http.StatusNotFound, Error{Code: "inventory_folder_not_found", Message: "inventory destination folder was not found"})
 	case errors.Is(err, inventory.ErrInvalidItem):
@@ -454,6 +458,7 @@ func (a *API) inventoryItemsByUser(w http.ResponseWriter, r *http.Request, userI
 		EveryonePermissions: request.EveryonePermissions, NextPermissions: request.NextPermissions,
 	})
 	switch {
+	case writeDurabilityError(w, err):
 	case errors.Is(err, inventory.ErrInvalidItem):
 		writeJSON(w, http.StatusBadRequest, Error{Code: "invalid_inventory_item", Message: "inventory item is invalid"})
 	case errors.Is(err, inventory.ErrItemFolderNotFound):

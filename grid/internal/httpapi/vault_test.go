@@ -13,16 +13,63 @@ import (
 	"testing"
 	"time"
 
+	"github.com/homeworldz/server/grid/internal/assetmeta"
 	"github.com/homeworldz/server/grid/internal/vault"
 )
 
+const (
+	testAssetID   = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+	testBlobID    = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+	absentAssetID = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+)
+
+// memoryRegistry is the blob layer the vault verifies against: the checksum and
+// length come from here, never from the caller.
+type memoryRegistry struct {
+	blobs     map[string]assetmeta.Blob
+	locations []assetmeta.Location
+}
+
+func (r *memoryRegistry) Register(context.Context, assetmeta.Registration) (assetmeta.Asset, error) {
+	return assetmeta.Asset{}, assetmeta.ErrConflict
+}
+
+func (r *memoryRegistry) Get(ctx context.Context, assetID string) (assetmeta.Asset, error) {
+	blob, err := r.Blob(ctx, assetID)
+	if err != nil {
+		return assetmeta.Asset{}, err
+	}
+	return assetmeta.Asset{ID: assetID, SHA256: blob.Checksum, Size: blob.ByteLength,
+		Locations: r.locations}, nil
+}
+
+func (r *memoryRegistry) Blob(_ context.Context, assetID string) (assetmeta.Blob, error) {
+	blob, found := r.blobs[assetID]
+	if !found {
+		return assetmeta.Blob{}, assetmeta.ErrNotFound
+	}
+	return blob, nil
+}
+
 // memoryVault is an in-memory stand-in that keeps the real store's verification
 // and idempotency behavior, so handler tests exercise the same outcomes.
-type memoryVault struct{ blobs map[string][]byte }
+type memoryVault struct {
+	registry *memoryRegistry
+	blobs    map[string][]byte
+}
 
-func (v *memoryVault) Ingest(_ context.Context, digest string, size int64,
-	content io.Reader) (vault.Blob, error) {
-	if !vault.ValidDigest(digest) || size <= 0 || size > vault.MaxBlobSize {
+func (v *memoryVault) registered(blobID string) (assetmeta.Blob, bool) {
+	for _, blob := range v.registry.blobs {
+		if blob.BlobID == blobID {
+			return blob, true
+		}
+	}
+	return assetmeta.Blob{}, false
+}
+
+func (v *memoryVault) Ingest(_ context.Context, blobID string, content io.Reader) (vault.Blob, error) {
+	registered, found := v.registered(blobID)
+	if !found {
 		return vault.Blob{}, vault.ErrInvalid
 	}
 	body, err := io.ReadAll(content)
@@ -30,27 +77,43 @@ func (v *memoryVault) Ingest(_ context.Context, digest string, size int64,
 		return vault.Blob{}, err
 	}
 	sum := sha256.Sum256(body)
-	if int64(len(body)) != size || hex.EncodeToString(sum[:]) != digest {
+	if int64(len(body)) != registered.ByteLength || hex.EncodeToString(sum[:]) != registered.Checksum {
 		return vault.Blob{}, vault.ErrMismatch
 	}
-	v.blobs[digest] = body
-	return vault.Blob{SHA256: digest, Size: size, IngestedAt: time.Unix(1, 0).UTC()}, nil
+	v.blobs[blobID] = body
+	return vault.Blob{BlobID: blobID, ByteLength: registered.ByteLength,
+		Checksum: registered.Checksum, IngestedAt: time.Unix(1, 0).UTC()}, nil
 }
 
-func (v *memoryVault) Stat(_ context.Context, digest string) (vault.Blob, error) {
-	body, found := v.blobs[digest]
+func (v *memoryVault) Held(_ context.Context, blobID string) (vault.Blob, error) {
+	body, found := v.blobs[blobID]
 	if !found {
 		return vault.Blob{}, vault.ErrNotFound
 	}
-	return vault.Blob{SHA256: digest, Size: int64(len(body)), IngestedAt: time.Unix(1, 0).UTC()}, nil
+	registered, _ := v.registered(blobID)
+	return vault.Blob{BlobID: blobID, ByteLength: int64(len(body)),
+		Checksum: registered.Checksum, IngestedAt: time.Unix(1, 0).UTC()}, nil
 }
 
-func (v *memoryVault) Open(ctx context.Context, digest string) (io.ReadCloser, vault.Blob, error) {
-	blob, err := v.Stat(ctx, digest)
+func (v *memoryVault) Open(ctx context.Context, blobID string) (io.ReadCloser, vault.Blob, error) {
+	blob, err := v.Held(ctx, blobID)
 	if err != nil {
 		return nil, vault.Blob{}, err
 	}
-	return io.NopCloser(bytes.NewReader(v.blobs[digest])), blob, nil
+	return io.NopCloser(bytes.NewReader(v.blobs[blobID])), blob, nil
+}
+
+// newVaultHandler wires a registry holding one asset over content, and an empty
+// vault, which is the state every asset starts in.
+func newVaultHandler(content []byte) (http.Handler, *memoryVault) {
+	sum := sha256.Sum256(content)
+	registry := &memoryRegistry{blobs: map[string]assetmeta.Blob{
+		testAssetID: {BlobID: testBlobID, ByteLength: int64(len(content)),
+			Checksum: hex.EncodeToString(sum[:]), ChecksumAlgorithm: "sha256"},
+	}}
+	store := &memoryVault{registry: registry, blobs: make(map[string][]byte)}
+	return New(checker{}, "test", Options{ServiceToken: "secret",
+		Assets: registry, Vault: store}), store
 }
 
 // requestVault issues a service-authenticated request with a raw (non-JSON) body,
@@ -72,20 +135,21 @@ func requestVault(t *testing.T, handler http.Handler, method, path string,
 	return w
 }
 
-func TestVaultBlobLifecycle(t *testing.T) {
-	store := &memoryVault{blobs: make(map[string][]byte)}
-	handler := New(checker{}, "test", Options{ServiceToken: "secret", Vault: store})
+func TestVaultAssetLifecycle(t *testing.T) {
 	content := []byte("durable inventory-referenced bytes")
-	sum := sha256.Sum256(content)
-	digest := hex.EncodeToString(sum[:])
-	path := "/api/v1/vault/blobs/" + digest
+	handler, _ := newVaultHandler(content)
+	path := "/api/v1/vault/assets/" + testAssetID
+
+	// Registered but not yet ingested: the vault holds nothing, which is the
+	// answer the inventory-commit invariant acts on.
+	requestVault(t, handler, http.MethodHead, path, nil, http.StatusNotFound)
 
 	recorder := requestVault(t, handler, http.MethodPut, path, content, http.StatusOK)
 	var ingested vault.Blob
 	if err := json.NewDecoder(recorder.Body).Decode(&ingested); err != nil {
 		t.Fatalf("decode ingest response: %v", err)
 	}
-	if ingested.SHA256 != digest || ingested.Size != int64(len(content)) {
+	if ingested.BlobID != testBlobID || ingested.ByteLength != int64(len(content)) {
 		t.Fatalf("ingested blob = %#v", ingested)
 	}
 
@@ -108,11 +172,9 @@ func TestVaultBlobLifecycle(t *testing.T) {
 	}
 }
 
-func TestVaultBlobRejectsMismatchedBytes(t *testing.T) {
-	store := &memoryVault{blobs: make(map[string][]byte)}
-	handler := New(checker{}, "test", Options{ServiceToken: "secret", Vault: store})
-	claimed := sha256.Sum256([]byte("what the caller says it is sending"))
-	path := "/api/v1/vault/blobs/" + hex.EncodeToString(claimed[:])
+func TestVaultAssetRejectsMismatchedBytes(t *testing.T) {
+	handler, _ := newVaultHandler([]byte("what the registry says the asset is"))
+	path := "/api/v1/vault/assets/" + testAssetID
 
 	recorder := requestVault(t, handler, http.MethodPut, path,
 		[]byte("what the caller actually sent"), http.StatusBadRequest)
@@ -127,13 +189,11 @@ func TestVaultBlobRejectsMismatchedBytes(t *testing.T) {
 	requestVault(t, handler, http.MethodHead, path, nil, http.StatusNotFound)
 }
 
-func TestVaultBlobMissingAndInvalid(t *testing.T) {
-	store := &memoryVault{blobs: make(map[string][]byte)}
-	handler := New(checker{}, "test", Options{ServiceToken: "secret", Vault: store})
-	unknown := sha256.Sum256([]byte("never ingested"))
-	unknownPath := "/api/v1/vault/blobs/" + hex.EncodeToString(unknown[:])
+func TestVaultAssetMissingAndInvalid(t *testing.T) {
+	handler, _ := newVaultHandler([]byte("registered content"))
 
-	recorder := requestVault(t, handler, http.MethodGet, unknownPath, nil, http.StatusNotFound)
+	recorder := requestVault(t, handler, http.MethodGet,
+		"/api/v1/vault/assets/"+testAssetID, nil, http.StatusNotFound)
 	var failure Error
 	if err := json.NewDecoder(recorder.Body).Decode(&failure); err != nil {
 		t.Fatalf("decode missing response: %v", err)
@@ -142,29 +202,31 @@ func TestVaultBlobMissingAndInvalid(t *testing.T) {
 		t.Fatalf("missing error = %#v", failure)
 	}
 
-	// A path that is not a digest is not a vault route at all.
-	requestVault(t, handler, http.MethodGet, "/api/v1/vault/blobs/not-a-digest", nil, http.StatusNotFound)
-
-	// An empty body has no length to verify against.
-	recorder = requestVault(t, handler, http.MethodPut, unknownPath, nil, http.StatusBadRequest)
+	// An unregistered asset has no blob to vouch for, which is a different
+	// answer from "the vault does not hold it yet".
+	recorder = requestVault(t, handler, http.MethodGet,
+		"/api/v1/vault/assets/"+absentAssetID, nil, http.StatusNotFound)
 	if err := json.NewDecoder(recorder.Body).Decode(&failure); err != nil {
-		t.Fatalf("decode empty-body response: %v", err)
+		t.Fatalf("decode unregistered response: %v", err)
 	}
-	if failure.Code != "invalid_vault_blob" {
-		t.Fatalf("empty body error = %#v", failure)
+	if failure.Code != "asset_not_found" {
+		t.Fatalf("unregistered error = %#v", failure)
 	}
 
-	recorder = requestVault(t, handler, http.MethodDelete, unknownPath, nil, http.StatusMethodNotAllowed)
+	// A path that is not an asset UUID is not a vault route at all.
+	requestVault(t, handler, http.MethodGet, "/api/v1/vault/assets/not-a-uuid", nil, http.StatusNotFound)
+
+	recorder = requestVault(t, handler, http.MethodDelete,
+		"/api/v1/vault/assets/"+testAssetID, nil, http.StatusMethodNotAllowed)
 	if got := recorder.Header().Get("Allow"); got != "GET, HEAD, PUT" {
 		t.Fatalf("Allow = %q", got)
 	}
 }
 
-func TestVaultBlobUnavailableWithoutStore(t *testing.T) {
+func TestVaultAssetUnavailableWithoutStore(t *testing.T) {
 	handler := New(checker{}, "test", Options{ServiceToken: "secret"})
-	unknown := sha256.Sum256([]byte("no vault configured"))
 	recorder := requestVault(t, handler, http.MethodGet,
-		"/api/v1/vault/blobs/"+hex.EncodeToString(unknown[:]), nil, http.StatusServiceUnavailable)
+		"/api/v1/vault/assets/"+testAssetID, nil, http.StatusServiceUnavailable)
 	var failure Error
 	if err := json.NewDecoder(recorder.Body).Decode(&failure); err != nil {
 		t.Fatalf("decode unavailable response: %v", err)
@@ -174,12 +236,9 @@ func TestVaultBlobUnavailableWithoutStore(t *testing.T) {
 	}
 }
 
-func TestVaultBlobRequiresServiceToken(t *testing.T) {
-	store := &memoryVault{blobs: make(map[string][]byte)}
-	handler := New(checker{}, "test", Options{ServiceToken: "secret", Vault: store})
-	unknown := sha256.Sum256([]byte("unauthenticated"))
-	r := httptest.NewRequest(http.MethodGet,
-		"/api/v1/vault/blobs/"+hex.EncodeToString(unknown[:]), nil)
+func TestVaultAssetRequiresServiceToken(t *testing.T) {
+	handler, _ := newVaultHandler([]byte("unauthenticated"))
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/vault/assets/"+testAssetID, nil)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, r)
 	// The vault stays behind the internal boundary, which is what keeps it out of

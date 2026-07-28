@@ -338,6 +338,17 @@ because the rezzed instance is the owner's only copy. The vault never
 originates assets, never hosts agents, is never in the viewer data path, and
 may internally tier rarely accessed blobs onto slower S3-compatible storage.
 
+The invariant is enforced by the grid **fetching** the bytes when an inventory
+reference is committed — from a location the registry already records, verified
+against the registered checksum and length — rather than by trusting a region to
+have pushed them. Regions may write through to
+`PUT /api/v1/vault/assets/{assetId}` and it saves the grid a round trip, but no
+durability property depends on a region doing so. A region that cannot find an
+asset locally or at a peer reads it from the vault, so a region is never the
+last copy of anything a user owns. `cmd/vaultbackfill` is the adoption pass:
+it walks every inventory-referenced asset, makes each durable, and names the
+ones no location will serve, which are lost and must be recreated.
+
 Because Homeworldz is built for mostly-untrusted users to run their own
 regions, the **grid is the trust anchor and regions are untrusted**
 ([ADR 0028](adr/0028-untrusted-region-trust-model.md)). The grid owns

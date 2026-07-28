@@ -1209,6 +1209,12 @@ func writeAISItemError(w http.ResponseWriter, err error) bool {
 		return false
 	}
 	switch {
+	case errors.Is(err, inventory.ErrAssetNotDurable):
+		// LLSD, not JSON: this arm answers the viewer's AIS capability, so it
+		// keeps that surface's error shape even though the cause is the same
+		// ADR 0026 refusal the internal tier reports as asset_not_durable.
+		writeLLSDError(w, http.StatusConflict,
+			"AIS inventory item asset could not be stored durably")
 	case errors.Is(err, inventory.ErrInvalidItem):
 		writeLLSDError(w, http.StatusBadRequest, "invalid AIS inventory item update")
 	case errors.Is(err, inventory.ErrItemNotFound):

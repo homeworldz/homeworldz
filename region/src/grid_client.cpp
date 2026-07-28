@@ -1031,6 +1031,13 @@ bool Client::register_asset(std::string_view asset_id, std::string_view creator_
     return transport_->send("POST", "/api/v1/assets", body).status_code == 201;
 }
 
+std::optional<std::string> Client::fetch_vault_asset(std::string_view asset_id) {
+    const auto response = transport_->send(
+        "GET", "/api/v1/vault/assets/" + path_segment(asset_id), {});
+    if (response.status_code != 200 || response.body.empty()) return std::nullopt;
+    return response.body;
+}
+
 std::optional<FederatedAsset> Client::find_asset(std::string_view asset_id) {
     const auto response = transport_->send("GET", "/api/v1/assets/" + std::string(asset_id), {});
     if (response.status_code != 200) return std::nullopt;

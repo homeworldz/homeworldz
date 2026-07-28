@@ -1,8 +1,12 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/homeworldz/server/grid/internal/assetmeta"
@@ -562,5 +566,68 @@ func TestCopyPersonalInventoryItemEndpoint(t *testing.T) {
 		http.StatusForbidden)
 	if denied.Code != "inventory_item_not_copyable" {
 		t.Fatalf("no-copy error = %#v", denied)
+	}
+}
+
+// TestInventoryCommitRequiresDurableAsset is the ADR 0026 invariant end to end:
+// an item may not be committed while the vault cannot vouch for the bytes it
+// references, and it commits the moment the vault can.
+func TestInventoryCommitRequiresDurableAsset(t *testing.T) {
+	const userID = "20000000-0000-4000-8000-000000000002"
+	var source inventory.Item
+	for _, item := range inventory.LibraryItems() {
+		if item.Name == "Default Shape" {
+			source = item
+			break
+		}
+	}
+	if source.ID == "" {
+		t.Fatal("Default Shape is missing from the Library")
+	}
+	content := []byte("the wearable bytes behind the library shape")
+	sum := sha256.Sum256(content)
+	registry := &memoryRegistry{blobs: map[string]assetmeta.Blob{
+		source.AssetID: {BlobID: testBlobID, ByteLength: int64(len(content)),
+			Checksum: hex.EncodeToString(sum[:]), ChecksumAlgorithm: "sha256"},
+	}}
+	// A region that no longer holds the bytes — the state that lost the first
+	// grid's outfits. The registry still names it, and that is not enough.
+	gone := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer gone.Close()
+	registry.locations = []assetmeta.Location{{Endpoint: gone.URL, Origin: true}}
+
+	store := &memoryInventoryStore{folders: make(map[string][]inventory.Folder)}
+	_, _ = store.EnsureSystemFolders(context.Background(), userID)
+	vaultStore := &memoryVault{registry: registry, blobs: make(map[string][]byte)}
+	handler := New(checker{}, "test", Options{ServiceToken: "secret",
+		Inventory: store, Assets: registry, Vault: vaultStore})
+
+	body := `{"sourceItemId":"` + source.ID +
+		`","destinationFolderId":"00000000-0000-0000-0000-000000000000","name":""}`
+	refused := requestRegion[Error](t, handler, http.MethodPost,
+		"/api/v1/inventory/"+userID+"/copy-library-item", body, http.StatusConflict)
+	if refused.Code != "asset_not_durable" {
+		t.Fatalf("refusal = %#v", refused)
+	}
+	if len(store.items[userID]) != 0 {
+		t.Fatalf("items after refusal = %#v", store.items[userID])
+	}
+
+	// The same request succeeds once a location serves the bytes: the commit
+	// path repairs durability rather than merely reporting on it.
+	alive := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write(content)
+	}))
+	defer alive.Close()
+	registry.locations = []assetmeta.Location{{Endpoint: alive.URL, Origin: true}}
+	created := requestRegion[inventory.Item](t, handler, http.MethodPost,
+		"/api/v1/inventory/"+userID+"/copy-library-item", body, http.StatusCreated)
+	if created.AssetID != source.AssetID {
+		t.Fatalf("created item = %#v", created)
+	}
+	if !bytes.Equal(vaultStore.blobs[testBlobID], content) {
+		t.Fatalf("vault holds %q", vaultStore.blobs[testBlobID])
 	}
 }

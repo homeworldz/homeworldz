@@ -22,6 +22,8 @@ public:
             return {200, R"({"userId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","userid":"jim.tarber","displayName":"Jim Tarber","sessionId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","expiresAt":"2026-07-27T00:00:00Z"})"};
         if (method == "POST" && path.starts_with("/api/v1/region-runtime/"))
             return {200, R"({"id":"22222222-2222-4222-8222-222222222222","name":"Sandbox Region","gridX":1001,"gridY":1000,"sizeX":256,"sizeY":256,"maturity":0,"publicEndpoint":"https://sandbox.example/region","viewerPort":43002,"gridName":"Homeworldz Test","gridPublicUrl":"https://grid.example","regionProtocol":1})"};
+        if (method == "GET" && path.starts_with("/api/v1/vault/assets/"))
+            return {200, "vault bytes"};
         if (method == "GET" && path == "/api/v1/regions/topology")
             return {200, R"({"regions":[{"id":"11111111-1111-4111-8111-111111111111","name":"Welcome","gridX":1000,"gridY":1000,"sizeX":256,"sizeY":256,"maturity":0,"publicEndpoint":"http://grid.example:42011","viewerPort":42012,"online":true},{"id":"44444444-4444-4444-8444-444444444444","name":"Gamma","gridX":1004,"gridY":1000,"sizeX":512,"sizeY":512,"maturity":0,"online":false}]})"};
         if (method == "GET" && path.starts_with("/api/v1/regions/lookup?")) {
@@ -194,6 +196,11 @@ int main() {
         transport->requests.back().path !=
             "/api/v1/regions/lookup?id=44444444-4444-4444-8444-444444444444") return 1;
     if (client.find_region_at(1003, 1000) || client.find_region_at(-1, 0)) return 1;
+    // The vault answers for inventory-referenced bytes when no region will.
+    const auto vaulted = client.fetch_vault_asset("66666666-6666-4666-8666-666666666666");
+    if (!vaulted || *vaulted != "vault bytes" ||
+        transport->requests.back().path !=
+            "/api/v1/vault/assets/66666666-6666-4666-8666-666666666666") return 1;
     // The world map's source: every placed region, near or far, up or down.
     const auto topology = client.find_grid_topology();
     if (!topology || topology->size() != 2 || topology->front() != *welcome ||

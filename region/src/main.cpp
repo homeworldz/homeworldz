@@ -1372,6 +1372,30 @@ int main(int argc, char* argv[]) {
                       << homeworldz::api::json_string(endpoint) << "}" << std::endl;
             return {content.begin(), content.end()};
         }
+        // The vault is the location of last resort and, for anything inventory
+        // references, the one that is always there (ADR 0026): peer regions are
+        // an optimization, and a region being unreachable — or gone for good —
+        // must not be the reason a user's own content cannot be read. The bytes
+        // are verified exactly as a peer's are; the vault is trusted storage,
+        // not a trusted source.
+        if (const auto vaulted = viewer_grid->fetch_vault_asset(metadata->asset_id)) {
+            const auto content = std::span(
+                reinterpret_cast<const std::byte*>(vaulted->data()), vaulted->size());
+            if (vaulted->size() == metadata->size &&
+                homeworldz::crypto::sha256_hex(content) == metadata->sha256) {
+                const auto stored = storage->store_asset(
+                    metadata->asset_id, metadata->creator_id, content);
+                if (!viewer_grid->register_asset(
+                        stored.viewer_id, stored.creator_id, stored.sha256, stored.size,
+                        region_public_endpoint, false))
+                    throw std::runtime_error("register vault-restored asset failed");
+                std::cout << "{\"level\":\"info\",\"message\":\"region asset restored from vault\",\"assetId\":"
+                          << homeworldz::api::json_string(stored.viewer_id) << "}" << std::endl;
+                return {content.begin(), content.end()};
+            }
+            std::cerr << "{\"level\":\"error\",\"message\":\"vault asset failed verification\",\"assetId\":"
+                      << homeworldz::api::json_string(metadata->asset_id) << "}" << std::endl;
+        }
         throw std::runtime_error("no verified asset replica was available");
     };
 

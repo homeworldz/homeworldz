@@ -82,7 +82,37 @@ inventory-referenced" stays sticky until an asset is proven dead.
 
 Adoption requires a one-time backfill that walks inventory-referenced asset
 UUIDs, ingests each from any live registered location, and reports assets that
-are already unfetchable. A decommission drain that evacuates scene-only assets
+are already unfetchable.
+
+## Implementation note: the grid pulls, 2026-07-28
+
+Written as evidence, not intent. Before this shipped, four of a test avatar's
+five worn wearables had no surviving bytes on any of the four regions the
+registry named as their origins, and the vault held nothing at all. The viewer's
+own cache had been the last copy, so clearing it is what exposed the loss. That
+is the failure this ADR describes, observed.
+
+The invariant is therefore enforced by the grid **fetching** the bytes at commit
+time — from a location the registry already records — rather than waiting for a
+region to write them through. Same act as the backfill, one mechanism: a grid
+that ran without a vault repairs itself as inventory is touched. It also makes
+the durability property literally independent of region cooperation, which the
+paragraph above only asked for: no region needs upgrading, shutting down
+cleanly, or choosing to participate. A region write-through remains worthwhile
+as an optimization, since the region has the bytes in hand, and is not what
+durability rests on.
+
+Enforcement wraps the inventory store rather than each handler. Eight call sites
+commit inventory references today across ordinary copies, AIS, and the outfit
+paths, and an invariant that each new one must remember is not an invariant.
+Links are exempt: a link's asset_id names the item it points at, not any bytes.
+
+The vault's HTTP surface is addressed by asset UUID, not by digest, because that
+is what a region knows — blob_id is grid-internal by [ADR 0027](0027-asset-blob-instance-separation.md)
+— and because a bare digest cannot say which registered blob an ingest is meant
+to vouch for. Neither the checksum nor the length is taken from the request:
+both come from the blob registration, so bytes that disagree with what the grid
+already believes the asset to be are refused rather than stored. A decommission drain that evacuates scene-only assets
 from a region being retired remains a useful operator courtesy, but no
 durability property depends on it.
 

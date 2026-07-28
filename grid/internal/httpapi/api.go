@@ -15,6 +15,7 @@ import (
 
 	"github.com/homeworldz/server/grid/internal/arrival"
 	"github.com/homeworldz/server/grid/internal/assetmeta"
+	"github.com/homeworldz/server/grid/internal/durability"
 	"github.com/homeworldz/server/grid/internal/estate"
 	"github.com/homeworldz/server/grid/internal/gestures"
 	"github.com/homeworldz/server/grid/internal/identity"
@@ -43,6 +44,7 @@ type API struct {
 	presence      presence.Store
 	inventory     inventory.Store
 	assets        assetmeta.Store
+	durability    *durability.Keeper
 	vault         vault.Store
 	serviceToken  string
 	provisioned   provisioning.Store
@@ -112,6 +114,18 @@ func New(ready ReadinessChecker, version string, options Options) http.Handler {
 	if a.gridName == "" {
 		a.gridName = "Homeworldz"
 	}
+	// The inventory-commit invariant of ADR 0026 is installed here, around the
+	// store, rather than left to each handler: every path that commits an
+	// inventory reference goes through it, including ones written later. A
+	// deployment without a vault or an asset registry keeps the bare store, so
+	// tools and tests that have neither still work — but the grid proper always
+	// configures both, and then no inventory row can name bytes the vault has
+	// not vouched for.
+	if a.inventory != nil && a.vault != nil && a.assets != nil {
+		a.durability = durability.New(a.assets, a.vault, options.ServiceToken,
+			&http.Client{Timeout: 30 * time.Second})
+		a.inventory = inventory.WithDurability(a.inventory, a.durability)
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/get_grid_info", getOnly(a.gridInfo))
 	mux.HandleFunc("/welcome", getOnly(a.welcome))
@@ -143,7 +157,7 @@ func New(ready ReadinessChecker, version string, options Options) http.Handler {
 	mux.HandleFunc("/api/v1/inventory/", a.inventoryByUser)
 	mux.HandleFunc("/api/v1/assets", a.assetsRoot)
 	mux.HandleFunc("/api/v1/assets/", a.assetByID)
-	mux.HandleFunc("/api/v1/vault/blobs/", a.vaultBlob)
+	mux.HandleFunc("/api/v1/vault/assets/", a.vaultAsset)
 	mux.HandleFunc("/api/v1/transits", a.transitsRoot)
 	mux.HandleFunc("/api/v1/transits/", a.transitByID)
 	mux.HandleFunc("/api/v1/task-transfers", a.taskTransfersRoot)

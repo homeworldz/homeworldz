@@ -373,6 +373,12 @@ public:
                         std::string_view sha256, std::uint64_t size,
                         std::string_view endpoint, bool origin);
     std::optional<FederatedAsset> find_asset(std::string_view asset_id);
+    // Read inventory-referenced bytes from the grid's asset vault (ADR 0026).
+    // For anything inventory references this location always has the content,
+    // which is what stops a region from being the last copy of it. Returns the
+    // raw bytes; the caller still verifies them against the registry checksum,
+    // as it does for a peer region.
+    std::optional<std::string> fetch_vault_asset(std::string_view asset_id);
     std::optional<InventoryItem> copy_library_item(std::string_view user_id,
                                                    std::string_view source_item_id,
                                                    std::string_view destination_folder_id,
