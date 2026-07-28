@@ -896,6 +896,28 @@ int main(int argc, char* argv[]) {
     std::unique_ptr<homeworldz::grid::Client> estate_client;
     std::unique_ptr<homeworldz::grid::ViewerSessionCache> viewer_sessions;
     std::vector<homeworldz::grid::RegionNeighbor> region_neighbors;
+    // The world map is grid-wide, so it cannot be built from the neighbor
+    // list. Cached rather than fetched per request: a viewer panning the map
+    // asks repeatedly, while the answer changes only when a region is placed
+    // or its lease turns over. A failed refresh keeps the previous list —
+    // stale placements draw a better map than none.
+    std::vector<homeworldz::grid::RegionPlacement> grid_topology;
+    auto next_topology_refresh = std::chrono::steady_clock::time_point{};
+    const auto refresh_grid_topology = [&]() {
+        const auto moment = std::chrono::steady_clock::now();
+        if (moment < next_topology_refresh) return;
+        next_topology_refresh = moment + std::chrono::seconds(30);
+        try {
+            if (auto discovered = viewer_grid ? viewer_grid->find_grid_topology() : std::nullopt)
+                grid_topology = std::move(*discovered);
+            else
+                std::cerr << "{\"level\":\"warning\",\"message\":\"grid topology discovery failed\"}"
+                          << std::endl;
+        } catch (const std::exception& error) {
+            std::cerr << "{\"level\":\"warning\",\"message\":\"grid topology discovery failed\",\"error\":"
+                      << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+        }
+    };
     auto next_neighbor_refresh = std::chrono::steady_clock::time_point{};
     const auto refresh_region_neighbors = [&](bool required) {
         const auto retry_at = std::chrono::steady_clock::now() + std::chrono::seconds(5);
@@ -3222,25 +3244,34 @@ int main(int argc, char* argv[]) {
                             std::vector<homeworldz::viewer::MapBlock> regions;
                             const auto map_image_id = homeworldz::viewer::parse_uuid(
                                 default_map_tile_asset_id).value_or(homeworldz::viewer::Uuid{});
-                            if (region_grid_x >= 0 && region_grid_x <= 65535 &&
-                                region_grid_y >= 0 && region_grid_y <= 65535) {
+                            const auto add_map_region = [&](int grid_x, int grid_y,
+                                                            const std::string& name, int size_x,
+                                                            int size_y, std::size_t agents) {
+                                if (grid_x < 0 || grid_x > 65535 || grid_y < 0 || grid_y > 65535) return;
+                                if (std::any_of(regions.begin(), regions.end(), [&](const auto& block) {
+                                        return block.x == grid_x && block.y == grid_y; })) return;
                                 regions.push_back(homeworldz::viewer::MapBlock{
-                                    static_cast<std::uint16_t>(region_grid_x),
-                                    static_cast<std::uint16_t>(region_grid_y), region_name,
-                                    13, 0, 20, static_cast<std::uint8_t>((std::min)(avatars.size(), std::size_t{255})),
-                                    map_image_id, static_cast<std::uint16_t>(region_size_x),
-                                    static_cast<std::uint16_t>(region_size_y)});
+                                    static_cast<std::uint16_t>(grid_x),
+                                    static_cast<std::uint16_t>(grid_y), name,
+                                    13, 0, 20,
+                                    static_cast<std::uint8_t>((std::min)(agents, std::size_t{255})),
+                                    map_image_id, static_cast<std::uint16_t>(size_x),
+                                    static_cast<std::uint16_t>(size_y)});
+                            };
+                            add_map_region(region_grid_x, region_grid_y, region_name,
+                                           region_size_x, region_size_y, avatars.size());
+                            refresh_grid_topology();
+                            for (const auto& placement : grid_topology) {
+								if (!placement.online) continue;
+                                add_map_region(placement.grid_x, placement.grid_y, placement.name,
+                                               placement.size_x, placement.size_y, 0);
                             }
+                            // If the grid is unreachable the neighbors are still
+                            // known here, and a four-region map beats a blank one.
                             for (const auto& neighbor : region_neighbors) {
 								if (!neighbor.online) continue;
-                                if (neighbor.grid_x < 0 || neighbor.grid_x > 65535 ||
-                                    neighbor.grid_y < 0 || neighbor.grid_y > 65535) continue;
-                                regions.push_back(homeworldz::viewer::MapBlock{
-                                    static_cast<std::uint16_t>(neighbor.grid_x),
-                                    static_cast<std::uint16_t>(neighbor.grid_y), neighbor.name,
-                                    13, 0, 20, 0, map_image_id,
-                                    static_cast<std::uint16_t>(neighbor.size_x),
-                                    static_cast<std::uint16_t>(neighbor.size_y)});
+                                add_map_region(neighbor.grid_x, neighbor.grid_y, neighbor.name,
+                                               neighbor.size_x, neighbor.size_y, 0);
                             }
                             return regions;
                         };
@@ -3723,13 +3754,40 @@ int main(int argc, char* argv[]) {
                                     static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
                             }
                         }
+                        const auto region_handle_of = [](int grid_x, int grid_y) {
+                            return (static_cast<std::uint64_t>(grid_x * 256) << 32) |
+                                static_cast<std::uint32_t>(grid_y * 256);
+                        };
+                        // The region handle of any region on the grid, by id.
+                        // The neighbor list is the cheap answer and the grid
+                        // the complete one: home and landmark destinations are
+                        // usually not adjacent, so adjacency cannot be the
+                        // test for whether they exist.
+                        const auto region_handle_for_id = [&](const std::string& region_id)
+                            -> std::optional<std::uint64_t> {
+                            if (registration && region_id == registration->region_id())
+                                return region_handle_of(region_grid_x, region_grid_y);
+                            for (const auto& neighbor : region_neighbors)
+                                if (neighbor.id == region_id)
+                                    return region_handle_of(neighbor.grid_x, neighbor.grid_y);
+                            if (!viewer_grid) return std::nullopt;
+                            try {
+                                if (const auto placement = viewer_grid->find_region(region_id))
+                                    return region_handle_of(placement->grid_x, placement->grid_y);
+                            } catch (const std::exception& error) {
+                                std::cout << "{\"level\":\"error\",\"message\":\"teleport destination lookup failed\",\"error\":"
+                                          << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+                            }
+                            return std::nullopt;
+                        };
                         const auto perform_teleport = [&](std::uint64_t destination_handle,
                                                           const std::array<float, 3>& destination_position) {
                             const auto current_position =
                                 homeworldz::region::resolve_region_teleport_position(
                                     region_grid_x, region_grid_y, region_size_x, region_size_y,
                                     destination_handle, destination_position);
-                            const homeworldz::grid::RegionNeighbor* target = nullptr;
+                            const homeworldz::grid::RegionPlacement* target = nullptr;
+                            std::optional<homeworldz::grid::RegionPlacement> distant_target;
                             std::optional<std::array<float, 3>> target_position;
                             for (const auto& neighbor : region_neighbors) {
                                 auto resolved = homeworldz::region::resolve_region_teleport_position(
@@ -3739,6 +3797,30 @@ int main(int argc, char* argv[]) {
                                 target = &neighbor;
                                 target_position = resolved;
                                 break;
+                            }
+                            // Adjacency is the crossing question, not the
+                            // teleport question. A handle that matches no
+                            // neighbor is the normal case — the map, a
+                            // landmark, and home all name distant regions — so
+                            // ask the grid where it is rather than refusing.
+                            if (!target && !current_position && viewer_grid) {
+                                try {
+                                    distant_target = viewer_grid->find_region_at(
+                                        static_cast<int>((destination_handle >> 32) / 256),
+                                        static_cast<int>((destination_handle & 0xFFFFFFFFULL) / 256));
+                                } catch (const std::exception& error) {
+                                    std::cout << "{\"level\":\"error\",\"message\":\"teleport destination lookup failed\",\"error\":"
+                                              << homeworldz::api::json_string(error.what()) << "}" << std::endl;
+                                }
+                                if (distant_target) {
+                                    if (auto resolved = homeworldz::region::resolve_region_teleport_position(
+                                            distant_target->grid_x, distant_target->grid_y,
+                                            distant_target->size_x, distant_target->size_y,
+                                            destination_handle, destination_position)) {
+                                        target = &*distant_target;
+                                        target_position = resolved;
+                                    }
+                                }
                             }
                             const auto fail_teleport = [&](std::string reason) {
                                 if (const auto failed = circuits.send(endpoint,
@@ -3909,21 +3991,7 @@ int main(int argc, char* argv[]) {
                                     }
                                 }
                                 std::optional<std::uint64_t> destination_handle;
-                                if (home) {
-                                    if (registration && home->region_id == registration->region_id()) {
-                                        destination_handle =
-                                            (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
-                                            static_cast<std::uint32_t>(region_grid_y * 256);
-                                    } else {
-                                        for (const auto& neighbor : region_neighbors) {
-                                            if (neighbor.id != home->region_id) continue;
-                                            destination_handle =
-                                                (static_cast<std::uint64_t>(neighbor.grid_x * 256) << 32) |
-                                                static_cast<std::uint32_t>(neighbor.grid_y * 256);
-                                            break;
-                                        }
-                                    }
-                                }
+                                if (home) destination_handle = region_handle_for_id(home->region_id);
                                 if (!home) fail_landmark("Home location is not set");
                                 else if (destination_handle) perform_teleport(*destination_handle, home->position);
                                 else fail_landmark("Your home region is unavailable");
@@ -3943,19 +4011,7 @@ int main(int argc, char* argv[]) {
                                         const auto region_id = text.substr(region_key + 10, 36);
                                         std::istringstream coords(text.substr(pos_key + 10));
                                         coords >> local_pos[0] >> local_pos[1] >> local_pos[2];
-                                        if (registration && region_id == registration->region_id()) {
-                                            destination_handle =
-                                                (static_cast<std::uint64_t>(region_grid_x * 256) << 32) |
-                                                static_cast<std::uint32_t>(region_grid_y * 256);
-                                        } else {
-                                            for (const auto& neighbor : region_neighbors) {
-                                                if (neighbor.id != region_id) continue;
-                                                destination_handle =
-                                                    (static_cast<std::uint64_t>(neighbor.grid_x * 256) << 32) |
-                                                    static_cast<std::uint32_t>(neighbor.grid_y * 256);
-                                                break;
-                                            }
-                                        }
+                                        destination_handle = region_handle_for_id(region_id);
                                     }
                                 } catch (const std::exception&) {
                                 }

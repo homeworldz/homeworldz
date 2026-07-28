@@ -110,8 +110,11 @@ struct RegisteredRegion {
 	int grid_region_protocol{};
 };
 
-struct RegionNeighbor {
-    std::string direction;
+// Where a region sits on the grid and how to reach it. Adjacency is a
+// property of a pair of regions, not of a region, so it lives on
+// RegionNeighbor below: a teleport destination is a placement with no
+// direction, because it can be anywhere.
+struct RegionPlacement {
     std::string id;
     std::string name;
     int grid_x{};
@@ -122,10 +125,15 @@ struct RegionNeighbor {
     std::string public_endpoint;
     int viewer_port{};
 	bool online{};
-    // session_endpoint is the neighbor's region-session URL when it serves
-    // one; empty means a session avatar cannot continue there
+    // session_endpoint is the region's session URL when it serves one; empty
+    // means a session avatar cannot continue there
     // (docs/CLIENT2-EMBODIMENT.md milestone E2).
     std::string session_endpoint;
+    bool operator==(const RegionPlacement&) const = default;
+};
+
+struct RegionNeighbor : RegionPlacement {
+    std::string direction;
     bool operator==(const RegionNeighbor&) const = default;
 };
 
@@ -301,6 +309,15 @@ public:
 		std::string* refusal = nullptr);
     std::optional<std::vector<RegionNeighbor>> find_region_neighbors(
         std::string_view region_id);
+    // Teleport destination resolution. The neighbor list answers crossings,
+    // but a map, landmark, or home teleport names a region that is usually
+    // not adjacent, so these ask the grid instead. Both return offline
+    // regions too — placed but down is a different report from not there.
+    std::optional<RegionPlacement> find_region_at(int grid_x, int grid_y);
+    std::optional<RegionPlacement> find_region(std::string_view region_id);
+    // Every region the grid has placed. What a world map draws: a map of the
+    // regions next door is not a map.
+    std::optional<std::vector<RegionPlacement>> find_grid_topology();
     std::optional<Estate> update_estate_settings(std::string_view region_id,
                                                  const EstateSettingsPatch& patch);
     std::optional<Estate> set_estate_member(std::string_view region_id, std::string_view member_id,

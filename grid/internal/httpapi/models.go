@@ -160,6 +160,12 @@ type RegionNeighborList struct {
 	Neighbors []RegionNeighbor `json:"neighbors"`
 }
 
+// RegionTopologyList is every region's placement, which is what a world map
+// has to draw: the map is not a view of the regions next door.
+type RegionTopologyList struct {
+	Regions []RegionTopology `json:"regions"`
+}
+
 type CreateProvisionedRegionRequest struct {
 	ID             string `json:"id,omitempty"`
 	Name           string `json:"name"`

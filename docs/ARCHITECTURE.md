@@ -138,6 +138,19 @@ discovery alone;
 until the crossing handoff exists, the simulation continues to contain entities
 at every region edge.
 
+Adjacency answers crossings and nothing else. **A teleport destination is
+usually not adjacent** — the map, a landmark, and Home all name regions
+somewhere else entirely — so destinations resolve against the whole grid
+instead: `GET /api/v1/regions/lookup?id=` or `?gridX=&gridY=` returns one
+region's placement, by id for Home and landmarks and by grid square for a map
+teleport, where the square named may be any of those a larger region covers.
+Offline regions are returned with `online` false, which is a different report
+from a destination that does not exist and is why "unavailable" can be
+truthful. `GET /api/v1/regions/topology` returns every placed region, which is
+what a world map has to draw. Both are views of the same list the neighbor
+computation walks, so adjacency and destination resolution cannot disagree
+about where a region is.
+
 Avatar teleports and crossings use the durable Grid-coordinated transaction in
 [ADR 0025](adr/0025-idempotent-avatar-transits.md). Internal Region clients
 prepare an immutable arrival record through `/api/v1/transits`; the destination
@@ -149,9 +162,13 @@ Region, expire automatically, and use a monotonically increasing per-avatar
 generation to reject stale handoff messages.
 
 The Region answers authenticated viewer `MapBlockRequest` and `MapNameRequest`
-UDP messages from that live topology snapshot. Replies currently cover the
-Region itself and its cardinal neighbors, including coordinates, name, access,
-water height, and local agent count. The initial package advertises a stable
+UDP messages from the grid topology, cached for thirty seconds because a viewer
+panning the map asks repeatedly while placements change only when a region is
+added or its lease turns over. Replies cover every online region on the grid —
+coordinates, name, access, water height, and the local agent count for this
+one — filtered to the rectangle or name prefix the viewer asked for. A failed
+refresh keeps the previous snapshot and falls back to the neighbors, since a
+stale or small map beats a blank one. The initial package advertises a stable
 Homeworldz JPEG-2000 rendering of the default plateau rather than a null image
 UUID, preventing unrelated cross-grid cache reuse.
 

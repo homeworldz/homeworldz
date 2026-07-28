@@ -482,3 +482,103 @@ func requestRegion[T any](t *testing.T, handler http.Handler, method, path, body
 	}
 	return value
 }
+
+func TestRegionLookupResolvesDestinationsAnywhereOnTheGrid(t *testing.T) {
+	// The failure this endpoint exists for: teleporting to a region that is
+	// nowhere near the one you are standing in. Neighbors cannot answer that.
+	path := filepath.Join(t.TempDir(), "regions.json")
+	if err := os.WriteFile(path, []byte(`[
+  {"id":"11111111-1111-4111-8111-111111111111","name":"Welcome","mapX":1000,"mapY":1000,"accessKey":"welcome-key"},
+  {"id":"22222222-2222-4222-8222-222222222222","name":"Gamma","mapX":1004,"mapY":1000,"size":2,"publicEndpoint":"https://gamma.example/region","viewerPort":42042,"accessKey":"gamma-key"}
+]`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	registry, err := provisioning.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := newMemoryRegionStore()
+	if _, err := store.RegisterProvisioned(context.Background(), "11111111-1111-4111-8111-111111111111",
+		regions.Registration{Name: "Welcome", GridX: 1000, GridY: 1000,
+			PublicEndpoint: "http://welcome.example:42001", ViewerPort: 42002,
+			LeaseDuration: time.Minute}); err != nil {
+		t.Fatal(err)
+	}
+	handler := New(checker{}, "test", Options{ServiceToken: "secret", Regions: store, Provisioned: registry})
+
+	live := requestRegion[RegionTopology](t, handler, http.MethodGet,
+		"/api/v1/regions/lookup?gridX=1000&gridY=1000", "", http.StatusOK)
+	if live.ID != "11111111-1111-4111-8111-111111111111" || !live.Online ||
+		live.PublicEndpoint != "http://welcome.example:42001" || live.ViewerPort != 42002 {
+		t.Fatalf("live lookup = %#v", live)
+	}
+
+	// A var region answers for every square it covers, not only its corner,
+	// and an offline one is reported as placed-but-down rather than absent.
+	inner := requestRegion[RegionTopology](t, handler, http.MethodGet,
+		"/api/v1/regions/lookup?gridX=1005&gridY=1001", "", http.StatusOK)
+	if inner.Name != "Gamma" || inner.Online || inner.SizeX != 512 || inner.SizeY != 512 {
+		t.Fatalf("var-region lookup = %#v", inner)
+	}
+	byID := requestRegion[RegionTopology](t, handler, http.MethodGet,
+		"/api/v1/regions/lookup?id=22222222-2222-4222-8222-222222222222", "", http.StatusOK)
+	if byID.Name != "Gamma" || byID.GridX != 1004 || byID.GridY != 1000 {
+		t.Fatalf("id lookup = %#v", byID)
+	}
+
+	empty := requestRegion[Error](t, handler, http.MethodGet,
+		"/api/v1/regions/lookup?gridX=1003&gridY=1000", "", http.StatusNotFound)
+	if empty.Code != "region_not_found" {
+		t.Fatalf("empty square = %#v", empty)
+	}
+	for _, query := range []string{"", "?id=not-a-uuid", "?gridX=1000",
+		"?gridX=1000&gridY=-1", "?id=11111111-1111-4111-8111-111111111111&gridX=1000&gridY=1000"} {
+		invalid := requestRegion[Error](t, handler, http.MethodGet,
+			"/api/v1/regions/lookup"+query, "", http.StatusBadRequest)
+		if invalid.Code != "invalid_lookup" {
+			t.Fatalf("lookup%q = %#v", query, invalid)
+		}
+	}
+	methodError := requestRegion[Error](t, handler, http.MethodPost,
+		"/api/v1/regions/lookup", `{}`, http.StatusMethodNotAllowed)
+	if methodError.Code != "method_not_allowed" {
+		t.Fatalf("mutation response = %#v", methodError)
+	}
+}
+
+func TestRegionTopologyListsThePlacedGrid(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "regions.json")
+	if err := os.WriteFile(path, []byte(`[
+  {"id":"11111111-1111-4111-8111-111111111111","name":"Welcome","mapX":1000,"mapY":1000,"accessKey":"welcome-key"},
+  {"id":"22222222-2222-4222-8222-222222222222","name":"Gamma","mapX":1004,"mapY":1000,"accessKey":"gamma-key"}
+]`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	registry, err := provisioning.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := newMemoryRegionStore()
+	if _, err := store.RegisterProvisioned(context.Background(), "11111111-1111-4111-8111-111111111111",
+		regions.Registration{Name: "Welcome", GridX: 1000, GridY: 1000,
+			PublicEndpoint: "http://welcome.example:42001", ViewerPort: 42002,
+			LeaseDuration: time.Minute}); err != nil {
+		t.Fatal(err)
+	}
+	handler := New(checker{}, "test", Options{ServiceToken: "secret", Regions: store, Provisioned: registry})
+
+	// Both regions, whether or not they hold a lease and whether or not they
+	// are anywhere near each other: a map that omitted either would be wrong.
+	response := requestRegion[RegionTopologyList](t, handler, http.MethodGet,
+		"/api/v1/regions/topology", "", http.StatusOK)
+	if len(response.Regions) != 2 || response.Regions[0].Name != "Welcome" ||
+		!response.Regions[0].Online || response.Regions[1].Name != "Gamma" ||
+		response.Regions[1].Online || response.Regions[1].GridX != 1004 {
+		t.Fatalf("topology = %#v", response.Regions)
+	}
+	methodError := requestRegion[Error](t, handler, http.MethodPost,
+		"/api/v1/regions/topology", `{}`, http.StatusMethodNotAllowed)
+	if methodError.Code != "method_not_allowed" {
+		t.Fatalf("mutation response = %#v", methodError)
+	}
+}

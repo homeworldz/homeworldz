@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -429,6 +430,24 @@ func (a *API) regionByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/v1/regions/"), "/")
+	if len(parts) == 1 && parts[0] == "lookup" {
+		a.regionLookup(w, r)
+		return
+	}
+	if len(parts) == 1 && parts[0] == "topology" {
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", http.MethodGet)
+			writeJSON(w, http.StatusMethodNotAllowed, Error{Code: "method_not_allowed", Message: "only GET is supported"})
+			return
+		}
+		topology, err := a.gridTopology(r.Context())
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, Error{Code: "region_store_error", Message: "region discovery failed"})
+			return
+		}
+		writeJSON(w, http.StatusOK, RegionTopologyList{Regions: topology})
+		return
+	}
 	if len(parts) == 0 || !validUUID(parts[0]) {
 		a.notFound(w, r)
 		return
@@ -456,13 +475,116 @@ func (a *API) regionByID(w http.ResponseWriter, r *http.Request) {
 	a.notFound(w, r)
 }
 
+// gridTopology is where every region the grid knows about sits and how big it
+// is — provisioned placement, overlaid with the live endpoint of the regions
+// currently holding a lease. Adjacency (neighbors) and destination resolution
+// (teleports) are two views of this one list, so they cannot disagree about
+// where a region is.
+func (a *API) gridTopology(ctx context.Context) ([]RegionTopology, error) {
+	liveItems, err := a.regions.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if a.provisioned == nil {
+		topology := make([]RegionTopology, 0, len(liveItems))
+		for _, item := range liveItems {
+			topology = append(topology, RegionTopology{ID: item.ID, Name: item.Name,
+				GridX: item.GridX, GridY: item.GridY, SizeX: 256, SizeY: 256, Maturity: 0,
+				PublicEndpoint: item.PublicEndpoint, ViewerPort: item.ViewerPort, Online: true,
+				SessionEndpoint: item.SessionEndpoint})
+		}
+		return topology, nil
+	}
+	liveByID := make(map[string]regions.Region, len(liveItems))
+	for _, item := range liveItems {
+		liveByID[item.ID] = item
+	}
+	provisioned, err := a.provisioned.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	topology := make([]RegionTopology, 0, len(provisioned))
+	for _, item := range provisioned {
+		entry := RegionTopology{ID: item.ID, Name: item.Name, GridX: item.MapX, GridY: item.MapY,
+			SizeX: item.Size * 256, SizeY: item.Size * 256, Maturity: item.Maturity, PublicEndpoint: item.PublicEndpoint,
+			ViewerPort: item.ViewerPort}
+		if live, online := liveByID[item.ID]; online {
+			entry.PublicEndpoint, entry.ViewerPort, entry.Online = live.PublicEndpoint, live.ViewerPort, true
+			entry.SessionEndpoint = live.SessionEndpoint
+		}
+		topology = append(topology, entry)
+	}
+	return topology, nil
+}
+
+// regionLookup answers GET /api/v1/regions/lookup?id=<uuid> or ?gridX=&gridY=,
+// returning one region's placement. Regions resolve teleport destinations
+// here: the neighbor list knows only adjacent regions, while a map, landmark,
+// or home teleport can name any region on the grid. Offline regions are
+// returned too, with online false, so the destination can be reported as down
+// rather than as not existing.
+func (a *API) regionLookup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		writeJSON(w, http.StatusMethodNotAllowed, Error{Code: "method_not_allowed", Message: "only GET is supported"})
+		return
+	}
+	query := r.URL.Query()
+	id := query.Get("id")
+	gridXText, gridYText := query.Get("gridX"), query.Get("gridY")
+	byPoint := gridXText != "" || gridYText != ""
+	gridX, xErr := strconv.Atoi(gridXText)
+	gridY, yErr := strconv.Atoi(gridYText)
+	if (id != "") == byPoint {
+		writeJSON(w, http.StatusBadRequest, Error{Code: "invalid_lookup",
+			Message: "provide either id or both gridX and gridY"})
+		return
+	}
+	if id != "" && !validUUID(id) {
+		writeJSON(w, http.StatusBadRequest, Error{Code: "invalid_lookup", Message: "id must be a UUID"})
+		return
+	}
+	if byPoint && (xErr != nil || yErr != nil || gridX < 0 || gridY < 0) {
+		writeJSON(w, http.StatusBadRequest, Error{Code: "invalid_lookup",
+			Message: "gridX and gridY must be non-negative integers"})
+		return
+	}
+	topology, err := a.gridTopology(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, Error{Code: "region_store_error", Message: "region discovery failed"})
+		return
+	}
+	for _, candidate := range topology {
+		// A point names a square the destination covers, not necessarily its
+		// corner: a var region covers several, and a viewer teleporting to one
+		// of them means the region that owns it.
+		found := candidate.ID == id ||
+			(byPoint && gridX >= candidate.GridX && gridX < candidate.GridX+candidate.SizeX/256 &&
+				gridY >= candidate.GridY && gridY < candidate.GridY+candidate.SizeY/256)
+		if found {
+			writeJSON(w, http.StatusOK, candidate)
+			return
+		}
+	}
+	writeJSON(w, http.StatusNotFound, Error{Code: "region_not_found", Message: "no region occupies that location"})
+}
+
 func (a *API) regionNeighbors(w http.ResponseWriter, r *http.Request, id string) {
 	source, err := a.regions.Get(r.Context(), id)
 	if err != nil {
 		a.writeRegionResult(w, regions.Region{}, err)
 		return
 	}
-	liveItems, err := a.regions.List(r.Context())
+	sourceSize := 1
+	if a.provisioned != nil {
+		provisionedSource, sourceErr := a.provisioned.Get(r.Context(), id)
+		if sourceErr != nil {
+			writeProvisioningError(w, sourceErr)
+			return
+		}
+		sourceSize = provisionedSource.Size
+	}
+	topology, err := a.gridTopology(r.Context())
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, Error{Code: "region_store_error", Message: "region discovery failed"})
 		return
@@ -477,42 +599,6 @@ func (a *API) regionNeighbors(w http.ResponseWriter, r *http.Request, id string)
 		{name: "east", dx: 1},
 		{name: "south", dy: -1},
 		{name: "west", dx: -1},
-	}
-	liveByID := make(map[string]regions.Region, len(liveItems))
-	for _, item := range liveItems {
-		liveByID[item.ID] = item
-	}
-	topology := make([]RegionTopology, 0, len(liveItems))
-	sourceSize := 1
-	if a.provisioned != nil {
-		provisionedSource, sourceErr := a.provisioned.Get(r.Context(), id)
-		if sourceErr != nil {
-			writeProvisioningError(w, sourceErr)
-			return
-		}
-		sourceSize = provisionedSource.Size
-		provisioned, provisionErr := a.provisioned.List(r.Context())
-		if provisionErr != nil {
-			writeJSON(w, http.StatusInternalServerError, Error{Code: "region_store_error", Message: "region topology discovery failed"})
-			return
-		}
-		for _, item := range provisioned {
-			entry := RegionTopology{ID: item.ID, Name: item.Name, GridX: item.MapX, GridY: item.MapY,
-				SizeX: item.Size * 256, SizeY: item.Size * 256, Maturity: item.Maturity, PublicEndpoint: item.PublicEndpoint,
-				ViewerPort: item.ViewerPort}
-			if live, online := liveByID[item.ID]; online {
-				entry.PublicEndpoint, entry.ViewerPort, entry.Online = live.PublicEndpoint, live.ViewerPort, true
-				entry.SessionEndpoint = live.SessionEndpoint
-			}
-			topology = append(topology, entry)
-		}
-	} else {
-		for _, item := range liveItems {
-			topology = append(topology, RegionTopology{ID: item.ID, Name: item.Name,
-				GridX: item.GridX, GridY: item.GridY, SizeX: 256, SizeY: 256, Maturity: 0,
-				PublicEndpoint: item.PublicEndpoint, ViewerPort: item.ViewerPort, Online: true,
-				SessionEndpoint: item.SessionEndpoint})
-		}
 	}
 	neighbors := make([]RegionNeighbor, 0, len(directions))
 	overlaps := func(firstStart, firstSize, secondStart, secondSize int) bool {

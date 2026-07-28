@@ -621,6 +621,79 @@ std::optional<AvatarTransit> Client::rollback_avatar_transit(
     return change_avatar_transit(transport_, transit_id, "rollback", region_id, reason);
 }
 
+namespace {
+// The region object the grid returns in both the neighbor list and a
+// destination lookup. One parser so the two can never read it differently.
+bool parse_region_placement(std::string_view object, RegionPlacement& placement) {
+    placement.id = json_field(object, "id");
+    placement.name = json_field(object, "name");
+    placement.public_endpoint = json_field(object, "publicEndpoint");
+    placement.session_endpoint = json_field(object, "sessionEndpoint");
+    const auto grid_x = json_int(object, "gridX");
+    const auto grid_y = json_int(object, "gridY");
+    const auto viewer_port = json_int(object, "viewerPort");
+    const auto size_x = json_int(object, "sizeX");
+    const auto size_y = json_int(object, "sizeY");
+    const auto maturity = json_int(object, "maturity");
+    const auto online = json_bool(object, "online");
+    if (placement.id.empty() || placement.name.empty() || !grid_x || !grid_y ||
+        !size_x || !size_y || *size_x < 256 || *size_y < 256 || !maturity || !online ||
+        (*online && (placement.public_endpoint.empty() || !viewer_port ||
+         *viewer_port < 1 || *viewer_port > 65535)))
+        return false;
+    placement.grid_x = *grid_x;
+    placement.grid_y = *grid_y;
+    placement.size_x = *size_x;
+    placement.size_y = *size_y;
+    placement.maturity = *maturity;
+    placement.online = *online;
+    placement.viewer_port = viewer_port.value_or(0);
+    return true;
+}
+} // namespace
+
+std::optional<RegionPlacement> Client::find_region_at(int grid_x, int grid_y) {
+    if (grid_x < 0 || grid_y < 0) return std::nullopt;
+    const auto response = transport_->send(
+        "GET", "/api/v1/regions/lookup?gridX=" + std::to_string(grid_x) +
+                   "&gridY=" + std::to_string(grid_y), {});
+    if (response.status_code != 200) return std::nullopt;
+    RegionPlacement placement;
+    if (!parse_region_placement(response.body, placement)) return std::nullopt;
+    return placement;
+}
+
+std::optional<RegionPlacement> Client::find_region(std::string_view region_id) {
+    const auto response = transport_->send(
+        "GET", "/api/v1/regions/lookup?id=" + path_segment(region_id), {});
+    if (response.status_code != 200) return std::nullopt;
+    RegionPlacement placement;
+    if (!parse_region_placement(response.body, placement)) return std::nullopt;
+    return placement;
+}
+
+std::optional<std::vector<RegionPlacement>> Client::find_grid_topology() {
+    const auto response = transport_->send("GET", "/api/v1/regions/topology", {});
+    if (response.status_code != 200) return std::nullopt;
+    if (response.body.find("\"regions\":[") == std::string::npos) return std::nullopt;
+    std::vector<RegionPlacement> topology;
+    // The list is flat objects, so each one runs from its brace to the next
+    // close brace; a partial parse is a failed parse, never a short map.
+    std::size_t position = response.body.find('[');
+    while ((position = response.body.find('{', position)) != std::string::npos) {
+        const auto object_end = response.body.find('}', position);
+        if (object_end == std::string::npos) return std::nullopt;
+        RegionPlacement placement;
+        if (!parse_region_placement(
+                std::string_view(response.body).substr(position + 1, object_end - position - 1),
+                placement))
+            return std::nullopt;
+        topology.push_back(std::move(placement));
+        position = object_end + 1;
+    }
+    return topology;
+}
+
 std::optional<std::vector<RegionNeighbor>> Client::find_region_neighbors(
     std::string_view region_id) {
     const auto response = transport_->send(
@@ -645,32 +718,11 @@ std::optional<std::vector<RegionNeighbor>> Client::find_region_neighbors(
         RegionNeighbor neighbor;
         neighbor.direction = response.body.substr(
             direction_start, direction_end - direction_start);
-        neighbor.id = json_field(object, "id");
-        neighbor.name = json_field(object, "name");
-        neighbor.public_endpoint = json_field(object, "publicEndpoint");
-        neighbor.session_endpoint = json_field(object, "sessionEndpoint");
-        const auto grid_x = json_int(object, "gridX");
-        const auto grid_y = json_int(object, "gridY");
-        const auto viewer_port = json_int(object, "viewerPort");
-		const auto size_x = json_int(object, "sizeX");
-		const auto size_y = json_int(object, "sizeY");
-		const auto maturity = json_int(object, "maturity");
-		const auto online = json_bool(object, "online");
         const auto valid_direction = neighbor.direction == "north" ||
             neighbor.direction == "east" || neighbor.direction == "south" ||
             neighbor.direction == "west";
-		if (!valid_direction || neighbor.id.empty() || neighbor.name.empty() || !grid_x || !grid_y ||
-			!size_x || !size_y || *size_x < 256 || *size_y < 256 || !maturity || !online ||
-			(*online && (neighbor.public_endpoint.empty() || !viewer_port ||
-			 *viewer_port < 1 || *viewer_port > 65535)))
+        if (!valid_direction || !parse_region_placement(object, neighbor))
             return std::nullopt;
-        neighbor.grid_x = *grid_x;
-        neighbor.grid_y = *grid_y;
-		neighbor.size_x = *size_x;
-		neighbor.size_y = *size_y;
-		neighbor.maturity = *maturity;
-		neighbor.online = *online;
-		neighbor.viewer_port = viewer_port.value_or(0);
         neighbors.push_back(std::move(neighbor));
         position = object_end + 1;
     }

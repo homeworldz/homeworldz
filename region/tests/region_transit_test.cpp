@@ -69,8 +69,9 @@ int main() {
     if (arrival_gate.size() != 0) return 1;
 
     const homeworldz::grid::RegionNeighbor beta{
-        "east", "beta", "Beta", 1002, 1000, 512, 512, 13,
-        "http://region.example:42021", 42022, true};
+        {"beta", "Beta", 1002, 1000, 512, 512, 13,
+         "http://region.example:42021", 42022, true},
+        "east"};
     const std::vector sandbox_neighbors{beta};
     const auto into_beta = homeworldz::region::plan_avatar_border_crossing(
         1001, 1000, 256, 256, {256.2, 200.0, 30.0}, sandbox_neighbors);
@@ -78,8 +79,9 @@ int main() {
         into_beta->position != std::array<float, 3>{0.3F, 200.0F, 30.0F}) return 1;
 
     const homeworldz::grid::RegionNeighbor sandbox{
-        "west", "sandbox", "Sandbox", 1001, 1000, 256, 256, 13,
-        "http://region.example:42001", 42002, true};
+        {"sandbox", "Sandbox", 1001, 1000, 256, 256, 13,
+         "http://region.example:42001", 42002, true},
+        "west"};
     const std::vector beta_neighbors{sandbox};
     const auto into_sandbox = homeworldz::region::plan_avatar_border_crossing(
         1002, 1000, 512, 512, {-0.2, 200.0, 31.0}, beta_neighbors);

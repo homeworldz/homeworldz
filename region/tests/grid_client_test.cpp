@@ -22,6 +22,18 @@ public:
             return {200, R"({"userId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","userid":"jim.tarber","displayName":"Jim Tarber","sessionId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","expiresAt":"2026-07-27T00:00:00Z"})"};
         if (method == "POST" && path.starts_with("/api/v1/region-runtime/"))
             return {200, R"({"id":"22222222-2222-4222-8222-222222222222","name":"Sandbox Region","gridX":1001,"gridY":1000,"sizeX":256,"sizeY":256,"maturity":0,"publicEndpoint":"https://sandbox.example/region","viewerPort":43002,"gridName":"Homeworldz Test","gridPublicUrl":"https://grid.example","regionProtocol":1})"};
+        if (method == "GET" && path == "/api/v1/regions/topology")
+            return {200, R"({"regions":[{"id":"11111111-1111-4111-8111-111111111111","name":"Welcome","gridX":1000,"gridY":1000,"sizeX":256,"sizeY":256,"maturity":0,"publicEndpoint":"http://grid.example:42011","viewerPort":42012,"online":true},{"id":"44444444-4444-4444-8444-444444444444","name":"Gamma","gridX":1004,"gridY":1000,"sizeX":512,"sizeY":512,"maturity":0,"online":false}]})"};
+        if (method == "GET" && path.starts_with("/api/v1/regions/lookup?")) {
+            // A destination four squares away and offline: the two things the
+            // neighbor list could never report.
+            if (path.find("gridX=1005") != std::string_view::npos ||
+                path.find("id=44444444") != std::string_view::npos)
+                return {200, R"({"id":"44444444-4444-4444-8444-444444444444","name":"Gamma","gridX":1004,"gridY":1000,"sizeX":512,"sizeY":512,"maturity":0,"online":false})"};
+            if (path.find("gridX=1000") != std::string_view::npos)
+                return {200, R"({"id":"11111111-1111-4111-8111-111111111111","name":"Welcome","gridX":1000,"gridY":1000,"sizeX":256,"sizeY":256,"maturity":0,"publicEndpoint":"http://grid.example:42011","viewerPort":42012,"online":true})"};
+            return {404, R"({"code":"region_not_found","message":"no region occupies that location"})"};
+        }
         if (method == "GET" && path.ends_with("/neighbors"))
             return {200, R"({"neighbors":[{"direction":"west","region":{"id":"11111111-1111-4111-8111-111111111111","name":"Welcome","gridX":1000,"gridY":1000,"sizeX":256,"sizeY":256,"maturity":0,"publicEndpoint":"http://grid.example:42011","viewerPort":42012,"online":true}}]})"};
         if (method == "POST" && path == "/api/v1/transits")
@@ -166,6 +178,27 @@ int main() {
         neighbors->front().public_endpoint != "http://grid.example:42011" ||
         transport->requests.back().path !=
             "/api/v1/regions/22222222-2222-4222-8222-222222222222/neighbors") return 1;
+    // Teleport destination resolution reaches the whole grid, not just the
+    // neighbors: a live region by point, a distant offline one by point and by
+    // id, and an empty square as a miss rather than a fabricated placement.
+    const auto welcome = client.find_region_at(1000, 1000);
+    if (!welcome || welcome->id != "11111111-1111-4111-8111-111111111111" ||
+        welcome->name != "Welcome" || !welcome->online || welcome->viewer_port != 42012 ||
+        welcome->public_endpoint != "http://grid.example:42011" ||
+        transport->requests.back().path != "/api/v1/regions/lookup?gridX=1000&gridY=1000") return 1;
+    const auto gamma = client.find_region_at(1005, 1001);
+    if (!gamma) return 1;
+    const auto gamma_by_id = client.find_region("44444444-4444-4444-8444-444444444444");
+    if (!gamma_by_id || *gamma_by_id != *gamma || gamma_by_id->online ||
+        gamma_by_id->grid_x != 1004 || gamma_by_id->size_x != 512 ||
+        transport->requests.back().path !=
+            "/api/v1/regions/lookup?id=44444444-4444-4444-8444-444444444444") return 1;
+    if (client.find_region_at(1003, 1000) || client.find_region_at(-1, 0)) return 1;
+    // The world map's source: every placed region, near or far, up or down.
+    const auto topology = client.find_grid_topology();
+    if (!topology || topology->size() != 2 || topology->front() != *welcome ||
+        topology->back() != *gamma_by_id ||
+        transport->requests.back().path != "/api/v1/regions/topology") return 1;
     const homeworldz::grid::AvatarTransitRequest transit_request{
         "33333333-3333-4333-8333-333333333333",
         "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
