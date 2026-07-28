@@ -216,14 +216,19 @@ func (s *PostgresStore) Finalize(ctx context.Context, id, regionID string) (Tran
 // clears it. Idempotent on the item id, because a finalize may be retried.
 func retainDepartedItem(ctx context.Context, tx *sql.Tx, item inventory.Item,
 	regionID, objectID string) error {
-	const zero = "00000000-0000-0000-0000-000000000000"
+	// A creator-less item travels as the zero UUID outside the database and is
+	// NULL inside it, same convention as inventory_items.
+	var creator any
+	if item.CreatorUserID != "" && item.CreatorUserID != "00000000-0000-0000-0000-000000000000" {
+		creator = item.CreatorUserID
+	}
 	_, err := tx.ExecContext(ctx, `INSERT INTO retained_inventory_items
 		(id,owner_user_id,creator_user_id,folder_id,asset_id,asset_type,inventory_type,name,
 		 description,flags,base_permissions,current_permissions,everyone_permissions,
 		 next_permissions,sale_type,sale_price,created_at,region_id,object_id)
-		VALUES($1,$2,NULLIF(NULLIF($3,''),$4)::uuid,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
 		ON CONFLICT (id) DO NOTHING`,
-		item.ID, item.OwnerUserID, item.CreatorUserID, zero, item.FolderID, item.AssetID,
+		item.ID, item.OwnerUserID, creator, item.FolderID, item.AssetID,
 		item.AssetType, item.InventoryType, item.Name, item.Description, item.Flags,
 		item.BasePermissions, item.CurrentPermissions, item.EveryonePermissions,
 		item.NextPermissions, item.SaleType, item.SalePrice, item.CreatedAt,
