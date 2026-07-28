@@ -207,11 +207,56 @@ func (s *PostgresStore) Finalize(ctx context.Context, id, regionID string) (Tran
 	return s.transition(ctx, id, regionID, Finalized)
 }
 
+// retainDepartedItem records a no-copy item that has finally left inventory
+// into the scene (ADR 0026, revision 4db2eaa). The record is deliberately not
+// an inventory row — a separate table no listing, viewer fetch, or export
+// reads — because the item genuinely left the inventory; it exists so the
+// vault's bytes stay reconstitutable if the region holding the only live copy
+// is lost. Recovery is a deliberate operator action; an ordinary take-back
+// clears it. Idempotent on the item id, because a finalize may be retried.
+func retainDepartedItem(ctx context.Context, tx *sql.Tx, item inventory.Item,
+	regionID, objectID string) error {
+	const zero = "00000000-0000-0000-0000-000000000000"
+	_, err := tx.ExecContext(ctx, `INSERT INTO retained_inventory_items
+		(id,owner_user_id,creator_user_id,folder_id,asset_id,asset_type,inventory_type,name,
+		 description,flags,base_permissions,current_permissions,everyone_permissions,
+		 next_permissions,sale_type,sale_price,created_at,region_id,object_id)
+		VALUES($1,$2,NULLIF(NULLIF($3,''),$4)::uuid,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+		ON CONFLICT (id) DO NOTHING`,
+		item.ID, item.OwnerUserID, item.CreatorUserID, zero, item.FolderID, item.AssetID,
+		item.AssetType, item.InventoryType, item.Name, item.Description, item.Flags,
+		item.BasePermissions, item.CurrentPermissions, item.EveryonePermissions,
+		item.NextPermissions, item.SaleType, item.SalePrice, item.CreatedAt,
+		regionID, objectID)
+	if err != nil {
+		return fmt.Errorf("retain departed inventory item: %w", err)
+	}
+	return nil
+}
+
 func (s *PostgresStore) transition(ctx context.Context, id, regionID string, state State) (Transfer, error) {
-	value, err := scan(s.db.QueryRowContext(ctx, `UPDATE task_inventory_transfers SET state=$3,
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Transfer{}, fmt.Errorf("begin task transfer transition: %w", err)
+	}
+	defer tx.Rollback()
+	value, err := scan(tx.QueryRowContext(ctx, `UPDATE task_inventory_transfers SET state=$3,
 		updated_at=now() WHERE id=$1 AND region_id=$2 AND state='prepared' RETURNING `+columns,
 		id, regionID, state))
 	if err == nil {
+		// Finalize is the point of no return: the item now exists only inside
+		// the object. Its metadata is retained — hidden, not inventory — so a
+		// later region loss cannot destroy it (ADR 0026). In the same
+		// transaction as the transition, so no finalized transfer can exist
+		// without its retained record.
+		if state == Finalized {
+			if err := retainDepartedItem(ctx, tx, value.Item, value.RegionID, value.ObjectID); err != nil {
+				return Transfer{}, err
+			}
+		}
+		if err := tx.Commit(); err != nil {
+			return Transfer{}, fmt.Errorf("commit task transfer transition: %w", err)
+		}
 		return value, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
@@ -369,6 +414,15 @@ func (s *PostgresStore) FinalizeExtraction(ctx context.Context, id, regionID str
 	if _, err := tx.ExecContext(ctx, `UPDATE inventory_folders SET version=version+1,
 		updated_at=now() WHERE id=$1 AND owner_user_id=$2`, value.DestinationFolderID, value.UserID); err != nil {
 		return Extraction{}, fmt.Errorf("update extraction folder: %w", err)
+	}
+	// The user holds an inventory item for these bytes again: any retained
+	// record for the same item in the same object has served its purpose
+	// (ADR 0026). Scoped to the object so a second copy of the asset rezzed
+	// elsewhere keeps its own record.
+	if _, err := tx.ExecContext(ctx, `DELETE FROM retained_inventory_items
+		WHERE owner_user_id=$1 AND object_id=$2 AND asset_id=$3`,
+		value.UserID, value.ObjectID, item.AssetID); err != nil {
+		return Extraction{}, fmt.Errorf("clear retained inventory record: %w", err)
 	}
 	value, err = scanExtraction(tx.QueryRowContext(ctx, `UPDATE task_inventory_extractions
 		SET state='finalized',updated_at=now() WHERE id=$1 RETURNING `+extractionColumns, id))
@@ -542,10 +596,27 @@ func (s *PostgresStore) RollbackObjectRez(ctx context.Context, id, regionID stri
 }
 
 func (s *PostgresStore) transitionObjectRez(ctx context.Context, id, regionID string, state State) (ObjectRez, error) {
-	value, err := scanObjectRez(s.db.QueryRowContext(ctx, `UPDATE inventory_object_rezzes
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return ObjectRez{}, fmt.Errorf("begin object rez transition: %w", err)
+	}
+	defer tx.Rollback()
+	value, err := scanObjectRez(tx.QueryRowContext(ctx, `UPDATE inventory_object_rezzes
 		SET state=$3,updated_at=now() WHERE id=$1 AND region_id=$2 AND state='prepared'
 		RETURNING `+objectRezColumns, id, regionID, state))
 	if err == nil {
+		// A finalized no-copy rez leaves the object as the user's only copy.
+		// Retain the departed item's metadata — hidden, not inventory — so a
+		// later region loss cannot destroy it (ADR 0026). Same transaction as
+		// the transition, so no finalized rez exists without its record.
+		if state == Finalized {
+			if err := retainDepartedItem(ctx, tx, value.Item, value.RegionID, value.ObjectID); err != nil {
+				return ObjectRez{}, err
+			}
+		}
+		if err := tx.Commit(); err != nil {
+			return ObjectRez{}, fmt.Errorf("commit object rez transition: %w", err)
+		}
 		return value, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
