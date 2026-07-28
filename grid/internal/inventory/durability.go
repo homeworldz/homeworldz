@@ -11,12 +11,14 @@ import (
 // ADR 0026 saying no.
 var ErrAssetNotDurable = errors.New("inventory item asset is not durable")
 
-// DurabilityKeeper answers whether an asset's bytes are safe in the vault, and
-// puts them there if not. It is an interface here rather than an import so the
-// inventory store keeps the vault at arm's length: this package knows only
-// that some writes must be vouched for.
+// DurabilityKeeper answers whether an asset's bytes — its whole reference
+// closure, since inventory-to-asset is 1:N — are safe in the vault, and puts
+// them there if not. The asset type tells the keeper how to parse the bytes
+// for references; -1 means unknown, treated as opaque. It is an interface
+// here rather than an import so the inventory store keeps the vault at arm's
+// length: this package knows only that some writes must be vouched for.
 type DurabilityKeeper interface {
-	EnsureDurable(ctx context.Context, assetID string) error
+	EnsureDurable(ctx context.Context, assetID string, assetType int) error
 }
 
 // Asset types whose asset_id is not an asset at all. A link's asset_id names
@@ -54,12 +56,12 @@ func referencesBytes(item Item) bool {
 		item.AssetType != assetTypeLink && item.AssetType != assetTypeLinkFolder
 }
 
-func (s *durableStore) ensure(ctx context.Context, assetID string) error {
+func (s *durableStore) ensure(ctx context.Context, assetID string, assetType int) error {
 	// Both errors are wrapped: callers switch on ErrAssetNotDurable to know an
 	// inventory write was refused, and on the keeper's own error to know
 	// whether the bytes are missing, unregistered, or simply unreachable right
 	// now — which is the difference between "give up" and "try again".
-	if err := s.keeper.EnsureDurable(ctx, assetID); err != nil {
+	if err := s.keeper.EnsureDurable(ctx, assetID, assetType); err != nil {
 		return fmt.Errorf("%w: %s: %w", ErrAssetNotDurable, assetID, err)
 	}
 	return nil
@@ -67,7 +69,7 @@ func (s *durableStore) ensure(ctx context.Context, assetID string) error {
 
 func (s *durableStore) CreateItem(ctx context.Context, item Item) (Item, error) {
 	if referencesBytes(item) {
-		if err := s.ensure(ctx, item.AssetID); err != nil {
+		if err := s.ensure(ctx, item.AssetID, item.AssetType); err != nil {
 			return Item{}, err
 		}
 	}
@@ -86,7 +88,7 @@ func (s *durableStore) CreateItems(ctx context.Context, items []Item) ([]Item, e
 			continue
 		}
 		seen[item.AssetID] = struct{}{}
-		if err := s.ensure(ctx, item.AssetID); err != nil {
+		if err := s.ensure(ctx, item.AssetID, item.AssetType); err != nil {
 			return nil, err
 		}
 	}
@@ -97,7 +99,7 @@ func (s *durableStore) UpdateItem(ctx context.Context, item Item) (Item, error) 
 	// An update that re-points an item at different bytes is a new inventory
 	// reference and carries the same obligation as creating one.
 	if referencesBytes(item) {
-		if err := s.ensure(ctx, item.AssetID); err != nil {
+		if err := s.ensure(ctx, item.AssetID, item.AssetType); err != nil {
 			return Item{}, err
 		}
 	}
@@ -110,7 +112,21 @@ func (s *durableStore) UpdateItem(ctx context.Context, item Item) (Item, error) 
 // this check, because it is where a user's own creations enter inventory.
 func (s *durableStore) UpdateItemAsset(ctx context.Context, ownerID, itemID, assetID string) (Item, error) {
 	if assetID != "" && assetID != zeroUUID {
-		if err := s.ensure(ctx, assetID); err != nil {
+		// The wire carries no type here; the item being re-pointed already
+		// knows its own. A save never changes an item's asset type, so the
+		// existing type is the right parser for the new bytes. An item that
+		// cannot be found parses as opaque and the underlying update reports
+		// the real not-found.
+		assetType := -1
+		if items, err := s.Store.ListItems(ctx, ownerID); err == nil {
+			for _, existing := range items {
+				if existing.ID == itemID {
+					assetType = existing.AssetType
+					break
+				}
+			}
+		}
+		if err := s.ensure(ctx, assetID, assetType); err != nil {
 			return Item{}, err
 		}
 	}
@@ -119,7 +135,7 @@ func (s *durableStore) UpdateItemAsset(ctx context.Context, ownerID, itemID, ass
 
 func (s *durableStore) EnsureItem(ctx context.Context, item Item) (bool, error) {
 	if referencesBytes(item) {
-		if err := s.ensure(ctx, item.AssetID); err != nil {
+		if err := s.ensure(ctx, item.AssetID, item.AssetType); err != nil {
 			return false, err
 		}
 	}

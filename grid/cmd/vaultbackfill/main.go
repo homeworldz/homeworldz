@@ -35,6 +35,7 @@ import (
 const referencedAssets = `
 	SELECT item.asset_id,
 	       min(item.name) AS name,
+	       min(item.asset_type) AS asset_type,
 	       count(*) AS items,
 	       count(DISTINCT item.owner_user_id) AS owners
 	FROM inventory_items AS item
@@ -44,10 +45,11 @@ const referencedAssets = `
 	ORDER BY min(item.name)`
 
 type reference struct {
-	assetID string
-	name    string
-	items   int
-	owners  int
+	assetID   string
+	name      string
+	assetType int
+	items     int
+	owners    int
 }
 
 func main() {
@@ -112,7 +114,7 @@ func main() {
 		// Held-before tells apart "was already safe" from "this run saved it",
 		// which is the number that says whether the pass did anything.
 		before := heldAlready(ctx, registry, assetVault, item.assetID)
-		switch err := keeper.EnsureDurable(ctx, item.assetID); {
+		switch err := keeper.EnsureDurable(ctx, item.assetID, item.assetType); {
 		case err == nil && before:
 			durable++
 		case err == nil:
@@ -124,6 +126,9 @@ func main() {
 		case errors.Is(err, durability.ErrUnfetchable):
 			lost++
 			lostItems = append(lostItems, item)
+			// The closure walk may have failed on a *referenced* asset rather
+			// than this one; the error names it, so print it.
+			fmt.Printf("unfetchable  %s  %s: %v\n", item.assetID, item.name, err)
 		default:
 			failed++
 			fmt.Printf("error     %s  %s: %v\n", item.assetID, item.name, err)
@@ -165,7 +170,7 @@ func listReferences(ctx context.Context, db *sql.DB) ([]reference, error) {
 	var references []reference
 	for rows.Next() {
 		var item reference
-		if err := rows.Scan(&item.assetID, &item.name, &item.items, &item.owners); err != nil {
+		if err := rows.Scan(&item.assetID, &item.name, &item.assetType, &item.items, &item.owners); err != nil {
 			return nil, err
 		}
 		references = append(references, item)

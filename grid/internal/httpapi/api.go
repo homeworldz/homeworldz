@@ -124,7 +124,7 @@ func New(ready ReadinessChecker, version string, options Options) http.Handler {
 	// not vouched for.
 	if a.inventory != nil && a.vault != nil && a.assets != nil {
 		a.durability = durability.New(a.assets, a.vault, options.ServiceToken,
-			&http.Client{Timeout: 30 * time.Second})
+			&http.Client{Timeout: 30 * time.Second}).WithLogger(options.Logger)
 		a.inventory = inventory.WithDurability(a.inventory, a.durability)
 	}
 	mux := http.NewServeMux()
