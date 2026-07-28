@@ -67,7 +67,7 @@ seam above encoding.
    viewers see something sane. Sessions do not receive `AvatarAppearance`
    blobs in the first cut (texture-entry byte blobs are a legacy shape);
    what a session client renders for other avatars is deferred to the
-   asset-format work (ROADMAP Phase 9).
+   asset-format work (ROADMAP Phase 10).
 8. **Crossings cost one new message.** The transit machinery needs no
    change; the session equivalent of `EnableSimulator`/`CrossedRegion` is a
    single `crossing` envelope carrying `{regionHandle, sessionURL of the
@@ -114,7 +114,7 @@ Server → client:
   names arrive with the name-resolution work, additively.
 - `object` `{id, objectId, ownerId, name, position: [x,y,z],
   rotation: [x,y,z,w], scale: [x,y,z]}` — enough to place a box; prim
-  shape and materials arrive with the Phase 9 asset work, additively.
+  shape and materials arrive with the Phase 10 asset work, additively.
 - `transform` `{id, position: [x,y,z], velocity: [x,y,z], rotation}` —
   interest-filtered by draw distance. **`rotation` length discriminates
   the form**: 3 elements is an avatar's body rotation (the same triplet
@@ -241,7 +241,7 @@ Two consequences the server side must honor:
   avatars; session clients see the scene move.
 - **E2 — crossings:** the `crossing` envelope, transit parity with viewers.
 - **E3 — appearance/assets:** what session clients render for avatars,
-  with the Phase 9 asset formats.
+  with the Phase 10 asset formats.
 
 Out of scope throughout: capabilities/EventQueueGet, UDP texture transfer,
 inventory xfer — a session client fetches assets over HTTP.

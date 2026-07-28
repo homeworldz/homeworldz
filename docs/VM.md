@@ -16,7 +16,7 @@ executes it. It is the implementation-level companion to the higher-level
 
 > **Status: proof-of-concept.** Falcon currently implements a representative
 > slice of LSL sufficient to confirm the approach (see
-> [ROADMAP.md](ROADMAP.md), Phase 4). The format and opcode set below are real
+> [ROADMAP.md](ROADMAP.md), Phase 5). The format and opcode set below are real
 > and versioned, but small; the [Scope](#current-scope) section lists what is
 > not yet present. Everything here is versioned, so the surface can grow without
 > invalidating the design.
@@ -305,4 +305,4 @@ identifiers, to be aligned as it graduates:
   — a planned second script runtime behind the same boundary
 - [SCRIPTING.md](SCRIPTING.md) — scheduling, resource, compatibility, and
   crossing requirements
-- [ROADMAP.md](ROADMAP.md) — Phase 4: LSL Scripting
+- [ROADMAP.md](ROADMAP.md) — Phase 5: LSL Scripting

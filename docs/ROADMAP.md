@@ -21,9 +21,9 @@ protocol tasks. Percentages are deliberately approximate and should be revised
 when scope or implementation evidence changes.
 
 Two overall bars, because this repository carries two deliverables on
-different clocks: the legacy-compatible server platform (phases 1-7, serving
+different clocks: the legacy-compatible server platform (phases 1-8, serving
 Firestorm and compatible viewers), and the back-end grid/region support for
-the modern Homeworldz client (phases 8-9). The client itself is tracked in
+the modern Homeworldz client (phases 9-10). The client itself is tracked in
 its own repository with its own roadmap and progress.
 
 <label class="roadmap-overall-progress">
@@ -43,12 +43,13 @@ its own repository with its own roadmap and progress.
 | 1. Functional Single-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="100" aria-label="Phase 1 progress: 100%">100%</progress> | 100% |
 | 2. Connected Multi-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="82" aria-label="Phase 2 progress: 82%">82%</progress> | 82% |
 | 3. Interactive Physical World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="39" aria-label="Phase 3 progress: 39%">39%</progress> | 39% |
-| 4. LSL Scripting | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="15" aria-label="Phase 4 progress: 15%">15%</progress> | 15% |
-| 5. Social and Creator Platform | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="9" aria-label="Phase 5 progress: 9%">9%</progress> | 9% |
-| 6. Reliable Operations and Distribution | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="12" aria-label="Phase 6 progress: 12%">12%</progress> | 12% |
-| 7. Scale, Compatibility, and Ecosystem | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="2" aria-label="Phase 7 progress: 2%">2%</progress> | 2% |
-| 8. Modernized Communications Transport | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="55" aria-label="Phase 8 progress: 55%">55%</progress> | 55% |
-| 9. Modern Client Support | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="3" aria-label="Phase 9 progress: 3%">3%</progress> | 3% |
+| 4. Mesh and Creator Platform | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="6" aria-label="Phase 4 progress: 6%">6%</progress> | 6% |
+| 5. LSL Scripting | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="15" aria-label="Phase 5 progress: 15%">15%</progress> | 15% |
+| 6. Social Communications | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="4" aria-label="Phase 6 progress: 4%">4%</progress> | 4% |
+| 7. Reliable Operations and Distribution | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="12" aria-label="Phase 7 progress: 12%">12%</progress> | 12% |
+| 8. Scale, Compatibility, and Ecosystem | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="2" aria-label="Phase 8 progress: 2%">2%</progress> | 2% |
+| 9. Modernized Communications Transport | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="55" aria-label="Phase 9 progress: 55%">55%</progress> | 55% |
+| 10. Modern Client Support | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="3" aria-label="Phase 10 progress: 3%">3%</progress> | 3% |
 
 The overall estimate is weighted by expected effort and therefore is not the
 arithmetic mean of the phase percentages. The binary checkboxes below remain
@@ -59,7 +60,7 @@ The phases are parallel workstreams, not completion gates. Work may advance in
 any phase when it delivers useful capability or evidence; dependencies constrain
 individual tasks rather than requiring an earlier phase to be complete. Current
 active work spans connected regions, the interactive physical world, the
-Falcon LSL scripting foundation, and the modern-client back end of phases 8-9,
+Falcon LSL scripting foundation, and the modern-client back end of phases 9-10,
 which was promoted into this roadmap from the [2.0 roadmap](ROADMAP2.md) on
 2026-07-27; that document keeps the detailed sequence and gates, and the
 first-party client itself is tracked in its own repository.
@@ -169,7 +170,7 @@ first-party client itself is tracked in its own repository.
   mutation, copy, derez, return, and inventory round-trip lifecycle.
 - [x] Implement creator-attributed sound and animation uploads; personal
   notecard, gesture, and LSL-source creation and updates; and task notecard and
-  script updates. Phase 4 now compiles and executes the supported Falcon
+  script updates. Phase 5 now compiles and executes the supported Falcon
   language subset when a script enters or is saved in object contents.
   (Menu-based personal landmark creation needs land data and moves to Phase 2;
   existing landmark assets remain usable via teleport routing.)
@@ -235,7 +236,7 @@ first-party client itself is tracked in its own repository.
   auto-return of non-owner objects are enforced authoritatively. The damage
   (`AllowDamage`) and push (`RestrictPushObject`) flags are carried and surfaced
   but their enforcement is inert until the combat/health and `llPushObject`
-  systems exist (Phase 4).
+  systems exist (Phase 5).
 - [x] Implement estate and region settings needed for terrain, access, maturity,
   restart, and emergency administration. Estates are grid-level records shared
   across regions (owner, managers, allowed users/groups, bans, deny/voice/teleport
@@ -407,7 +408,40 @@ than twice.
 - [ ] Define lifecycle ordering for attachment, seated-avatar, physics, viewer,
   and later script events.
 
-## Phase 4: LSL Scripting
+## Phase 4: Mesh and Creator Platform
+
+What a creator needs before scripting matters: the content pipeline itself —
+mesh and its collision sources, uploads and validation, inventory breadth, and
+the economy boundary that decides whether creations can be sold. Scripting
+operates on this content, which is why it now follows rather than precedes it.
+
+### Content creation and inventory breadth
+
+- [ ] Complete viewer building workflows for linksets, materials, mesh, sculpt,
+  animation, sound, gesture, notecard, landmark, and script content.
+- [ ] Store portable mesh collision sources separately from visual LODs; build
+  validated static triangle shapes or dynamic convex compounds through the
+  selected physics adapter, with immutable collision capture for deforming
+  meshes and non-colliding attachments by default.
+- [ ] Implement uploads, validation, dependencies, creator attribution, asset
+  replication, and inventory creation for each supported asset type.
+- [x] Add viewer-authored wearable creation, editing, and named outfit saving
+  beyond the initial default-avatar flow.
+- [ ] Provide bulk inventory, search, copy, transfer, export-policy, recovery,
+  and large-inventory performance behavior.
+
+### Economy and marketplace boundary
+
+- [ ] Define whether credits remain display-only or become a transferable grid
+  balance before implementing paid behavior.
+- [ ] If enabled, implement auditable balances, idempotent transactions, object
+  sales, parcel payments, gifts, refunds, and operator controls.
+- [ ] Keep texture uploads free and preserve a useful no-economy deployment
+  mode.
+- [ ] Treat external payment processing and marketplace integration as separate,
+  explicitly approved security projects.
+
+## Phase 5: LSL Scripting
 
 ### Language and compiler
 
@@ -505,7 +539,11 @@ than twice.
   state as one transferable vehicle bundle.
 - [ ] Add load, tunneling, stacking, recovery, and abusive-object safeguards.
 
-## Phase 5: Social and Creator Platform
+## Phase 6: Social Communications
+
+Who people are to each other, and how they reach each other: identity and
+profiles, direct and group messaging, voice, friendship, and the group and
+role machinery that shared ownership rests on.
 
 ### Identity, profiles, and communication
 
@@ -530,33 +568,7 @@ than twice.
   inventory sharing, and moderation.
 - [ ] Audit sensitive group and ownership changes.
 
-### Content creation and inventory breadth
-
-- [ ] Complete viewer building workflows for linksets, materials, mesh, sculpt,
-  animation, sound, gesture, notecard, landmark, and script content.
-- [ ] Store portable mesh collision sources separately from visual LODs; build
-  validated static triangle shapes or dynamic convex compounds through the
-  selected physics adapter, with immutable collision capture for deforming
-  meshes and non-colliding attachments by default.
-- [ ] Implement uploads, validation, dependencies, creator attribution, asset
-  replication, and inventory creation for each supported asset type.
-- [x] Add viewer-authored wearable creation, editing, and named outfit saving
-  beyond the initial default-avatar flow.
-- [ ] Provide bulk inventory, search, copy, transfer, export-policy, recovery,
-  and large-inventory performance behavior.
-
-### Economy and marketplace boundary
-
-- [ ] Define whether credits remain display-only or become a transferable grid
-  balance before implementing paid behavior.
-- [ ] If enabled, implement auditable balances, idempotent transactions, object
-  sales, parcel payments, gifts, refunds, and operator controls.
-- [ ] Keep texture uploads free and preserve a useful no-economy deployment
-  mode.
-- [ ] Treat external payment processing and marketplace integration as separate,
-  explicitly approved security projects.
-
-## Phase 6: Reliable Operations and Distribution
+## Phase 7: Reliable Operations and Distribution
 
 ### Grid and region packages
 
@@ -617,7 +629,7 @@ than twice.
 - [ ] Perform fault-injection, abuse, denial-of-service, and recovery testing
   before describing a release as production-ready.
 
-## Phase 7: Scale, Compatibility, and Ecosystem
+## Phase 8: Scale, Compatibility, and Ecosystem
 
 ### Performance and scale
 
@@ -670,7 +682,7 @@ than twice.
 - [ ] Define the supported platform matrix, compatibility guarantees, upgrade
   policy, and long-term maintenance expectations for the first stable release.
 
-## Phase 8: Modernized Communications Transport
+## Phase 9: Modernized Communications Transport
 
 The modern client-facing wire surface: REST bootstrap, a grid-anchored
 notification channel, and a region-anchored session — replacing LLUDP,
@@ -738,14 +750,14 @@ sequence this summarizes.
 - [ ] Add WebTransport as a second advertised transport when its RFC
   publishes, per the version-floor rule.
 
-## Phase 9: Modern Client Support
+## Phase 10: Modern Client Support
 
 The grid/region back end for what the first-party client can do that a legacy
 viewer cannot — served through negotiated region extensions so Firestorm never
 sees a change ([ADR 0032](adr/0032-region-extensions-for-new-client.md)). The
 **client itself** — the engine-neutral C++ core and its native and browser
 frontends — is developed and tracked in its own repository, with its own
-roadmap, status, and progress; phases 8 and 9 here are the server-side surface
+roadmap, status, and progress; phases 9 and 10 here are the server-side surface
 it builds against.
 
 - [x] Dress a session avatar for viewers: spawn seeds the server-side

@@ -235,7 +235,7 @@ Parcel enforcement is authoritative for build/rez (`CreateObjects`), script
 execution (`AllowOtherScripts`), teleport entry and continuous walk-in ejection
 (ban/access lists plus landing-point routing), viewer-initiated object return,
 and periodic `OtherCleanTime` auto-return. Group-scoped flags currently fall back
-to owner-only behaviour because groups are not yet modelled (Phase 5). The damage
+to owner-only behaviour because groups are not yet modelled (Phase 6). The damage
 (`AllowDamage`) and push (`RestrictPushObject`) flags are carried but inert until
 the combat/health and `llPushObject` systems exist.
 
@@ -258,7 +258,7 @@ Two consequences are visible to creators:
   use convex hulls, but as a consequence of their prim shape, not of this
   setting.)
 - **Mesh, dynamic pathfinding, and avatar hover height** report `false`. Mesh
-  assets are Phase 5 and ADR 0023 work. The region emits a hover-height block in
+  assets are Phase 4 and ADR 0023 work. The region emits a hover-height block in
   `AvatarAppearance` but accepts no hover-height update, so the control stays
   hidden rather than appearing inert.
 

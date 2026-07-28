@@ -42,10 +42,10 @@ the primary sequence.
 
 2.0 also *depends* on 1.0 rather than competing with it. The region, parcel,
 crossing, inventory, and asset layers it builds on are 1.0 work, and the script
-runtime boundary that makes a second language possible is 1.0's Phase 4. In
+runtime boundary that makes a second language possible is 1.0's Phase 5. In
 particular:
 
-- Lua work should not begin before 1.0 Phase 4 has a real LSL host-function
+- Lua work should not begin before 1.0 Phase 5 has a real LSL host-function
   library and a stable snapshot ABI — the Lua runtime is a peer of Falcon, not a
   replacement, and reworking Falcon's foundations twice is the outcome to avoid.
 - Region extensions assume the asset, blob, and instance separation already

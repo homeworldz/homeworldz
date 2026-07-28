@@ -111,7 +111,7 @@ boundary**, not a bypass:
   from the raw local file backups above.
 
 The permission- and creator-aware behavior is a requirement on the IAR/OAR work
-(Phase 6), not optional polish.
+(Phase 7), not optional polish.
 
 ## Future: creator-signed provenance
 

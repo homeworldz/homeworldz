@@ -183,7 +183,7 @@ accounts observing each other. Judgment calls within the contract:
   smuggled in here.
 - **Anyone authenticated can message anyone.** Blocking, muting, and rate
   policy beyond the tier's existing per-IP limiter are social-platform work
-  (ROADMAP Phase 5), not transport work.
+  (ROADMAP Phase 6), not transport work.
 
 ## 2026-07-27 — step 5, the region session (WebSocket, option A)
 
