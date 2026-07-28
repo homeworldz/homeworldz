@@ -1,5 +1,7 @@
 #include "homeworldz/session_protocol.h"
 
+#include "homeworldz/avatar_controller.h"
+
 #include <charconv>
 
 namespace homeworldz::session {
@@ -143,6 +145,16 @@ std::optional<std::string> object_extent(std::string_view text, std::size_t posi
 }
 
 } // namespace
+
+// A shortest-round-trip decimal for a JSON number: "4" not "4.000000", and
+// "9.81" exactly, so the constants a client reads are the constants the
+// controller computes with.
+std::string json_number_text(double value) {
+    std::array<char, 32> buffer{};
+    const auto [end, error] = std::to_chars(buffer.data(), buffer.data() + buffer.size(), value);
+    if (error != std::errc{}) return "0";
+    return std::string(buffer.data(), end);
+}
 
 std::string json_string(std::string_view value) {
     std::string rendered;
@@ -300,11 +312,22 @@ SessionCore::Result SessionCore::handle_text(std::string_view text) {
         identity_ = *resolved;
         established_ = true;
         Result result;
+        // The movement block publishes the region's authoritative movement
+        // constants so a predicting client simulates this region rather than
+        // guessing (docs/CLIENT2-EMBODIMENT.md). interestSweepMs is the
+        // avatar-interest sweep period — the floor on how stale a remote
+        // transform can be, which is what a client's extrapolation cap should
+        // be derived from. Additive fields, per the payload contract.
         result.send.push_back(encode_envelope("hello", {},
             "{\"region\":" + json_string(region_name_) +
             ",\"identity\":{\"id\":" + json_string(identity_.user_id) +
             ",\"userid\":" + json_string(identity_.userid) +
-            ",\"displayName\":" + json_string(identity_.display_name) + "}}"));
+            ",\"displayName\":" + json_string(identity_.display_name) + "}" +
+            ",\"movement\":{\"walkSpeed\":" + json_number_text(homeworldz::viewer::avatar_walk_speed) +
+            ",\"runSpeed\":" + json_number_text(homeworldz::viewer::avatar_fast_speed) +
+            ",\"jumpVelocity\":" + json_number_text(homeworldz::viewer::avatar_jump_velocity) +
+            ",\"gravity\":" + json_number_text(homeworldz::viewer::avatar_gravity) +
+            "},\"interestSweepMs\":100}"));
         return result;
     }
 

@@ -92,6 +92,13 @@ int main() {
     if (!greeting || greeting->type != "hello" ||
         homeworldz::session::json_field(greeting->payload, "region") != "Sandbox")
         return 11;
+    // The hello publishes the movement constants a predicting client
+    // simulates with, and the interest-sweep period its extrapolation cap
+    // derives from. These are the controller's own numbers, not copies.
+    if (greeting->payload.find("\"movement\":{\"walkSpeed\":4,\"runSpeed\":8,"
+                               "\"jumpVelocity\":5,\"gravity\":9.81}") == std::string::npos ||
+        greeting->payload.find("\"interestSweepMs\":100") == std::string::npos)
+        return 27;
 
     // Ping answers pong carrying the correlation identifier.
     const auto pong = session.handle_text(

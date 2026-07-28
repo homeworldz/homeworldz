@@ -58,6 +58,17 @@ enum class MovementAnimation {
 
 std::string_view movement_animation_id(MovementAnimation animation);
 
+// The movement model's authoritative constants. Published to session clients
+// in the hello payload so client-side prediction can simulate what this
+// controller will do with the same input, rather than hard-coding an
+// observation that rubber-bands the day the region changes it (client core
+// request, 2026-07-28). The region owns these numbers; this header is their
+// single definition.
+inline constexpr double avatar_walk_speed = 4.0;   // m/s; also flight cruise
+inline constexpr double avatar_fast_speed = 8.0;   // m/s, run and fast flight
+inline constexpr double avatar_jump_velocity = 5.0;  // m/s straight up
+inline constexpr double avatar_gravity = 9.81;     // m/s², airborne non-flying
+
 class AvatarController {
 public:
     explicit AvatarController(scene::Vector3 spawn = {128.0, 128.0, 25.0},

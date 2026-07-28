@@ -211,7 +211,7 @@ void AvatarController::step(double seconds) {
     const double length = std::hypot(forward, left);
     if (length > 1.0) { forward /= length; left /= length; }
     const bool fast = controls_ & (control_fast_forward | control_fast_left | control_fast_up);
-    const double speed = fast ? 8.0 : 4.0;
+    const double speed = fast ? avatar_fast_speed : avatar_walk_speed;
     // Horizontal velocity is control-driven while flying (release hovers in
     // place) or grounded (release stops), but an airborne avatar that is not
     // flying is ballistic: momentum from the moment flight ended or the jump
@@ -232,10 +232,10 @@ void AvatarController::step(double seconds) {
         state_.grounded = false;
     } else {
         if ((controls_ & control_up) && state_.grounded) {
-            state_.velocity.z = 5.0;
+            state_.velocity.z = avatar_jump_velocity;
             state_.grounded = false;
         }
-        if (!state_.grounded) state_.velocity.z -= 9.81 * seconds;
+        if (!state_.grounded) state_.velocity.z -= avatar_gravity * seconds;
     }
     state_.position.x += state_.velocity.x * seconds;
     state_.position.y += state_.velocity.y * seconds;
