@@ -24,6 +24,7 @@ import (
 	"github.com/homeworldz/server/grid/internal/presence"
 	"github.com/homeworldz/server/grid/internal/provisioning"
 	"github.com/homeworldz/server/grid/internal/regions"
+	"github.com/homeworldz/server/grid/internal/renditions"
 	"github.com/homeworldz/server/grid/internal/tasktransfer"
 	"github.com/homeworldz/server/grid/internal/transit"
 	"github.com/homeworldz/server/grid/internal/vault"
@@ -35,24 +36,26 @@ type ReadinessChecker interface {
 }
 
 type API struct {
-	ready         ReadinessChecker
-	version       string
-	publicURL     string
-	gridName      string
-	logger        *slog.Logger
-	regions       regions.Store
-	identity      identity.Store
-	presence      presence.Store
-	inventory     inventory.Store
-	assets        assetmeta.Store
-	durability    *durability.Keeper
-	vault         vault.Store
-	serviceToken  string
-	provisioned   provisioning.Store
-	terrainHTTP   *http.Client
-	terrainCache  terrainTileCache
-	transits      transit.Store
-	taskTransfers tasktransfer.Store
+	ready          ReadinessChecker
+	version        string
+	publicURL      string
+	gridName       string
+	logger         *slog.Logger
+	regions        regions.Store
+	identity       identity.Store
+	presence       presence.Store
+	inventory      inventory.Store
+	assets         assetmeta.Store
+	renditions     renditions.Store
+	workerToken    string
+	durability     *durability.Keeper
+	vault          vault.Store
+	serviceToken   string
+	provisioned    provisioning.Store
+	terrainHTTP    *http.Client
+	terrainCache   terrainTileCache
+	transits       transit.Store
+	taskTransfers  tasktransfer.Store
 	locations      locations.Store
 	gestures       gestures.Store
 	estates        estate.Store
@@ -70,16 +73,22 @@ func (a *API) regionExtent(ctx context.Context, id string) float32 {
 }
 
 type Options struct {
-	ServiceToken      string
-	GridPublicURL     string
-	GridName          string
-	Logger            *slog.Logger
-	Regions           regions.Store
-	Identity          identity.Store
-	Presence          presence.Store
-	Inventory         inventory.Store
-	Assets            assetmeta.Store
-	Vault             vault.Store
+	ServiceToken  string
+	GridPublicURL string
+	GridName      string
+	Logger        *slog.Logger
+	Regions       regions.Store
+	Identity      identity.Store
+	Presence      presence.Store
+	Inventory     inventory.Store
+	Assets        assetmeta.Store
+	Vault         vault.Store
+	// Renditions stores derived encodings and the conversion queue
+	// (ADR 0033); WorkerToken is the conversion-worker credential that
+	// gates writing them. See renditions.go for why it is not the
+	// service token.
+	Renditions        renditions.Store
+	WorkerToken       string
 	Provisioned       provisioning.Store
 	TerrainHTTPClient *http.Client
 	Transits          transit.Store
@@ -101,8 +110,9 @@ type Options struct {
 func New(ready ReadinessChecker, version string, options Options) http.Handler {
 	a := &API{ready: ready, version: version, publicURL: strings.TrimRight(options.GridPublicURL, "/"),
 		gridName: strings.TrimSpace(options.GridName), logger: options.Logger,
-		regions:  options.Regions, identity: options.Identity, presence: options.Presence,
+		regions: options.Regions, identity: options.Identity, presence: options.Presence,
 		inventory: options.Inventory, assets: options.Assets, vault: options.Vault,
+		renditions: options.Renditions, workerToken: options.WorkerToken,
 		serviceToken: options.ServiceToken,
 		provisioned:  options.Provisioned, terrainHTTP: options.TerrainHTTPClient,
 		terrainCache: newTerrainTileCache(), transits: options.Transits,
@@ -159,6 +169,7 @@ func New(ready ReadinessChecker, version string, options Options) http.Handler {
 	mux.HandleFunc("/api/v1/assets", a.assetsRoot)
 	mux.HandleFunc("/api/v1/assets/", a.assetByID)
 	mux.HandleFunc("/api/v1/vault/assets/", a.vaultAsset)
+	mux.HandleFunc("/api/v1/rendition-jobs/", a.renditionJobs)
 	mux.HandleFunc("/api/v1/transits", a.transitsRoot)
 	mux.HandleFunc("/api/v1/transits/", a.transitByID)
 	mux.HandleFunc("/api/v1/task-transfers", a.taskTransfersRoot)
@@ -169,7 +180,7 @@ func New(ready ReadinessChecker, version string, options Options) http.Handler {
 	mux.HandleFunc("/api/v1/object-rezzes/", a.objectRezByID)
 	mux.HandleFunc("/", a.notFound)
 	return withRequestID(withRequestLogging(
-		authenticateInternal(mux, options.ServiceToken), options.Logger,
+		authenticateInternal(mux, options.ServiceToken, options.WorkerToken), options.Logger,
 	))
 }
 

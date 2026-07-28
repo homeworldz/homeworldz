@@ -52,7 +52,12 @@ func withRequestLogging(next http.Handler, logger *slog.Logger) http.Handler {
 	})
 }
 
-func authenticateInternal(next http.Handler, serviceToken string) http.Handler {
+// authenticateInternal admits holders of the service token or the worker
+// token to the internal tier. The worker token is not a second service
+// token: worker-only routes re-check it specifically (workerAuthorized), so
+// a worker can do no more than convert, and a region can never write
+// renditions (ADR 0033, ADR 0028).
+func authenticateInternal(next http.Handler, serviceToken, workerToken string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/api/v1/region-runtime/") {
 			next.ServeHTTP(w, r)
@@ -64,7 +69,9 @@ func authenticateInternal(next http.Handler, serviceToken string) http.Handler {
 			})
 			return
 		}
-		if !validBearerToken(r.Header.Get("Authorization"), serviceToken) {
+		authorization := r.Header.Get("Authorization")
+		if !validBearerToken(authorization, serviceToken) &&
+			(workerToken == "" || !validBearerToken(authorization, workerToken)) {
 			w.Header().Set("WWW-Authenticate", "Bearer")
 			writeJSON(w, http.StatusUnauthorized, Error{
 				Code: "unauthorized", Message: "a valid service token is required",

@@ -1,0 +1,139 @@
+package renditions
+
+import (
+	"bytes"
+	"context"
+	"database/sql"
+	"errors"
+	"io"
+	"os"
+	"testing"
+	"time"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
+)
+
+// registerAsset creates the minimal canonical asset a rendition derives from:
+// a blob and an asset row, cleaned up in reverse order.
+func registerAsset(t *testing.T, db *sql.DB) string {
+	t.Helper()
+	var blobID, assetID string
+	if err := db.QueryRow(`
+		INSERT INTO blobs (byte_length, checksum, checksum_algorithm)
+		VALUES (24, '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff', 'sha256')
+		RETURNING blob_id`).Scan(&blobID); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`
+		INSERT INTO assets (asset_id, blob_id, creator_user_id)
+		VALUES (gen_random_uuid(), $1, gen_random_uuid()) RETURNING asset_id`, blobID).
+		Scan(&assetID); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = db.Exec(`DELETE FROM rendition_jobs WHERE asset_id = $1`, assetID)
+		_, _ = db.Exec(`DELETE FROM blobs WHERE blob_id IN (
+			SELECT blob_id FROM asset_renditions WHERE asset_id = $1)`, assetID)
+		_, _ = db.Exec(`DELETE FROM asset_renditions WHERE asset_id = $1`, assetID)
+		_, _ = db.Exec(`DELETE FROM assets WHERE asset_id = $1`, assetID)
+		_, _ = db.Exec(`DELETE FROM blobs WHERE blob_id = $1`, blobID)
+	})
+	return assetID
+}
+
+func TestPostgresRenditionLifecycle(t *testing.T) {
+	databaseURL := os.Getenv("HOMEWORLDZ_TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("HOMEWORLDZ_TEST_DATABASE_URL is not configured")
+	}
+	db, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	store, err := NewPostgresStore(db, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	assetID := registerAsset(t, db)
+
+	// Request is idempotent; a repeat returns the same job.
+	job, err := store.Request(ctx, assetID, "sl-mesh")
+	if err != nil || job.State != "queued" {
+		t.Fatalf("request = %#v, %v", job, err)
+	}
+	repeat, err := store.Request(ctx, assetID, "sl-mesh")
+	if err != nil || repeat.ID != job.ID {
+		t.Fatalf("repeat request = %#v, %v", repeat, err)
+	}
+	if _, err := store.Request(ctx, assetID, "stl"); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("invalid kind = %v", err)
+	}
+	if _, err := store.Request(ctx,
+		"eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", "sl-mesh"); !errors.Is(err, ErrUnknownAsset) {
+		t.Fatalf("unknown asset = %v", err)
+	}
+
+	// Claim leases it; a second claim finds nothing while the lease holds.
+	claimed, ok, err := store.Claim(ctx, []string{"sl-mesh", "gltf"}, time.Minute)
+	if err != nil || !ok || claimed.ID != job.ID || claimed.State != "leased" ||
+		claimed.Attempts != 1 {
+		t.Fatalf("claim = %#v %v %v", claimed, ok, err)
+	}
+	if _, ok, err := store.Claim(ctx, []string{"sl-mesh"}, time.Minute); err != nil || ok {
+		t.Fatalf("second claim during lease = %v %v", ok, err)
+	}
+
+	// Failure re-queues with the reason; the job is claimable again.
+	if err := store.Fail(ctx, claimed.ID, "converter exploded"); err != nil {
+		t.Fatalf("fail = %v", err)
+	}
+	reclaimed, ok, err := store.Claim(ctx, []string{"sl-mesh"}, time.Minute)
+	if err != nil || !ok || reclaimed.Attempts != 2 {
+		t.Fatalf("reclaim = %#v %v %v", reclaimed, ok, err)
+	}
+
+	// Put stores bytes, mints the blob, records the rendition, completes the
+	// job — and a second Put (a regeneration) replaces the record.
+	payload := []byte("the derived sl-mesh bytes")
+	stored, err := store.Put(ctx, assetID, "sl-mesh", "meshsmith/0.1", bytes.NewReader(payload))
+	if err != nil || stored.ByteLength != int64(len(payload)) || stored.BlobID == "" {
+		t.Fatalf("put = %#v, %v", stored, err)
+	}
+	listed, err := store.List(ctx, assetID)
+	if err != nil || len(listed) != 1 || listed[0].Generator != "meshsmith/0.1" {
+		t.Fatalf("list = %#v, %v", listed, err)
+	}
+	content, opened, err := store.Open(ctx, assetID, "sl-mesh")
+	if err != nil {
+		t.Fatalf("open = %v", err)
+	}
+	served, _ := io.ReadAll(content)
+	content.Close()
+	if !bytes.Equal(served, payload) || opened.Checksum != stored.Checksum {
+		t.Fatalf("served = %q, %#v", served, opened)
+	}
+	var jobState string
+	if err := db.QueryRow(`SELECT state FROM rendition_jobs WHERE id = $1`, job.ID).
+		Scan(&jobState); err != nil || jobState != "done" {
+		t.Fatalf("job state after put = %q, %v", jobState, err)
+	}
+
+	regenerated, err := store.Put(ctx, assetID, "sl-mesh", "meshsmith/0.2",
+		bytes.NewReader([]byte("better bytes")))
+	if err != nil || regenerated.BlobID == stored.BlobID {
+		t.Fatalf("regeneration = %#v, %v", regenerated, err)
+	}
+	listed, _ = store.List(ctx, assetID)
+	if len(listed) != 1 || listed[0].Generator != "meshsmith/0.2" {
+		t.Fatalf("list after regeneration = %#v", listed)
+	}
+
+	// Missing renditions read as not-yet.
+	if _, _, err := store.Open(ctx, assetID, "gltf"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("open missing = %v", err)
+	}
+}

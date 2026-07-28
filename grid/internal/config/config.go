@@ -16,6 +16,14 @@ type Grid struct {
 	Name         string
 	DatabaseURL  string
 	ServiceToken string
+	// WorkerToken authenticates the grid's own conversion workers (ADR 0033).
+	// It is deliberately not the service token: regions hold that one, regions
+	// are untrusted (ADR 0028), and a rendition upload cannot be
+	// checksum-verified the way region-served asset bytes can — the grid
+	// cannot verify a conversion without redoing it. Only holders of this
+	// token may claim conversion jobs or write rendition bytes. Empty
+	// disables those endpoints.
+	WorkerToken string
 	Directory    string
 	// WelcomeLocations is the ordered new-arrival list ([grid]
 	// welcome_locations): comma-separated Region/x/y/z entries, first entry
@@ -75,6 +83,7 @@ func LoadGrid(directory string) (Grid, error) {
 		Name:         strings.TrimSpace(parsed.Section("grid").Key("name").MustString("Homeworldz")),
 		DatabaseURL:  parsed.Section("database").Key("url").String(),
 		ServiceToken: parsed.Section("auth").Key("service_token").String(),
+		WorkerToken:  parsed.Section("auth").Key("worker_token").String(),
 		Directory:    resolved,
 		VaultPath: strings.TrimSpace(parsed.Section("vault").Key("path").
 			MustString(filepath.Join("var", "vault"))),

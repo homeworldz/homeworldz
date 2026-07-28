@@ -52,7 +52,26 @@ func (a *API) assetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := strings.TrimPrefix(r.URL.Path, "/api/v1/assets/")
-	if !validUUID(id) || strings.Contains(id, "/") {
+	if suffix, remainder, found := strings.Cut(id, "/"); found {
+		// /assets/{id}/renditions and /assets/{id}/renditions/{kind}
+		// (ADR 0033). Kind names contain no slash by construction.
+		if !validUUID(suffix) {
+			a.notFound(w, r)
+			return
+		}
+		if remainder == "renditions" {
+			a.assetRenditions(w, r, suffix, "")
+			return
+		}
+		if kind, extra, nested := strings.Cut(strings.TrimPrefix(remainder, "renditions/"),
+			"/"); strings.HasPrefix(remainder, "renditions/") && !nested && kind != "" && extra == "" {
+			a.assetRenditions(w, r, suffix, kind)
+			return
+		}
+		a.notFound(w, r)
+		return
+	}
+	if !validUUID(id) {
 		a.notFound(w, r)
 		return
 	}

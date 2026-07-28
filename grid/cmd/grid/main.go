@@ -30,6 +30,7 @@ import (
 	"github.com/homeworldz/server/grid/internal/presence"
 	"github.com/homeworldz/server/grid/internal/provisioning"
 	"github.com/homeworldz/server/grid/internal/regions"
+	"github.com/homeworldz/server/grid/internal/renditions"
 	"github.com/homeworldz/server/grid/internal/tasktransfer"
 	"github.com/homeworldz/server/grid/internal/transit"
 	"github.com/homeworldz/server/grid/internal/vault"
@@ -119,6 +120,7 @@ func main() {
 	}
 
 	assetVault := vaultStore(db, settings.VaultPath, logger)
+	renditionStore := renditionsStore(db, settings.VaultPath, logger)
 
 	welcome, err := arrival.ParseList(settings.WelcomeLocations)
 	if err != nil {
@@ -152,6 +154,8 @@ func main() {
 			Inventory:         inventoryStore(db),
 			Assets:            assetStore(db),
 			Vault:             assetVault,
+			Renditions:        renditionStore,
+			WorkerToken:       settings.WorkerToken,
 			Provisioned:       provisionedStore,
 			TerrainHTTPClient: &http.Client{Timeout: 2 * time.Second},
 			Transits:          transitStore(db),
@@ -286,6 +290,21 @@ func assetStore(db *sql.DB) assetmeta.Store {
 // purpose is that inventory durability never depends on something optional, and
 // once inventory commits enforce it, a grid that silently ran without one would
 // have accepted items whose bytes it never stored.
+// renditionsStore roots the derived-encoding tree beside the vault's shards
+// (shard names are two hex characters, so "renditions" cannot collide).
+func renditionsStore(db *sql.DB, vaultDirectory string, logger *slog.Logger) renditions.Store {
+	if db == nil {
+		return nil
+	}
+	store, err := renditions.NewPostgresStore(db, filepath.Join(vaultDirectory, "renditions"))
+	if err != nil {
+		logger.Error("open rendition store", "error", err, "path", vaultDirectory)
+		os.Exit(1)
+	}
+	logger.Info("rendition store ready", "path", store.Directory())
+	return store
+}
+
 func vaultStore(db *sql.DB, directory string, logger *slog.Logger) vault.Store {
 	if db == nil {
 		return nil
