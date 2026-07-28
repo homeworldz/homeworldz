@@ -321,11 +321,16 @@ but stays unchecked until its complete wording is satisfied.
 
 ### Inventory asset durability
 
-**Current priority (2026-07-27).** A region that dies must not take its
-users' inventory with it, and today it would: the vault store exists but
-nothing writes to it, so inventory still depends on the region that
-originated the bytes. The items in this section come before other phases'
-work until that is no longer true.
+**Landed 2026-07-28.** A region that dies no longer takes its users'
+inventory with it: the vault holds verified bytes for every
+inventory-referenced asset — the item's whole reference closure, since
+inventory-to-asset is 1:N — and the grid refuses any inventory commit it
+cannot make durable first. The adoption backfill named 19 pre-vault assets
+as already lost; everything else is safe, and everything created from now
+on is safe by construction. Regions mirror the rule for scene content: a
+rezzed object's closure is materialized region-locally so region backups
+are self-contained, and a hidden retained record preserves no-copy items
+that leave inventory into the scene.
 
 Sequencing, decided on one fact: **the vault is empty, so re-keying it costs
 nothing now and means moving every stored blob later.** The layer separation
@@ -333,7 +338,7 @@ below therefore lands before the write-through and backfill that fill the
 vault, and the enforcement is written once against the final shape rather
 than twice.
 
-- [ ] Separate the blob, asset, and instance layers of
+- [x] Separate the blob, asset, and instance layers of
   [ADR 0027](adr/0027-asset-blob-instance-separation.md): a grid-assigned
   `blob_id` naming bytes, with the digest demoted to an integrity checksum;
   `asset_id` carrying creator, provenance, and the exportable option;
@@ -348,22 +353,33 @@ than twice.
   never originates assets, never hosts agents, and is never in the viewer data
   path (ADR 0026). Blob bytes live on a sharded filesystem tree under the
   `[vault] path` setting and are indexed in PostgreSQL; regions reach them at
-  `/api/v1/vault/blobs/{sha256}` behind the internal service-token boundary,
+  `/api/v1/vault/assets/{assetId}` behind the internal service-token boundary,
   which is what keeps the vault out of the viewer fetch path. Ingest verifies the
-  declared digest and length on a temporary file before an atomic rename, so
+  registry's recorded checksum and length on a temporary file before an atomic rename, so
   bytes that fail verification are never reachable, and it is idempotent. A
   presence check confirms the stored file as well as the index row, so the vault
   never claims a blob it cannot serve. This is the store only — the enforcement,
   ingest, fallback, and backfill items below are what make inventory durability
   real, and until they land the vault holds nothing.
-- [ ] Enforce the vault invariant grid-side: commit an inventory item only
-  after the vault holds verified bytes for its referenced asset, with
-  write-through ingest on upload, take-to-inventory, give, and purchase.
-- [ ] Treat region copies of vault-held assets as an evictable cache and
+- [x] Enforce the vault invariant grid-side: commit an inventory item only
+  after the vault holds verified bytes for its referenced asset — the whole
+  reference closure, gathered by parsing the vault's own copy of the bytes
+  (objects' face textures and task inventory, nested objects recursively,
+  wearable textures, gesture animations and sounds, notecard embeds).
+  Enforcement wraps the inventory store, so every committing path — and any
+  written later — passes through it; the grid *fetches* bytes from recorded
+  locations at commit, so durability never depends on region cooperation and
+  a region write-through stays an optimization.
+- [x] Treat region copies of vault-held assets as an evictable cache and
   scene-only assets as region-owned; demote region-to-region fetch to an
-  optimization with the vault as the always-available fallback location.
-- [ ] Backfill existing inventory-referenced assets into the vault from live
-  registered locations and report assets that are already unfetchable.
+  optimization with the vault as the always-available fallback location. A
+  region also materializes the reference closure of scene content locally —
+  at rez, at contents-add, and in a whole-scene sweep at startup — so a
+  backup of the region's own storage is self-contained.
+- [x] Backfill existing inventory-referenced assets into the vault from live
+  registered locations and report assets that are already unfetchable
+  (`cmd/vaultbackfill`, idempotent, closure-aware; the first live run
+  ingested 85 blobs and named 19 assets as already lost).
 - [ ] Tier rarely accessed vault blobs onto slower S3-compatible storage with
   hash re-verification on rehydration, keeping tiering vault-internal.
 
