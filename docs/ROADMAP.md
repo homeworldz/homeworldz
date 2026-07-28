@@ -4,9 +4,7 @@ This roadmap describes the major implementation sequence for Homeworldz. It is
 organized at three levels: phases, milestones within each phase, and major work
 items within each milestone. [`PLAN.md`](PLAN.md) remains the detailed
 engineering checklist, while [`FEATURES.md`](FEATURES.md) records intentional
-product differences and the ADRs record architectural decisions. The
-[commit history for this document](https://github.com/homeworldz/server/commits/main/docs/ROADMAP.md)
-shows how the roadmap has evolved over time.
+product differences and the ADRs record architectural decisions. 
 
 Checkboxes describe the present state, not a promise of a release date. A
 milestone is complete only when its automated tests and applicable Firestorm
@@ -14,7 +12,7 @@ acceptance tests pass.
 
 ## Progress snapshot
 
-Updated 2026-07-27. These bars are effort-weighted engineering estimates, not
+**Updated 2026-07-28**: These bars are effort-weighted engineering estimates, not
 simple checkbox ratios. Later scripting, crossings, social systems, security,
 recovery, and scale items are substantially larger than many completed viewer
 protocol tasks. Percentages are deliberately approximate and should be revised
@@ -26,17 +24,21 @@ Firestorm and compatible viewers), and the back-end grid/region support for
 the modern Homeworldz client (phases 9-10). The client itself is tracked in
 its own repository with its own roadmap and progress.
 
+<p>
 <label class="roadmap-overall-progress">
-  <span>Legacy (Firestorm-compatible) servers</span>
+  <span>Legacy (Firestorm-compatible) services:</span>
   <progress data-color="primary" max="100" value="30">30%</progress>
   <strong>30%</strong>
 </label>
+</p>
 
+<p>
 <label class="roadmap-overall-progress">
-  <span>Modern Homeworldz client: grid/region back end</span>
+  <span>Modern Homeworldz client + back-end:</span>
   <progress data-color="primary" max="100" value="28">28%</progress>
   <strong>28%</strong>
 </label>
+</p>
 
 | Phase | Progress | Estimate |
 | --- | --- | ---: |
@@ -55,15 +57,6 @@ The overall estimate is weighted by expected effort and therefore is not the
 arithmetic mean of the phase percentages. The binary checkboxes below remain
 the acceptance record; partially implemented work contributes to these bars
 but stays unchecked until its complete wording is satisfied.
-
-The phases are parallel workstreams, not completion gates. Work may advance in
-any phase when it delivers useful capability or evidence; dependencies constrain
-individual tasks rather than requiring an earlier phase to be complete. Current
-active work spans connected regions, the interactive physical world, the
-Falcon LSL scripting foundation, and the modern-client back end of phases 9-10,
-which was promoted into this roadmap from the [2.0 roadmap](ROADMAP2.md) on
-2026-07-27; that document keeps the detailed sequence and gates, and the
-first-party client itself is tracked in its own repository.
 
 ## Phase 1: Functional Single-region World
 
