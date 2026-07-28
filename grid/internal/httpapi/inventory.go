@@ -11,6 +11,16 @@ import (
 	"github.com/homeworldz/server/grid/internal/inventory"
 )
 
+// inventoryStoreError answers a store failure that no caller input explains.
+// The response stays generic; the cause goes to the log, the only place an
+// operator can see it, keyed by requestId to the request line.
+func (a *API) inventoryStoreError(w http.ResponseWriter, r *http.Request, message string, err error) {
+	if a.logger != nil {
+		a.logger.Error(message, "requestId", requestIDFromContext(r.Context()), "error", err)
+	}
+	writeJSON(w, http.StatusInternalServerError, Error{Code: "inventory_store_error", Message: message})
+}
+
 func (a *API) inventoryByUser(w http.ResponseWriter, r *http.Request) {
 	if a.inventory == nil {
 		writeJSON(w, http.StatusServiceUnavailable, Error{Code: "inventory_store_unavailable", Message: "inventory storage is unavailable"})
@@ -76,7 +86,7 @@ func (a *API) inventoryByUser(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		folders, err := a.inventory.ListFolders(r.Context(), userID)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, Error{Code: "inventory_store_error", Message: "inventory folders could not be listed"})
+			a.inventoryStoreError(w, r, "inventory folders could not be listed", err)
 			return
 		}
 		if folders == nil {
@@ -109,7 +119,7 @@ func (a *API) inventoryByUser(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, Error{Code: "inventory_store_error", Message: "inventory folder could not be created"})
+			a.inventoryStoreError(w, r, "inventory folder could not be created", err)
 			return
 		}
 		w.Header().Set("Location", "/api/v1/inventory/"+userID+"/folders/"+folder.ID)
@@ -159,7 +169,7 @@ func (a *API) inventoryItemAssetByUser(w http.ResponseWriter, r *http.Request, u
 	case errors.Is(err, inventory.ErrItemNotFound):
 		writeJSON(w, http.StatusNotFound, Error{Code: "inventory_item_not_found", Message: "inventory item was not found"})
 	case err != nil:
-		writeJSON(w, http.StatusInternalServerError, Error{Code: "inventory_store_error", Message: "inventory item asset could not be updated"})
+		a.inventoryStoreError(w, r, "inventory item asset could not be updated", err)
 	default:
 		writeJSON(w, http.StatusOK, item)
 	}
@@ -173,7 +183,7 @@ func (a *API) inventorySystemFolderByUser(w http.ResponseWriter, r *http.Request
 	}
 	folders, err := a.inventory.ListFolders(r.Context(), userID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, Error{Code: "inventory_store_error", Message: "inventory folder could not be loaded"})
+		a.inventoryStoreError(w, r, "inventory folder could not be loaded", err)
 		return
 	}
 	for _, folder := range folders {
@@ -193,7 +203,7 @@ func (a *API) inventoryItemByUser(w http.ResponseWriter, r *http.Request, userID
 	}
 	items, err := a.inventory.ListItems(r.Context(), userID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, Error{Code: "inventory_store_error", Message: "inventory item could not be loaded"})
+		a.inventoryStoreError(w, r, "inventory item could not be loaded", err)
 		return
 	}
 	var item inventory.Item
@@ -233,7 +243,7 @@ func (a *API) inventoryItemByUser(w http.ResponseWriter, r *http.Request, userID
 	case errors.Is(err, inventory.ErrItemNotFound):
 		writeJSON(w, http.StatusNotFound, Error{Code: "inventory_item_not_found", Message: "inventory item was not found"})
 	case err != nil:
-		writeJSON(w, http.StatusInternalServerError, Error{Code: "inventory_store_error", Message: "inventory item could not be moved"})
+		a.inventoryStoreError(w, r, "inventory item could not be moved", err)
 	default:
 		writeJSON(w, http.StatusOK, item)
 	}
@@ -255,7 +265,7 @@ func (a *API) inventoryFolderByUser(w http.ResponseWriter, r *http.Request, user
 	}
 	folders, err := a.inventory.ListFolders(r.Context(), userID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, Error{Code: "inventory_store_error", Message: "inventory folder could not be loaded"})
+		a.inventoryStoreError(w, r, "inventory folder could not be loaded", err)
 		return
 	}
 	var folder inventory.Folder
@@ -277,7 +287,7 @@ func (a *API) inventoryFolderByUser(w http.ResponseWriter, r *http.Request, user
 	case errors.Is(err, inventory.ErrFolderNotFound):
 		writeJSON(w, http.StatusNotFound, Error{Code: "inventory_folder_not_found", Message: "inventory folder or destination was not found"})
 	case err != nil:
-		writeJSON(w, http.StatusInternalServerError, Error{Code: "inventory_store_error", Message: "inventory folder could not be moved"})
+		a.inventoryStoreError(w, r, "inventory folder could not be moved", err)
 	default:
 		writeJSON(w, http.StatusOK, folder)
 	}
@@ -346,7 +356,7 @@ func (a *API) copyLibraryInventoryItem(w http.ResponseWriter, r *http.Request, u
 	case errors.Is(err, inventory.ErrInvalidItem):
 		writeJSON(w, http.StatusBadRequest, Error{Code: "invalid_library_copy", Message: "library inventory copy is invalid"})
 	case err != nil:
-		writeJSON(w, http.StatusInternalServerError, Error{Code: "inventory_store_error", Message: "library inventory item could not be copied"})
+		a.inventoryStoreError(w, r, "library inventory item could not be copied", err)
 	default:
 		w.Header().Set("Location", "/api/v1/inventory/"+userID+"/items/"+item.ID)
 		writeJSON(w, http.StatusCreated, item)
@@ -369,7 +379,7 @@ func (a *API) copyInventoryItem(w http.ResponseWriter, r *http.Request, userID s
 	}
 	items, err := a.inventory.ListItems(r.Context(), userID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, Error{Code: "inventory_store_error", Message: "inventory item could not be loaded"})
+		a.inventoryStoreError(w, r, "inventory item could not be loaded", err)
 		return
 	}
 	var source inventory.Item
@@ -416,7 +426,7 @@ func (a *API) copyInventoryItem(w http.ResponseWriter, r *http.Request, userID s
 	case errors.Is(err, inventory.ErrInvalidItem):
 		writeJSON(w, http.StatusBadRequest, Error{Code: "invalid_inventory_copy", Message: "inventory item copy is invalid"})
 	case err != nil:
-		writeJSON(w, http.StatusInternalServerError, Error{Code: "inventory_store_error", Message: "inventory item could not be copied"})
+		a.inventoryStoreError(w, r, "inventory item could not be copied", err)
 	default:
 		w.Header().Set("Location", "/api/v1/inventory/"+userID+"/items/"+created.ID)
 		writeJSON(w, http.StatusCreated, created)
@@ -466,7 +476,7 @@ func (a *API) inventoryItemsByUser(w http.ResponseWriter, r *http.Request, userI
 	case errors.Is(err, inventory.ErrItemConflict):
 		writeJSON(w, http.StatusConflict, Error{Code: "inventory_item_exists", Message: "inventory item already exists"})
 	case err != nil:
-		writeJSON(w, http.StatusInternalServerError, Error{Code: "inventory_store_error", Message: "inventory item could not be created"})
+		a.inventoryStoreError(w, r, "inventory item could not be created", err)
 	default:
 		w.Header().Set("Location", "/api/v1/inventory/"+userID+"/items/"+item.ID)
 		writeJSON(w, http.StatusCreated, item)

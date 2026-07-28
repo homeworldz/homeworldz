@@ -358,16 +358,26 @@ func (s *PostgresStore) UpdateFolder(ctx context.Context, folder Folder) (Folder
 	return folder, nil
 }
 
+// creatorColumn is the creator_user_id column value for an item, normalizing
+// the two spellings of "no creator": the empty string and the zero UUID both
+// store NULL — the column references users(id), which no creator-less item can
+// satisfy — and the item itself carries the zero UUID, the form ListItems
+// reports NULL as.
+func creatorColumn(item *Item) any {
+	if item.CreatorUserID == "" || item.CreatorUserID == zeroUUID {
+		item.CreatorUserID = zeroUUID
+		return nil
+	}
+	return item.CreatorUserID
+}
+
 func (s *PostgresStore) EnsureItem(ctx context.Context, item Item) (bool, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return false, fmt.Errorf("begin inventory item transaction: %w", err)
 	}
 	defer tx.Rollback()
-	var creator any
-	if item.CreatorUserID != "" && item.CreatorUserID != zeroUUID {
-		creator = item.CreatorUserID
-	}
+	creator := creatorColumn(&item)
 	result, err := tx.ExecContext(ctx, `
 		INSERT INTO inventory_items
 			(id, owner_user_id, creator_user_id, folder_id, asset_id, asset_type, inventory_type,
@@ -419,13 +429,17 @@ func (s *PostgresStore) EnsureItem(ctx context.Context, item Item) (bool, error)
 
 func (s *PostgresStore) CreateItem(ctx context.Context, item Item) (Item, error) {
 	item.Name = strings.TrimSpace(item.Name)
-	if item.ID == "" || item.OwnerUserID == "" || item.CreatorUserID == "" ||
+	if item.ID == "" || item.OwnerUserID == "" ||
 		item.FolderID == "" || item.AssetID == "" || len(item.Name) == 0 ||
 		len(item.Name) > 255 || len(item.Description) > 1024 || item.AssetType < 0 ||
 		item.AssetType > 127 || item.InventoryType < 0 || item.InventoryType > 127 ||
 		item.SaleType < 0 || item.SaleType > 3 || item.SalePrice < 0 {
 		return Item{}, ErrInvalidItem
 	}
+	// A creator-less item is legal — default wearables are made without one,
+	// and creator_user_id is ON DELETE SET NULL — so a copy of one must
+	// round-trip the zero UUID that ListItems reports for it.
+	creator := creatorColumn(&item)
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return Item{}, fmt.Errorf("begin inventory item creation: %w", err)
@@ -444,7 +458,7 @@ func (s *PostgresStore) CreateItem(ctx context.Context, item Item) (Item, error)
 		 name, description, flags, base_permissions, current_permissions, everyone_permissions,
 		 next_permissions, sale_type, sale_price)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-		ON CONFLICT (id) DO NOTHING`, item.ID, item.OwnerUserID, item.CreatorUserID,
+		ON CONFLICT (id) DO NOTHING`, item.ID, item.OwnerUserID, creator,
 		item.FolderID, item.AssetID, item.AssetType, item.InventoryType, item.Name,
 		item.Description, item.Flags, item.BasePermissions, item.CurrentPermissions,
 		item.EveryonePermissions, item.NextPermissions, item.SaleType, item.SalePrice)
@@ -483,7 +497,7 @@ func (s *PostgresStore) CreateItems(ctx context.Context, items []Item) ([]Item, 
 	for index := range items {
 		items[index].Name = strings.TrimSpace(items[index].Name)
 		item := items[index]
-		if item.ID == "" || item.OwnerUserID == "" || item.CreatorUserID == "" ||
+		if item.ID == "" || item.OwnerUserID == "" ||
 			item.OwnerUserID != ownerID || item.FolderID == "" || item.FolderID != folderID ||
 			item.AssetID == "" || len(item.Name) == 0 || len(item.Name) > 255 ||
 			len(item.Description) > 1024 || item.AssetType < 0 || item.AssetType > 127 ||
@@ -514,7 +528,7 @@ func (s *PostgresStore) CreateItems(ctx context.Context, items []Item) ([]Item, 
 			 next_permissions, sale_type, sale_price)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 			ON CONFLICT (id) DO NOTHING RETURNING created_at`, item.ID, item.OwnerUserID,
-			item.CreatorUserID, item.FolderID, item.AssetID, item.AssetType, item.InventoryType,
+			creatorColumn(item), item.FolderID, item.AssetID, item.AssetType, item.InventoryType,
 			item.Name, item.Description, item.Flags, item.BasePermissions, item.CurrentPermissions,
 			item.EveryonePermissions, item.NextPermissions, item.SaleType, item.SalePrice).
 			Scan(&item.CreatedAt)

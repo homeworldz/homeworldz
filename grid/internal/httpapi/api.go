@@ -39,6 +39,7 @@ type API struct {
 	version       string
 	publicURL     string
 	gridName      string
+	logger        *slog.Logger
 	regions       regions.Store
 	identity      identity.Store
 	presence      presence.Store
@@ -99,7 +100,7 @@ type Options struct {
 
 func New(ready ReadinessChecker, version string, options Options) http.Handler {
 	a := &API{ready: ready, version: version, publicURL: strings.TrimRight(options.GridPublicURL, "/"),
-		gridName: strings.TrimSpace(options.GridName),
+		gridName: strings.TrimSpace(options.GridName), logger: options.Logger,
 		regions:  options.Regions, identity: options.Identity, presence: options.Presence,
 		inventory: options.Inventory, assets: options.Assets, vault: options.Vault,
 		serviceToken: options.ServiceToken,

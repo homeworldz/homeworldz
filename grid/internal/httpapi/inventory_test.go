@@ -5,8 +5,11 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/homeworldz/server/grid/internal/assetmeta"
@@ -566,6 +569,31 @@ func TestCopyPersonalInventoryItemEndpoint(t *testing.T) {
 		http.StatusForbidden)
 	if denied.Code != "inventory_item_not_copyable" {
 		t.Fatalf("no-copy error = %#v", denied)
+	}
+}
+
+type failingInventoryStore struct{ inventory.Store }
+
+func (failingInventoryStore) ListFolders(context.Context, string) ([]inventory.Folder, error) {
+	return nil, errors.New("the metadata database refused the connection")
+}
+
+// TestInventoryStoreErrorIsLogged pins the operator's view of a store failure:
+// the HTTP response stays a generic 500, so the underlying cause must reach
+// the log or it is lost entirely.
+func TestInventoryStoreErrorIsLogged(t *testing.T) {
+	const userID = "20000000-0000-4000-8000-000000000001"
+	var output bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&output, nil))
+	handler := New(checker{}, "test", Options{ServiceToken: "secret",
+		Inventory: failingInventoryStore{}, Logger: logger})
+	failure := requestRegion[Error](t, handler, http.MethodGet,
+		"/api/v1/inventory/"+userID+"/folders", "", http.StatusInternalServerError)
+	if failure.Code != "inventory_store_error" {
+		t.Fatalf("store failure = %#v", failure)
+	}
+	if !strings.Contains(output.String(), "the metadata database refused the connection") {
+		t.Fatalf("store failure cause is missing from the log: %s", output.String())
 	}
 }
 

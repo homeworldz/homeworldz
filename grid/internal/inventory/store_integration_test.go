@@ -104,6 +104,24 @@ func TestPostgresSystemFolderLifecycle(t *testing.T) {
 	if _, err := store.CreateItem(ctx, uploaded); !errors.Is(err, ErrItemConflict) {
 		t.Fatalf("duplicate uploaded item error = %v", err)
 	}
+	// A copy of a creator-less item (NULL creator_user_id, as the default
+	// wearables have) arrives at CreateItem carrying the zero UUID that
+	// ListItems reports for it, and must store NULL — the reference to
+	// users(id) permits nothing else.
+	creatorlessItemID, _ := identifier.NewUUID()
+	creatorless := uploaded
+	creatorless.ID = creatorlessItemID
+	creatorless.CreatorUserID = zeroUUID
+	creatorless.Name = "Creatorless Texture Copy"
+	if created, err := store.CreateItem(ctx, creatorless); err != nil ||
+		created.CreatorUserID != zeroUUID {
+		t.Fatalf("create creatorless item = %#v, error = %v", created, err)
+	}
+	var creatorIsNull bool
+	if err := db.QueryRowContext(ctx, `SELECT creator_user_id IS NULL FROM inventory_items
+		WHERE id = $1`, creatorlessItemID).Scan(&creatorIsNull); err != nil || !creatorIsNull {
+		t.Fatalf("creatorless item creator IS NULL = %v, error = %v", creatorIsNull, err)
+	}
 	linkOneID, _ := identifier.NewUUID()
 	linkTwoID, _ := identifier.NewUUID()
 	currentOutfitID := SystemFolderID(userID, 46)
@@ -127,7 +145,7 @@ func TestPostgresSystemFolderLifecycle(t *testing.T) {
 		t.Fatalf("updated uploaded item = %#v, error = %v", updated, err)
 	}
 	items, err := store.ListItems(ctx, userID)
-	if err != nil || len(items) != 4 {
+	if err != nil || len(items) != 5 {
 		t.Fatalf("inventory items = %#v, error = %v", items, err)
 	}
 	found := map[string]bool{}
