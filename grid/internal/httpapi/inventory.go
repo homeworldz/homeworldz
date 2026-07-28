@@ -181,7 +181,12 @@ func (a *API) inventorySystemFolderByUser(w http.ResponseWriter, r *http.Request
 		writeJSON(w, http.StatusMethodNotAllowed, Error{Code: "method_not_allowed", Message: "only GET is supported"})
 		return
 	}
-	folders, err := a.inventory.ListFolders(r.Context(), userID)
+	// Ensured on read, deliberately: this internal endpoint exists so a
+	// region can place an item, and every caller wants the folder to exist.
+	// Viewer logins ensure the same set; a session client's first upload must
+	// not depend on the user having once logged in with a viewer. Idempotent —
+	// the folder ids are deterministic per user.
+	folders, err := a.inventory.EnsureSystemFolders(r.Context(), userID)
 	if err != nil {
 		a.inventoryStoreError(w, r, "inventory folder could not be loaded", err)
 		return
