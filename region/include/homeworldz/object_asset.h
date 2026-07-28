@@ -60,6 +60,13 @@ struct LinksetAsset {
     std::vector<ObjectAsset> children;
 };
 
+// The texture asset UUIDs a viewer TextureEntry names: the default texture
+// and every per-face exception, in encounter order, deduplicated, with the
+// zero UUID (the format's "none") dropped. Only the texture section is read;
+// the colors, repeats, and bump sections that follow carry no asset
+// references. Used to walk an object's reference closure (ADR 0026).
+std::vector<std::string> texture_entry_texture_ids(std::span<const std::byte> texture_entry);
+
 std::optional<ObjectAsset> parse_object_asset(std::span<const std::byte> content);
 std::optional<LinksetAsset> parse_linkset_asset(std::span<const std::byte> content);
 std::string serialize_linkset_asset(

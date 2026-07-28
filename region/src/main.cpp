@@ -12,6 +12,7 @@
 #include <exception>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <limits>
 #include <memory>
@@ -1197,6 +1198,14 @@ int main(int argc, char* argv[]) {
 #endif
         return 1;
     }
+    // Pulls an asset closure into the local blob store (ADR 0026,
+    // "Completeness is transitive"). Assigned below once the asset-fetch
+    // machinery exists; a safe no-op until then. Declared this early because
+    // the contents-transfer application, defined next, is the first path that
+    // must materialize what it admits.
+    std::function<void(std::vector<std::pair<std::string, int>>, std::string_view)>
+        materialize_asset_closure = [](std::vector<std::pair<std::string, int>>,
+                                       std::string_view) {};
     const auto apply_task_inventory_transfer = [&](const homeworldz::grid::TaskInventoryTransfer& transfer) {
         homeworldz::scene::Entity* target = nullptr;
         for (const auto& [entity_id, entity] : scene.entities()) {
@@ -1232,6 +1241,10 @@ int main(int argc, char* argv[]) {
                 target->task_inventory_serial = previous_serial;
                 throw;
             }
+            // The item's bytes must live here now, not wherever it came from:
+            // this region's backup has to be able to reconstruct its own
+            // contents (ADR 0026, region completeness).
+            materialize_asset_closure({{item.asset_id, item.asset_type}}, "contents-add");
         }
         return viewer_grid && viewer_grid->finalize_task_inventory_transfer(
             transfer.id, provisioned_region_id);
@@ -1421,6 +1434,89 @@ int main(int argc, char* argv[]) {
             return std::nullopt;
         }
     };
+    // Region completeness (ADR 0026, "Completeness is transitive"): content
+    // standing in the scene is only region-durable when its whole reference
+    // closure is in the local blob store — face textures, task inventory
+    // assets, nested objects and their closures — so a backup of this
+    // region's own storage reconstructs it without reaching any other
+    // server. read_federated_asset stores what it fetches, so materializing
+    // is walking the closure and reading each member once; already-local
+    // members cost a local read. Lenient by design: the content already
+    // stands in the scene, so a missing member is reported, never a refusal
+    // — refusal lives grid-side, at the inventory commit.
+    materialize_asset_closure = [&](std::vector<std::pair<std::string, int>> seeds,
+                                    std::string_view reason) {
+        constexpr std::size_t closure_bound = 10000;
+        std::vector<std::pair<std::string, int>> queue;
+        std::unordered_set<std::string> seen;
+        const auto push = [&](const std::string& id, int type) {
+            if (id.empty() || id == "00000000-0000-0000-0000-000000000000") return;
+            if (!seen.insert(id).second) return;
+            queue.emplace_back(id, type);
+        };
+        for (const auto& [id, type] : seeds) push(id, type);
+        std::size_t unavailable = 0;
+        for (std::size_t index = 0; index < queue.size() && index < closure_bound; ++index) {
+            const auto [id, type] = queue[index];
+            std::vector<std::byte> content;
+            try {
+                content = read_federated_asset(id);
+            } catch (const std::exception&) {
+                // Includes external references (stock viewer textures the grid
+                // never registered) alongside genuine losses; the grid-side
+                // walk is where the two are told apart.
+                ++unavailable;
+                continue;
+            }
+            if (type == 6) {
+                if (const auto linkset = homeworldz::asset::parse_linkset_asset(content)) {
+                    const auto walk_part = [&](const homeworldz::asset::ObjectAsset& part) {
+                        for (auto& texture : homeworldz::asset::texture_entry_texture_ids(
+                                 std::span(part.texture_entry)))
+                            push(texture, 0);
+                        for (const auto& item : part.task_inventory)
+                            push(item.asset_id, item.asset_type);
+                    };
+                    walk_part(linkset->root);
+                    for (const auto& child : linkset->children) walk_part(child);
+                }
+            } else if (type == 5 || type == 13) {
+                const std::string text(
+                    reinterpret_cast<const char*>(content.data()), content.size());
+                if (const auto wearable = homeworldz::viewer::parse_wearable(text))
+                    for (const auto& [slot, texture] : wearable->textures) {
+                        static_cast<void>(slot);
+                        push(homeworldz::viewer::format_uuid(texture), 0);
+                    }
+            }
+        }
+        if (unavailable != 0)
+            std::cout << "{\"level\":\"warning\",\"message\":\"scene closure members unavailable\","
+                         "\"reason\":" << homeworldz::api::json_string(reason)
+                      << ",\"walked\":" << queue.size()
+                      << ",\"unavailable\":" << unavailable << "}" << std::endl;
+    };
+    // The whole-scene sweep: every entity already standing when the region
+    // starts gets its closure materialized, which both adopts scenes that
+    // predate this rule and self-heals any arrival path that misses it — the
+    // next restart repairs the gap.
+    if (scene.size() != 0) {
+        std::vector<std::pair<std::string, int>> seeds;
+        for (const auto& [entity_id, entity] : scene.entities()) {
+            static_cast<void>(entity_id);
+            for (auto& texture : homeworldz::asset::texture_entry_texture_ids(
+                     std::span(entity.texture_entry)))
+                seeds.emplace_back(std::move(texture), 0);
+            for (const auto& item : entity.task_inventory)
+                seeds.emplace_back(item.asset_id, item.asset_type);
+        }
+        if (!seeds.empty()) {
+            const auto seed_count = seeds.size();
+            materialize_asset_closure(std::move(seeds), "startup sweep");
+            std::cout << "{\"level\":\"info\",\"message\":\"scene closure sweep completed\","
+                         "\"seeds\":" << seed_count << "}" << std::endl;
+        }
+    }
     // Clothing alpha masks (TGA) are bundled region files, read straight from
     // the default-avatar asset directory by name (they are not UUID-named
     // assets, so they are not imported into the content-addressed store).
@@ -7396,6 +7492,12 @@ int main(int argc, char* argv[]) {
                                             storage->save_snapshot(scene);
                                             scene_persisted = true;
                                             created = true;
+                                            // The object now stands here, so its whole
+                                            // closure — face textures, contents, nested
+                                            // objects — must live here too (ADR 0026,
+                                            // region completeness).
+                                            materialize_asset_closure(
+                                                {{item->asset_id, 6}}, "rez");
                                         }
                                     }
                                 }

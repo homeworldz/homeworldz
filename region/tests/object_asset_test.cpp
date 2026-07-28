@@ -84,5 +84,38 @@ int main() {
     if (!single || !single->children.empty() || single->root.description != "Round \"prim\"")
         return 1;
     if (single->root.task_inventory_serial != 0 || !single->root.task_inventory.empty()) return 1;
+
+    // The texture UUIDs a TextureEntry names: the default, then per-face
+    // exceptions behind varint bitfields, terminated by a zero bitfield. The
+    // zero UUID means "none" and duplicates collapse; sections after the
+    // terminator (colors etc.) must not be read as textures.
+    {
+        const auto uuid_bytes = [](std::uint8_t seed) {
+            std::vector<std::byte> raw(16);
+            for (std::size_t index = 0; index < 16; ++index)
+                raw[index] = static_cast<std::byte>(seed);
+            return raw;
+        };
+        std::vector<std::byte> entry = uuid_bytes(0x11);       // default texture
+        entry.push_back(static_cast<std::byte>(0x02));         // face 1
+        const auto face_texture = uuid_bytes(0xab);
+        entry.insert(entry.end(), face_texture.begin(), face_texture.end());
+        entry.push_back(static_cast<std::byte>(0x81));         // two-byte varint...
+        entry.push_back(static_cast<std::byte>(0x04));         // ...faces 0x84
+        const auto duplicate = uuid_bytes(0x11);               // same as default
+        entry.insert(entry.end(), duplicate.begin(), duplicate.end());
+        entry.push_back(static_cast<std::byte>(0x00));         // terminator
+        const auto trailing = uuid_bytes(0xff);                // colors section noise
+        entry.insert(entry.end(), trailing.begin(), trailing.end());
+        const auto ids = homeworldz::asset::texture_entry_texture_ids(entry);
+        if (ids.size() != 2 || ids[0] != "11111111-1111-1111-1111-111111111111" ||
+            ids[1] != "abababab-abab-abab-abab-abababababab")
+            return 1;
+        // The zero UUID and short buffers yield nothing.
+        std::vector<std::byte> zero(16, std::byte{});
+        if (!homeworldz::asset::texture_entry_texture_ids(zero).empty()) return 1;
+        std::vector<std::byte> tiny(7, std::byte{0x22});
+        if (!homeworldz::asset::texture_entry_texture_ids(tiny).empty()) return 1;
+    }
     return 0;
 }

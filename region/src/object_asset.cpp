@@ -299,6 +299,55 @@ std::string object_json(const scene::Entity& entity, bool child) {
 
 } // namespace
 
+std::vector<std::string> texture_entry_texture_ids(std::span<const std::byte> texture_entry) {
+    constexpr char hex[] = "0123456789abcdef";
+    const auto format = [&](std::span<const std::byte> raw) {
+        std::string id;
+        id.reserve(36);
+        for (std::size_t index = 0; index < 16; ++index) {
+            if (index == 4 || index == 6 || index == 8 || index == 10) id.push_back('-');
+            const auto value = std::to_integer<unsigned>(raw[index]);
+            id.push_back(hex[value >> 4]);
+            id.push_back(hex[value & 0x0f]);
+        }
+        return id;
+    };
+    std::vector<std::string> ids;
+    const auto add = [&](std::span<const std::byte> raw) {
+        auto id = format(raw);
+        if (id == "00000000-0000-0000-0000-000000000000") return;
+        if (std::find(ids.begin(), ids.end(), id) == ids.end()) ids.push_back(std::move(id));
+    };
+    if (texture_entry.size() < 16) return ids;
+    add(texture_entry.subspan(0, 16));
+    // The texture section: {face-bitfield varint, 16-byte texture} exceptions
+    // until a zero bitfield. The varint uses the high bit as a continuation
+    // flag, viewer convention; a run of continuation bytes past any plausible
+    // face count is malformed and ends the walk rather than reading colors as
+    // textures.
+    std::size_t offset = 16;
+    while (true) {
+        std::uint64_t bits = 0;
+        int length = 0;
+        bool complete = false;
+        while (offset < texture_entry.size()) {
+            const auto value = std::to_integer<unsigned>(texture_entry[offset]);
+            ++offset;
+            bits = (bits << 7) | (value & 0x7fU);
+            if ((value & 0x80U) == 0) {
+                complete = true;
+                break;
+            }
+            if (++length > 8) return ids;
+        }
+        if (!complete || bits == 0) break;
+        if (offset + 16 > texture_entry.size()) break;
+        add(texture_entry.subspan(offset, 16));
+        offset += 16;
+    }
+    return ids;
+}
+
 std::optional<ObjectAsset> parse_object_asset(std::span<const std::byte> content) {
     const std::string_view text(reinterpret_cast<const char*>(content.data()), content.size());
     if (text.find(R"("format":"homeworldz-object-v1")") == std::string_view::npos)
