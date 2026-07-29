@@ -2932,8 +2932,27 @@ std::vector<std::byte> encode_static_object_update(std::uint64_t region_handle, 
     if (!append_binary(output, prim_count, 2) || !append_binary(output, {}, 1)) return {}; // data, text
     output.insert(output.end(), 4, std::byte{}); // text color
     if (!append_binary(output, {}, 1) || !append_binary(output, {}, 1)) return {}; // media, particles
-    const std::array<std::byte, 1> no_extra_params{std::byte{0}};
-    if (!append_binary(output, no_extra_params, 1)) return {};
+    // ExtraParams names a prim's shaping asset. Viewers require the dedicated
+    // mesh parameter (0x60) for mesh prims — a sculpt parameter (0x30)
+    // carrying sculpt type 5 is not treated as mesh — while true sculpts use
+    // 0x30. Both carry the same 17-byte payload: shaping asset UUID + type
+    // byte. Everything else sends an empty parameter list, as before.
+    if (object.sculpt_id != Uuid{}) {
+        std::vector<std::byte> extra;
+        extra.push_back(std::byte{1}); // parameter count
+        const std::uint8_t parameter =
+            object.sculpt_type == 5 ? std::uint8_t{0x60} : std::uint8_t{0x30};
+        extra.push_back(static_cast<std::byte>(parameter)); // u16, little-endian
+        extra.push_back(std::byte{0});
+        extra.push_back(std::byte{17}); // payload size, u32 little-endian
+        extra.insert(extra.end(), 3, std::byte{});
+        append_uuid(extra, object.sculpt_id);
+        extra.push_back(static_cast<std::byte>(object.sculpt_type));
+        if (!append_binary(output, extra, 1)) return {};
+    } else {
+        const std::array<std::byte, 1> no_extra_params{std::byte{0}};
+        if (!append_binary(output, no_extra_params, 1)) return {};
+    }
     Uuid zero{};
     append_uuid(output, zero); append_uuid(output, object.owner_id); // sound and owner
     append_f32(output, 0.0F); output.push_back(std::byte{}); append_f32(output, 0.0F);

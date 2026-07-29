@@ -1,7 +1,14 @@
 #include "homeworldz/object_asset.h"
+#include "homeworldz/viewer_protocol.h"
+
+#include <algorithm>
+#include <span>
+#include <vector>
 
 #include <array>
 #include <string>
+
+static int mesh_wrapper_chain();
 
 int main() {
     const std::string json = R"({"format":"homeworldz-object-v1","creatorId":"10000000-0000-4000-8000-000000000001","name":"Prism","scale":[0.500000,0.500000,0.500000],"rotation":[0.000000,0.000000,0.382683],"description":"Round \"prim\"","material":3,"physicsShapeType":2,"physicsDensity":125.000000,"physicsFriction":0.700000,"physicsRestitution":0.250000,"physicsGravityMultiplier":1.500000,"textureEntry":"aabbcc","pathCurve":16,"profileCurve":1,"pathBegin":0,"pathEnd":0,"pathScaleX":200,"pathScaleY":100,"pathShearX":206,"pathShearY":0,"pathTwist":0,"pathTwistBegin":0,"pathRadiusOffset":0,"pathTaperX":0,"pathTaperY":0,"pathRevolutions":0,"pathSkew":0,"profileBegin":0,"profileEnd":0,"profileHollow":0,"physical":true,"phantom":false,"basePermissions":647168})";
@@ -117,5 +124,52 @@ int main() {
         std::vector<std::byte> tiny(7, std::byte{0x22});
         if (!homeworldz::asset::texture_entry_texture_ids(tiny).empty()) return 1;
     }
+    if (const auto chain = mesh_wrapper_chain(); chain != 0) return chain;
     return 0;
 }
+// Appended: the mesh wrapper chain end to end at the wire level — an entity
+// with a sculpt reference serializes, parses, and encodes into an
+// ObjectUpdate whose ExtraParams carry the mesh parameter (0x60) with the
+// shaping asset and type 5. Guards the exact chain a rezzed GLB wrapper
+// travels (ADR 0033).
+static int mesh_wrapper_chain() {
+    homeworldz::scene::Entity wrapper;
+    wrapper.name = "Wrapped Mesh";
+    wrapper.creator_id = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+    wrapper.owner_id = wrapper.creator_id;
+    wrapper.scale = {2.0, 1.0, 0.5};
+    wrapper.sculpt_id = "17b03cc1-091e-49d8-bc57-18c2d5d10f93";
+    wrapper.sculpt_type = 5;
+    const auto serialized = homeworldz::asset::serialize_linkset_asset(wrapper);
+    const auto parsed = homeworldz::asset::parse_linkset_asset(std::span(
+        reinterpret_cast<const std::byte*>(serialized.data()), serialized.size()));
+    if (!parsed || parsed->root.sculpt_id != wrapper.sculpt_id ||
+        parsed->root.sculpt_type != 5)
+        return 100;
+
+    homeworldz::viewer::StaticObject object;
+    object.local_id = 7;
+    object.id = homeworldz::viewer::parse_uuid("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa").value();
+    object.owner_id = homeworldz::viewer::parse_uuid(wrapper.creator_id).value();
+    object.sculpt_id = homeworldz::viewer::parse_uuid(wrapper.sculpt_id).value();
+    object.sculpt_type = 5;
+    const auto update = homeworldz::viewer::encode_static_object_update(0, object);
+    if (update.empty()) return 101;
+    // The ExtraParams payload: count 1, parameter 0x60 (little-endian u16),
+    // size 17 (little-endian u32), 16-byte uuid, type byte 5. Find it as a
+    // byte sequence: [01][60 00][11 00 00 00][uuid...][05].
+    std::vector<std::byte> expected{std::byte{1}, std::byte{0x60}, std::byte{0},
+                                    std::byte{17}, std::byte{0}, std::byte{0}, std::byte{0}};
+    const auto uuid_raw = homeworldz::viewer::parse_uuid(wrapper.sculpt_id).value();
+    expected.insert(expected.end(), uuid_raw.begin(), uuid_raw.end());
+    expected.push_back(std::byte{5});
+    const auto found = std::search(update.begin(), update.end(),
+                                   expected.begin(), expected.end());
+    if (found == update.end()) return 102;
+    // And the length byte of the variable field precedes the block.
+    if (found == update.begin() || *(found - 1) != std::byte{24}) return 103;
+    return 0;
+}
+
+// Chain check runs after the existing assertions via a static initializer
+// shim replaced below by an explicit call — see main.
