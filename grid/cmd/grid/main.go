@@ -147,6 +147,7 @@ func main() {
 			ServiceToken:      settings.ServiceToken,
 			GridPublicURL:     settings.PublicURL,
 			GridName:          settings.Name,
+			WelcomeMessage:    settings.WelcomeMessage,
 			Logger:            logger,
 			Regions:           regionStore(db),
 			Identity:          identityStore(db),

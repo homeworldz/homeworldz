@@ -19,13 +19,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/homeworldz/server/grid/internal/arrival"
+	"github.com/homeworldz/server/grid/internal/identity"
+	"github.com/homeworldz/server/grid/internal/locations"
 	"github.com/homeworldz/server/grid/internal/mailer"
 	"github.com/homeworldz/server/grid/internal/messages"
 	"github.com/homeworldz/server/grid/internal/presence"
 	"github.com/homeworldz/server/grid/internal/provisioning"
-	"github.com/homeworldz/server/grid/internal/arrival"
-	"github.com/homeworldz/server/grid/internal/identity"
-	"github.com/homeworldz/server/grid/internal/locations"
 	"github.com/homeworldz/server/grid/internal/regions"
 	"github.com/homeworldz/server/grid/internal/webaccount"
 	"github.com/homeworldz/server/grid/internal/webtoken"
@@ -106,6 +106,10 @@ type Options struct {
 	// GridName is the operator-facing grid name ([grid] name), reported to the
 	// Homeworldz client for its login screen.
 	GridName string
+	// WelcomeMessage is the grid-wide greeting template ([grid]
+	// welcome_message; {grid} and {user} placeholders), delivered once per
+	// login in the grid channel hello; empty disables it.
+	WelcomeMessage string
 	// Welcome is the ordered new-arrival list ([grid] welcome_locations); the
 	// probe's welcome field derives from its first entry.
 	Welcome []arrival.Point
@@ -138,6 +142,7 @@ type API struct {
 	limiter         *rateLimiter
 	version         string
 	gridName        string
+	welcomeText     string
 	welcome         []arrival.Point
 	sessions        SessionStore
 	locations       LocationStore
@@ -183,6 +188,7 @@ func New(options Options) (http.Handler, error) {
 		limiter:         newRateLimiter(float64(perMinute)/60.0, burst),
 		version:         options.Version,
 		gridName:        options.GridName,
+		welcomeText:     options.WelcomeMessage,
 		welcome:         options.Welcome,
 		sessions:        options.Sessions,
 		locations:       options.Locations,

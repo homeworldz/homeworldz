@@ -40,6 +40,7 @@ type API struct {
 	version        string
 	publicURL      string
 	gridName       string
+	welcomeText    string
 	logger         *slog.Logger
 	regions        regions.Store
 	identity       identity.Store
@@ -76,13 +77,17 @@ type Options struct {
 	ServiceToken  string
 	GridPublicURL string
 	GridName      string
-	Logger        *slog.Logger
-	Regions       regions.Store
-	Identity      identity.Store
-	Presence      presence.Store
-	Inventory     inventory.Store
-	Assets        assetmeta.Store
-	Vault         vault.Store
+	// WelcomeMessage is the grid-wide login greeting template ([grid]
+	// welcome_message; {grid} and {user} placeholders); empty disables the
+	// login reply's message.
+	WelcomeMessage string
+	Logger         *slog.Logger
+	Regions        regions.Store
+	Identity       identity.Store
+	Presence       presence.Store
+	Inventory      inventory.Store
+	Assets         assetmeta.Store
+	Vault          vault.Store
 	// Renditions stores derived encodings and the conversion queue
 	// (ADR 0033); WorkerToken is the conversion-worker credential that
 	// gates writing them. See renditions.go for why it is not the
@@ -118,7 +123,8 @@ func New(ready ReadinessChecker, version string, options Options) http.Handler {
 		terrainCache: newTerrainTileCache(), transits: options.Transits,
 		taskTransfers: options.TaskTransfers, locations: options.Locations,
 		gestures: options.Gestures, estates: options.Estates,
-		welcomePoints: options.Welcome, ticketVerifier: options.TicketVerifier}
+		welcomePoints: options.Welcome, ticketVerifier: options.TicketVerifier,
+		welcomeText: options.WelcomeMessage}
 	if a.publicURL == "" {
 		a.publicURL = "http://127.0.0.1:42000"
 	}

@@ -335,7 +335,7 @@ func (a *API) xmlrpcLoginResponse(f *loginFields) rpcOutputValue {
 			rpcField("item_id", rpcString(g.ItemID)), rpcField("asset_id", rpcString(g.AssetID))))
 	}
 	return rpcStructValue(
-		rpcField("login", rpcString("true")), rpcField("message", rpcString("Welcome to "+a.gridName)),
+		rpcField("login", rpcString("true")), rpcField("message", rpcString(a.welcomeMessage(f.first+" "+f.last))),
 		rpcField("agent_id", rpcString(f.agentID)), rpcField("session_id", rpcString(f.sessionID)),
 		rpcField("secure_session_id", rpcString(f.secureID)), rpcField("first_name", rpcString(f.first)),
 		rpcField("last_name", rpcString(f.last)), rpcField("circuit_code", rpcInt(int(f.circuit))),
@@ -448,6 +448,13 @@ func newCircuitCode() (uint32, error) {
 
 func loginFailure(reason, message string) rpcOutputValue {
 	return rpcStructValue(rpcField("login", rpcString("false")), rpcField("reason", rpcString(reason)), rpcField("message", rpcString(message)))
+}
+
+// welcomeMessage renders the grid-wide login greeting for one avatar. This is
+// the once-per-login message; per-region greetings are the regions' own.
+func (a *API) welcomeMessage(displayName string) string {
+	message := strings.ReplaceAll(a.welcomeText, "{grid}", a.gridName)
+	return strings.ReplaceAll(message, "{user}", displayName)
 }
 
 func writeViewerLogin(w http.ResponseWriter, value rpcOutputValue) {

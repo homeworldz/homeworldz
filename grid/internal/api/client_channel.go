@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/coder/websocket"
@@ -50,6 +51,10 @@ type channelAuthPayload struct {
 type channelHelloPayload struct {
 	Grid     string   `json:"grid"`
 	Identity Identity `json:"identity"`
+	// Greeting is the grid-wide welcome, delivered here — the connection
+	// that survives region crossings — precisely so entering a region never
+	// re-welcomes anyone to the grid. Empty when the operator disabled it.
+	Greeting string `json:"greeting,omitempty"`
 }
 
 type channelErrorPayload struct {
@@ -118,7 +123,10 @@ func (a *API) serveChannel(ctx context.Context, conn *websocket.Conn) {
 		return
 	}
 
-	hello, err := json.Marshal(channelHelloPayload{Grid: a.gridName, Identity: identityOf(account)})
+	greeting := strings.ReplaceAll(a.welcomeText, "{grid}", a.gridName)
+	greeting = strings.ReplaceAll(greeting, "{user}", account.DisplayName)
+	hello, err := json.Marshal(channelHelloPayload{
+		Grid: a.gridName, Identity: identityOf(account), Greeting: greeting})
 	if err != nil {
 		return
 	}
@@ -259,4 +267,3 @@ func (a *API) channelWrite(ctx context.Context, conn *websocket.Conn, message ch
 	}
 	return conn.Write(ctx, websocket.MessageText, encoded) == nil
 }
-

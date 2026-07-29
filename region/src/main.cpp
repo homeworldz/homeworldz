@@ -376,15 +376,22 @@ int configured_port() {
 
 // The arrival greeting (region.welcome_message), delivered privately to each
 // avatar as it enters — the llOwnerSay shape on the viewer path, a chat
-// envelope on the session path. {user} resolves to the avatar's display
-// name; configuring the message empty disables the greeting.
-std::string welcome_chat_message(std::string_view display_name) {
+// envelope on the session path. {region} and {user} resolve to the region
+// name and the avatar's display name; configuring the message empty disables
+// the greeting. Deliberately region-scoped wording: this fires on every
+// entry including border crossings, so a grid-wide welcome does not belong
+// here — that one is the grid's ([grid] welcome_message), delivered once per
+// login (client core observation, 2026-07-29).
+std::string welcome_chat_message(std::string_view display_name, std::string_view region) {
     auto message = configured_value(
-        "region.welcome_message", "Welcome to Homeworldz, {user}!");
-    constexpr std::string_view placeholder = "{user}";
-    for (auto at = message.find(placeholder); at != std::string::npos;
-         at = message.find(placeholder, at + display_name.size()))
-        message.replace(at, placeholder.size(), display_name);
+        "region.welcome_message", "Welcome to {region}, {user}!");
+    const auto substitute = [&](std::string_view placeholder, std::string_view value) {
+        for (auto at = message.find(placeholder); at != std::string::npos;
+             at = message.find(placeholder, at + value.size()))
+            message.replace(at, placeholder.size(), value);
+    };
+    substitute("{region}", region);
+    substitute("{user}", display_name);
     return message;
 }
 
@@ -6603,7 +6610,8 @@ int main(int argc, char* argv[]) {
                             } catch (const std::exception&) {
                             }
                             if (arrival_name.empty()) arrival_name = live_avatar.user_id;
-                            if (const auto greeting = welcome_chat_message(arrival_name);
+                            if (const auto greeting =
+                                    welcome_chat_message(arrival_name, region_name);
                                 !greeting.empty()) {
                                 homeworldz::viewer::ChatFromSimulator welcome;
                                 welcome.from_name = region_name;
@@ -8474,7 +8482,8 @@ int main(int argc, char* argv[]) {
                     // the ticket carried.
                     if (const auto greeting = welcome_chat_message(
                             inbound.display_name.empty() ? inbound.user_id
-                                                         : inbound.display_name);
+                                                         : inbound.display_name,
+                            region_name);
                         !greeting.empty()) {
                         session_server->send_to(inbound.session_id,
                             homeworldz::session::encode_envelope("chat", {},

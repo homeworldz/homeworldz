@@ -19,17 +19,17 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/homeworldz/server/grid/internal/api"
 	"github.com/homeworldz/server/grid/internal/arrival"
 	"github.com/homeworldz/server/grid/internal/config"
 	"github.com/homeworldz/server/grid/internal/identity"
 	"github.com/homeworldz/server/grid/internal/locations"
 	"github.com/homeworldz/server/grid/internal/mailer"
+	"github.com/homeworldz/server/grid/internal/messages"
 	"github.com/homeworldz/server/grid/internal/presence"
 	"github.com/homeworldz/server/grid/internal/provisioning"
 	"github.com/homeworldz/server/grid/internal/regions"
-	"github.com/homeworldz/server/grid/internal/messages"
 	"github.com/homeworldz/server/grid/internal/webaccount"
-	"github.com/homeworldz/server/grid/internal/api"
 	"github.com/homeworldz/server/grid/internal/webtoken"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -100,6 +100,7 @@ func main() {
 		RateBurst:       settings.WebsiteRateBurst,
 		Version:         version,
 		GridName:        settings.Name,
+		WelcomeMessage:  settings.WelcomeMessage,
 		Welcome:         welcome,
 		Sessions:        identity.NewPostgresStore(db),
 		Messages:        messages.NewPostgresStore(db),

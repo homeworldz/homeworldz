@@ -24,12 +24,20 @@ type Grid struct {
 	// token may claim conversion jobs or write rendition bytes. Empty
 	// disables those endpoints.
 	WorkerToken string
-	Directory    string
+	Directory   string
 	// WelcomeLocations is the ordered new-arrival list ([grid]
 	// welcome_locations): comma-separated Region/x/y/z entries, first entry
 	// preferred. Parsing into structured points happens at the consumer so a
 	// malformed entry fails that binary's startup with a specific error.
 	WelcomeLocations []string
+	// WelcomeMessage is the grid-wide greeting ([grid] welcome_message),
+	// delivered once per login — the viewer login reply's message field and
+	// the grid channel hello — never per region entered, so a border
+	// crossing does not re-welcome anyone to the grid. {grid} and {user}
+	// resolve to the grid name and the avatar's display name; configure it
+	// empty to disable. Region-specific greetings are the region's own
+	// region.welcome_message.
+	WelcomeMessage string
 	// VaultPath is the filesystem root of the asset vault (ADR 0026), holding the
 	// durable bytes behind inventory-referenced assets. A relative value resolves
 	// against the process working directory, as the region's data_path does.
@@ -37,7 +45,7 @@ type Grid struct {
 
 	// Website API ([website] and [mail] sections). These configure the
 	// separate browser-facing homeworldz-api binary; the grid binary ignores them.
-	WebsiteAddress        string
+	WebsiteAddress string
 	// WebsitePublicURL is the public https:// base of the website API
 	// ([website] public_url), used to derive absolute URLs such as the grid
 	// channel's wss:// endpoint. Empty when the deployment has no public name.
@@ -49,17 +57,17 @@ type Grid struct {
 	WebsiteTokenTTL       time.Duration
 	// RegionTicketTTL is the short lifetime of region-scoped tickets minted at
 	// world entry ([website] region_ticket_ttl_seconds, default 300).
-	RegionTicketTTL time.Duration
-	WebsiteRatePerMinute  int
-	WebsiteRateBurst      int
-	MailTransport         string
-	MailFrom              string
-	MailVerificationURL   string
-	SMTPHost              string
-	SMTPPort              int
-	SMTPUsername          string
-	SMTPPassword          string
-	SMTPImplicitTLS       bool
+	RegionTicketTTL      time.Duration
+	WebsiteRatePerMinute int
+	WebsiteRateBurst     int
+	MailTransport        string
+	MailFrom             string
+	MailVerificationURL  string
+	SMTPHost             string
+	SMTPPort             int
+	SMTPUsername         string
+	SMTPPassword         string
+	SMTPImplicitTLS      bool
 }
 
 func LoadGrid(directory string) (Grid, error) {
@@ -88,6 +96,8 @@ func LoadGrid(directory string) (Grid, error) {
 		VaultPath: strings.TrimSpace(parsed.Section("vault").Key("path").
 			MustString(filepath.Join("var", "vault"))),
 		WelcomeLocations: splitList(parsed.Section("grid").Key("welcome_locations").String()),
+		WelcomeMessage: parsed.Section("grid").Key("welcome_message").
+			MustString("Welcome to {grid}, {user}!"),
 	}
 	if result.VaultPath == "" {
 		return Grid{}, fmt.Errorf("invalid asset vault path %q", result.VaultPath)
