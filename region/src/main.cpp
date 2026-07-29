@@ -2535,7 +2535,10 @@ int main(int argc, char* argv[]) {
             const auto metadata = storage->store_asset(asset_id, entity->creator_id, content);
             const bool asset_registered = viewer_grid->register_asset(
                 metadata.viewer_id, metadata.creator_id, metadata.sha256, metadata.size,
-                region_public_endpoint, true);
+                region_public_endpoint, true) &&
+                // Write-through before the commit: the durability fetch-back
+                // and this region's single thread cannot meet (ADR 0026).
+                viewer_grid->store_vault_asset(metadata.viewer_id, content);
             item_created = asset_registered && viewer_grid->create_object_inventory_item(
                 owner_id, homeworldz::grid::ObjectInventoryItem{
                     item_id, entity->creator_id, folder, asset_id, entity->name,
@@ -3184,9 +3187,12 @@ int main(int argc, char* argv[]) {
                                     const auto asset_id = homeworldz::viewer::random_uuid();
                                     const auto metadata = storage->store_asset(
                                         asset_id, authorized_agent_id, content);
-                                    const bool registered = !viewer_grid || viewer_grid->register_asset(
+                                    const bool registered = !viewer_grid || (viewer_grid->register_asset(
                                         metadata.viewer_id, metadata.creator_id, metadata.sha256,
-                                        metadata.size, region_public_endpoint, true);
+                                        metadata.size, region_public_endpoint, true) &&
+                                        // Write-through (ADR 0026): the commit's
+                                        // fetch-back and this thread cannot meet.
+                                        viewer_grid->store_vault_asset(metadata.viewer_id, content));
                                     response = registered
                                         ? homeworldz::http::response_for_content(
                                               request, 200, "application/llsd+xml",
@@ -3242,7 +3248,9 @@ int main(int argc, char* argv[]) {
                                     upload.asset_id, authorized_agent_id, content);
                                 const bool asset_registered = viewer_grid && viewer_grid->register_asset(
                                     metadata.viewer_id, metadata.creator_id, metadata.sha256,
-                                    metadata.size, region_public_endpoint, true);
+                                    metadata.size, region_public_endpoint, true) &&
+                                    // Write-through (ADR 0026): see above.
+                                    viewer_grid->store_vault_asset(metadata.viewer_id, content);
                                 const bool item_created = asset_registered &&
                                     viewer_grid->create_inventory_item(
                                         authorized_agent_id, homeworldz::grid::InventoryItem{
@@ -3356,7 +3364,9 @@ int main(int argc, char* argv[]) {
                                         update.asset_id, authorized_agent_id, content);
                                     const bool registered = viewer_grid && viewer_grid->register_asset(
                                         metadata.viewer_id, metadata.creator_id, metadata.sha256,
-                                        metadata.size, region_public_endpoint, true);
+                                        metadata.size, region_public_endpoint, true) &&
+                                        // Write-through (ADR 0026): see above.
+                                        viewer_grid->store_vault_asset(metadata.viewer_id, content);
                                     if (registered && update.task_id.empty()) {
                                         stored = viewer_grid->update_inventory_item_asset(
                                             authorized_agent_id, update.item_id, update.asset_id);
@@ -4579,7 +4589,10 @@ int main(int argc, char* argv[]) {
                                             if (!viewer_grid->register_asset(
                                                     metadata.viewer_id, metadata.creator_id,
                                                     metadata.sha256, metadata.size,
-                                                    region_public_endpoint, true))
+                                                    region_public_endpoint, true) ||
+                                                // Write-through (ADR 0026): a later
+                                                // extraction commits this asset.
+                                                !viewer_grid->store_vault_asset(metadata.viewer_id, content))
                                                 asset_id.clear();
                                             if (!asset_id.empty()) {
                                                 task_item_id = homeworldz::viewer::random_uuid();
@@ -7502,7 +7515,12 @@ int main(int argc, char* argv[]) {
                                             asset_id, entity->creator_id, content);
                                         const bool asset_registered = viewer_grid && viewer_grid->register_asset(
                                             metadata.viewer_id, metadata.creator_id, metadata.sha256,
-                                            metadata.size, region_public_endpoint, true);
+                                            metadata.size, region_public_endpoint, true) &&
+                                            // Write-through before the commit
+                                            // (ADR 0026): the durability
+                                            // fetch-back and this thread
+                                            // cannot meet.
+                                            viewer_grid->store_vault_asset(metadata.viewer_id, content);
                                         item_created = asset_registered && viewer_grid->create_object_inventory_item(
                                             user_id, homeworldz::grid::ObjectInventoryItem{
                                                 item_id, entity->creator_id, destination_id, asset_id,
