@@ -434,7 +434,14 @@ grid-side conversion worker. FBX/OBJ/DAE and Daz exports convert in the
 Homeworldz client at import, keeping the server pipeline to two verifiable
 input formats.
 
-- [ ] M1 static mesh — upload half live 2026-07-28: the GLB upload
+- [x] M1 static mesh — complete 2026-07-29, finish line crossed in
+  Firestorm: a GLB uploaded through the session path stands in-world as a
+  solid textured mesh. The last mile was serving (GetMesh capabilities and
+  ranged 206 responses), the mesh ExtraParams block, mesh rez through the
+  object wrapper, synthesized normals and texture coordinates for sources
+  that carry none — and one pre-mesh-era SimulatorFeatures flag
+  (MeshRezEnabled=0) that gates viewer mesh *rendering* and silently ate
+  every proof until the viewer's own log named it. Originally shipped as: the GLB upload
   capability (`POST /session/uploads/mesh`, authorized by the region ticket
   as a bearer token — one credential, both transports), the validation gate
   with its policy published in the session hello (read, never encode), the
