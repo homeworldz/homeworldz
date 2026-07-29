@@ -115,7 +115,8 @@ int main() {
     if (greeting->payload.find("\"terrain\":{\"path\":\"/session/terrain\","
                                "\"format\":\"heightmap-f32le\",\"width\":256,"
                                "\"spacing\":1,\"interpolation\":"
-                               "\"cell-triangles-diagonal-x,y+1-x+1,y\"}") == std::string::npos)
+                               "\"cell-triangles-diagonal-x,y+1-x+1,y\","
+                               "\"changedEvent\":\"terrainChanged\"}") == std::string::npos)
         return 34;
 
     // Ping answers pong carrying the correlation identifier.

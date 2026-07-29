@@ -354,7 +354,10 @@ SessionCore::Result SessionCore::handle_text(std::string_view text) {
             ",\"format\":\"heightmap-f32le\"" +
             ",\"width\":" + std::to_string(terrain_width_) +
             ",\"spacing\":1" +
-            ",\"interpolation\":\"cell-triangles-diagonal-x,y+1-x+1,y\"}" +
+            ",\"interpolation\":\"cell-triangles-diagonal-x,y+1-x+1,y\"" +
+            // A fetch is a snapshot; this event names the dirty patches when
+            // in-world editing changes the ground under a connected session.
+            ",\"changedEvent\":\"terrainChanged\"}" +
             // The mesh acceptance gate, published so importing clients refuse
             // exactly what upload would refuse (ADR 0033: read, never encode).
             ",\"meshAcceptance\":" + homeworldz::mesh::acceptance_policy_json() + "}"));

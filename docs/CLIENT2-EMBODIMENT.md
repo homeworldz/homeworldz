@@ -57,7 +57,10 @@ seam above encoding.
    triangulation, which region movement samples by raycast). The hello's
    `avatar` block publishes the capsule contract (radius 0.3, support at
    ground + height/2, grounded tolerance 0.05) and the spawned reply carries
-   the avatar's own computed height and hip offset.
+   the avatar's own computed height and hip offset. A fetch is a snapshot,
+   so in-world terrain editing announces itself to connected sessions with a
+   `terrainChanged` event naming the dirty 16 m patches (the event is itself
+   named in the hello's terrain block as `changedEvent`).
 5. **Departure splits into what the avatar owns and what the viewer owns.**
    `retire_avatar(key)` (kill broadcast, physics removal, avatar-keyed maps)
    serves both transports; `clear_viewer_transport(endpoint)` (texture

@@ -8178,6 +8178,31 @@ int main(int argc, char* argv[]) {
                                                 viewer_server, recipient_endpoint, *outgoing));
                                     }
                                 }
+                                if (session_server) {
+                                    // Sessions fetch terrain as a snapshot
+                                    // (GET /session/terrain), so an edit must
+                                    // announce itself or their floor goes
+                                    // silently stale. The dirty 16m patches
+                                    // ride along; a client may refetch either
+                                    // way. Additive event, named in the hello
+                                    // terrain block.
+                                    std::string patch_list;
+                                    for (const auto& patch : changed) {
+                                        if (!patch_list.empty()) patch_list += ',';
+                                        patch_list += '[' + std::to_string(patch.x) + ',' +
+                                                      std::to_string(patch.y) + ']';
+                                    }
+                                    const auto notice = homeworldz::session::encode_envelope(
+                                        "terrainChanged", {},
+                                        "{\"path\":\"/session/terrain\",\"patchSize\":16,"
+                                        "\"patches\":[" + patch_list + "]}");
+                                    for (const auto& [session_key, session_avatar] : avatars) {
+                                        static_cast<void>(session_key);
+                                        if (session_avatar.transport == AvatarTransport::session)
+                                            session_server->send_to(
+                                                session_avatar.session_id, notice);
+                                    }
+                                }
                                 std::cout << "{\"level\":" << (persisted ? "\"info\"" : "\"error\"")
                                           << ",\"message\":\"terrain edit applied\",\"action\":"
                                           << static_cast<unsigned>(terrain_edit->action)
