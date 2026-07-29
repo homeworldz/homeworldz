@@ -434,10 +434,15 @@ grid-side conversion worker. FBX/OBJ/DAE and Daz exports convert in the
 Homeworldz client at import, keeping the server pipeline to two verifiable
 input formats.
 
-- [ ] M1 static mesh: GLB upload capability with validation and extension
-  allowlist, `asset_renditions` table, conversion worker deriving sl-mesh
-  (generated LODs via meshoptimizer, V-HACD physics blocks), region mesh
-  serving to viewers, mesh rez on the Jolt collision source.
+- [ ] M1 static mesh — upload half live 2026-07-28: the GLB upload
+  capability (`POST /session/uploads/mesh`, authorized by the region ticket
+  as a bearer token — one credential, both transports), the validation gate
+  with its policy published in the session hello (read, never encode), the
+  `asset_renditions` table and lease-based conversion queue behind a
+  dedicated worker credential, and vault write-through so an uploaded GLB
+  is durable at commit. Remaining: the conversion worker deriving sl-mesh
+  (LLSD/zlib type-49 payload, generated LODs, physics), region mesh serving
+  to viewers, and mesh rez on the Jolt collision source.
 - [ ] M2 Firestorm mesh uploads via the standard viewer capability and fee
   stub, with the `gltf` rendition derived from SL-mesh uploads.
 - [ ] M3 material and texture renditions: glTF material JSON (type 57) for
