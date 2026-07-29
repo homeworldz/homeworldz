@@ -44,6 +44,8 @@
 #include "homeworldz/region_storage.h"
 #include "homeworldz/mesh_acceptance.h"
 #include "homeworldz/mesh_convert.h"
+#include "homeworldz/mesh_model_upload.h"
+#include "homeworldz/slmesh.h"
 #include "homeworldz/region_transit.h"
 #include "homeworldz/scene.h"
 #include "homeworldz/sha256.h"
@@ -138,6 +140,15 @@ struct PendingInventoryUpload {
     std::string item_id;
     std::string asset_id;
     homeworldz::viewer::NewFileInventoryUpload request;
+};
+
+// A mesh model upload between its two POSTs (ADR 0033 M2): the fee request
+// carried the metadata, the upload to the minted URL carries only the
+// resources, so the metadata waits here keyed by the URL's token.
+struct PendingMeshModelUpload {
+    std::string session_id;
+    std::string agent_id;
+    homeworldz::mesh_model::Metadata metadata;
 };
 
 struct PendingInventoryAssetUpdate {
@@ -425,6 +436,11 @@ std::optional<std::string> receive_http_request(socket_handle client) {
             const std::string_view head(request.data(), header_end + 4);
             if (head.starts_with("POST " + std::string(homeworldz::mesh::upload_path)))
                 body_limit = maximum_mesh_body;
+            // The viewer model upload carries whole type-49 payloads in
+            // LLSD XML, whose base64 adds a third again over the raw cap.
+            if (head.starts_with("POST /caps/upload-file/") ||
+                head.starts_with("POST /caps/upload-model-data/"))
+                body_limit = (maximum_mesh_body * 4) / 3 + 64 * 1024;
             const auto content_length = homeworldz::http::request_content_length(head);
             if (!content_length || *content_length > body_limit) return std::nullopt;
             expected_size = header_end + 4 + *content_length;
@@ -558,6 +574,17 @@ std::optional<std::pair<std::string, std::string>> baked_upload_data_request(std
 
 std::optional<std::pair<std::string, std::string>> file_upload_data_request(std::string_view path) {
     constexpr std::string_view prefix = "/caps/upload-file-data/";
+    if (!path.starts_with(prefix)) return std::nullopt;
+    const auto separator = path.find('/', prefix.size());
+    if (separator == std::string_view::npos) return std::nullopt;
+    const auto session = path.substr(prefix.size(), separator - prefix.size());
+    const auto token = path.substr(separator + 1);
+    if (session.empty() || token.empty() || token.find('/') != std::string_view::npos) return std::nullopt;
+    return std::pair{std::string(session), std::string(token)};
+}
+
+std::optional<std::pair<std::string, std::string>> model_upload_data_request(std::string_view path) {
+    constexpr std::string_view prefix = "/caps/upload-model-data/";
     if (!path.starts_with(prefix)) return std::nullopt;
     const auto separator = path.find('/', prefix.size());
     if (separator == std::string_view::npos) return std::nullopt;
@@ -1884,6 +1911,7 @@ int main(int argc, char* argv[]) {
     std::unordered_map<std::string, std::deque<QueuedTexturePacket>> texture_packets;
     std::unordered_set<std::string> active_texture_transfers;
     std::unordered_map<std::string, PendingInventoryUpload> pending_inventory_uploads;
+    std::unordered_map<std::string, PendingMeshModelUpload> pending_mesh_model_uploads;
     std::unordered_map<std::string, PendingInventoryAssetUpdate> pending_inventory_asset_updates;
     std::unordered_map<std::string, PendingInventoryAssetUpload> pending_inventory_asset_uploads;
     std::unordered_map<std::string, PendingInventoryAssetXfer> pending_inventory_asset_xfers;
@@ -3024,6 +3052,8 @@ int main(int argc, char* argv[]) {
                     if (file_upload) session_id = file_upload_session;
                     const auto file_upload_data = file_upload_data_request(response.path);
                     if (file_upload_data) session_id = file_upload_data->first;
+                    const auto model_upload_data = model_upload_data_request(response.path);
+                    if (model_upload_data) session_id = model_upload_data->first;
                     const auto notecard_update_session =
                         capability_session(response.path, "/caps/update-notecard/");
                     const bool notecard_update = !notecard_update_session.empty();
@@ -3050,6 +3080,7 @@ int main(int argc, char* argv[]) {
                     if (seed || event_queue || texture || viewer_asset || simulator_features || environment_settings ||
                         remote_parcel ||
                         baked_upload || baked_upload_data || file_upload || file_upload_data ||
+                        model_upload_data ||
                         notecard_update || script_update || gesture_update ||
                         task_notecard_update || task_script_update || inventory_asset_update_data) {
                         bool authorized = false;
@@ -3138,8 +3169,21 @@ int main(int argc, char* argv[]) {
                                             ? viewer_grid->fetch_asset_rendition(
                                                   viewer_asset->asset, "sl-mesh")
                                             : std::nullopt;
-                                        if (!rendition)
-                                            throw std::runtime_error("mesh rendition unavailable");
+                                        if (!rendition) {
+                                            // A viewer-uploaded mesh (ADR 0033
+                                            // M2) is canonical type-49 with no
+                                            // rendition; serve the canonical
+                                            // bytes — but only if they really
+                                            // are an SL mesh, so a GLB whose
+                                            // conversion is still pending
+                                            // stays a 404 rather than garbage.
+                                            auto canonical = read_federated_asset(viewer_asset->asset);
+                                            if (!homeworldz::slmesh::parse(canonical))
+                                                throw std::runtime_error("mesh rendition unavailable");
+                                            rendition = std::string(
+                                                reinterpret_cast<const char*>(canonical.data()),
+                                                canonical.size());
+                                        }
                                         if (mesh_rendition_cache.size() >= 128)
                                             mesh_rendition_cache.clear();
                                         cached = mesh_rendition_cache.emplace(
@@ -3266,9 +3310,43 @@ int main(int argc, char* argv[]) {
                                 }
                             }
                         } else if (authorized && file_upload) {
-                            const auto upload = homeworldz::viewer::parse_new_file_inventory_upload(
-                                http_request_body(request));
-                            if (!upload) {
+                            const auto body = http_request_body(request);
+                            // The mesh branch of NewFileAgentInventory
+                            // (ADR 0033 M2): a whole-model fee request. The
+                            // metadata waits for the upload POST, which
+                            // carries the resources alone.
+                            const auto fee = homeworldz::mesh_model::parse_fee_request(body);
+                            if (fee.mesh_request) {
+                                if (!fee.ok) {
+                                    response = homeworldz::http::response_for_content(
+                                        request, 200, "application/llsd+xml",
+                                        homeworldz::mesh_model::error_response_xml(fee.error));
+                                    std::cout << "{\"level\":\"info\",\"message\":\"mesh model fee refused\","
+                                                 "\"error\":" << homeworldz::api::json_string(fee.error)
+                                              << "}" << std::endl;
+                                } else {
+                                    const auto token = homeworldz::viewer::random_uuid();
+                                    pending_mesh_model_uploads.insert_or_assign(token,
+                                        PendingMeshModelUpload{session_id, authorized_agent_id,
+                                                               fee.request.metadata});
+                                    auto base = region_public_endpoint;
+                                    while (!base.empty() && base.back() == '/') base.pop_back();
+                                    const auto uploader =
+                                        base + "/caps/upload-model-data/" + session_id + '/' + token;
+                                    response = homeworldz::http::response_for_content(
+                                        request, 200, "application/llsd+xml",
+                                        homeworldz::mesh_model::fee_response_xml(uploader));
+                                    std::cout << "{\"level\":\"info\",\"message\":\"mesh model fee granted\","
+                                                 "\"name\":" << homeworldz::api::json_string(
+                                                     fee.request.metadata.name)
+                                              << ",\"meshes\":" << fee.request.resources.meshes.size()
+                                              << ",\"instances\":" << fee.request.resources.instances.size()
+                                              << ",\"textures\":" << fee.request.resources.textures.size()
+                                              << "}" << std::endl;
+                                }
+                            } else if (const auto upload =
+                                           homeworldz::viewer::parse_new_file_inventory_upload(body);
+                                       !upload) {
                                 response = homeworldz::http::response_for_content(
                                     request, 400, "application/llsd+xml", "<llsd><undef/></llsd>");
                             } else {
@@ -3334,6 +3412,187 @@ int main(int argc, char* argv[]) {
                                               << ",\"inventoryType\":" << static_cast<int>(upload.request.inventory_type)
                                               << ",\"bytes\":" << body.size() << "}" << std::endl;
                                     pending_inventory_uploads.erase(pending);
+                                }
+                            }
+                        } else if (authorized && model_upload_data) {
+                            // The upload half of the mesh model flow: store
+                            // every mesh verbatim as a canonical type-49
+                            // asset, every texture as JPEG2000, build the
+                            // linkset the instance transforms describe, and
+                            // answer with the new object item. Write-through
+                            // at every register (ADR 0026): this thread
+                            // would be the one serving the commit's
+                            // fetch-back.
+                            const auto pending = pending_mesh_model_uploads.find(model_upload_data->second);
+                            const auto body = http_request_body(request);
+                            if (pending == pending_mesh_model_uploads.end() ||
+                                pending->second.session_id != session_id ||
+                                pending->second.agent_id != authorized_agent_id) {
+                                response = homeworldz::http::response_for_content(
+                                    request, 404, "application/llsd+xml", "<llsd><undef/></llsd>");
+                            } else {
+                                const auto metadata = pending->second.metadata;
+                                const auto parsed = homeworldz::mesh_model::parse_upload(body);
+                                if (!parsed.ok) {
+                                    response = homeworldz::http::response_for_content(
+                                        request, 200, "application/llsd+xml",
+                                        homeworldz::mesh_model::error_response_xml(parsed.error));
+                                    std::cout << "{\"level\":\"info\",\"message\":\"mesh model upload refused\","
+                                                 "\"error\":" << homeworldz::api::json_string(parsed.error)
+                                              << "}" << std::endl;
+                                    pending_mesh_model_uploads.erase(pending);
+                                } else {
+                                    try {
+                                        if (!viewer_grid)
+                                            throw std::runtime_error("grid connection unavailable");
+                                        const auto& resources = parsed.resources;
+                                        const auto store_registered =
+                                            [&](std::span<const std::byte> content) {
+                                            const auto stored = storage->store_asset(
+                                                homeworldz::viewer::random_uuid(),
+                                                authorized_agent_id, content);
+                                            if (!viewer_grid->register_asset(
+                                                    stored.viewer_id, stored.creator_id,
+                                                    stored.sha256, stored.size,
+                                                    region_public_endpoint, true) ||
+                                                !viewer_grid->store_vault_asset(
+                                                    stored.viewer_id, content))
+                                                throw std::runtime_error(
+                                                    "asset registration or vault write-through failed");
+                                            return stored.viewer_id;
+                                        };
+                                        std::vector<std::string> mesh_assets;
+                                        for (const auto& mesh : resources.meshes)
+                                            mesh_assets.push_back(store_registered(mesh));
+                                        std::vector<std::optional<homeworldz::viewer::Uuid>> textures;
+                                        std::size_t texture_number = 0;
+                                        for (const auto& texture_bytes : resources.textures) {
+                                            if (texture_bytes.empty()) {
+                                                textures.emplace_back();
+                                                continue;
+                                            }
+                                            const auto texture_asset = store_registered(texture_bytes);
+                                            textures.push_back(
+                                                homeworldz::viewer::parse_uuid(texture_asset));
+                                            // The texture also lands in inventory, as
+                                            // Second Life's uploader does, so the
+                                            // creator can reuse it.
+                                            homeworldz::grid::InventoryItem texture_item;
+                                            texture_item.item_id = homeworldz::viewer::random_uuid();
+                                            texture_item.creator_id = authorized_agent_id;
+                                            texture_item.owner_id = authorized_agent_id;
+                                            texture_item.folder_id = metadata.texture_folder_id;
+                                            texture_item.asset_id = texture_asset;
+                                            texture_item.asset_type = 0;
+                                            texture_item.inventory_type = 0;
+                                            texture_item.name = metadata.name + " - Texture " +
+                                                std::to_string(++texture_number);
+                                            texture_item.base_permissions =
+                                                homeworldz::scene::permission_creator;
+                                            texture_item.current_permissions =
+                                                homeworldz::scene::permission_creator;
+                                            texture_item.everyone_permissions =
+                                                metadata.everyone_permissions;
+                                            texture_item.next_permissions = metadata.next_permissions;
+                                            static_cast<void>(viewer_grid->create_inventory_item(
+                                                authorized_agent_id, texture_item));
+                                        }
+                                        const auto plywood = homeworldz::viewer::parse_uuid(
+                                            "89556747-24cb-43ed-920b-47caed15465f").value();
+                                        const auto entity_for =
+                                            [&](const homeworldz::mesh_model::Instance& instance) {
+                                            homeworldz::scene::Entity entity;
+                                            entity.name = instance.name.empty()
+                                                ? metadata.name : instance.name;
+                                            entity.creator_id = authorized_agent_id;
+                                            entity.owner_id = authorized_agent_id;
+                                            entity.sculpt_id =
+                                                mesh_assets[static_cast<std::size_t>(instance.mesh)];
+                                            entity.sculpt_type = 5; // mesh
+                                            entity.material = instance.material;
+                                            entity.physics_shape_type =
+                                                std::min<std::uint8_t>(instance.physics_shape_type, 2);
+                                            entity.scale.x = std::clamp(instance.scale[0], 0.001f, 64.0f);
+                                            entity.scale.y = std::clamp(instance.scale[1], 0.001f, 64.0f);
+                                            entity.scale.z = std::clamp(instance.scale[2], 0.001f, 64.0f);
+                                            entity.texture_entry =
+                                                homeworldz::mesh_model::instance_texture_entry(
+                                                    plywood, instance.faces, textures);
+                                            return entity;
+                                        };
+                                        const auto& root_instance = resources.instances.front();
+                                        auto root = entity_for(root_instance);
+                                        root.rotation = homeworldz::mesh_model::packed_rotation(
+                                            root_instance.rotation);
+                                        const auto root_inverse =
+                                            homeworldz::mesh_model::quaternion_conjugate(
+                                                root_instance.rotation);
+                                        std::vector<homeworldz::scene::Entity> children;
+                                        for (std::size_t index = 1;
+                                             index < resources.instances.size(); ++index) {
+                                            const auto& instance = resources.instances[index];
+                                            auto child = entity_for(instance);
+                                            const auto offset = homeworldz::mesh_model::quaternion_rotate(
+                                                root_inverse,
+                                                {instance.position[0] - root_instance.position[0],
+                                                 instance.position[1] - root_instance.position[1],
+                                                 instance.position[2] - root_instance.position[2]});
+                                            child.local_position = {offset[0], offset[1], offset[2]};
+                                            child.local_rotation = homeworldz::mesh_model::packed_rotation(
+                                                homeworldz::mesh_model::quaternion_multiply(
+                                                    root_inverse, instance.rotation));
+                                            children.push_back(std::move(child));
+                                        }
+                                        std::vector<const homeworldz::scene::Entity*> child_pointers;
+                                        for (const auto& child : children) child_pointers.push_back(&child);
+                                        const auto wrapped = homeworldz::asset::serialize_linkset_asset(
+                                            root, child_pointers);
+                                        const auto object_asset_id = store_registered(std::span(
+                                            reinterpret_cast<const std::byte*>(wrapped.data()),
+                                            wrapped.size()));
+                                        homeworldz::grid::InventoryItem item;
+                                        item.item_id = homeworldz::viewer::random_uuid();
+                                        item.creator_id = authorized_agent_id;
+                                        item.owner_id = authorized_agent_id;
+                                        item.folder_id = metadata.folder_id;
+                                        item.asset_id = object_asset_id;
+                                        item.asset_type = 6;      // object
+                                        item.inventory_type = 6;  // object
+                                        item.name = metadata.name;
+                                        item.description = metadata.description;
+                                        item.base_permissions = homeworldz::scene::permission_creator;
+                                        item.current_permissions = homeworldz::scene::permission_creator;
+                                        item.everyone_permissions = metadata.everyone_permissions;
+                                        item.next_permissions = metadata.next_permissions;
+                                        if (!viewer_grid->create_inventory_item(authorized_agent_id, item))
+                                            throw std::runtime_error("inventory item creation failed");
+                                        response = homeworldz::http::response_for_content(
+                                            request, 200, "application/llsd+xml",
+                                            homeworldz::viewer::new_file_inventory_complete_xml(
+                                                item.item_id, object_asset_id,
+                                                metadata.everyone_permissions,
+                                                metadata.next_permissions));
+                                        std::cout << "{\"level\":\"info\",\"message\":\"mesh model uploaded\","
+                                                     "\"name\":" << homeworldz::api::json_string(metadata.name)
+                                                  << ",\"itemId\":" << homeworldz::api::json_string(item.item_id)
+                                                  << ",\"objectAssetId\":"
+                                                  << homeworldz::api::json_string(object_asset_id)
+                                                  << ",\"creatorId\":"
+                                                  << homeworldz::api::json_string(authorized_agent_id)
+                                                  << ",\"meshes\":" << mesh_assets.size()
+                                                  << ",\"instances\":" << resources.instances.size()
+                                                  << ",\"textures\":" << textures.size()
+                                                  << "}" << std::endl;
+                                        pending_mesh_model_uploads.erase(pending);
+                                    } catch (const std::exception& error) {
+                                        response = homeworldz::http::response_for_content(
+                                            request, 500, "application/llsd+xml",
+                                            homeworldz::mesh_model::error_response_xml(
+                                                "the region could not store the model"));
+                                        std::cerr << "{\"level\":\"error\",\"message\":\"mesh model upload failed\","
+                                                     "\"error\":" << homeworldz::api::json_string(error.what())
+                                                  << "}" << std::endl;
+                                    }
                                 }
                             }
                         } else if (authorized && (notecard_update || script_update || gesture_update ||

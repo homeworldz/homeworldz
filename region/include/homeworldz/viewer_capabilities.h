@@ -194,10 +194,10 @@ struct SimulatorFeatures {
     // load-bearing for RENDERING, not just UI: a viewer honors
     // MeshRezEnabled=false by never building render volumes for mesh
     // objects — they fetch, parse, and select, but draw nothing. Found the
-    // hard way, 2026-07-29. Viewer-side mesh UPLOAD (M2) is separate and
-    // stays off until the NewFileAgentInventory mesh path exists.
+    // hard way, 2026-07-29. Viewer-side mesh upload is the mesh branch of
+    // NewFileAgentInventory plus the upload-model-data route (ADR 0033 M2).
     bool mesh{true};
-    bool mesh_upload{false};
+    bool mesh_upload{true};
     bool dynamic_pathfinding{false};
     // The region emits a hover-height block in AvatarAppearance but accepts no
     // hover-height update, so the viewer must not offer the control.
