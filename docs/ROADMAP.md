@@ -458,7 +458,14 @@ input formats.
   stub, with the `gltf` rendition derived from SL-mesh uploads.
 - [ ] M3 material and texture renditions: glTF material JSON (type 57) for
   PBR-capable viewers and JPEG2000 texture extraction for the legacy
-  texture pipeline.
+  texture pipeline. Related gap found live 2026-07-29: the region serves no
+  RenderMaterials update capability, so viewer materials edits
+  (normal/specular assignments) silently do not persist.
+- [ ] V-HACD convex decomposition for mesh physics; the shipped physics
+  block is the conservative bounding-box hull.
+- [ ] Regenerate stale renditions: the generator column records which
+  converter produced each rendition so a better one can re-queue and
+  replace everything it supersedes.
 - [ ] M4 rigged mesh: glTF skins mapped onto the Bento skeleton (refusing
   rigs that do not map), attachments and body wearables.
 - [ ] M5 import breadth: client-side FBX/OBJ/DAE import, documented Daz
