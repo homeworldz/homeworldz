@@ -374,6 +374,20 @@ int configured_port() {
     return configured_int("region.http_port", 42001, 1, 65535);
 }
 
+// The arrival greeting (region.welcome_message), delivered privately to each
+// avatar as it enters — the llOwnerSay shape on the viewer path, a chat
+// envelope on the session path. {user} resolves to the avatar's display
+// name; configuring the message empty disables the greeting.
+std::string welcome_chat_message(std::string_view display_name) {
+    auto message = configured_value(
+        "region.welcome_message", "Welcome to Homeworldz, {user}!");
+    constexpr std::string_view placeholder = "{user}";
+    for (auto at = message.find(placeholder); at != std::string::npos;
+         at = message.find(placeholder, at + display_name.size()))
+        message.replace(at, placeholder.size(), display_name);
+    return message;
+}
+
 int configured_viewer_port() {
     return configured_int("region.viewer_port", 42002, 1, 65535);
 }
@@ -6555,6 +6569,44 @@ int main(int argc, char* argv[]) {
                                             response.region_handle, *restored_object), true, now, true))
                                     static_cast<void>(send_udp(viewer_server, endpoint, *object));
                             }
+                            // The arrival greeting, privately, once the world
+                            // has been backfilled. The name comes from the
+                            // account the grid knows, in its legacy two-part
+                            // form; the id is the honest fallback rather than
+                            // a greeting that lies about knowing you.
+                            std::string arrival_name;
+                            try {
+                                const auto user = viewer_grid
+                                    ? viewer_grid->find_user(live_avatar.user_id)
+                                    : std::nullopt;
+                                if (user) {
+                                    auto [first, last] = legacy_avatar_name(user->username);
+                                    arrival_name = first + " " + last;
+                                }
+                            } catch (const std::exception&) {
+                            }
+                            if (arrival_name.empty()) arrival_name = live_avatar.user_id;
+                            if (const auto greeting = welcome_chat_message(arrival_name);
+                                !greeting.empty()) {
+                                homeworldz::viewer::ChatFromSimulator welcome;
+                                welcome.from_name = region_name;
+                                if (const auto region_uuid =
+                                        homeworldz::viewer::parse_uuid(provisioned_region_id)) {
+                                    welcome.source_id = *region_uuid;
+                                    welcome.owner_id = *region_uuid;
+                                }
+                                welcome.source_type = 2; // object: the llOwnerSay shape
+                                welcome.chat_type = 8;   // owner say: private, plain text
+                                const auto& here = live_avatar.controller.state().position;
+                                welcome.position = {static_cast<float>(here.x),
+                                                    static_cast<float>(here.y),
+                                                    static_cast<float>(here.z)};
+                                welcome.message = greeting;
+                                if (const auto sent = circuits.send(endpoint,
+                                        homeworldz::viewer::encode_chat_from_simulator(welcome),
+                                        true, now, true))
+                                    static_cast<void>(send_udp(viewer_server, endpoint, *sent));
+                            }
                         }
                         const auto object_link = homeworldz::viewer::decode_object_link(packet->payload);
                         if (object_link && object_link->agent_id == identity->agent_id &&
@@ -8400,6 +8452,19 @@ int main(int argc, char* argv[]) {
                         static_cast<void>(viewer_grid->update_presence(
                             inbound.user_id, registration->region_id()));
                     spawned_reply(live);
+                    // The arrival greeting, matching the viewer path: private
+                    // to this session, {user} resolved to the display name
+                    // the ticket carried.
+                    if (const auto greeting = welcome_chat_message(
+                            inbound.display_name.empty() ? inbound.user_id
+                                                         : inbound.display_name);
+                        !greeting.empty()) {
+                        session_server->send_to(inbound.session_id,
+                            homeworldz::session::encode_envelope("chat", {},
+                                "{\"from\":" + homeworldz::session::json_string(region_name) +
+                                ",\"message\":" +
+                                homeworldz::session::json_string(greeting) + "}"));
+                    }
                     // Initial scene: every other avatar, then every non-avatar
                     // entity. Terrain deliberately not sent (design decision 4).
                     std::unordered_set<homeworldz::scene::EntityId> avatar_entities;
