@@ -23,6 +23,8 @@ public:
         // validator runs on the service thread; it is expected to block
         // briefly (one grid round trip) during auth only.
         TicketValidator validator;
+        // Vertices per heightmap side, published in the hello terrain block.
+        std::size_t terrain_width{};
     };
 
     // start returns a running server, or null when the listener could not be

@@ -281,8 +281,10 @@ std::string encode_envelope(std::string_view type, std::string_view correlation_
     return rendered;
 }
 
-SessionCore::SessionCore(std::string region_name, TicketValidator validator)
-    : region_name_(std::move(region_name)), validator_(std::move(validator)) {}
+SessionCore::SessionCore(std::string region_name, TicketValidator validator,
+                         std::size_t terrain_width)
+    : region_name_(std::move(region_name)), validator_(std::move(validator)),
+      terrain_width_(terrain_width) {}
 
 SessionCore::Result SessionCore::refuse(std::string reason) const {
     Result result;
@@ -329,6 +331,30 @@ SessionCore::Result SessionCore::handle_text(std::string_view text) {
             ",\"jumpVelocity\":" + json_number_text(homeworldz::viewer::avatar_jump_velocity) +
             ",\"gravity\":" + json_number_text(homeworldz::viewer::avatar_gravity) +
             "},\"interestSweepMs\":100" +
+            // The avatar capsule and ground contract (client core request,
+            // 2026-07-29): position is the capsule center, standing support
+            // is ground + height/2, grounded within the tolerance above it.
+            // The height itself is per-avatar and arrives in the spawned
+            // reply. Same publication discipline as the movement block: the
+            // controller header is the single definition.
+            ",\"avatar\":{\"capsuleRadius\":" +
+            json_number_text(homeworldz::viewer::avatar_capsule_radius) +
+            ",\"supportOffsetFactor\":0.5" +
+            ",\"groundedTolerance\":" +
+            json_number_text(homeworldz::viewer::avatar_grounded_tolerance) + "}" +
+            // The ground itself: a heightmap fetched over HTTP with the same
+            // region ticket this socket authenticated with. Heights are
+            // float32 little-endian meters, row-major from y=0, one vertex
+            // per meter (spacing 1), exact at integer coordinates. Between
+            // vertices the surface the region collides against is each 1m
+            // cell split into two planar triangles along the diagonal from
+            // (x, y+1) to (x+1, y) — Jolt's heightfield triangulation, which
+            // region movement samples by raycast every tick.
+            ",\"terrain\":{\"path\":\"/session/terrain\"" +
+            ",\"format\":\"heightmap-f32le\"" +
+            ",\"width\":" + std::to_string(terrain_width_) +
+            ",\"spacing\":1" +
+            ",\"interpolation\":\"cell-triangles-diagonal-x,y+1-x+1,y\"}" +
             // The mesh acceptance gate, published so importing clients refuse
             // exactly what upload would refuse (ADR 0033: read, never encode).
             ",\"meshAcceptance\":" + homeworldz::mesh::acceptance_policy_json() + "}"));

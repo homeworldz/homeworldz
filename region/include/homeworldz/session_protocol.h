@@ -105,7 +105,8 @@ struct Command {
 // carries away what it says to send.
 class SessionCore {
 public:
-    SessionCore(std::string region_name, TicketValidator validator);
+    SessionCore(std::string region_name, TicketValidator validator,
+                std::size_t terrain_width);
 
     struct Result {
         std::vector<std::string> send;
@@ -131,6 +132,7 @@ private:
 
     std::string region_name_;
     TicketValidator validator_;
+    std::size_t terrain_width_;
     bool established_{};
     SessionIdentity identity_;
 };

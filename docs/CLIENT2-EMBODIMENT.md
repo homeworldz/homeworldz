@@ -48,8 +48,16 @@ seam above encoding.
    arrival/persisted/initial position, controller + Jolt character,
    presence) lifts into `spawn_avatar(...)`; the join backfill lifts into a
    per-kind `send_initial_scene(...)` — a session wants existing avatars,
-   appearances, and objects, but not 16×16 terrain patch packets (terrain
-   reaches a session as one message or a capability fetch, later).
+   appearances, and objects, but not 16×16 terrain patch packets. The
+   "later" arrived 2026-07-29 as the capability fetch: `GET /session/terrain`
+   (region ticket bearer) returns the heightmap the region collides against
+   as float32 little-endian meters, and the hello's `terrain` block states
+   width, spacing, and the interpolation rule (each 1 m cell is two planar
+   triangles along the (x, y+1)–(x+1, y) diagonal — Jolt's heightfield
+   triangulation, which region movement samples by raycast). The hello's
+   `avatar` block publishes the capsule contract (radius 0.3, support at
+   ground + height/2, grounded tolerance 0.05) and the spawned reply carries
+   the avatar's own computed height and hip offset.
 5. **Departure splits into what the avatar owns and what the viewer owns.**
    `retire_avatar(key)` (kill broadcast, physics removal, avatar-keyed maps)
    serves both transports; `clear_viewer_transport(endpoint)` (texture

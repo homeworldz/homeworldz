@@ -68,6 +68,15 @@ inline constexpr double avatar_walk_speed = 4.0;   // m/s; also flight cruise
 inline constexpr double avatar_fast_speed = 8.0;   // m/s, run and fast flight
 inline constexpr double avatar_jump_velocity = 5.0;  // m/s straight up
 inline constexpr double avatar_gravity = 9.81;     // m/s², airborne non-flying
+// The avatar capsule and its ground contract, published like the movement
+// constants (client core request, 2026-07-29). The avatar's position is the
+// capsule center, so standing support is ground height plus half the
+// avatar's own height — the height the region computes from shape and
+// reports in the session spawned reply. The radius is both the horizontal
+// containment margin and the Jolt character capsule; grounded means within
+// the tolerance above support.
+inline constexpr double avatar_capsule_radius = 0.3;      // m
+inline constexpr double avatar_grounded_tolerance = 0.05; // m above support
 
 class AvatarController {
 public:

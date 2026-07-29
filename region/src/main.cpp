@@ -1121,7 +1121,8 @@ int main(int argc, char* argv[]) {
                         return homeworldz::session::SessionIdentity{resolved->user_id,
                             resolved->userid, resolved->display_name, resolved->session_id,
                             resolved->arrival};
-                    }});
+                    },
+                    static_cast<std::size_t>(region_size_x)});
                 if (!session_server) {
                     std::cerr << "{\"level\":\"error\",\"message\":\"region session listener failed\",\"port\":"
                               << session_port << "}" << std::endl;
@@ -2697,6 +2698,47 @@ int main(int argc, char* argv[]) {
                                 request, 401, "application/json",
                                 homeworldz::api::to_json(homeworldz::api::Error{
                                     "unauthorized", "a valid grid service token is required"}));
+                        } else {
+                            response = homeworldz::http::response_for_content(
+                                request, 200, "application/vnd.homeworldz.heightmap-f32le",
+                                encode_heightmap(*terrain_heightmap));
+                        }
+                    }
+                    if (response.path == "/session/terrain") {
+                        // The ground itself, for session clients (client core
+                        // request, 2026-07-29): the same heightmap the region
+                        // collides against, float32 little-endian meters,
+                        // row-major from y=0, one vertex per meter. The hello
+                        // terrain block states the width and interpolation
+                        // rule. Authorized by the region ticket, exactly as
+                        // the mesh upload path is.
+                        const auto authorization =
+                            homeworldz::http::request_header_value(request, "Authorization");
+                        constexpr std::string_view bearer = "Bearer ";
+                        std::optional<homeworldz::grid::TicketIdentity> requester;
+                        if (response.method == "GET" && authorization.starts_with(bearer) &&
+                            viewer_grid && registration) {
+                            try {
+                                homeworldz::grid::Client ticket_client(
+                                    homeworldz::grid::socket_transport(
+                                        configured_value("grid.url", "http://localhost:42000"),
+                                        region_access_key));
+                                requester = ticket_client.validate_region_ticket(
+                                    provisioned_region_id, authorization.substr(bearer.size()));
+                            } catch (const std::exception&) {
+                            }
+                        }
+                        if (response.method != "GET") {
+                            response = homeworldz::http::response_for_content(
+                                request, 405, "application/json",
+                                homeworldz::api::to_json(homeworldz::api::Error{
+                                    "method_not_allowed", "terrain requires GET"}));
+                        } else if (!requester) {
+                            response = homeworldz::http::response_for_content(
+                                request, 401, "application/json",
+                                homeworldz::api::to_json(homeworldz::api::Error{
+                                    "unauthorized",
+                                    "a valid region ticket bearer token is required"}));
                         } else {
                             response = homeworldz::http::response_for_content(
                                 request, 200, "application/vnd.homeworldz.heightmap-f32le",
@@ -5833,7 +5875,8 @@ int main(int argc, char* argv[]) {
                                             physics_world->remove_character(live->second.physics_character);
                                         live->second.physics_character = physics_world->create_character({
                                             live->second.entity_id, live->second.controller.state().position,
-                                            0.3, geometry->height, 0.4});
+                                            homeworldz::viewer::avatar_capsule_radius,
+                                            geometry->height, 0.4});
                                         physics_world->set_character_flying(
                                             live->second.physics_character,
                                             live->second.controller.state().flying);
@@ -6290,7 +6333,8 @@ int main(int argc, char* argv[]) {
                                 if (physics_world) {
                                     auto& live = avatars.at(endpoint);
                                     live.physics_character = physics_world->create_character({
-                                        entity, live.controller.state().position, 0.3,
+                                        entity, live.controller.state().position,
+                                        homeworldz::viewer::avatar_capsule_radius,
                                         live.controller.state().height, 0.4});
                                     physics_world->set_character_velocity(
                                         live.physics_character, live.controller.state().velocity);
@@ -8207,7 +8251,14 @@ int main(int argc, char* argv[]) {
                                     state.position.y, state.position.z) +
                                 ",\"lookAt\":" + session_vec3(
                                     1.0 - 2.0 * (qy * qy + qz * qz),
-                                    2.0 * (qx * qy + qw * qz), 0.0) + "}"));
+                                    2.0 * (qx * qy + qw * qz), 0.0) +
+                                // The avatar's own geometry, as the region
+                                // computed it from shape: with the published
+                                // capsule contract this is everything ground
+                                // support needs (client core request,
+                                // 2026-07-29). Additive fields.
+                                ",\"height\":" + std::to_string(state.height) +
+                                ",\"hipOffset\":" + std::to_string(state.hip_offset) + "}"));
                     };
                     if (const auto existing = avatars.find(participant_key);
                         existing != avatars.end()) {
@@ -8294,7 +8345,8 @@ int main(int argc, char* argv[]) {
                     live.controller.apply(seed);
                     if (physics_world) {
                         live.physics_character = physics_world->create_character({
-                            entity, live.controller.state().position, 0.3,
+                            entity, live.controller.state().position,
+                            homeworldz::viewer::avatar_capsule_radius,
                             live.controller.state().height, 0.4});
                         physics_world->set_character_velocity(
                             live.physics_character, live.controller.state().velocity);

@@ -48,9 +48,10 @@ AvatarController::AvatarController(scene::Vector3 spawn, double ground_height, d
                                    double hip_offset, double region_width, double region_height)
     : state_{spawn}, ground_height_(ground_height),
       region_width_(std::max(region_width, 1.0)), region_height_(std::max(region_height, 1.0)) {
-    constexpr double capsule_radius = 0.3;
-    state_.position.x = std::clamp(state_.position.x, capsule_radius, region_width_ - capsule_radius);
-    state_.position.y = std::clamp(state_.position.y, capsule_radius, region_height_ - capsule_radius);
+    state_.position.x = std::clamp(state_.position.x, avatar_capsule_radius,
+                                   region_width_ - avatar_capsule_radius);
+    state_.position.y = std::clamp(state_.position.y, avatar_capsule_radius,
+                                   region_height_ - avatar_capsule_radius);
     // The default state is grounded for a default-constructed avatar, but a
     // restored spawn may be airborne. Geometry must not snap that spawn to
     // terrain before support is evaluated below.
@@ -58,7 +59,7 @@ AvatarController::AvatarController(scene::Vector3 spawn, double ground_height, d
     set_avatar_geometry(avatar_height, hip_offset);
     const auto support_height = ground_height_ + state_.height * 0.5;
     if (state_.position.z <= support_height) state_.position.z = support_height;
-    state_.grounded = state_.position.z <= support_height + 0.05;
+    state_.grounded = state_.position.z <= support_height + avatar_grounded_tolerance;
 }
 
 void AvatarController::apply(const AgentUpdate& update) {
@@ -108,11 +109,10 @@ void AvatarController::set_ground_height(double height) {
 }
 
 void AvatarController::contain_horizontal() {
-    constexpr double capsule_radius = 0.3;
     const auto bounded_x = std::clamp(
-        state_.position.x, capsule_radius, region_width_ - capsule_radius);
+        state_.position.x, avatar_capsule_radius, region_width_ - avatar_capsule_radius);
     const auto bounded_y = std::clamp(
-        state_.position.y, capsule_radius, region_height_ - capsule_radius);
+        state_.position.y, avatar_capsule_radius, region_height_ - avatar_capsule_radius);
     if (bounded_x != state_.position.x) state_.velocity.x = 0.0;
     if (bounded_y != state_.position.y) state_.velocity.y = 0.0;
     state_.position.x = bounded_x;
@@ -134,9 +134,10 @@ void AvatarController::restore_motion(
 void AvatarController::teleport(scene::Vector3 position, bool flying) {
     if (!std::isfinite(position.x) || !std::isfinite(position.y) || !std::isfinite(position.z))
         return;
-    constexpr double capsule_radius = 0.3;
-    position.x = std::clamp(position.x, capsule_radius, region_width_ - capsule_radius);
-    position.y = std::clamp(position.y, capsule_radius, region_height_ - capsule_radius);
+    position.x = std::clamp(position.x, avatar_capsule_radius,
+                            region_width_ - avatar_capsule_radius);
+    position.y = std::clamp(position.y, avatar_capsule_radius,
+                            region_height_ - avatar_capsule_radius);
     state_.position = position;
     state_.velocity = {};
     state_.flying = flying;
