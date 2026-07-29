@@ -440,9 +440,13 @@ input formats.
   with its policy published in the session hello (read, never encode), the
   `asset_renditions` table and lease-based conversion queue behind a
   dedicated worker credential, and vault write-through so an uploaded GLB
-  is durable at commit. Remaining: the conversion worker deriving sl-mesh
-  (LLSD/zlib type-49 payload, generated LODs, physics), region mesh serving
-  to viewers, and mesh rez on the Jolt collision source.
+  is durable at commit. The conversion worker
+  (`homeworldz-meshsmith`) is live too: it claims queued jobs on the worker
+  credential, derives the type-49 payload (round-trip-tested serializer,
+  meshoptimizer LOD chain, bounding-box convex physics pending V-HACD), and
+  stores the rendition — the first uploaded GLB converted on the worker's
+  first claim. Remaining: region mesh serving to viewers and mesh rez on
+  the Jolt collision source.
 - [ ] M2 Firestorm mesh uploads via the standard viewer capability and fee
   stub, with the `gltf` rendition derived from SL-mesh uploads.
 - [ ] M3 material and texture renditions: glTF material JSON (type 57) for
