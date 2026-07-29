@@ -454,8 +454,16 @@ input formats.
   stores the rendition — the first uploaded GLB converted on the worker's
   first claim. Remaining: region mesh serving to viewers and mesh rez on
   the Jolt collision source.
-- [ ] M2 Firestorm mesh uploads via the standard viewer capability and fee
-  stub, with the `gltf` rendition derived from SL-mesh uploads.
+- [ ] M2 Firestorm mesh uploads — server side implemented and
+  protocol-verified live 2026-07-29 (the mesh branch of
+  NewFileAgentInventory: fee request answered with a one-shot uploader URL
+  and a real zero price, viewer-written type-49 payloads stored verbatim as
+  canonical vault assets, textures stored with inventory items, the
+  linkset built from instance transforms with per-face TextureEntry, mesh
+  serving falling back to canonical bytes where no rendition is needed,
+  MeshUploadEnabled on). Awaiting the Firestorm Upload Model click-through
+  for the checkbox; the `gltf` rendition derived from SL-mesh uploads
+  remains.
 - [ ] M3 material and texture renditions: glTF material JSON (type 57) for
   PBR-capable viewers and JPEG2000 texture extraction for the legacy
   texture pipeline. Related gap found live 2026-07-29: the region serves no

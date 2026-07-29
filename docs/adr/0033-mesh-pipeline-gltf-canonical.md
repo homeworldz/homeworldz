@@ -153,7 +153,14 @@ blob is never rewritten.
   physics), region mesh serving to viewers, mesh rez as scene content on the
   Jolt collision source. Firestorm sees a GLB-authored static object.
 - **M2 — Firestorm uploads.** Viewer mesh-upload capability with the fee
-  stub, `gltf` derivation from SL mesh.
+  stub, `gltf` derivation from SL mesh. The capability half shipped
+  2026-07-29: the fee/uploader pair on NewFileAgentInventory, canonical
+  storage of viewer-written type-49 payloads (read, never encode — the
+  viewer's bytes are stored verbatim, so here the canonical asset *is* the
+  SL mesh and no sl-mesh rendition exists or is needed; mesh serving falls
+  back to canonical bytes for exactly this case), texture assets and items,
+  and the linkset from instance transforms. `gltf` derivation from SL mesh
+  is still open.
 - **M3 — materials and textures.** `sl-material` and `j2c-texture`
   renditions, so PBR surfaces match across client families.
 - **M4 — rigged mesh.** Bento mapping for attachments and body wearables.
