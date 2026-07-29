@@ -994,17 +994,28 @@ vault-exempt, following the precedent baked textures set in
 **Textures are much cheaper than meshes.** JPEG2000 encoding already exists and
 is already used — `encode_j2c` in [region/src/image.cpp](../region/src/image.cpp),
 driven by appearance baking — so the texture down-conversion is mostly wiring. The
-Second Life mesh serialization does not exist anywhere in the region; there is no
-mesh, LOD, or vertex code at all, and `SimulatorFeatures::mesh` is hardcoded
-`false` ([region/include/homeworldz/viewer_capabilities.h:195](../region/include/homeworldz/viewer_capabilities.h:195)).
-Doing textures first is the obvious split.
+Meshes were the harder half and went first anyway: as of 2026-07-29 the Second
+Life mesh serialization, the LOD chain, and the rendition queue all exist
+([ADR 0033](adr/0033-mesh-pipeline-gltf-canonical.md) M1 and M2 shipped) and
+`SimulatorFeatures::mesh` is now `true`. Textures are what remains, and the
+`j2c-texture` rendition kind is already reserved for exactly this: JPEG2000 as
+the derived form of a modern canonical, never the authority.
+
+**One inversion still to undo.** The bundled seed textures - the four terrain
+layers in the grid Library, and the default-avatar wearable textures - are
+JPEG2000 *at rest*, which is the direction this section reverses. They predate
+the decision rather than dissenting from it, but until they are re-sourced from
+modern canonicals the first-party client cannot read the grid's own default
+content (it refuses JPEG2000 by rule), and no terrain surface published to it
+would be usable. Re-sourcing the seed assets is part of this work rather than a
+follow-on to it (client core, 2026-07-29).
 
 **Who sees it.** Both, and this one needs no negotiation at all. A viewer asking
 `GetTexture` gets the derived JPEG2000 and never learns anything changed, so this
 is invisible rather than additive. The client gets the authoritative blob through
-a new asset route on the modern path. The only viewer-visible change is that
-`mesh` eventually flips to `true`, and that is an honest advertisement of new
-behavior rather than an extension to opt into.
+a new asset route on the modern path. The only viewer-visible change was `mesh`
+flipping to `true`, an honest advertisement of new behavior rather than an
+extension to opt into - which happened 2026-07-29 when the pipeline shipped.
 
 ### Server-side prim meshing
 

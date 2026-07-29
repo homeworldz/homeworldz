@@ -478,7 +478,14 @@ input formats.
   per-corner elevation parameters are literals in the RegionHandshake
   encoder (start 10, range 60, uniform) — neither is per-region data, and
   no blend rule is implemented server-side at all: viewers apply their own.
-  Prerequisites, in order: make textures and elevation per-region state
+  There is a format inversion in the way as well: the four layer assets are
+  JPEG2000 *at rest*, and the first-party client refuses JPEG2000 by rule, so
+  they are unusable by it however stable they become. The committed direction
+  is the mesh pipeline's pointed at textures - modern canonical,
+  `j2c-texture` derived - so the seed assets need re-sourcing from modern
+  originals rather than a client exception.
+  Prerequisites, in order: re-source the layer assets so a modern client can
+  read them, make textures and elevation per-region state
   (what `setregionterrain` would drive), then decide the blend contract
   knowing that a viewer's blend is not ours to specify — SL's noise term
   was never reproduced outside Linden, so a published rule is authoritative
