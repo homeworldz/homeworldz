@@ -92,6 +92,16 @@ int main() {
     // The source has no normals, so the converter computed them: a flat quad
     // in the XY plane gets straight-up normals.
     if (face.normals.size() != 4 || std::fabs(face.normals[0][2] - 1.0f) > 0.01f) return 11;
+    // No texcoords in the source either, so the converter synthesized them,
+    // and they vary per vertex — constant UVs are what NaN a viewer's
+    // tangent math.
+    if (face.texcoords.size() != 4) return 12;
+    bool uv_varies = false;
+    for (std::size_t vertex = 1; vertex < 4; ++vertex)
+        if (std::fabs(face.texcoords[vertex][0] - face.texcoords[0][0]) > 0.01f ||
+            std::fabs(face.texcoords[vertex][1] - face.texcoords[0][1]) > 0.01f)
+            uv_varies = true;
+    if (!uv_varies) return 13;
 
     // Every level is present and non-empty; the physics hull is the unit box.
     if (parsed->medium.empty() || parsed->low.empty() || parsed->lowest.empty()) return 6;

@@ -278,6 +278,24 @@ Conversion convert_glb(std::span<const std::byte> glb) {
         face.any_missing_normals = false;
     }
 
+    // Sources without texture coordinates get computed ones too, and this one
+    // is load-bearing: a viewer zero-fills missing TexCoord0, its tangent
+    // computation then divides by a zero UV determinant, and NaN tangents
+    // stop the triangles rasterizing at all — faces select and silhouette but
+    // never draw (observed live on Firestorm, 2026-07-29). Real SL uploads
+    // always carry UVs, so viewers never exercise the missing-UV path. The
+    // sheared planar map (x+y, y+z) keeps per-triangle UV variation on every
+    // axis-aligned plane; only planes normal to (1,-1,1) degrade, and those
+    // still vary numerically.
+    for (auto& face : faces) {
+        if (!face.any_missing_texcoords) continue;
+        face.texcoords.clear();
+        for (const auto& position : face.positions)
+            face.texcoords.push_back({position[0] + position[1] + 0.5f,
+                                      position[1] + position[2] + 0.5f});
+        face.any_missing_texcoords = false;
+    }
+
     // Normalize to the unit domain by the same declared bounds the upload
     // used for the wrapper prim's scale (declared_world_bounds): geometry
     // spans [-0.5, 0.5] per axis, and the prim scale stretches it back to
