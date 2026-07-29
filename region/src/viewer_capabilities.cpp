@@ -184,6 +184,13 @@ std::string seed_capability_xml(std::string_view public_endpoint, std::string_vi
     return "<?xml version=\"1.0\"?><llsd><map><key>EventQueueGet</key><uri>" + event_url +
            "</uri><key>GetTexture</key><uri>" + texture_url +
            "</uri><key>ViewerAsset</key><uri>" + asset_url +
+           // Mesh fetches go through the GetMesh capabilities, not
+           // ViewerAsset: a viewer granted neither never asks for mesh bytes
+           // and renders mesh prims invisible (verified live on Firestorm,
+           // 2026-07-29). Same endpoint — the handler reads any <type>_id=
+           // query, mesh_id included.
+           "</uri><key>GetMesh</key><uri>" + asset_url +
+           "</uri><key>GetMesh2</key><uri>" + asset_url +
            "</uri><key>SimulatorFeatures</key><uri>" + simulator_features_url +
            "</uri><key>EnvironmentSettings</key><uri>" + environment_url +
            "</uri><key>RemoteParcelRequest</key><uri>" + remote_parcel_url +

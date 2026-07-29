@@ -1169,6 +1169,23 @@ int main(int argc, char* argv[]) {
             if (!assets.empty()) {
                 std::cout << "{\"level\":\"info\",\"message\":\"region asset origins registered\",\"count\":"
                           << assets.size() << "}" << std::endl;
+                // Write the bundled assets through to the vault (idempotent).
+                // Anything a commit's closure can reach — the default prim
+                // texture on every wrapper, the default wearables — must
+                // already be vault-held, because the durability fetch-back
+                // and this region's single thread cannot meet (ADR 0026).
+                std::size_t vaulted = 0;
+                for (const auto& asset : assets) {
+                    try {
+                        const auto bytes = storage->read_asset(asset.viewer_id);
+                        if (viewer_grid->store_vault_asset(asset.viewer_id,
+                                std::span(bytes.data(), bytes.size())))
+                            ++vaulted;
+                    } catch (const std::exception&) {
+                    }
+                }
+                std::cout << "{\"level\":\"info\",\"message\":\"bundled assets vaulted\",\"count\":"
+                          << vaulted << "}" << std::endl;
             }
         }
         if (storage->load_snapshot(scene)) {
@@ -2747,6 +2764,13 @@ int main(int argc, char* argv[]) {
                                     wrapper.owner_id = uploader->user_id;
                                     wrapper.sculpt_id = stored.viewer_id;
                                     wrapper.sculpt_type = 5; // mesh
+                                    // A face with no texture entry renders
+                                    // transparent (verified live on
+                                    // Firestorm, 2026-07-29); the default
+                                    // entry is a bundled asset the startup
+                                    // write-through keeps vault-held, so the
+                                    // commit closure stays deadlock-free.
+                                    wrapper.texture_entry = default_prim_texture_entry();
                                     wrapper.scale.x = std::clamp(bounds.extent[0], 0.01f, 64.0f);
                                     wrapper.scale.y = std::clamp(bounds.extent[1], 0.01f, 64.0f);
                                     wrapper.scale.z = std::clamp(bounds.extent[2], 0.01f, 64.0f);
@@ -3121,8 +3145,39 @@ int main(int argc, char* argv[]) {
                                         cached = mesh_rendition_cache.emplace(
                                             viewer_asset->asset, std::move(*rendition)).first;
                                     }
-                                    response = homeworldz::http::response_for_content(
-                                        request, 200, "application/vnd.ll.mesh", cached->second);
+                                    // Viewer mesh loading is ranged: the
+                                    // header first (bytes 0..), then each LOD
+                                    // at the extent the header named. A full
+                                    // 200 to a ranged LOD request hands the
+                                    // decompressor the wrong bytes, so honor
+                                    // the range with a 206.
+                                    const auto range_header = homeworldz::http::request_header_value(
+                                        request, "Range");
+                                    std::size_t range_offset = 0, range_length = 0;
+                                    bool ranged = false;
+                                    if (range_header.starts_with("bytes=")) {
+                                        const auto dash = range_header.find('-', 6);
+                                        if (dash != std::string::npos) {
+                                            const auto from = range_header.substr(6, dash - 6);
+                                            const auto to = range_header.substr(dash + 1);
+                                            char* end = nullptr;
+                                            range_offset = std::strtoull(from.c_str(), &end, 10);
+                                            if (end != nullptr && *end == 0 && !to.empty()) {
+                                                const auto last = std::strtoull(to.c_str(), &end, 10);
+                                                if (end != nullptr && *end == 0 && last >= range_offset) {
+                                                    range_length = last - range_offset + 1;
+                                                    ranged = true;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if (ranged)
+                                        response = homeworldz::http::response_for_range(
+                                            request, "application/vnd.ll.mesh", cached->second,
+                                            range_offset, range_length);
+                                    else
+                                        response = homeworldz::http::response_for_content(
+                                            request, 200, "application/vnd.ll.mesh", cached->second);
                                 } else {
                                     const auto asset = read_federated_asset(viewer_asset->asset);
                                     response = homeworldz::http::response_for_content(

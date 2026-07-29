@@ -49,7 +49,7 @@ WorldBounds declared_world_bounds(std::span<const std::byte> glb);
 
 // The generator tag stored with renditions this converter produces, bumped
 // when output changes so regeneration can find what it supersedes.
-inline constexpr const char* generator = "meshsmith/0.2";
+inline constexpr const char* generator = "meshsmith/0.3";
 
 } // namespace homeworldz::mesh
 

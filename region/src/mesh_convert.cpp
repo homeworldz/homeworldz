@@ -247,6 +247,37 @@ Conversion convert_glb(std::span<const std::byte> glb) {
     }
     if (faces.empty()) return fail("the GLB contains no triangle geometry");
 
+    // Sources without normals get computed ones — per-vertex averages of the
+    // adjoining face normals — because a mesh without normals lights
+    // unpredictably in viewers, and refusing would be worse.
+    for (auto& face : faces) {
+        if (!face.any_missing_normals) continue;
+        std::vector<std::array<float, 3>> accumulated(face.positions.size(), {0, 0, 0});
+        for (std::size_t triangle = 0; triangle + 2 < face.indices.size(); triangle += 3) {
+            const auto& a = face.positions[face.indices[triangle]];
+            const auto& b = face.positions[face.indices[triangle + 1]];
+            const auto& c = face.positions[face.indices[triangle + 2]];
+            const std::array<float, 3> ab{b[0] - a[0], b[1] - a[1], b[2] - a[2]};
+            const std::array<float, 3> ac{c[0] - a[0], c[1] - a[1], c[2] - a[2]};
+            const std::array<float, 3> cross{ab[1] * ac[2] - ab[2] * ac[1],
+                                             ab[2] * ac[0] - ab[0] * ac[2],
+                                             ab[0] * ac[1] - ab[1] * ac[0]};
+            for (int corner = 0; corner < 3; ++corner)
+                for (int axis = 0; axis < 3; ++axis)
+                    accumulated[face.indices[triangle + corner]][axis] += cross[axis];
+        }
+        for (auto& normal : accumulated) {
+            const float length = std::sqrt(normal[0] * normal[0] + normal[1] * normal[1] +
+                                           normal[2] * normal[2]);
+            if (length > 0.0f)
+                for (int axis = 0; axis < 3; ++axis) normal[axis] /= length;
+            else
+                normal = {0, 0, 1};
+        }
+        face.normals = std::move(accumulated);
+        face.any_missing_normals = false;
+    }
+
     // Normalize to the unit domain by the same declared bounds the upload
     // used for the wrapper prim's scale (declared_world_bounds): geometry
     // spans [-0.5, 0.5] per axis, and the prim scale stretches it back to

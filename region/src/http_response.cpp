@@ -122,6 +122,29 @@ Response response_for_content(std::string_view request, int status_code,
     return {status_code, std::move(request_id), std::move(method), std::move(path), std::move(content)};
 }
 
+Response response_for_range(std::string_view request, std::string_view content_type,
+                            std::string_view full_body, std::size_t offset, std::size_t length) {
+    std::string method;
+    std::string path;
+    parse_request_line(request, method, path);
+    auto request_id = parse_request_header(request, request_id_header);
+    if (!valid_request_id(request_id)) request_id = new_request_id();
+    if (offset >= full_body.size()) offset = 0;
+    length = (std::min)(length, full_body.size() - offset);
+    const auto slice = full_body.substr(offset, length);
+    const std::string crlf{static_cast<char>(13), static_cast<char>(10)};
+    auto content = "HTTP/1.1 206 Partial Content" + crlf +
+                   "Content-Type: " + std::string(content_type) + crlf +
+                   "Connection: close" + crlf +
+                   std::string(request_id_header) + ": " + request_id + crlf +
+                   "Content-Range: bytes " + std::to_string(offset) + "-" +
+                   std::to_string(offset + slice.size() - 1) + "/" +
+                   std::to_string(full_body.size()) + crlf +
+                   "Content-Length: " + std::to_string(slice.size()) + crlf + crlf +
+                   std::string(slice);
+    return {206, std::move(request_id), std::move(method), std::move(path), std::move(content)};
+}
+
 Response response_for(std::string_view request) {
     return response_for(request, HOMEWORLDZ_VERSION);
 }

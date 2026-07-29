@@ -89,6 +89,10 @@ int main() {
     }
     if (!found_corner) return 5;
 
+    // The source has no normals, so the converter computed them: a flat quad
+    // in the XY plane gets straight-up normals.
+    if (face.normals.size() != 4 || std::fabs(face.normals[0][2] - 1.0f) > 0.01f) return 11;
+
     // Every level is present and non-empty; the physics hull is the unit box.
     if (parsed->medium.empty() || parsed->low.empty() || parsed->lowest.empty()) return 6;
     if (parsed->physics_hull.size() != 8) return 7;
