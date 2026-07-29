@@ -8833,11 +8833,19 @@ int main(int argc, char* argv[]) {
                     // leave, so an unknown subject is silently skipped rather
                     // than freezing on a client that never learned of it.
                     if (session_server) {
+                        // Sessions get the capsule center, matching the
+                        // spawned reply, the avatar announcement, and the
+                        // published support rule (ground + height/2). The
+                        // hip offset is a viewer skeleton convention and
+                        // stays on the LLUDP path; a session client that
+                        // wants it has the value from its spawned reply.
+                        // Found by the client core comparing sampled ground
+                        // against reported z, 2026-07-29.
                         const auto transform_envelope =
                             homeworldz::session::encode_envelope("transform", {},
                                 "{\"id\":\"" + std::to_string(avatar.entity_id) + "\"" +
-                                ",\"position\":" + session_vec3(viewer_position.x,
-                                    viewer_position.y, viewer_position.z) +
+                                ",\"position\":" + session_vec3(state.position.x,
+                                    state.position.y, state.position.z) +
                                 ",\"velocity\":" + session_vec3(state.velocity.x,
                                     state.velocity.y, state.velocity.z) +
                                 ",\"rotation\":[" + std::to_string(state.rotation[0]) + "," +
