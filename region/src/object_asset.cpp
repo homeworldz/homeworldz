@@ -290,6 +290,9 @@ std::string object_json(const scene::Entity& entity, bool child) {
         ",\"everyonePermissions\":" + std::to_string(entity.everyone_permissions) +
         ",\"nextOwnerPermissions\":" + std::to_string(entity.next_owner_permissions) +
         task_inventory_json(entity);
+    if (!entity.sculpt_id.empty())
+        result += ",\"sculptId\":" + json_string(entity.sculpt_id) +
+            ",\"sculptType\":" + std::to_string(entity.sculpt_type);
     if (child)
         result += ",\"localPosition\":[" + std::to_string(entity.local_position.x) + ',' +
             std::to_string(entity.local_position.y) + ',' +
@@ -496,6 +499,12 @@ std::optional<ObjectAsset> parse_object_asset(std::span<const std::byte> content
     result.task_inventory = *task_inventory;
     result.local_position = local_position.value_or(scene::Vector3{});
     result.local_rotation = result.rotation;
+    if (const auto sculpt_id = string_after(text, R"("sculptId":")")) {
+        const auto sculpt_type = integer_after<unsigned>(text, R"("sculptType":)");
+        if (!sculpt_type || *sculpt_type > 255 || sculpt_id->size() > 128) return std::nullopt;
+        result.sculpt_id = *sculpt_id;
+        result.sculpt_type = static_cast<std::uint8_t>(*sculpt_type);
+    }
     return result;
 }
 

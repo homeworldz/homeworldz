@@ -27,6 +27,7 @@ import (
 const (
 	TypeUnknown   = -1
 	TypeTexture   = 0
+	TypeMesh      = 49
 	TypeSound     = 1
 	TypeClothing  = 5
 	TypeObject    = 6
@@ -99,6 +100,7 @@ func (c *collector) add(id string, assetType int) {
 type objectPart struct {
 	Format        string `json:"format"`
 	TextureEntry  string `json:"textureEntry"`
+	SculptID      string `json:"sculptId"`
 	TaskInventory []struct {
 		AssetID   string `json:"assetId"`
 		AssetType int    `json:"assetType"`
@@ -134,6 +136,9 @@ func objectReferences(content []byte) []Reference {
 		for _, item := range part.TaskInventory {
 			refs.add(item.AssetID, item.AssetType)
 		}
+		// A mesh or sculpted prim's shaping asset. The mesh canonical is a
+		// self-contained GLB, so it is a leaf of the closure, not a bearer.
+		refs.add(part.SculptID, TypeMesh)
 	}
 	return refs.references
 }

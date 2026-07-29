@@ -894,6 +894,11 @@ struct TerrainPatch {
 };
 
 struct StaticObject {
+    // A mesh or sculpted prim's shaping asset, carried to viewers in the
+    // ObjectUpdate ExtraParams sculpt block (type 5 = mesh, ADR 0033). A zero
+    // id emits no extra params, exactly as before.
+    Uuid sculpt_id{};
+    std::uint8_t sculpt_type{};
     std::uint32_t local_id{1};
     std::uint32_t parent_local_id{};
     Uuid id{};

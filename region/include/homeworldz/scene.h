@@ -111,6 +111,11 @@ struct Entity {
     Vector3 local_rotation;
     std::uint16_t task_inventory_serial{};
     std::vector<TaskInventoryItem> task_inventory;
+    // A sculpted or mesh prim: the asset whose bytes shape it, and the sculpt
+    // type byte viewers read (5 = mesh, ADR 0033). Empty id means an ordinary
+    // parametric prim.
+    std::string sculpt_id;
+    std::uint8_t sculpt_type{};
 };
 
 struct RayIntersection {

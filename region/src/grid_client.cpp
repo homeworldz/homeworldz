@@ -1037,6 +1037,14 @@ bool Client::store_vault_asset(std::string_view asset_id, std::span<const std::b
                                              content.size())).status_code == 200;
 }
 
+std::optional<std::string> Client::fetch_asset_rendition(std::string_view asset_id,
+                                                         std::string_view kind) {
+    const auto response = transport_->send(
+        "GET", "/api/v1/assets/" + path_segment(asset_id) + "/renditions/" + std::string(kind), {});
+    if (response.status_code != 200 || response.body.empty()) return std::nullopt;
+    return response.body;
+}
+
 bool Client::request_asset_rendition(std::string_view asset_id, std::string_view kind) {
     const auto body = "{\"kind\":" + api::json_string(kind) + '}';
     return transport_->send("POST", "/api/v1/assets/" + path_segment(asset_id) + "/renditions",

@@ -43,6 +43,7 @@
 #include "homeworldz/region_config.h"
 #include "homeworldz/region_storage.h"
 #include "homeworldz/mesh_acceptance.h"
+#include "homeworldz/mesh_convert.h"
 #include "homeworldz/region_transit.h"
 #include "homeworldz/scene.h"
 #include "homeworldz/sha256.h"
@@ -496,7 +497,15 @@ std::optional<std::pair<std::string, std::string>> texture_request(std::string_v
     return std::pair{std::string(session), std::string(texture)};
 }
 
-std::optional<std::pair<std::string, std::string>> viewer_asset_request(std::string_view path) {
+struct ViewerAssetRequest {
+    std::string session;
+    std::string asset;
+    // A mesh fetch is served the sl-mesh rendition, never the canonical GLB
+    // (ADR 0033): the type-49 bytes are what a viewer can render.
+    bool mesh{};
+};
+
+std::optional<ViewerAssetRequest> viewer_asset_request(std::string_view path) {
     constexpr std::string_view prefix = "/caps/assets/";
     if (!path.starts_with(prefix)) return std::nullopt;
     // Accept both "<session>/?<type>_id=<uuid>" and "<session>?<type>_id=<uuid>".
@@ -512,7 +521,8 @@ std::optional<std::pair<std::string, std::string>> viewer_asset_request(std::str
         query.find('&') != std::string_view::npos) return std::nullopt;
     const auto asset = query.substr(id_marker + 4);
     if (asset.empty()) return std::nullopt;
-    return std::pair{std::string(session), std::string(asset)};
+    return ViewerAssetRequest{std::string(session), std::string(asset),
+                              query.starts_with("mesh_id=")};
 }
 
 struct InternalAssetRequest {
@@ -703,6 +713,12 @@ std::optional<homeworldz::viewer::StaticObject> static_object_from_entity(
     object.scale = {static_cast<float>(entity.scale.x), static_cast<float>(entity.scale.y),
                     static_cast<float>(entity.scale.z)};
     object.texture_entry = entity.texture_entry;
+    if (!entity.sculpt_id.empty()) {
+        if (const auto sculpt = homeworldz::viewer::parse_uuid(entity.sculpt_id)) {
+            object.sculpt_id = *sculpt;
+            object.sculpt_type = entity.sculpt_type;
+        }
+    }
     object.path_curve = entity.path_curve;
     object.profile_curve = entity.profile_curve;
     object.path_begin = entity.path_begin;
@@ -762,6 +778,8 @@ void apply_object_asset(
     entity.phantom = asset.phantom;
     entity.task_inventory_serial = asset.task_inventory_serial;
     entity.task_inventory = asset.task_inventory;
+    entity.sculpt_id = asset.sculpt_id;
+    entity.sculpt_type = asset.sculpt_type;
     regenerate_task_inventory_item_ids(entity);
 }
 
@@ -911,6 +929,8 @@ int main(int argc, char* argv[]) {
     // or its lease turns over. A failed refresh keeps the previous list —
     // stale placements draw a better map than none.
     std::vector<homeworldz::grid::RegionPlacement> grid_topology;
+    // Viewer-served sl-mesh renditions, fetch-through cached from the grid.
+    std::unordered_map<std::string, std::string> mesh_rendition_cache;
     auto next_topology_refresh = std::chrono::steady_clock::time_point{};
     const auto refresh_grid_topology = [&]() {
         const auto moment = std::chrono::steady_clock::now();
@@ -1484,6 +1504,8 @@ int main(int argc, char* argv[]) {
                             push(texture, 0);
                         for (const auto& item : part.task_inventory)
                             push(item.asset_id, item.asset_type);
+                        // A mesh or sculpted prim's shaping asset (type 49).
+                        push(part.sculpt_id, 49);
                     };
                     walk_part(linkset->root);
                     for (const auto& child : linkset->children) walk_part(child);
@@ -2688,6 +2710,19 @@ int main(int argc, char* argv[]) {
                                         request, "X-Homeworldz-Name");
                                     if (name.empty()) name = "Mesh";
                                     if (name.size() > 255) name.resize(255);
+                                    // As in Second Life, a mesh upload yields
+                                    // an OBJECT item: viewers cannot rez a
+                                    // bare mesh asset. The mesh asset (the
+                                    // canonical GLB) is wrapped by a one-prim
+                                    // object whose sculpt entry names it, and
+                                    // whose scale is the model's declared
+                                    // world bounds -- the same bounds the
+                                    // converter normalizes by, so it renders
+                                    // at authored size (ADR 0033).
+                                    const auto bounds = homeworldz::mesh::declared_world_bounds(content);
+                                    if (!bounds.ok)
+                                        throw std::runtime_error(
+                                            "the GLB declares no position bounds");
                                     const auto stored = storage->store_asset(
                                         homeworldz::viewer::random_uuid(),
                                         uploader->user_id, content);
@@ -2703,6 +2738,31 @@ int main(int argc, char* argv[]) {
                                     // already vault-held.
                                     if (!viewer_grid->store_vault_asset(stored.viewer_id, content))
                                         throw std::runtime_error("vault write-through failed");
+                                    homeworldz::scene::Entity wrapper;
+                                    wrapper.name = name;
+                                    wrapper.creator_id = uploader->user_id;
+                                    wrapper.owner_id = uploader->user_id;
+                                    wrapper.sculpt_id = stored.viewer_id;
+                                    wrapper.sculpt_type = 5; // mesh
+                                    wrapper.scale.x = std::clamp(bounds.extent[0], 0.01f, 64.0f);
+                                    wrapper.scale.y = std::clamp(bounds.extent[1], 0.01f, 64.0f);
+                                    wrapper.scale.z = std::clamp(bounds.extent[2], 0.01f, 64.0f);
+                                    const auto wrapped =
+                                        homeworldz::asset::serialize_linkset_asset(wrapper);
+                                    const auto wrapped_bytes = std::span(
+                                        reinterpret_cast<const std::byte*>(wrapped.data()),
+                                        wrapped.size());
+                                    const auto object_stored = storage->store_asset(
+                                        homeworldz::viewer::random_uuid(), uploader->user_id,
+                                        wrapped_bytes);
+                                    if (!viewer_grid->register_asset(
+                                            object_stored.viewer_id, object_stored.creator_id,
+                                            object_stored.sha256, object_stored.size,
+                                            region_public_endpoint, true))
+                                        throw std::runtime_error("object asset registration failed");
+                                    if (!viewer_grid->store_vault_asset(
+                                            object_stored.viewer_id, wrapped_bytes))
+                                        throw std::runtime_error("object vault write-through failed");
                                     const auto folder = viewer_grid->find_system_inventory_folder(
                                         uploader->user_id, 6);
                                     if (!folder)
@@ -2712,18 +2772,19 @@ int main(int argc, char* argv[]) {
                                     item.creator_id = uploader->user_id;
                                     item.owner_id = uploader->user_id;
                                     item.folder_id = *folder;
-                                    item.asset_id = stored.viewer_id;
-                                    item.asset_type = 49;
-                                    item.inventory_type = 22;
+                                    item.asset_id = object_stored.viewer_id;
+                                    item.asset_type = 6;
+                                    item.inventory_type = 6;
                                     item.name = name;
                                     item.base_permissions = 0x7fffffff;
                                     item.current_permissions = 0x7fffffff;
                                     item.everyone_permissions = 0;
                                     item.next_permissions = 581632;
-                                    // The grid's commit invariant pulls the GLB
-                                    // into the vault here; self-containment
-                                    // (enforced above) makes its closure one
-                                    // blob, so this is one fetch.
+                                    // The commit's closure walk finds the
+                                    // wrapper and, through its sculptId, the
+                                    // GLB -- both already vault-held by
+                                    // write-through, so no fetch-back can
+                                    // deadlock this thread.
                                     if (!viewer_grid->create_inventory_item(
                                             uploader->user_id, item))
                                         throw std::runtime_error(
@@ -2733,6 +2794,7 @@ int main(int argc, char* argv[]) {
                                     response = homeworldz::http::response_for_content(
                                         request, 201, "application/json",
                                         "{\"assetId\":" + homeworldz::api::json_string(stored.viewer_id) +
+                                        ",\"objectAssetId\":" + homeworldz::api::json_string(object_stored.viewer_id) +
                                         ",\"itemId\":" + homeworldz::api::json_string(item.item_id) +
                                         ",\"triangles\":" + std::to_string(acceptance.triangles) +
                                         ",\"materials\":" + std::to_string(acceptance.materials) +
@@ -2904,7 +2966,7 @@ int main(int argc, char* argv[]) {
                     const auto texture = texture_request(response.path);
                     if (texture) session_id = texture->first;
                     const auto viewer_asset = viewer_asset_request(response.path);
-                    if (viewer_asset) session_id = viewer_asset->first;
+                    if (viewer_asset) session_id = viewer_asset->session;
                     std::string simulator_features_session;
                     if (!seed && !event_queue && !texture && !viewer_asset)
                         simulator_features_session =
@@ -3036,12 +3098,34 @@ int main(int argc, char* argv[]) {
                                         "asset_not_found", "texture asset was not found"}));
                             }
                         } else if (authorized && viewer_asset &&
-                                   homeworldz::viewer::parse_uuid(viewer_asset->second)) {
+                                   homeworldz::viewer::parse_uuid(viewer_asset->asset)) {
                             try {
-                                const auto asset = read_federated_asset(viewer_asset->second);
-                                response = homeworldz::http::response_for_content(
-                                    request, 200, "application/octet-stream",
-                                    std::string(reinterpret_cast<const char*>(asset.data()), asset.size()));
+                                if (viewer_asset->mesh) {
+                                    // Mesh fetches get the sl-mesh rendition,
+                                    // fetch-through cached: renditions are
+                                    // regenerable grid-side data, so memory is
+                                    // the right tier here (ADR 0033).
+                                    auto cached = mesh_rendition_cache.find(viewer_asset->asset);
+                                    if (cached == mesh_rendition_cache.end()) {
+                                        auto rendition = viewer_grid
+                                            ? viewer_grid->fetch_asset_rendition(
+                                                  viewer_asset->asset, "sl-mesh")
+                                            : std::nullopt;
+                                        if (!rendition)
+                                            throw std::runtime_error("mesh rendition unavailable");
+                                        if (mesh_rendition_cache.size() >= 128)
+                                            mesh_rendition_cache.clear();
+                                        cached = mesh_rendition_cache.emplace(
+                                            viewer_asset->asset, std::move(*rendition)).first;
+                                    }
+                                    response = homeworldz::http::response_for_content(
+                                        request, 200, "application/vnd.ll.mesh", cached->second);
+                                } else {
+                                    const auto asset = read_federated_asset(viewer_asset->asset);
+                                    response = homeworldz::http::response_for_content(
+                                        request, 200, "application/octet-stream",
+                                        std::string(reinterpret_cast<const char*>(asset.data()), asset.size()));
+                                }
                             } catch (const std::exception&) {
                                 response = homeworldz::http::response_for_content(
                                     request, 404, "application/json",

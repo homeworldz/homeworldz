@@ -383,6 +383,11 @@ public:
     // Queue a derived-encoding conversion for an asset (ADR 0033); idempotent
     // on the grid side, so re-requesting is safe.
     bool request_asset_rendition(std::string_view asset_id, std::string_view kind);
+    // Read a derived encoding back (ADR 0033) — what a region serves viewers
+    // when they fetch a mesh. nullopt covers both absent-yet and errors; the
+    // caller answers not-found either way and the viewer retries.
+    std::optional<std::string> fetch_asset_rendition(std::string_view asset_id,
+                                                     std::string_view kind);
     // Write asset bytes through to the grid vault (ADR 0026). The vault
     // verifies them against the registered checksum, so this cannot vouch for
     // wrong bytes. On the upload path it is load-bearing, not just an

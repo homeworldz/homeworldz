@@ -4,6 +4,7 @@
 #ifndef HOMEWORLDZ_MESH_CONVERT_H
 #define HOMEWORLDZ_MESH_CONVERT_H
 
+#include <array>
 #include <cstddef>
 #include <span>
 #include <string>
@@ -32,9 +33,23 @@ struct Conversion {
 // not policy.
 Conversion convert_glb(std::span<const std::byte> glb);
 
+// The world-space box the GLB's declared accessor bounds cover, under every
+// node transform reachable from the scene — computed from accessor min/max
+// corners without loading buffers, so the upload gate can afford it. This is
+// the ONE bounds definition: the upload sets the wrapper prim's scale from
+// it, and the converter normalizes geometry by it, so the prim renders at
+// authored size by construction (viewers scale mesh geometry by prim scale
+// over a unit domain).
+struct WorldBounds {
+    bool ok{};
+    std::array<float, 3> center{};
+    std::array<float, 3> extent{};
+};
+WorldBounds declared_world_bounds(std::span<const std::byte> glb);
+
 // The generator tag stored with renditions this converter produces, bumped
 // when output changes so regeneration can find what it supersedes.
-inline constexpr const char* generator = "meshsmith/0.1";
+inline constexpr const char* generator = "meshsmith/0.2";
 
 } // namespace homeworldz::mesh
 

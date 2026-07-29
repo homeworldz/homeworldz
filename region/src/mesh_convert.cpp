@@ -88,7 +88,72 @@ std::optional<slmesh::Submesh> to_submesh(const Face& face,
     return submesh;
 }
 
+void accumulate_declared_bounds(const cgltf_data* data, std::array<float, 3>& low,
+                                std::array<float, 3>& high, bool& any) {
+    const cgltf_scene* scene = data->scene != nullptr ? data->scene
+        : (data->scenes_count != 0 ? &data->scenes[0] : nullptr);
+    if (scene == nullptr) return;
+    std::vector<const cgltf_node*> pending(scene->nodes, scene->nodes + scene->nodes_count);
+    while (!pending.empty()) {
+        const auto* node = pending.back();
+        pending.pop_back();
+        for (cgltf_size child = 0; child < node->children_count; ++child)
+            pending.push_back(node->children[child]);
+        if (node->mesh == nullptr) continue;
+        float world[16];
+        cgltf_node_transform_world(node, world);
+        for (cgltf_size primitive_index = 0; primitive_index < node->mesh->primitives_count;
+             ++primitive_index) {
+            const auto& primitive = node->mesh->primitives[primitive_index];
+            for (cgltf_size attribute = 0; attribute < primitive.attributes_count; ++attribute) {
+                const auto& value = primitive.attributes[attribute];
+                if (value.type != cgltf_attribute_type_position || value.data == nullptr ||
+                    !value.data->has_min || !value.data->has_max)
+                    continue;
+                for (int corner = 0; corner < 8; ++corner) {
+                    std::array<float, 3> point{
+                        (corner & 1) != 0 ? value.data->max[0] : value.data->min[0],
+                        (corner & 2) != 0 ? value.data->max[1] : value.data->min[1],
+                        (corner & 4) != 0 ? value.data->max[2] : value.data->min[2]};
+                    transform_point(world, point);
+                    for (int axis = 0; axis < 3; ++axis) {
+                        low[axis] = (std::min)(low[axis], point[axis]);
+                        high[axis] = (std::max)(high[axis], point[axis]);
+                    }
+                    any = true;
+                }
+            }
+        }
+    }
+}
+
 } // namespace
+
+WorldBounds declared_world_bounds(std::span<const std::byte> glb) {
+    cgltf_options options{};
+    cgltf_data* data = nullptr;
+    if (cgltf_parse(&options, glb.data(), glb.size(), &data) != cgltf_result_success) return {};
+    struct Free {
+        cgltf_data* data;
+        ~Free() { cgltf_free(data); }
+    } freer{data};
+    std::array<float, 3> low{std::numeric_limits<float>::max(),
+                             std::numeric_limits<float>::max(),
+                             std::numeric_limits<float>::max()};
+    std::array<float, 3> high{std::numeric_limits<float>::lowest(),
+                              std::numeric_limits<float>::lowest(),
+                              std::numeric_limits<float>::lowest()};
+    bool any = false;
+    accumulate_declared_bounds(data, low, high, any);
+    if (!any) return {};
+    WorldBounds bounds;
+    bounds.ok = true;
+    for (int axis = 0; axis < 3; ++axis) {
+        bounds.center[axis] = (low[axis] + high[axis]) * 0.5f;
+        bounds.extent[axis] = (std::max)(high[axis] - low[axis], 0.001f);
+    }
+    return bounds;
+}
 
 Conversion convert_glb(std::span<const std::byte> glb) {
     cgltf_options options{};
@@ -182,6 +247,17 @@ Conversion convert_glb(std::span<const std::byte> glb) {
     }
     if (faces.empty()) return fail("the GLB contains no triangle geometry");
 
+    // Normalize to the unit domain by the same declared bounds the upload
+    // used for the wrapper prim's scale (declared_world_bounds): geometry
+    // spans [-0.5, 0.5] per axis, and the prim scale stretches it back to
+    // authored size. Viewers render mesh this way; so do we.
+    const auto bounds = declared_world_bounds(glb);
+    if (!bounds.ok) return fail("the GLB declares no position bounds");
+    for (auto& face : faces)
+        for (auto& position : face.positions)
+            for (int axis = 0; axis < 3; ++axis)
+                position[axis] = (position[axis] - bounds.center[axis]) / bounds.extent[axis];
+
     // The LOD chain. Ratios follow the viewer's expectations of scale steps;
     // whatever the simplifier genuinely achieves is what ships.
     slmesh::Mesh mesh;
@@ -204,24 +280,13 @@ Conversion convert_glb(std::span<const std::byte> glb) {
         }
     }
 
-    // Physics: the geometry's bounding box as a single convex hull — the
-    // conservative shape until V-HACD decomposition lands (ADR 0033).
-    std::array<float, 3> low{std::numeric_limits<float>::max(),
-                             std::numeric_limits<float>::max(),
-                             std::numeric_limits<float>::max()};
-    std::array<float, 3> high_bound{std::numeric_limits<float>::lowest(),
-                                    std::numeric_limits<float>::lowest(),
-                                    std::numeric_limits<float>::lowest()};
-    for (const auto& face : faces)
-        for (const auto& position : face.positions)
-            for (int axis = 0; axis < 3; ++axis) {
-                low[axis] = (std::min)(low[axis], position[axis]);
-                high_bound[axis] = (std::max)(high_bound[axis], position[axis]);
-            }
+    // Physics: the normalized unit box as a single convex hull — the
+    // conservative shape until V-HACD decomposition lands (ADR 0033). In the
+    // normalized domain that box is exactly [-0.5, 0.5]^3, scaled by the prim.
     for (int corner = 0; corner < 8; ++corner)
-        mesh.physics_hull.push_back({(corner & 1) != 0 ? high_bound[0] : low[0],
-                                     (corner & 2) != 0 ? high_bound[1] : low[1],
-                                     (corner & 4) != 0 ? high_bound[2] : low[2]});
+        mesh.physics_hull.push_back({(corner & 1) != 0 ? 0.5f : -0.5f,
+                                     (corner & 2) != 0 ? 0.5f : -0.5f,
+                                     (corner & 4) != 0 ? 0.5f : -0.5f});
 
     result.sl_mesh = slmesh::serialize(mesh);
     if (result.sl_mesh.empty()) return fail("the converted mesh failed to serialize");

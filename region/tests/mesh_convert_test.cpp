@@ -65,25 +65,36 @@ int main() {
     if (!conversion.ok) return 1;
     if (conversion.faces != 1 || conversion.high_triangles != 2) return 2;
 
-    // The output is a well-formed type-49 asset whose geometry survived —
-    // translated to world space, quantization-precise.
+    // The wrapper prim's scale comes from the declared world bounds: the quad
+    // spans 1x1 translated to x 10..11, so center (10.5, 0.5, 0), extent
+    // (1, 1, ~0).
+    const auto bounds = homeworldz::mesh::declared_world_bounds(glb(json, bin));
+    if (!bounds.ok || std::fabs(bounds.center[0] - 10.5f) > 0.001f ||
+        std::fabs(bounds.extent[0] - 1.0f) > 0.001f ||
+        std::fabs(bounds.extent[1] - 1.0f) > 0.001f)
+        return 10;
+
+    // The output is a well-formed type-49 asset whose geometry is normalized
+    // by those same bounds — the unit domain the prim scale stretches back to
+    // authored size. The far corner lands at (+0.5, +0.5).
     const auto parsed = homeworldz::slmesh::parse(conversion.sl_mesh);
     if (!parsed || parsed->high.size() != 1) return 3;
     const auto& face = parsed->high.front();
     if (face.positions.size() != 4 || face.indices.size() != 6) return 4;
-    bool found_translated = false;
-    for (const auto& position : face.positions)
-        if (std::fabs(position[0] - 11.0f) < 0.001f && std::fabs(position[1] - 1.0f) < 0.001f)
-            found_translated = true;
-    if (!found_translated) return 5;
+    bool found_corner = false;
+    for (const auto& position : face.positions) {
+        if (std::fabs(position[0]) > 0.501f || std::fabs(position[1]) > 0.501f) return 5;
+        if (std::fabs(position[0] - 0.5f) < 0.001f && std::fabs(position[1] - 0.5f) < 0.001f)
+            found_corner = true;
+    }
+    if (!found_corner) return 5;
 
-    // Every level is present and non-empty; the physics hull boxes the
-    // translated geometry.
+    // Every level is present and non-empty; the physics hull is the unit box.
     if (parsed->medium.empty() || parsed->low.empty() || parsed->lowest.empty()) return 6;
     if (parsed->physics_hull.size() != 8) return 7;
     float max_x = -1e9f;
     for (const auto& vertex : parsed->physics_hull) max_x = (std::max)(max_x, vertex[0]);
-    if (std::fabs(max_x - 11.0f) > 0.001f) return 8;
+    if (std::fabs(max_x - 0.5f) > 0.001f) return 8;
 
     // Geometry-free input fails with a reason, never with bytes.
     const auto empty = homeworldz::mesh::convert_glb(glb(

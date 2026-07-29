@@ -53,6 +53,10 @@ struct ObjectAsset {
     std::vector<scene::TaskInventoryItem> task_inventory;
     scene::Vector3 local_position;
     scene::Vector3 local_rotation;
+    // Mesh and sculpted prims: the shaping asset and the sculpt type byte
+    // (5 = mesh, ADR 0033). Empty id is an ordinary parametric prim.
+    std::string sculpt_id;
+    std::uint8_t sculpt_type{};
 };
 
 struct LinksetAsset {

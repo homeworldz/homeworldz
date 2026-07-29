@@ -494,6 +494,17 @@ private:
             do result.task_inventory.push_back(task_inventory_item()); while (consume(","));
             expect("]");
         }
+        if (consume("}")) return result;
+        expect(",");
+        expect_string("sculptId");
+        expect(":");
+        result.sculpt_id = string();
+        expect(",");
+        expect_string("sculptType");
+        expect(":");
+        const auto sculpt_type = unsigned_integer();
+        if (sculpt_type > 255) fail("sculpt type is outside the supported range");
+        result.sculpt_type = static_cast<std::uint8_t>(sculpt_type);
         expect("}");
         return result;
     }
@@ -600,7 +611,11 @@ std::string snapshot_json(const scene::Scene& scene) {
                 ",\"salePrice\":" + std::to_string(item.sale_price) +
                 ",\"creationDate\":" + std::to_string(item.creation_date) + '}';
         }
-        json += "]}";
+        json += "]";
+        if (!entity->sculpt_id.empty())
+            json += ",\"sculptId\":" + api::json_string(entity->sculpt_id) +
+                ",\"sculptType\":" + std::to_string(entity->sculpt_type);
+        json += "}";
     }
     return json + "]}";
 }
