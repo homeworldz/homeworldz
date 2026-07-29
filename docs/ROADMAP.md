@@ -454,16 +454,17 @@ input formats.
   stores the rendition — the first uploaded GLB converted on the worker's
   first claim. Remaining: region mesh serving to viewers and mesh rez on
   the Jolt collision source.
-- [ ] M2 Firestorm mesh uploads — server side implemented and
-  protocol-verified live 2026-07-29 (the mesh branch of
-  NewFileAgentInventory: fee request answered with a one-shot uploader URL
-  and a real zero price, viewer-written type-49 payloads stored verbatim as
-  canonical vault assets, textures stored with inventory items, the
-  linkset built from instance transforms with per-face TextureEntry, mesh
-  serving falling back to canonical bytes where no rendition is needed,
-  MeshUploadEnabled on). Awaiting the Firestorm Upload Model click-through
-  for the checkbox; the `gltf` rendition derived from SL-mesh uploads
-  remains.
+- [x] M2 Firestorm mesh uploads — complete 2026-07-29, confirmed in
+  Firestorm: a Utah teapot uploaded through Upload Model stands rezzed and
+  smooth-shaded in-world. The mesh branch of NewFileAgentInventory: fee
+  request answered with a one-shot uploader URL and a real zero price,
+  viewer-written type-49 payloads stored verbatim as canonical vault
+  assets (read, never encode — no rendition exists or is needed; serving
+  falls back to canonical bytes), textures stored with inventory items,
+  the linkset built from instance transforms with per-face TextureEntry,
+  MeshUploadEnabled on, and the MeshUploadFlag permission capability the
+  uploader queries. The `gltf` rendition derived from SL-mesh uploads
+  remains open.
 - [ ] M3 material and texture renditions: glTF material JSON (type 57) for
   PBR-capable viewers and JPEG2000 texture extraction for the legacy
   texture pipeline. Related gap found live 2026-07-29: the region serves no
@@ -471,9 +472,12 @@ input formats.
   (normal/specular assignments) silently do not persist.
 - [ ] V-HACD convex decomposition for mesh physics; the shipped physics
   block is the conservative bounding-box hull.
-- [ ] Regenerate stale renditions: the generator column records which
-  converter produced each rendition so a better one can re-queue and
-  replace everything it supersedes.
+- [x] Regenerate stale renditions — live 2026-07-29: the generator column
+  records which converter produced each rendition; the grid re-queues
+  everything a different generator produced (worker-token endpoint), and
+  meshsmith sweeps at startup, so a deployed converter upgrade reconverts
+  existing content automatically (its first sweep reconverted the pre-UV
+  probe meshes).
 - [ ] M4 rigged mesh: glTF skins mapped onto the Bento skeleton (refusing
   rigs that do not map), attachments and body wearables.
 - [ ] M5 import breadth: client-side FBX/OBJ/DAE import, documented Daz
