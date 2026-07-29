@@ -344,9 +344,11 @@ SessionCore::Result SessionCore::handle_text(std::string_view text) {
             ",\"groundedTolerance\":" +
             json_number_text(homeworldz::viewer::avatar_grounded_tolerance) +
             // Ground steeper than this never grounds the capsule: the avatar
-            // is contact-held and sliding, and the support rule makes no
-            // claim there. On walkable ground the rule is exact (client core
-            // measurement, 2026-07-29).
+            // is contact-held and sliding. This is strictly the grounded/
+            // sliding boundary — NOT an exactness threshold for the support
+            // rule, which is measured exact only on effectively flat ground
+            // (≲3°) and deviates below flat arithmetic on real slopes even
+            // while standing (docs/CLIENT2-EMBODIMENT.md, decision 4).
             ",\"walkableSlopeDegrees\":" +
             json_number_text(homeworldz::physics::character_walkable_slope_degrees) + "}" +
             // The ground itself: a heightmap fetched over HTTP with the same
