@@ -8,6 +8,8 @@
     "sqlite3",
     "openjpeg",
     "libwebsockets",
-    "cgltf"
+    "cgltf",
+    "zlib",
+    "meshoptimizer"
   ]
 }

@@ -148,6 +148,12 @@ func (a *API) openRendition(w http.ResponseWriter, r *http.Request, assetID, kin
 func (a *API) putRendition(w http.ResponseWriter, r *http.Request, assetID, kind string) {
 	generator := strings.TrimSpace(r.Header.Get("X-Homeworldz-Generator"))
 	if generator == "" {
+		// The worker's plain HTTP transport carries no custom headers; the
+		// query parameter is the same declaration in the only place it can
+		// put one.
+		generator = strings.TrimSpace(r.URL.Query().Get("generator"))
+	}
+	if generator == "" {
 		writeJSON(w, http.StatusBadRequest, Error{Code: "invalid_rendition",
 			Message: "the X-Homeworldz-Generator header must name the converter version"})
 		return
