@@ -68,8 +68,10 @@ seam above encoding.
    −0.107 m measured standing at a locally ~11° feature, −0.331 m at 39°
    (inside walkable), ~0.5 m sliding at 51°. The walkable limit —
    region-owned rather than Jolt's silent default,
-   `character_walkable_slope_degrees` (50°) in physics.h, published in the
-   hello avatar block as `walkableSlopeDegrees` — is strictly the
+   `character_walkable_slope_degrees` in physics.h (default 65°, Halcyon's
+   MAX_WALKABLE_SLOPE, adopted 2026-07-29; per-region override
+   `region.walkable_slope_degrees`), published in the hello avatar block as
+   `walkableSlopeDegrees` — is strictly the
    grounded-versus-sliding boundary, NOT an exactness threshold; the two
    differ by an order of magnitude and conflating them was a bug in both
    ends' first drafts. The flat arithmetic is also the non-Jolt fallback's

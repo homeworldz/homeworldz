@@ -283,9 +283,9 @@ std::string encode_envelope(std::string_view type, std::string_view correlation_
 }
 
 SessionCore::SessionCore(std::string region_name, TicketValidator validator,
-                         std::size_t terrain_width)
+                         std::size_t terrain_width, double walkable_slope_degrees)
     : region_name_(std::move(region_name)), validator_(std::move(validator)),
-      terrain_width_(terrain_width) {}
+      terrain_width_(terrain_width), walkable_slope_degrees_(walkable_slope_degrees) {}
 
 SessionCore::Result SessionCore::refuse(std::string reason) const {
     Result result;
@@ -350,7 +350,7 @@ SessionCore::Result SessionCore::handle_text(std::string_view text) {
             // (≲3°) and deviates below flat arithmetic on real slopes even
             // while standing (docs/CLIENT2-EMBODIMENT.md, decision 4).
             ",\"walkableSlopeDegrees\":" +
-            json_number_text(homeworldz::physics::character_walkable_slope_degrees) + "}" +
+            json_number_text(walkable_slope_degrees_) + "}" +
             // The ground itself: a heightmap fetched over HTTP with the same
             // region ticket this socket authenticated with. Heights are
             // float32 little-endian meters, row-major from y=0, one vertex

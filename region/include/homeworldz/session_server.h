@@ -25,6 +25,9 @@ public:
         TicketValidator validator;
         // Vertices per heightmap side, published in the hello terrain block.
         std::size_t terrain_width{};
+        // This region's configured walkable slope, published in the hello
+        // avatar block.
+        double walkable_slope_degrees{};
     };
 
     // start returns a running server, or null when the listener could not be

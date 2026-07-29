@@ -131,7 +131,8 @@ int Server::State::callback(lws* wsi, lws_callback_reasons reason, void* user, v
     switch (reason) {
     case LWS_CALLBACK_ESTABLISHED: {
         *slot = new Connection(SessionCore(state->options.region_name, state->options.validator,
-                                    state->options.terrain_width));
+                                    state->options.terrain_width,
+                                    state->options.walkable_slope_degrees));
         state->connections.insert(wsi);
         lws_set_timeout(wsi, PENDING_TIMEOUT_USER_REASON_BASE, auth_timeout_seconds);
         return 0;

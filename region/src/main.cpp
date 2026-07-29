@@ -943,6 +943,12 @@ int main(int argc, char* argv[]) {
     // region.connection_timeout_seconds if your users see longer blips.
     const auto connection_timeout =
         std::chrono::seconds(configured_int("region.connection_timeout_seconds", 60, 15, 3600));
+    // The walkable slope limit, overridable per region and published in the
+    // session hello. Every character this region creates uses the same value
+    // the hello announces — one configured number, no drift.
+    const auto walkable_slope_degrees = static_cast<double>(configured_int(
+        "region.walkable_slope_degrees",
+        static_cast<int>(homeworldz::physics::character_walkable_slope_degrees), 10, 89));
     std::unique_ptr<homeworldz::grid::RegistrationLifecycle> registration;
     std::unique_ptr<homeworldz::session::Server> session_server;
     std::unique_ptr<homeworldz::grid::Client> viewer_grid;
@@ -1122,7 +1128,8 @@ int main(int argc, char* argv[]) {
                             resolved->userid, resolved->display_name, resolved->session_id,
                             resolved->arrival};
                     },
-                    static_cast<std::size_t>(region_size_x)});
+                    static_cast<std::size_t>(region_size_x),
+                    walkable_slope_degrees});
                 if (!session_server) {
                     std::cerr << "{\"level\":\"error\",\"message\":\"region session listener failed\",\"port\":"
                               << session_port << "}" << std::endl;
@@ -1741,6 +1748,17 @@ int main(int argc, char* argv[]) {
             });
         }
         if (physics_scene) physics_scene->remove(entity_id);
+    };
+    const auto character_definition = [&](homeworldz::scene::EntityId entity,
+                                          const homeworldz::scene::Vector3& position,
+                                          double height) {
+        homeworldz::physics::CharacterDefinition definition;
+        definition.entity_id = entity;
+        definition.position = position;
+        definition.radius = homeworldz::viewer::avatar_capsule_radius;
+        definition.height = height;
+        definition.walkable_slope_degrees = walkable_slope_degrees;
+        return definition;
     };
     const auto collision_ground_height = [&](const homeworldz::scene::Vector3& position) {
         if (physics_world && physics_terrain != 0) {
@@ -5873,10 +5891,10 @@ int main(int argc, char* argv[]) {
                                     if (physics_world) {
                                         if (live->second.physics_character != 0)
                                             physics_world->remove_character(live->second.physics_character);
-                                        live->second.physics_character = physics_world->create_character({
-                                            live->second.entity_id, live->second.controller.state().position,
-                                            homeworldz::viewer::avatar_capsule_radius,
-                                            geometry->height, 0.4});
+                                        live->second.physics_character = physics_world->create_character(
+                                            character_definition(live->second.entity_id,
+                                                live->second.controller.state().position,
+                                                geometry->height));
                                         physics_world->set_character_flying(
                                             live->second.physics_character,
                                             live->second.controller.state().flying);
@@ -6332,10 +6350,10 @@ int main(int argc, char* argv[]) {
                                         now + std::chrono::seconds(2) : now;
                                 if (physics_world) {
                                     auto& live = avatars.at(endpoint);
-                                    live.physics_character = physics_world->create_character({
-                                        entity, live.controller.state().position,
-                                        homeworldz::viewer::avatar_capsule_radius,
-                                        live.controller.state().height, 0.4});
+                                    live.physics_character = physics_world->create_character(
+                                        character_definition(entity,
+                                            live.controller.state().position,
+                                            live.controller.state().height));
                                     physics_world->set_character_velocity(
                                         live.physics_character, live.controller.state().velocity);
                                     physics_world->set_character_flying(
@@ -8369,10 +8387,10 @@ int main(int argc, char* argv[]) {
                         session_draw_distances[inbound.session_id]);
                     live.controller.apply(seed);
                     if (physics_world) {
-                        live.physics_character = physics_world->create_character({
-                            entity, live.controller.state().position,
-                            homeworldz::viewer::avatar_capsule_radius,
-                            live.controller.state().height, 0.4});
+                        live.physics_character = physics_world->create_character(
+                            character_definition(entity,
+                                live.controller.state().position,
+                                live.controller.state().height));
                         physics_world->set_character_velocity(
                             live.physics_character, live.controller.state().velocity);
                         physics_world->set_character_flying(

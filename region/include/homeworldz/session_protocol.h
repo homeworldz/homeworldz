@@ -106,7 +106,7 @@ struct Command {
 class SessionCore {
 public:
     SessionCore(std::string region_name, TicketValidator validator,
-                std::size_t terrain_width);
+                std::size_t terrain_width, double walkable_slope_degrees);
 
     struct Result {
         std::vector<std::string> send;
@@ -133,6 +133,7 @@ private:
     std::string region_name_;
     TicketValidator validator_;
     std::size_t terrain_width_;
+    double walkable_slope_degrees_;
     bool established_{};
     SessionIdentity identity_;
 };

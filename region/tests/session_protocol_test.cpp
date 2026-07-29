@@ -71,19 +71,19 @@ int main() {
     };
 
     // The first message must be auth; anything else closes.
-    SessionCore impatient("Sandbox", validator, 256);
+    SessionCore impatient("Sandbox", validator, 256, 65.0);
     if (const auto result = impatient.handle_text(R"({"type":"ping","version":1})"); !result.close)
         return 8;
 
     // A refused ticket closes with the refusal named.
-    SessionCore refused("Sandbox", validator, 256);
+    SessionCore refused("Sandbox", validator, 256, 65.0);
     if (const auto result = refused.handle_text(
             R"({"type":"auth","version":1,"payload":{"token":"bad"}})");
         !result.close || result.close_reason.find("ticket") == std::string::npos)
         return 9;
 
     // The happy path: auth resolves, hello names the region and identity.
-    SessionCore session("Sandbox", validator, 256);
+    SessionCore session("Sandbox", validator, 256, 65.0);
     const auto hello = session.handle_text(
         R"({"type":"auth","version":1,"payload":{"token":"good-ticket"}})");
     if (hello.close || hello.send.size() != 1 || !session.established() ||
@@ -111,7 +111,7 @@ int main() {
     if (greeting->payload.find("\"avatar\":{\"capsuleRadius\":0.3,"
                                "\"supportOffsetFactor\":0.5,"
                                "\"groundedTolerance\":0.05,"
-                               "\"walkableSlopeDegrees\":50}") == std::string::npos)
+                               "\"walkableSlopeDegrees\":65}") == std::string::npos)
         return 33;
     if (greeting->payload.find("\"terrain\":{\"path\":\"/session/terrain\","
                                "\"format\":\"heightmap-f32le\",\"width\":256,"
@@ -173,7 +173,7 @@ int main() {
     if (!leave.command || leave.command->kind != Kind::leave) return 25;
 
     // Commands from an unauthenticated connection never reach the host.
-    SessionCore stranger("Sandbox", validator, 256);
+    SessionCore stranger("Sandbox", validator, 256, 65.0);
     if (const auto result = stranger.handle_text(R"({"type":"spawn","version":1})");
         !result.close)
         return 26;

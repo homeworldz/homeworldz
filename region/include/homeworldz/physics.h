@@ -59,12 +59,15 @@ struct BodyState {
     std::array<double, 4> rotation{0.0, 0.0, 0.0, 1.0};
 };
 
-// The steepest ground a character stands on; beyond it the capsule is held
-// by contact but never grounded, so it slides and the standing support rule
-// makes no claim. Region-owned and published in the session hello — it was
-// Jolt's silent default (50°) before 2026-07-29, and a limit that gates
+// The default for the steepest ground a character stands on; beyond it the
+// capsule is held by contact but never grounded, so it slides and the
+// standing support rule makes no claim. Overridable per region
+// (region.walkable_slope_degrees) and published in the session hello — it
+// was Jolt's silent default (50°) before 2026-07-29, and a limit that gates
 // behavior must be announced, never inherited (the SimulatorFeatures rule).
-inline constexpr double character_walkable_slope_degrees = 50.0;
+// 65 is Halcyon's MAX_WALKABLE_SLOPE, adopted 2026-07-29 for the InWorldz
+// feel; awaiting the operator's visual verdict before any further loosening.
+inline constexpr double character_walkable_slope_degrees = 65.0;
 
 struct CharacterDefinition {
     scene::EntityId entity_id{};
@@ -74,6 +77,7 @@ struct CharacterDefinition {
     double step_height{0.4};
     double mass{70.0};
     double maximum_horizontal_acceleration{30.0};
+    double walkable_slope_degrees{character_walkable_slope_degrees};
 };
 
 struct HeightFieldDefinition {
