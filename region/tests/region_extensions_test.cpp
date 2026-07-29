@@ -143,12 +143,14 @@ int main() {
                              "<key>none</key><boolean>1</boolean>"
                              "<key>prim</key><boolean>1</boolean></map>");
     passed &= contains(bare, "<key>PhysicsMaterialsEnabled</key><boolean>1</boolean>");
-    // Not implemented, and advertised as a definite no rather than omitted: mesh
-    // assets, dynamic pathfinding, and hover height, which the region emits in
-    // AvatarAppearance but never accepts an update for.
-    passed &= contains(bare, "<key>MeshRezEnabled</key><boolean>0</boolean>");
+    // Mesh rez and transfer default ON (ADR 0033 M1) — MeshRezEnabled gates
+    // viewer-side mesh RENDERING, not just UI. Viewer mesh upload stays a
+    // definite no until M2 implements it. Dynamic pathfinding and hover
+    // height remain no: the region emits hover height in AvatarAppearance
+    // but never accepts an update for it.
+    passed &= contains(bare, "<key>MeshRezEnabled</key><boolean>1</boolean>");
     passed &= contains(bare, "<key>MeshUploadEnabled</key><boolean>0</boolean>");
-    passed &= contains(bare, "<key>MeshXferEnabled</key><boolean>0</boolean>");
+    passed &= contains(bare, "<key>MeshXferEnabled</key><boolean>1</boolean>");
     passed &= contains(bare, "<key>DynamicPathfindingEnabled</key><boolean>0</boolean>");
     passed &= contains(bare, "<key>AvatarHoverHeightEnabled</key><boolean>0</boolean>");
     // The Export permission bit is enforced in the permission core.
@@ -165,11 +167,12 @@ int main() {
     passed &= chat_range(0x7f) == chat_range(chat_type_normal);
 
     // A region that later implements one flips its flag without touching the
-    // rest of the advertisement.
-    const auto with_mesh = simulator_features_xml({.mesh = true});
-    passed &= contains(with_mesh, "<key>MeshRezEnabled</key><boolean>1</boolean>");
-    passed &= contains(with_mesh, "<key>MeshUploadEnabled</key><boolean>1</boolean>");
-    passed &= contains(with_mesh, "<key>PhysicsMaterialsEnabled</key><boolean>1</boolean>");
+    // rest of the advertisement — upload is its own flag, so enabling it
+    // never rides along with rez.
+    const auto with_upload = simulator_features_xml({.mesh = true, .mesh_upload = true});
+    passed &= contains(with_upload, "<key>MeshRezEnabled</key><boolean>1</boolean>");
+    passed &= contains(with_upload, "<key>MeshUploadEnabled</key><boolean>1</boolean>");
+    passed &= contains(with_upload, "<key>PhysicsMaterialsEnabled</key><boolean>1</boolean>");
 
     // An advertised extension carries its own version and the capability names a
     // client names to opt in.

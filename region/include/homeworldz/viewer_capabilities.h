@@ -189,10 +189,15 @@ struct SimulatorFeatures {
     // persisted, and applied to the Jolt body.
     bool physics_materials{true};
 
-    // Mesh assets are not implemented (ADR 0023 and the Phase 5 content
-    // pipeline), so all three mesh flags stay false rather than absent: a
-    // definite no tells the viewer more than a missing key.
-    bool mesh{false};
+    // Mesh rez and transfer are live (ADR 0033 M1: GLB upload, sl-mesh
+    // renditions, ranged serving, the mesh ExtraParams block). This flag is
+    // load-bearing for RENDERING, not just UI: a viewer honors
+    // MeshRezEnabled=false by never building render volumes for mesh
+    // objects — they fetch, parse, and select, but draw nothing. Found the
+    // hard way, 2026-07-29. Viewer-side mesh UPLOAD (M2) is separate and
+    // stays off until the NewFileAgentInventory mesh path exists.
+    bool mesh{true};
+    bool mesh_upload{false};
     bool dynamic_pathfinding{false};
     // The region emits a hover-height block in AvatarAppearance but accepts no
     // hover-height update, so the viewer must not offer the control.

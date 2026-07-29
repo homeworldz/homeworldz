@@ -440,7 +440,7 @@ std::string simulator_features_xml(const SimulatorFeatures& features) {
            std::to_string(static_cast<int>(chat_range(chat_type_shout))) +
            "</integer></map>"
            "<key>MeshRezEnabled</key>" + llsd_boolean(features.mesh) +
-           "<key>MeshUploadEnabled</key>" + llsd_boolean(features.mesh) +
+           "<key>MeshUploadEnabled</key>" + llsd_boolean(features.mesh_upload) +
            "<key>MeshXferEnabled</key>" + llsd_boolean(features.mesh) +
            "<key>PhysicsMaterialsEnabled</key>" + llsd_boolean(features.physics_materials) +
            "<key>DynamicPathfindingEnabled</key>" + llsd_boolean(features.dynamic_pathfinding) +
