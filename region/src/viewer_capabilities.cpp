@@ -155,6 +155,8 @@ std::string seed_capability_xml(std::string_view public_endpoint, std::string_vi
     const auto remote_parcel_url = xml_escape(base + "/caps/remote-parcel/" + std::string(session_id));
     const auto baked_upload_url = xml_escape(base + "/caps/upload-baked/" + std::string(session_id));
     const auto file_upload_url = xml_escape(base + "/caps/upload-file/" + std::string(session_id));
+    const auto mesh_upload_flag_url =
+        xml_escape(base + "/caps/mesh-upload-flag/" + std::string(session_id));
     const auto notecard_update_url = xml_escape(base + "/caps/update-notecard/" + std::string(session_id));
     const auto script_update_url = xml_escape(base + "/caps/update-script/" + std::string(session_id));
     const auto gesture_update_url = xml_escape(base + "/caps/update-gesture/" + std::string(session_id));
@@ -196,6 +198,11 @@ std::string seed_capability_xml(std::string_view public_endpoint, std::string_vi
            "</uri><key>RemoteParcelRequest</key><uri>" + remote_parcel_url +
            "</uri><key>UploadBakedTexture</key><uri>" + baked_upload_url +
            "</uri><key>NewFileAgentInventory</key><uri>" + file_upload_url +
+           // The per-agent upload-permission query the model uploader makes
+           // before enabling its Upload button; absent, Firestorm raises
+           // RegionCapabilityRequestError at the creator (seen live,
+           // 2026-07-29).
+           "</uri><key>MeshUploadFlag</key><uri>" + mesh_upload_flag_url +
            "</uri><key>UpdateNotecardAgentInventory</key><uri>" + notecard_update_url +
            "</uri><key>UpdateScriptAgentInventory</key><uri>" + script_update_url +
            "</uri><key>UpdateScriptAgent</key><uri>" + script_update_url +

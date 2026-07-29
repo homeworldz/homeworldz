@@ -3128,6 +3128,10 @@ int main(int argc, char* argv[]) {
                     if (file_upload_data) session_id = file_upload_data->first;
                     const auto model_upload_data = model_upload_data_request(response.path);
                     if (model_upload_data) session_id = model_upload_data->first;
+                    const auto mesh_upload_flag_session =
+                        capability_session(response.path, "/caps/mesh-upload-flag/");
+                    const bool mesh_upload_flag = !mesh_upload_flag_session.empty();
+                    if (mesh_upload_flag) session_id = mesh_upload_flag_session;
                     const auto notecard_update_session =
                         capability_session(response.path, "/caps/update-notecard/");
                     const bool notecard_update = !notecard_update_session.empty();
@@ -3154,14 +3158,15 @@ int main(int argc, char* argv[]) {
                     if (seed || event_queue || texture || viewer_asset || simulator_features || environment_settings ||
                         remote_parcel ||
                         baked_upload || baked_upload_data || file_upload || file_upload_data ||
-                        model_upload_data ||
+                        model_upload_data || mesh_upload_flag ||
                         notecard_update || script_update || gesture_update ||
                         task_notecard_update || task_script_update || inventory_asset_update_data) {
                         bool authorized = false;
                         std::string authorized_agent_id;
                         std::optional<homeworldz::grid::ViewerSession> authorized_session;
                         const auto expected_method =
-                            texture || viewer_asset || simulator_features || environment_settings ? "GET" : "POST";
+                            texture || viewer_asset || simulator_features || environment_settings ||
+                            mesh_upload_flag ? "GET" : "POST";
                         if (response.method == expected_method && registration && viewer_sessions) {
                             authorized_session = viewer_sessions->validate(session_id);
                             authorized = authorized_session &&
@@ -3316,6 +3321,18 @@ int main(int argc, char* argv[]) {
                                         .map_server_url = grid_public_endpoint + "/map/",
                                         .extensions =
                                             homeworldz::viewer::available_region_extensions()}));
+                        } else if (authorized && mesh_upload_flag) {
+                            // The model uploader's per-agent permission
+                            // query: every resident may upload mesh on this
+                            // grid, so the answer is the same truth
+                            // MeshUploadEnabled advertises. Refusals, when
+                            // they exist, will be per-account facts from the
+                            // grid, not a second copy of the region flag.
+                            response = homeworldz::http::response_for_content(
+                                request, 200, "application/llsd+xml",
+                                "<?xml version=\"1.0\"?><llsd><map>"
+                                "<key>mesh_upload_status</key><string>valid</string>"
+                                "</map></llsd>");
                         } else if (authorized && environment_settings && registration) {
                             response = homeworldz::http::response_for_content(
                                 request, 200, "application/llsd+xml",
