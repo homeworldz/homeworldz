@@ -277,6 +277,8 @@ public:
     CharacterId create_character(const CharacterDefinition& definition) override {
         JPH::CharacterVirtualSettings settings;
         settings.mUp = JPH::Vec3::sAxisZ();
+        settings.mMaxSlopeAngle = JPH::DegreesToRadians(
+            static_cast<float>(character_walkable_slope_degrees));
         settings.mSupportingVolume = JPH::Plane(
             JPH::Vec3::sAxisZ(), -static_cast<float>(definition.radius));
         settings.mShape = make_character_shape(definition.radius, definition.height);

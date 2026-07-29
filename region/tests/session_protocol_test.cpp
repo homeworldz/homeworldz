@@ -110,7 +110,8 @@ int main() {
     // request, 2026-07-29). The capsule numbers are the controller's own.
     if (greeting->payload.find("\"avatar\":{\"capsuleRadius\":0.3,"
                                "\"supportOffsetFactor\":0.5,"
-                               "\"groundedTolerance\":0.05}") == std::string::npos)
+                               "\"groundedTolerance\":0.05,"
+                               "\"walkableSlopeDegrees\":50}") == std::string::npos)
         return 33;
     if (greeting->payload.find("\"terrain\":{\"path\":\"/session/terrain\","
                                "\"format\":\"heightmap-f32le\",\"width\":256,"

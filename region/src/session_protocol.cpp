@@ -1,6 +1,7 @@
 #include "homeworldz/session_protocol.h"
 
 #include "homeworldz/avatar_controller.h"
+#include "homeworldz/physics.h"
 #include "homeworldz/mesh_acceptance.h"
 
 #include <charconv>
@@ -341,7 +342,13 @@ SessionCore::Result SessionCore::handle_text(std::string_view text) {
             json_number_text(homeworldz::viewer::avatar_capsule_radius) +
             ",\"supportOffsetFactor\":0.5" +
             ",\"groundedTolerance\":" +
-            json_number_text(homeworldz::viewer::avatar_grounded_tolerance) + "}" +
+            json_number_text(homeworldz::viewer::avatar_grounded_tolerance) +
+            // Ground steeper than this never grounds the capsule: the avatar
+            // is contact-held and sliding, and the support rule makes no
+            // claim there. On walkable ground the rule is exact (client core
+            // measurement, 2026-07-29).
+            ",\"walkableSlopeDegrees\":" +
+            json_number_text(homeworldz::physics::character_walkable_slope_degrees) + "}" +
             // The ground itself: a heightmap fetched over HTTP with the same
             // region ticket this socket authenticated with. Heights are
             // float32 little-endian meters, row-major from y=0, one vertex

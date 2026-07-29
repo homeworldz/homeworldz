@@ -59,6 +59,13 @@ struct BodyState {
     std::array<double, 4> rotation{0.0, 0.0, 0.0, 1.0};
 };
 
+// The steepest ground a character stands on; beyond it the capsule is held
+// by contact but never grounded, so it slides and the standing support rule
+// makes no claim. Region-owned and published in the session hello — it was
+// Jolt's silent default (50°) before 2026-07-29, and a limit that gates
+// behavior must be announced, never inherited (the SimulatorFeatures rule).
+inline constexpr double character_walkable_slope_degrees = 50.0;
+
 struct CharacterDefinition {
     scene::EntityId entity_id{};
     scene::Vector3 position;

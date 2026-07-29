@@ -58,17 +58,20 @@ seam above encoding.
    `avatar` block publishes the capsule contract (radius 0.3, support at
    ground + height/2, grounded tolerance 0.05) and the spawned reply carries
    the avatar's own computed height and hip offset. The support rule's
-   honest domain, measured live 2026-07-29: with Jolt active (every cloud
-   region) z is the Jolt capsule's rest position — on flat ground that
-   equals ground + height/2 exactly (0.0000 m measured), but on sloped
-   ground the capsule contacts downhill of the center, so the center sits
-   *below* ground-under-center + height/2, growing with gradient (measured
-   −0.11 m at a locally ~11° feature, −0.33 m at 39°; planar-capsule model:
-   center = ground + (height/2 − r) + r·cos 2θ / cos θ, curvature makes it
-   approximate). The exact flat arithmetic is also the non-Jolt fallback's
-   clamp. Session z is the capsule center everywhere — the transform
-   envelope briefly carried the hip-shifted viewer convention, found by the
-   client core's ground comparison and fixed the same night. A fetch is a snapshot,
+   honest domain, measured live 2026-07-29 (server-side samples, then the
+   client core's cleaner 12-sample sweep): with Jolt active (every cloud
+   region) z is the Jolt capsule's rest position. On *walkable* ground the
+   published arithmetic is exact — 0.000 m on the flat, ≤0.013 m on
+   walkable slopes. Beyond the walkable limit the capsule is contact-held,
+   never grounded, and sits below ground-under-center + height/2 by
+   contact geometry (measured up to ~0.5 m at 51°) — the rule makes no
+   claim there. The limit itself is now region-owned rather than Jolt's
+   silent default: `character_walkable_slope_degrees` (50°) in physics.h,
+   published in the hello avatar block as `walkableSlopeDegrees`. The flat
+   arithmetic is also the non-Jolt fallback's clamp. Session z is the
+   capsule center everywhere — the transform envelope briefly carried the
+   hip-shifted viewer convention, found by the client core's ground
+   comparison and fixed the same night. A fetch is a snapshot,
    so in-world terrain editing announces itself to connected sessions with a
    `terrainChanged` event naming the dirty 16 m patches (the event is itself
    named in the hello's terrain block as `changedEvent`).
