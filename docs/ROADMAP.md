@@ -470,6 +470,22 @@ input formats.
   texture pipeline. Related gap found live 2026-07-29: the region serves no
   RenderMaterials update capability, so viewer materials edits
   (normal/specular assignments) silently do not persist.
+- [ ] Terrain surface for session clients (client core request 2026-07-29,
+  after the operator saw untextured ground in the desktop client). The
+  ground's geometry is published and verified; its *surface* is not. Today
+  the four layer textures are a hardcoded grid-wide constant in the region
+  binary (real vault assets: Sand and Dirt, Grass, Mountain, Rock) and the
+  per-corner elevation parameters are literals in the RegionHandshake
+  encoder (start 10, range 60, uniform) — neither is per-region data, and
+  no blend rule is implemented server-side at all: viewers apply their own.
+  Prerequisites, in order: make textures and elevation per-region state
+  (what `setregionterrain` would drive), then decide the blend contract
+  knowing that a viewer's blend is not ours to specify — SL's noise term
+  was never reproduced outside Linden, so a published rule is authoritative
+  for first-party clients only and the two families will differ subtly on
+  the same ground. Publishing an approximate rule early is worse than
+  publishing none (the client core's own preference, and the reason the
+  contact model stayed unpublished).
 - [ ] V-HACD convex decomposition for mesh physics; the shipped physics
   block is the conservative bounding-box hull.
 - [x] Regenerate stale renditions — live 2026-07-29: the generator column
