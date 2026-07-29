@@ -61,6 +61,7 @@ int main(int argc, char** argv) {
     std::string worker_token;
     int interval_seconds = 5;
     bool once = false;
+    bool regenerate = false;
     for (int index = 1; index < argc; ++index) {
         const std::string_view argument = argv[index];
         if (argument == "--grid" && index + 1 < argc) grid_url = argv[++index];
@@ -68,10 +69,11 @@ int main(int argc, char** argv) {
         else if (argument == "--interval" && index + 1 < argc)
             interval_seconds = std::atoi(argv[++index]);
         else if (argument == "--once") once = true;
+        else if (argument == "--regenerate") regenerate = true;
     }
     if (grid_url.empty() || worker_token.empty()) {
         std::cerr << "usage: homeworldz-meshsmith --grid <url> --token <worker token>"
-                     " [--interval seconds] [--once]" << std::endl;
+                     " [--interval seconds] [--once] [--regenerate]" << std::endl;
         return 2;
     }
     if (interval_seconds < 1) interval_seconds = 1;
@@ -86,6 +88,22 @@ int main(int argc, char** argv) {
         ",\"grid\":" + json_string(grid_url));
 
     const auto transport = homeworldz::grid::socket_transport(grid_url, worker_token);
+    if (regenerate) {
+        // The upgrade sweep: everything a different generator produced
+        // returns to the queue, and the loop below reconverts it.
+        try {
+            const auto swept = transport->send("POST", "/api/v1/rendition-jobs/regenerate",
+                std::string(R"({"kind":"sl-mesh","generator":)") +
+                    json_string(homeworldz::mesh::generator) + "}");
+            if (swept.status_code == 200)
+                log("info", "regeneration sweep", ",\"response\":" + json_string(swept.body));
+            else
+                log("warning", "regeneration sweep refused",
+                    ",\"status\":" + std::to_string(swept.status_code));
+        } catch (const std::exception& error) {
+            log("warning", "regeneration sweep failed", ",\"error\":" + json_string(error.what()));
+        }
+    }
     while (stopping == 0) {
         homeworldz::grid::HttpResponse claim;
         try {

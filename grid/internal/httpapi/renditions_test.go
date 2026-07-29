@@ -101,6 +101,28 @@ func (m *memoryRenditions) Put(_ context.Context, assetID, kind, generator strin
 	return value, nil
 }
 
+func (m *memoryRenditions) RequeueStale(_ context.Context, kind, currentGenerator string) (int64, error) {
+	if (kind != "sl-mesh" && kind != "gltf" && kind != "sl-material" && kind != "j2c-texture") ||
+		currentGenerator == "" {
+		return 0, renditions.ErrInvalid
+	}
+	var requeued int64
+	for _, value := range m.stored {
+		if value.Kind != kind || value.Generator == currentGenerator {
+			continue
+		}
+		jobKey := key(value.AssetID, kind)
+		if job, exists := m.jobs[jobKey]; exists && job.State != "done" && job.State != "failed" {
+			continue
+		}
+		job := m.jobs[jobKey]
+		job.AssetID, job.Kind, job.State, job.Attempts, job.Error = value.AssetID, kind, "queued", 0, ""
+		m.jobs[jobKey] = job
+		requeued++
+	}
+	return requeued, nil
+}
+
 func (m *memoryRenditions) List(_ context.Context, assetID string) ([]renditions.Rendition, error) {
 	var values []renditions.Rendition
 	for _, value := range m.stored {
@@ -228,6 +250,61 @@ func TestRenditionWritesRequireTheWorkerCredential(t *testing.T) {
 		Assets: &memoryRegistry{}, Renditions: newMemoryRenditions()})
 	requestRendition(t, unconfigured, http.MethodPut, base+"/sl-mesh", "secret",
 		[]byte("forged"), "rogue/1", http.StatusServiceUnavailable)
+}
+
+// TestRenditionRegeneration is the converter-upgrade sweep: a stored
+// rendition from an older generator re-queues; one already current does not;
+// and the endpoint takes the worker credential only.
+func TestRenditionRegeneration(t *testing.T) {
+	handler, store := newRenditionHandler()
+	base := "/api/v1/assets/" + testAssetID + "/renditions"
+
+	// Convert once under the old generator.
+	requestRendition(t, handler, http.MethodPost, base, "secret",
+		[]byte(`{"kind":"sl-mesh"}`), "", http.StatusOK)
+	requestRendition(t, handler, http.MethodPost, "/api/v1/rendition-jobs/claim",
+		"worker-secret", []byte(`{"kinds":["sl-mesh"]}`), "", http.StatusOK)
+	requestRendition(t, handler, http.MethodPut, base+"/sl-mesh", "worker-secret",
+		[]byte("old bytes"), "meshsmith/0.3", http.StatusOK)
+
+	// The service token may not trigger a sweep.
+	requestRendition(t, handler, http.MethodPost, "/api/v1/rendition-jobs/regenerate",
+		"secret", []byte(`{"kind":"sl-mesh","generator":"meshsmith/0.4"}`), "",
+		http.StatusForbidden)
+
+	// The upgraded worker sweeps: the stale rendition re-queues.
+	recorder := requestRendition(t, handler, http.MethodPost, "/api/v1/rendition-jobs/regenerate",
+		"worker-secret", []byte(`{"kind":"sl-mesh","generator":"meshsmith/0.4"}`), "",
+		http.StatusOK)
+	var swept struct {
+		Requeued int64 `json:"requeued"`
+	}
+	if err := json.NewDecoder(recorder.Body).Decode(&swept); err != nil || swept.Requeued != 1 {
+		t.Fatalf("sweep = %#v, %v", swept, err)
+	}
+	if job := store.jobs[key(testAssetID, "sl-mesh")]; job.State != "queued" || job.Attempts != 0 {
+		t.Fatalf("requeued job = %#v", job)
+	}
+
+	// Reconvert under the current generator; a second sweep finds nothing.
+	requestRendition(t, handler, http.MethodPost, "/api/v1/rendition-jobs/claim",
+		"worker-secret", []byte(`{"kinds":["sl-mesh"]}`), "", http.StatusOK)
+	requestRendition(t, handler, http.MethodPut, base+"/sl-mesh", "worker-secret",
+		[]byte("current bytes"), "meshsmith/0.4", http.StatusOK)
+	recorder = requestRendition(t, handler, http.MethodPost, "/api/v1/rendition-jobs/regenerate",
+		"worker-secret", []byte(`{"kind":"sl-mesh","generator":"meshsmith/0.4"}`), "",
+		http.StatusOK)
+	swept.Requeued = -1
+	if err := json.NewDecoder(recorder.Body).Decode(&swept); err != nil || swept.Requeued != 0 {
+		t.Fatalf("second sweep = %#v, %v", swept, err)
+	}
+
+	// A missing generator or unknown kind is refused.
+	requestRendition(t, handler, http.MethodPost, "/api/v1/rendition-jobs/regenerate",
+		"worker-secret", []byte(`{"kind":"sl-mesh"}`), "", http.StatusBadRequest)
+	requestRendition(t, handler, http.MethodPost, "/api/v1/rendition-jobs/regenerate",
+		"worker-secret", []byte(`{"kind":"stl","generator":"meshsmith/0.4"}`), "",
+		http.StatusBadRequest)
 }
 
 func TestRenditionValidationAndFailure(t *testing.T) {

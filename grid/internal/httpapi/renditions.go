@@ -20,6 +20,8 @@ import (
 //	PUT  /api/v1/assets/{id}/renditions/{kind}    store bytes (worker token ONLY)
 //	POST /api/v1/rendition-jobs/claim             lease a job (worker token ONLY)
 //	POST /api/v1/rendition-jobs/{id}/fail         release a failed job (worker token ONLY)
+//	POST /api/v1/rendition-jobs/regenerate        re-queue renditions a newer
+//	                                              generator supersedes (worker token ONLY)
 //
 // The split is ADR 0028 doing its job: regions hold the service token and are
 // untrusted, and a rendition upload cannot be checksum-verified the way
@@ -218,6 +220,29 @@ func (a *API) renditionJobs(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNoContent)
 		default:
 			writeJSON(w, http.StatusOK, job)
+		}
+		return
+	}
+	if suffix == "regenerate" {
+		var request struct {
+			Kind      string `json:"kind"`
+			Generator string `json:"generator"`
+		}
+		if !decodeJSON(w, r, &request) {
+			return
+		}
+		requeued, err := a.renditions.RequeueStale(r.Context(), request.Kind, request.Generator)
+		switch {
+		case errors.Is(err, renditions.ErrInvalid):
+			writeJSON(w, http.StatusBadRequest, Error{Code: "invalid_regenerate",
+				Message: "regenerate needs a known kind and the current generator"})
+		case err != nil:
+			writeJSON(w, http.StatusInternalServerError, Error{Code: "rendition_store_error",
+				Message: "rendition regenerate failed"})
+		default:
+			writeJSON(w, http.StatusOK, struct {
+				Requeued int64 `json:"requeued"`
+			}{requeued})
 		}
 		return
 	}

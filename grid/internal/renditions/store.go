@@ -89,6 +89,11 @@ type Store interface {
 	// rendition record, and marking any job for (asset, kind) done — one
 	// transaction, so a recorded rendition always has its bytes.
 	Put(ctx context.Context, assetID, kind, generator string, content io.Reader) (Rendition, error)
+	// RequeueStale re-queues conversion for every stored rendition of the
+	// kind whose generator differs from current — how a deployed converter
+	// upgrade sweeps the content its predecessors produced. Jobs already
+	// queued or leased are left alone. Returns how many jobs were (re)queued.
+	RequeueStale(ctx context.Context, kind, currentGenerator string) (int64, error)
 	// List reports an asset's renditions.
 	List(ctx context.Context, assetID string) ([]Rendition, error)
 	// Open returns a rendition's bytes. The caller closes them.
@@ -260,6 +265,33 @@ func (s *PostgresStore) Put(ctx context.Context, assetID, kind, generator string
 		return Rendition{}, fmt.Errorf("commit rendition put: %w", err)
 	}
 	return rendition, nil
+}
+
+func (s *PostgresStore) RequeueStale(ctx context.Context, kind, currentGenerator string) (int64, error) {
+	if !validKinds[kind] || currentGenerator == "" || len(currentGenerator) > 128 {
+		return 0, ErrInvalid
+	}
+	// The generator column exists for exactly this query. Conflicting rows in
+	// flight (queued or leased) are skipped — their outcome is either the
+	// current generator's work already, or a stale result the next sweep
+	// catches. Done and failed jobs return to the queue with fresh attempts.
+	result, err := s.db.ExecContext(ctx, `
+		INSERT INTO rendition_jobs (asset_id, kind)
+		SELECT r.asset_id, r.kind FROM asset_renditions AS r
+		WHERE r.kind = $1 AND r.generator <> $2
+		ON CONFLICT (asset_id, kind) DO UPDATE SET
+			state = 'queued', attempts = 0, error = '', leased_until = NULL,
+			updated_at = now()
+		WHERE rendition_jobs.state IN ('done', 'failed')`,
+		kind, currentGenerator)
+	if err != nil {
+		return 0, fmt.Errorf("requeue stale renditions: %w", err)
+	}
+	requeued, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("count requeued renditions: %w", err)
+	}
+	return requeued, nil
 }
 
 func (s *PostgresStore) List(ctx context.Context, assetID string) ([]Rendition, error) {
