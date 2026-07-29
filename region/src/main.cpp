@@ -377,14 +377,17 @@ int configured_port() {
 // The arrival greeting (region.welcome_message), delivered privately to each
 // avatar as it enters — the llOwnerSay shape on the viewer path, a chat
 // envelope on the session path. {region} and {user} resolve to the region
-// name and the avatar's display name; configuring the message empty disables
-// the greeting. Deliberately region-scoped wording: this fires on every
-// entry including border crossings, so a grid-wide welcome does not belong
-// here — that one is the grid's ([grid] welcome_message), delivered once per
-// login (client core observation, 2026-07-29).
+// name and the avatar's display name.
+//
+// Silent by default, deliberately: this fires on every entry including the
+// border crossings people make constantly, so the arrival greeting proper is
+// the grid's ([grid] welcome_message, once per login). A region speaks here
+// only when its operator has something region-specific worth repeating —
+// "You are in Sandbox, the build area" — which is the minority case (client
+// core observation, and the operator's own expectation, 2026-07-29).
 std::string welcome_chat_message(std::string_view display_name, std::string_view region) {
-    auto message = configured_value(
-        "region.welcome_message", "Welcome to {region}, {user}!");
+    auto message = configured_value("region.welcome_message");
+    if (message.empty()) return {};
     const auto substitute = [&](std::string_view placeholder, std::string_view value) {
         for (auto at = message.find(placeholder); at != std::string::npos;
              at = message.find(placeholder, at + value.size()))
