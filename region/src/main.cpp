@@ -2791,6 +2791,47 @@ int main(int argc, char* argv[]) {
                                 homeworldz::api::to_json(homeworldz::api::Error{
                                     "unauthorized", "a valid grid service token is required"}));
                         } else {
+                            response = homeworldz::http::response_for_content(
+                                request, 200, "application/vnd.homeworldz.heightmap-f32le",
+                                encode_heightmap(*terrain_heightmap));
+                        }
+                    }
+                    if (response.path == "/session/terrain") {
+                        // The ground itself, for session clients (client core
+                        // request, 2026-07-29): the same heightmap the region
+                        // collides against, float32 little-endian meters,
+                        // row-major from y=0, one vertex per meter. The hello
+                        // terrain block states the width and interpolation
+                        // rule. Authorized by the region ticket, exactly as
+                        // the mesh upload path is.
+                        const auto authorization =
+                            homeworldz::http::request_header_value(request, "Authorization");
+                        constexpr std::string_view bearer = "Bearer ";
+                        std::optional<homeworldz::grid::TicketIdentity> requester;
+                        if (response.method == "GET" && authorization.starts_with(bearer) &&
+                            viewer_grid && registration) {
+                            try {
+                                homeworldz::grid::Client ticket_client(
+                                    homeworldz::grid::socket_transport(
+                                        configured_value("grid.url", "http://localhost:42000"),
+                                        region_access_key));
+                                requester = ticket_client.validate_region_ticket(
+                                    provisioned_region_id, authorization.substr(bearer.size()));
+                            } catch (const std::exception&) {
+                            }
+                        }
+                        if (response.method != "GET") {
+                            response = homeworldz::http::response_for_content(
+                                request, 405, "application/json",
+                                homeworldz::api::to_json(homeworldz::api::Error{
+                                    "method_not_allowed", "terrain requires GET"}));
+                        } else if (!requester) {
+                            response = homeworldz::http::response_for_content(
+                                request, 401, "application/json",
+                                homeworldz::api::to_json(homeworldz::api::Error{
+                                    "unauthorized",
+                                    "a valid region ticket bearer token is required"}));
+                        } else {
                             // The revision as an ETag, so a client that is
                             // already current spends no bytes learning it - and
                             // a reconnect or a crossing, where a missed edit
@@ -2845,47 +2886,6 @@ int main(int argc, char* argv[]) {
                             }
                             homeworldz::http::add_header(response, "ETag", etag);
                             homeworldz::http::add_header(response, "Accept-Ranges", "bytes");
-                        }
-                    }
-                    if (response.path == "/session/terrain") {
-                        // The ground itself, for session clients (client core
-                        // request, 2026-07-29): the same heightmap the region
-                        // collides against, float32 little-endian meters,
-                        // row-major from y=0, one vertex per meter. The hello
-                        // terrain block states the width and interpolation
-                        // rule. Authorized by the region ticket, exactly as
-                        // the mesh upload path is.
-                        const auto authorization =
-                            homeworldz::http::request_header_value(request, "Authorization");
-                        constexpr std::string_view bearer = "Bearer ";
-                        std::optional<homeworldz::grid::TicketIdentity> requester;
-                        if (response.method == "GET" && authorization.starts_with(bearer) &&
-                            viewer_grid && registration) {
-                            try {
-                                homeworldz::grid::Client ticket_client(
-                                    homeworldz::grid::socket_transport(
-                                        configured_value("grid.url", "http://localhost:42000"),
-                                        region_access_key));
-                                requester = ticket_client.validate_region_ticket(
-                                    provisioned_region_id, authorization.substr(bearer.size()));
-                            } catch (const std::exception&) {
-                            }
-                        }
-                        if (response.method != "GET") {
-                            response = homeworldz::http::response_for_content(
-                                request, 405, "application/json",
-                                homeworldz::api::to_json(homeworldz::api::Error{
-                                    "method_not_allowed", "terrain requires GET"}));
-                        } else if (!requester) {
-                            response = homeworldz::http::response_for_content(
-                                request, 401, "application/json",
-                                homeworldz::api::to_json(homeworldz::api::Error{
-                                    "unauthorized",
-                                    "a valid region ticket bearer token is required"}));
-                        } else {
-                            response = homeworldz::http::response_for_content(
-                                request, 200, "application/vnd.homeworldz.heightmap-f32le",
-                                encode_heightmap(*terrain_heightmap));
                         }
                     }
                     if (const auto session_asset = session_asset_request(response.path)) {
