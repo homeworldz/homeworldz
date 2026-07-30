@@ -164,13 +164,35 @@ degenerates correctly in both directions and it keeps working when a user
 resizes the prim in-world, which the "just ignore the wrapper" shortcut does
 not.
 
-Only the region can compute that division — the numerator is scene state and
-the denominator is a property of the asset — so `referenceExtent` becomes a
-published field on the session object envelope's `geometry` block, landing
-with the `gltf` rendition where the normalized case first arrives. It is
-deliberately not published earlier: the authored extent is not recorded on
-existing objects, and a field that is right for new content and silently
-wrong for old content is the approximate contract this ADR keeps refusing.
+`referenceExtent` is defined as the axis-aligned box of the asset's declared
+accessor bounds under every node transform (`declared_world_bounds`), floored
+at 0.001 per axis, and the wrapper prim's scale is that extent clamped to
+[0.01, 64].
+
+It was going to be a published field, on the reasoning that only the region
+can compute the division — scene state over a property of the asset. **That
+reasoning was wrong, and the client core disproved it by measurement**
+(2026-07-30): the denominator is the asset's own bounding box, so a client
+that has already parsed the asset can measure it locally. Dividing by the
+measured extent reproduced the region's stated size to three decimals across
+all seven objects on a live region — normalized viewer-derived meshes landing
+at twelve and nineteen metres, session uploads at factor one — and it
+survives an in-world resize, which no fixed convention does.
+
+So the field is **not published**, and no migration records authored extents.
+Three things would make it necessary, and each is a reason to revisit rather
+than a caveat to live with:
+
+- **Degenerate axes.** A flat asset measures zero thickness while the region
+  floors the extent to 0.001 and the prim scale to 0.01, so the two divisions
+  disagree (visually moot — zero scaled by anything is zero — but the numbers
+  differ, and a client must special-case it).
+- **Declared bounds that are not actual bounds.** The region trusts the
+  accessor min/max the file declares; a local measurement reads the vertices.
+  glTF requires these to agree and files in the wild sometimes do not.
+- **Rigged meshes (M4).** A bind-pose bounding box is not the authored size
+  once skinning moves vertices, at which point the asset stops being able to
+  answer the question and only the region can.
 
 ## Rigging, in phases
 
