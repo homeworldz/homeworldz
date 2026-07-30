@@ -2882,6 +2882,17 @@ int main(int argc, char* argv[]) {
                                                 *session_asset, "gltf")) {
                                             text = std::move(*modern);
                                             content_type = "model/gltf-binary";
+                                        } else {
+                                            // Not converted yet: queue it and
+                                            // answer honestly with the legacy
+                                            // bytes this time. Requesting is
+                                            // idempotent, so content that
+                                            // predates the derivation heals on
+                                            // first demand rather than needing
+                                            // an operator sweep.
+                                            static_cast<void>(
+                                                viewer_grid->request_asset_rendition(
+                                                    *session_asset, "gltf"));
                                         }
                                     }
                                 }
