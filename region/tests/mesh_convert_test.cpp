@@ -65,33 +65,39 @@ int main() {
     if (!conversion.ok) return 1;
     if (conversion.faces != 1 || conversion.high_triangles != 2) return 2;
 
-    // The wrapper prim's scale comes from the declared world bounds: the quad
-    // spans 1x1 translated to x 10..11, so center (10.5, 0.5, 0), extent
-    // (1, 1, ~0).
+    // The wrapper prim's scale comes from the declared world bounds, in region
+    // axes: the source quad lies in glTF's XY plane (its thin axis is glTF Z),
+    // and a region is Z-up, so in-world it is thin in Y and stands 1 metre
+    // tall. Getting this wrong lays every upright model on its side, and a
+    // square quad cannot show it - only the thin axis can (client core's
+    // cube-proves-size / triangle-proves-orientation lesson, 2026-07-30).
     const auto bounds = homeworldz::mesh::declared_world_bounds(glb(json, bin));
     if (!bounds.ok || std::fabs(bounds.center[0] - 10.5f) > 0.001f ||
         std::fabs(bounds.extent[0] - 1.0f) > 0.001f ||
-        std::fabs(bounds.extent[1] - 1.0f) > 0.001f)
+        std::fabs(bounds.extent[2] - 1.0f) > 0.001f)
         return 10;
+    if (bounds.extent[1] > 0.01f) return 10;  // thin axis is region Y
 
     // The output is a well-formed type-49 asset whose geometry is normalized
     // by those same bounds — the unit domain the prim scale stretches back to
-    // authored size. The far corner lands at (+0.5, +0.5).
+    // authored size. The far corner lands at (+0.5, +0.5) in the two axes the
+    // quad spans, which after the axis map are region X and Z.
     const auto parsed = homeworldz::slmesh::parse(conversion.sl_mesh);
     if (!parsed || parsed->high.size() != 1) return 3;
     const auto& face = parsed->high.front();
     if (face.positions.size() != 4 || face.indices.size() != 6) return 4;
     bool found_corner = false;
     for (const auto& position : face.positions) {
-        if (std::fabs(position[0]) > 0.501f || std::fabs(position[1]) > 0.501f) return 5;
-        if (std::fabs(position[0] - 0.5f) < 0.001f && std::fabs(position[1] - 0.5f) < 0.001f)
+        if (std::fabs(position[0]) > 0.501f || std::fabs(position[2]) > 0.501f) return 5;
+        if (std::fabs(position[0] - 0.5f) < 0.001f && std::fabs(position[2] - 0.5f) < 0.001f)
             found_corner = true;
     }
     if (!found_corner) return 5;
 
-    // The source has no normals, so the converter computed them: a flat quad
-    // in the XY plane gets straight-up normals.
-    if (face.normals.size() != 4 || std::fabs(face.normals[0][2] - 1.0f) > 0.01f) return 11;
+    // The source has no normals, so the converter computed them: a quad lying
+    // in glTF's XY plane faces glTF +Z, which in region axes is -Y.
+    if (face.normals.size() != 4 || std::fabs(std::fabs(face.normals[0][1]) - 1.0f) > 0.01f)
+        return 11;
     // No texcoords in the source either, so the converter synthesized them,
     // and they vary per vertex — constant UVs are what NaN a viewer's
     // tangent math.

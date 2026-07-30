@@ -194,6 +194,36 @@ than a caveat to live with:
   once skinning moves vertices, at which point the asset stops being able to
   answer the question and only the region can.
 
+## Coordinates
+
+glTF is **+Y up**; a Homeworldz region is **+Z up**. Both directions of the
+pipeline apply the axis map — `(x, y, z)_glTF` to `(x, -z, y)_region` on
+ingest and its inverse on emit — so an asset authored to the glTF convention
+stands upright in-world, and a derived glTF opens upright in Blender or any
+other tool.
+
+Until 2026-07-30 neither direction rotated. That was self-consistent and
+wrong: it silently redefined glTF as a Z-up format for this grid alone, which
+forfeits the interchange value that is this ADR's entire argument for
+choosing glTF. A creator exporting from Blender (Y-up by default) would have
+found their model on its side in-world, with nothing any client could do
+about it, and a creator downloading their own canonical asset would have
+found it sideways in Blender.
+
+It was found by the client core measuring rather than by anyone reading the
+code, and it took two fixtures to see: a cube proved the size rule and
+answered nothing about orientation, because a cube matches every rotation. A
+flat triangle showed it in one reading. The corollary is recorded because it
+generalizes past this bug — **a fixture that cannot fail the check it is
+being used for is not evidence**, and a test suite needs a third outcome
+beside pass and fail for the case where the subject cannot corroborate.
+
+The change costs one regeneration (the generator tag carries it) and the
+re-upload of eight probe assets, which are the only GLB-canonical assets in
+existence here and were all uploaded by the pipeline's own tests. Viewer
+uploads are unaffected: SL mesh is Z-up by definition and its canonical bytes
+are untouched.
+
 ## Rigging, in phases
 
 Static mesh ships first and proves the pipeline. Rigged mesh follows, as a

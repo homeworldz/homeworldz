@@ -32,6 +32,18 @@ struct Face {
     bool any_missing_texcoords{};
 };
 
+// glTF is +Y up; a Homeworldz region is +Z up. The two directions of this
+// pipeline apply this map and its inverse, so an asset authored to the glTF
+// convention stands upright in-world and a derived glTF is conformant for
+// every tool that reads it (ADR 0033 "Coordinates"). Applied after node
+// transforms, which are expressed in the source's own frame.
+void to_region_axes(std::array<float, 3>& value) {
+    const float x = value[0], y = value[1], z = value[2];
+    value[0] = x;
+    value[1] = -z;
+    value[2] = y;
+}
+
 void transform_point(const float matrix[16], std::array<float, 3>& point) {
     const float x = point[0], y = point[1], z = point[2];
     point[0] = matrix[0] * x + matrix[4] * y + matrix[8] * z + matrix[12];
@@ -116,6 +128,7 @@ void accumulate_declared_bounds(const cgltf_data* data, std::array<float, 3>& lo
                         (corner & 2) != 0 ? value.data->max[1] : value.data->min[1],
                         (corner & 4) != 0 ? value.data->max[2] : value.data->min[2]};
                     transform_point(world, point);
+                    to_region_axes(point);
                     for (int axis = 0; axis < 3; ++axis) {
                         low[axis] = (std::min)(low[axis], point[axis]);
                         high[axis] = (std::max)(high[axis], point[axis]);
@@ -214,12 +227,14 @@ Conversion convert_glb(std::span<const std::byte> glb) {
                 if (!cgltf_accessor_read_float(position_accessor, vertex, position.data(), 3))
                     return fail("a position accessor is unreadable");
                 transform_point(world, position);
+                to_region_axes(position);
                 face.positions.push_back(position);
                 if (normal_accessor != nullptr) {
                     std::array<float, 3> normal{};
                     if (!cgltf_accessor_read_float(normal_accessor, vertex, normal.data(), 3))
                         return fail("a normal accessor is unreadable");
                     transform_direction(world, normal);
+                    to_region_axes(normal);
                     face.normals.push_back(normal);
                 } else {
                     face.normals.push_back({0, 0, 1});

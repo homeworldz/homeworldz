@@ -57,12 +57,11 @@ WorldBounds declared_world_bounds(std::span<const std::byte> glb);
 // authored mesh is the normalized unit domain — so a renderer applies the
 // object's scale over it, per ADR 0033 "Scale".
 //
-// COORDINATES: emitted in region axes (Z up), not glTF's Y-up convention.
-// This matches the forward converter, which reads uploaded GLB coordinates as
-// region coordinates without rotating them, so the two directions round-trip.
-// It is a deviation from the glTF convention and is stated rather than
-// silent; whether the pipeline should instead rotate on both sides is an open
-// question recorded in ADR 0033.
+// COORDINATES: emitted as conformant glTF, +Y up. Both directions of this
+// pipeline apply the axis map (region +Z up), so an uploaded GLB stands
+// upright in-world and a derived glTF opens upright in any tool that reads
+// it. Until 2026-07-30 neither direction rotated, which was consistent and
+// wrong: it made every conformant export land on its side.
 struct GltfConversion {
     bool ok{};
     std::string error;
@@ -75,7 +74,7 @@ GltfConversion gltf_from_sl_mesh(std::span<const std::byte> asset);
 
 // The generator tag stored with renditions this converter produces, bumped
 // when output changes so regeneration can find what it supersedes.
-inline constexpr const char* generator = "meshsmith/0.5";
+inline constexpr const char* generator = "meshsmith/0.6";
 
 } // namespace homeworldz::mesh
 

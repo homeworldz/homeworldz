@@ -28,6 +28,16 @@ std::string number(float value) {
     return std::string(buffer.data(), end);
 }
 
+// The inverse of mesh_convert's to_region_axes: a region is +Z up and glTF is
+// +Y up, so what leaves here is conformant glTF that any tool reads upright
+// (ADR 0033 "Coordinates").
+void to_gltf_axes(std::array<float, 3>& value) {
+    const float x = value[0], y = value[1], z = value[2];
+    value[0] = x;
+    value[1] = z;
+    value[2] = -y;
+}
+
 void append_u32(std::vector<std::byte>& out, std::uint32_t value) {
     for (int shift = 0; shift < 32; shift += 8)
         out.push_back(static_cast<std::byte>((value >> shift) & 0xffu));
@@ -96,12 +106,21 @@ GltfConversion gltf_from_sl_mesh(std::span<const std::byte> asset) {
         std::array<float, 3> high{submesh.positions[0]};
         pad_to_four(binary);
         const auto position_offset = binary.size();
-        for (const auto& position : submesh.positions)
+        {
+            auto first = submesh.positions[0];
+            to_gltf_axes(first);
+            low = first;
+            high = first;
+        }
+        for (const auto& stored_position : submesh.positions) {
+            auto position = stored_position;
+            to_gltf_axes(position);
             for (int axis = 0; axis < 3; ++axis) {
                 low[axis] = (std::min)(low[axis], position[axis]);
                 high[axis] = (std::max)(high[axis], position[axis]);
                 append_float(binary, position[axis]);
             }
+        }
         const auto position_view =
             add_view(position_offset, binary.size() - position_offset, 34962);
         if (!accessors.empty()) accessors += ',';
@@ -116,8 +135,11 @@ GltfConversion gltf_from_sl_mesh(std::span<const std::byte> asset) {
         if (has_normals) {
             pad_to_four(binary);
             const auto offset = binary.size();
-            for (const auto& normal : submesh.normals)
+            for (const auto& stored_normal : submesh.normals) {
+                auto normal = stored_normal;
+                to_gltf_axes(normal);
                 for (int axis = 0; axis < 3; ++axis) append_float(binary, normal[axis]);
+            }
             const auto view = add_view(offset, binary.size() - offset, 34962);
             accessors += ",{\"bufferView\":" + std::to_string(view) +
                 ",\"componentType\":5126,\"count\":" +
