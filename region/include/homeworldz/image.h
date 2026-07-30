@@ -38,6 +38,12 @@ std::optional<Image> decode_j2c(const std::vector<std::uint8_t>& data);
 // invalid input or encoder failure.
 std::optional<std::vector<std::uint8_t>> encode_j2c(const Image& image);
 
+// Decode a PNG or JPEG blob into an Image, keeping the channel count the file
+// carries. These are the only two formats glTF allows for embedded images, so
+// this is the entry point for extracting a GLB's textures (ADR 0033 M3).
+// Returns nullopt on malformed or unsupported input.
+std::optional<Image> decode_png_or_jpeg(const std::vector<std::uint8_t>& data);
+
 // Decode a TGA blob into an Image. Supports uncompressed and RLE, grayscale
 // (types 3/11 -> 1-channel L) and truecolor (types 2/10, 24/32 bpp -> RGB/RGBA,
 // BGRA reordered to RGBA), honoring the image-descriptor vertical origin.

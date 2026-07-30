@@ -10,6 +10,7 @@
     "libwebsockets",
     "cgltf",
     "zlib",
-    "meshoptimizer"
+    "meshoptimizer",
+    "stb"
   ]
 }

@@ -7,6 +7,21 @@
 #include <openjpeg.h>
 #endif
 
+// stb_image, compiled here once. Only PNG and JPEG are enabled: those are the
+// two formats glTF permits embedded (ADR 0033 M3), and every other decoder stb
+// carries would be attack surface reachable from an upload for no benefit.
+#define STB_IMAGE_IMPLEMENTATION
+#define STBI_NO_STDIO
+#define STBI_NO_BMP
+#define STBI_NO_PSD
+#define STBI_NO_TGA
+#define STBI_NO_GIF
+#define STBI_NO_HDR
+#define STBI_NO_PIC
+#define STBI_NO_PNM
+#define STBI_FAILURE_USERMSG
+#include <stb_image.h>
+
 namespace homeworldz::image {
 
 #if defined(HOMEWORLDZ_OPENJPEG)
@@ -453,6 +468,31 @@ Image composite_rgba(std::uint32_t width, std::uint32_t height,
         }
     }
     return acc;
+}
+
+std::optional<Image> decode_png_or_jpeg(const std::vector<std::uint8_t>& data) {
+    if (data.empty() || data.size() > (std::size_t{1} << 31)) return std::nullopt;
+    int width = 0;
+    int height = 0;
+    int channels = 0;
+    // Ask for whatever the file carries rather than forcing RGBA: a greyscale
+    // mask stays one channel, so the J2C the viewer receives is the size the
+    // content warrants. The bake path's to_rgba() widens where it must.
+    auto* pixels = stbi_load_from_memory(data.data(), static_cast<int>(data.size()),
+                                         &width, &height, &channels, 0);
+    if (pixels == nullptr) return std::nullopt;
+    if (width <= 0 || height <= 0 || channels < 1 || channels > 4) {
+        stbi_image_free(pixels);
+        return std::nullopt;
+    }
+    Image image;
+    image.width = static_cast<std::uint32_t>(width);
+    image.height = static_cast<std::uint32_t>(height);
+    image.channels = static_cast<std::uint8_t>(channels);
+    const auto count = image.expected_size();
+    image.pixels.assign(pixels, pixels + count);
+    stbi_image_free(pixels);
+    return image;
 }
 
 }  // namespace homeworldz::image

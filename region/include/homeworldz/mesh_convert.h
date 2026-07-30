@@ -72,6 +72,33 @@ struct GltfConversion {
 };
 GltfConversion gltf_from_sl_mesh(std::span<const std::byte> asset);
 
+// Textures a GLB carries, for the viewer pipeline of ADR 0033 M3. A viewer
+// cannot read a GLB's embedded PNG or JPEG, so each becomes its own texture
+// asset: the extracted bytes stay canonical (a format the modern client reads)
+// and a `j2c-texture` rendition is derived for viewers - the same
+// canonical/derived split the mesh itself uses, pointed at images.
+struct SourceTexture {
+    // "image/png" or "image/jpeg", as the GLB declares it.
+    std::string mime;
+    // The embedded bytes, verbatim: the creator's image, never re-encoded here.
+    std::vector<std::byte> bytes;
+};
+
+struct TextureExtraction {
+    bool ok{};
+    std::string error;
+    std::vector<SourceTexture> textures;
+    // Per face, in the same order convert_glb emits faces, the index into
+    // textures of that material's base-colour map, or -1 for an untextured
+    // face. Both orders come from one shared traversal, so a face index means
+    // the same thing to the converter and to the TextureEntry built from this.
+    std::vector<int> face_textures;
+};
+
+// Extract the base-colour images a GLB references. Cheap enough for the upload
+// path: it reads the container and copies bytes, decoding nothing.
+TextureExtraction extract_textures(std::span<const std::byte> glb);
+
 // The generator tag stored with renditions this converter produces, bumped
 // when output changes so regeneration can find what it supersedes.
 inline constexpr const char* generator = "meshsmith/0.6";

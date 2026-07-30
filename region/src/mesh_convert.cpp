@@ -11,6 +11,7 @@
 #include <cstring>
 #include <limits>
 #include <map>
+#include <string>
 
 namespace homeworldz::mesh {
 namespace {
@@ -168,6 +169,92 @@ WorldBounds declared_world_bounds(std::span<const std::byte> glb) {
     return bounds;
 }
 
+// The order faces come out in: materials as the scene walk first encounters
+// them, the null material counting as one of its own. Factored out because two
+// callers depend on agreeing about it exactly - the converter, which emits one
+// face per material, and texture extraction, which must name a texture for
+// face N. Two copies of this walk would be two things that must agree and
+// eventually would not.
+std::vector<const cgltf_material*> ordered_materials(const cgltf_data* data) {
+    std::vector<const cgltf_material*> order;
+    const cgltf_scene* scene = data->scene != nullptr ? data->scene
+        : (data->scenes_count != 0 ? &data->scenes[0] : nullptr);
+    if (scene == nullptr) return order;
+    std::vector<const cgltf_node*> pending(scene->nodes, scene->nodes + scene->nodes_count);
+    while (!pending.empty()) {
+        const auto* node = pending.back();
+        pending.pop_back();
+        for (cgltf_size child = 0; child < node->children_count; ++child)
+            pending.push_back(node->children[child]);
+        if (node->mesh == nullptr) continue;
+        for (cgltf_size index = 0; index < node->mesh->primitives_count; ++index) {
+            const auto* material = node->mesh->primitives[index].material;
+            if (std::find(order.begin(), order.end(), material) == order.end())
+                order.push_back(material);
+        }
+    }
+    return order;
+}
+
+TextureExtraction extract_textures(std::span<const std::byte> glb) {
+    TextureExtraction result;
+    const auto fail = [&](std::string reason) {
+        result.ok = false;
+        result.error = std::move(reason);
+        return result;
+    };
+    cgltf_options options{};
+    cgltf_data* data = nullptr;
+    if (cgltf_parse(&options, glb.data(), glb.size(), &data) != cgltf_result_success ||
+        data == nullptr)
+        return fail("the GLB does not parse");
+    struct Free {
+        cgltf_data* data;
+        ~Free() { cgltf_free(data); }
+    } freer{data};
+    if (cgltf_load_buffers(&options, data, nullptr) != cgltf_result_success)
+        return fail("the GLB's embedded buffers do not load");
+
+    // One entry per distinct image, so a texture shared by several materials is
+    // stored and converted once and the faces name the same asset.
+    std::map<const cgltf_image*, int> index_of;
+    for (const auto* material : ordered_materials(data)) {
+        int texture = -1;
+        const cgltf_image* image = nullptr;
+        if (material != nullptr && material->has_pbr_metallic_roughness)
+            if (const auto* view = material->pbr_metallic_roughness.base_color_texture.texture;
+                view != nullptr)
+                image = view->image;
+        if (image != nullptr) {
+            if (const auto found = index_of.find(image); found != index_of.end()) {
+                texture = found->second;
+            } else if (image->buffer_view == nullptr) {
+                // The acceptance gate requires self-containment, so an image
+                // reachable only by URI is a gate escape rather than content.
+                return fail("a texture is not embedded in the GLB");
+            } else {
+                const auto* view = image->buffer_view;
+                if (view->buffer == nullptr || view->buffer->data == nullptr)
+                    return fail("a texture's buffer is unreadable");
+                const auto* bytes = static_cast<const std::byte*>(view->buffer->data) +
+                                    view->offset;
+                SourceTexture stored;
+                stored.mime = image->mime_type != nullptr ? image->mime_type : "";
+                if (stored.mime != "image/png" && stored.mime != "image/jpeg")
+                    return fail("a texture is neither PNG nor JPEG");
+                stored.bytes.assign(bytes, bytes + view->size);
+                if (stored.bytes.empty()) return fail("a texture carries no bytes");
+                texture = static_cast<int>(result.textures.size());
+                index_of.emplace(image, texture);
+                result.textures.push_back(std::move(stored));
+            }
+        }
+        result.face_textures.push_back(texture);
+    }
+    result.ok = true;
+    return result;
+}
+
 Conversion convert_glb(std::span<const std::byte> glb) {
     cgltf_options options{};
     cgltf_data* data = nullptr;
@@ -181,9 +268,15 @@ Conversion convert_glb(std::span<const std::byte> glb) {
         return fail("the GLB's embedded buffers do not load");
 
     // Faces in first-encounter material order; the null material is a face of
-    // its own. The gate already capped materials at eight.
+    // its own. The gate already capped materials at eight. The order comes from
+    // ordered_materials() rather than from this loop's own accounting, so
+    // extract_textures() names textures for the same faces this emits.
     std::map<const cgltf_material*, std::size_t> face_of;
     std::vector<Face> faces;
+    for (const auto* material : ordered_materials(data)) {
+        face_of.emplace(material, faces.size());
+        faces.emplace_back();
+    }
 
     const cgltf_scene* scene = data->scene != nullptr ? data->scene
         : (data->scenes_count != 0 ? &data->scenes[0] : nullptr);

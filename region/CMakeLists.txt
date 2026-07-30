@@ -36,6 +36,11 @@ find_package(meshoptimizer CONFIG REQUIRED)
 target_link_libraries(homeworldz-region-core PRIVATE meshoptimizer::meshoptimizer)
 find_path(HOMEWORLDZ_CGLTF_INCLUDE_DIR cgltf.h REQUIRED)
 target_include_directories(homeworldz-region-core PRIVATE ${HOMEWORLDZ_CGLTF_INCLUDE_DIR})
+# stb_image decodes the PNG and JPEG that glTF embeds; the region already had
+# JPEG2000 and TGA and neither of the two formats a GLB actually carries
+# (ADR 0033 M3).
+find_path(HOMEWORLDZ_STB_INCLUDE_DIR stb_image.h REQUIRED)
+target_include_directories(homeworldz-region-core PRIVATE ${HOMEWORLDZ_STB_INCLUDE_DIR})
 find_package(ZLIB REQUIRED)
 target_link_libraries(homeworldz-region-core PRIVATE ZLIB::ZLIB)
 find_package(libwebsockets CONFIG REQUIRED)
