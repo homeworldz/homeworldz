@@ -74,7 +74,36 @@ seam above encoding.
    `walkableSlopeDegrees` — is strictly the
    grounded-versus-sliding boundary, NOT an exactness threshold; the two
    differ by an order of magnitude and conflating them was a bug in both
-   ends' first drafts. The flat arithmetic is also the non-Jolt fallback's
+   ends' first drafts.
+
+   **The resting height, and what `groundedTolerance` is measured from.**
+   Established by designed measurement on the operator's test slope
+   (2026-07-30), ten points across 10-33 degrees agreeing within 6 mm - a
+   residual now known to sit inside Jolt's own height quantization, which is
+   `block relief / 255` and therefore scales with local roughness rather than
+   being a fixed floor:
+
+       resting_z = ground + height * supportOffsetFactor
+                          + capsuleRadius * (sqrt(1 + gradient^2) - 1)
+
+   The third term is a hemisphere resting on an incline: its centre is a
+   perpendicular distance `capsuleRadius` from the surface, so it sits
+   `capsuleRadius * sec` above the ground vertically beneath it rather than
+   `capsuleRadius`. It is zero on the flat and derives entirely from constants
+   already published, so it is not a new field - but it **must** be included
+   before `groundedTolerance` is applied. The tolerance is 0.05 m above
+   `resting_z`, not above the flat arithmetic. Applied to the flat arithmetic
+   it calls a *standing* avatar airborne from about 31 degrees upward, and
+   0.41 m adrift at the 65 degrees a region will still stand an avatar on -
+   which is exactly the fault it caused in the client core's predictor before
+   the law was known. The region does not have that fault where Jolt is
+   present, because `grounded` comes from Jolt's own contact state rather than
+   from this arithmetic; the non-Jolt fallback is flat-only by construction,
+   having a scalar ground height and no gradient to work from.
+
+   Verified 10-33 degrees. Above that it is extrapolation: the law is
+   geometry and should hold to the walkable limit, but no avatar has stood on
+   ground between 33 and 65 degrees on this grid, so nothing has measured it. The flat arithmetic is also the non-Jolt fallback's
    clamp. Session z is the capsule center everywhere — the transform
    envelope briefly carried the hip-shifted viewer convention, found by
    the client core's ground comparison and fixed the same night. A fetch is a snapshot,
