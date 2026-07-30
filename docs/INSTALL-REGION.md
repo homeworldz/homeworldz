@@ -223,7 +223,7 @@ confirm registration at the assigned coordinates before inviting viewers.
 | `region.data_path` | Local scene and uploaded-asset state | `var/region` |
 | `region.asset_path` | Static assets imported at startup | `assets/region` |
 | `region.terrain_path` | Assigned-width byte RAW terrain; a packaged 256×256 default is scaled when needed | `assets/region/terrain/plateau-square.raw` |
-| `region.walkable_slope_degrees` | Steepest ground an avatar stands on (10–89); steeper ground holds but never grounds, so avatars slide. Published to session clients in the hello | `65` (Halcyon's limit) |
+| `region.walkable_slope_degrees` | Steepest ground an avatar stands on (10–89); steeper ground holds but never grounds, so avatars slide. Published to session clients in the hello | `65` (Halcyon's limit, walked and confirmed in-world 2026-07-30) |
 | `region.welcome_message` | Optional region-specific line sent privately to each avatar as it enters, including on border crossings — set it only when a region has something worth repeating every entry ("You are in Sandbox, the build area"). The arrival greeting proper is `[grid] welcome_message` on the grid, delivered once per login. `{region}` and `{user}` resolve to the region name and display name | *(none — silent)* |
 
 Bind addresses must be IPv4 addresses. Invalid numeric values fall back to

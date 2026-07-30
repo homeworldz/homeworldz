@@ -66,7 +66,11 @@ struct BodyState {
 // was Jolt's silent default (50°) before 2026-07-29, and a limit that gates
 // behavior must be announced, never inherited (the SimulatorFeatures rule).
 // 65 is Halcyon's MAX_WALKABLE_SLOPE, adopted 2026-07-29 for the InWorldz
-// feel; awaiting the operator's visual verdict before any further loosening.
+// feel and confirmed in-world the next day: the operator, who set the
+// original value, walked it and found it good. Tuning stays open, so treat
+// this as a tested default rather than a settled constant — but it is a
+// judgement someone made and stood behind, not a number inherited from a
+// physics engine's header (which is what 50 was).
 inline constexpr double character_walkable_slope_degrees = 65.0;
 
 struct CharacterDefinition {
