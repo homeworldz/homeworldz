@@ -82,7 +82,8 @@ seam above encoding.
    `terrainChanged` event naming the dirty 16 m patches (the event is itself
    named in the hello's terrain block as `changedEvent`). Canonical asset
    bytes reach a session through `GET /session/assets/{id}` on the same
-   ticket, announced in the hello as `assets.path`; the reply's Content-Type
+   ticket, announced in the hello as `assets.base` (a base to append an id to, unlike
+   `terrain.path`, which is complete); the reply's Content-Type
    names the format actually stored, because a mesh uploaded through the
    session path is glTF while one uploaded by a viewer is Second Life mesh
    (ADR 0033 stores each verbatim). Scene objects carry an optional

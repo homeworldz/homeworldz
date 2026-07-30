@@ -121,7 +121,7 @@ int main() {
         return 34;
     // Canonical asset bytes are fetchable, and the hello says from where: a
     // session that learns an asset id must have a way to read it.
-    if (greeting->payload.find("\"assets\":{\"path\":\"/session/assets/\"}") == std::string::npos)
+    if (greeting->payload.find("\"assets\":{\"base\":\"/session/assets/\"}") == std::string::npos)
         return 35;
 
     // Ping answers pong carrying the correlation identifier.
