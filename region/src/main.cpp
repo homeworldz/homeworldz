@@ -2853,6 +2853,20 @@ int main(int argc, char* argv[]) {
                             auto body = encode_heightmap(*terrain_heightmap);
                             const auto range_header =
                                 homeworldz::http::request_header_value(request, "Range");
+                            if (!known.empty() && known != etag) {
+                                // A client asking with a revision it holds that
+                                // is not the current one is behind despite
+                                // whatever was sent it - a patch that failed to
+                                // apply, an event dropped, or heights omitted
+                                // above the cap. That is invisible from here
+                                // otherwise: a well-formed event goes out and no
+                                // complaint comes back (client core, 2026-07-30).
+                                std::cout << "{\"level\":\"info\",\"message\":"
+                                             "\"terrain refetched from behind\",\"held\":"
+                                          << homeworldz::api::json_string(known)
+                                          << ",\"current\":" << terrain_revision << "}"
+                                          << std::endl;
+                            }
                             if (known == etag) {
                                 response = homeworldz::http::response_for_content(
                                     request, 304, "application/vnd.homeworldz.heightmap-f32le",
