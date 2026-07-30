@@ -197,7 +197,11 @@ blob is never rewritten.
   SL mesh and no sl-mesh rendition exists or is needed; mesh serving falls
   back to canonical bytes for exactly this case), texture assets and items,
   and the linkset from instance transforms. `gltf` derivation from SL mesh
-  is still open.
+  shipped 2026-07-30, completing M2: `gltf_from_sl_mesh` emits the high LOD
+  as one primitive per submesh, meshsmith picks conversion direction from
+  the job's kind, and the session asset route serves the derivation where
+  the canonical is legacy - symmetric with GetMesh serving viewers the
+  legacy rendition of a canonical GLB.
 - **M3 — materials and textures.** `sl-material` and `j2c-texture`
   renditions, so PBR surfaces match across client families.
 - **M4 — rigged mesh.** Bento mapping for attachments and body wearables.

@@ -463,8 +463,13 @@ input formats.
   falls back to canonical bytes), textures stored with inventory items,
   the linkset built from instance transforms with per-face TextureEntry,
   MeshUploadEnabled on, and the MeshUploadFlag permission capability the
-  uploader queries. The `gltf` rendition derived from SL-mesh uploads
-  remains open.
+  uploader queries. The `gltf` rendition closed the loop 2026-07-30: a
+  stored type-49 asset derives a GLB (queued at upload and on first demand,
+  so content predating it heals itself), and the session asset route serves
+  it - the Firestorm-uploaded teapot fetches as 24880 bytes of glTF, 558
+  vertices and 1024 triangles with normals and texture coordinates, and the
+  first-party client renders viewer-authored content with no client change.
+  Each family fetches one asset id and receives the form it can read.
 - [ ] M3 material and texture renditions: glTF material JSON (type 57) for
   PBR-capable viewers and JPEG2000 texture extraction for the legacy
   texture pipeline. Related gap found live 2026-07-29: the region serves no
