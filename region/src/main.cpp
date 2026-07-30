@@ -1991,6 +1991,11 @@ int main(int argc, char* argv[]) {
     // once. Flushed on the tick below at a bounded rate.
     std::set<std::uint32_t> pending_terrain_patches;
     std::chrono::steady_clock::time_point next_terrain_notice{};
+    // When the last change was announced, so a client refetching from behind
+    // can be told apart from one that was simply away: those are different
+    // facts and a log line that renders them the same has stopped being a
+    // check (client core, 2026-07-30).
+    std::chrono::steady_clock::time_point last_terrain_notice_at{};
     // Terrain edited in memory but not yet mirrored into physics, persisted, or
     // shown to anyone. Each of those is region-scale work that must not run per
     // brush tick; they run at their own cadences below.
@@ -2861,11 +2866,30 @@ int main(int argc, char* argv[]) {
                                 // above the cap. That is invisible from here
                                 // otherwise: a well-formed event goes out and no
                                 // complaint comes back (client core, 2026-07-30).
+                                // Soon after an announcement means the client
+                                // could not use what was sent - a patch that
+                                // failed to decode, or heights omitted above the
+                                // cap. Long after means it was away and is
+                                // refetching by design, which a reconnect and a
+                                // crossing both do. Same request, different
+                                // fact; the line says which rather than leaving
+                                // a reader to correlate timestamps.
+                                const auto since_announce = last_terrain_notice_at.time_since_epoch()
+                                        .count() == 0
+                                    ? -1.0
+                                    : std::chrono::duration<double>(
+                                          std::chrono::steady_clock::now() -
+                                          last_terrain_notice_at).count();
+                                const bool soon = since_announce >= 0.0 && since_announce < 2.0;
                                 std::cout << "{\"level\":\"info\",\"message\":"
                                              "\"terrain refetched from behind\",\"held\":"
                                           << homeworldz::api::json_string(known)
-                                          << ",\"current\":" << terrain_revision << "}"
-                                          << std::endl;
+                                          << ",\"current\":" << terrain_revision
+                                          << ",\"secondsSinceAnnounce\":" << since_announce
+                                          << ",\"likely\":"
+                                          << (soon ? "\"the announced heights were unusable\""
+                                                   : "\"the client was away\"")
+                                          << "}" << std::endl;
                             }
                             if (known == etag) {
                                 response = homeworldz::http::response_for_content(
@@ -8947,6 +8971,7 @@ int main(int argc, char* argv[]) {
                       << ",\"heightsIncluded\":" << (heights.empty() ? "false" : "true")
                       << ",\"sessions\":" << told << "}" << std::endl;
             pending_terrain_patches.clear();
+            last_terrain_notice_at = now;
             next_terrain_notice = now + std::chrono::milliseconds(250);
         }
 
