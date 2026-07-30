@@ -1991,6 +1991,14 @@ int main(int argc, char* argv[]) {
     // once. Flushed on the tick below at a bounded rate.
     std::set<std::uint32_t> pending_terrain_patches;
     std::chrono::steady_clock::time_point next_terrain_notice{};
+    // Terrain edited in memory but not yet mirrored into physics, persisted, or
+    // shown to anyone. Each of those is region-scale work that must not run per
+    // brush tick; they run at their own cadences below.
+    std::set<std::uint32_t> pending_viewer_terrain_patches;
+    std::chrono::steady_clock::time_point next_viewer_terrain_notice{};
+    bool terrain_dirty = false;
+    std::chrono::steady_clock::time_point next_terrain_physics{};
+    std::chrono::steady_clock::time_point next_terrain_persist{};
     std::unordered_map<std::string, PendingInventoryAssetUpdate> pending_inventory_asset_updates;
     std::unordered_map<std::string, PendingInventoryAssetUpload> pending_inventory_asset_uploads;
     std::unordered_map<std::string, PendingInventoryAssetXfer> pending_inventory_asset_xfers;
@@ -8463,28 +8471,24 @@ int main(int argc, char* argv[]) {
                             const auto changed = homeworldz::terrain::apply(
                                 *terrain_heightmap, *revert_heightmap, *terrain_edit);
                             if (!changed.empty()) {
-                                const auto persisted = homeworldz::terrain::save_state(
-                                    terrain_state_path, *terrain_heightmap);
-                                const auto physics_synchronized = synchronize_physics_terrain();
-                                constexpr std::size_t patches_per_packet = 16;
-                                for (const auto& [recipient_endpoint, recipient] : avatars) {
-                                    static_cast<void>(recipient);
-                                    for (std::size_t offset = 0; offset < changed.size();
-                                         offset += patches_per_packet) {
-                                        const auto count = (std::min)(patches_per_packet, changed.size() - offset);
-                                        const auto terrain_payload = homeworldz::viewer::encode_terrain(
-                                            std::span<const homeworldz::viewer::TerrainPatch>(
-                                                changed.data() + offset, count), *terrain_heightmap);
-                                        if (const auto outgoing = circuits.send(
-                                                recipient_endpoint, terrain_payload, true, now))
-                                            static_cast<void>(send_udp(
-                                                viewer_server, recipient_endpoint, *outgoing));
-                                    }
-                                }
-                                // The revision advances once per applied edit,
-                                // whatever the notification does afterwards.
+                                // Applying the edit is an in-memory operation and
+                                // is all that happens here. Everything that costs
+                                // region-scale work - persisting the heightmap,
+                                // rebuilding the Jolt heightfield, telling viewers
+                                // and sessions - is deferred to the tick below and
+                                // coalesced.
+                                //
+                                // It used to run per ModifyLand packet, and
+                                // Firestorm sends those continuously while the
+                                // mouse is down: 586 edits in one ten-minute
+                                // session meant 586 whole-heightmap writes (4 MB
+                                // each on a 1024 region, 2.3 GB) and 586 rebuilds
+                                // of a million-sample collision shape. The edits
+                                // were applied correctly and arrived twenty
+                                // seconds late because this thread could not keep
+                                // up with the brush (operator report, 2026-07-30).
                                 ++terrain_revision;
-                                persist_terrain_revision();
+                                terrain_dirty = true;
                                 // Sessions are told the ground moved, but not
                                 // once per brush tick: a drag produced one
                                 // event per tick, each of which cost a client
@@ -8496,17 +8500,16 @@ int main(int argc, char* argv[]) {
                                 // out below, carrying the union and the
                                 // revision (client core measurement,
                                 // 2026-07-30).
-                                for (const auto& patch : changed)
-                                    pending_terrain_patches.insert(
-                                        (static_cast<std::uint32_t>(patch.y) << 8) | patch.x);
-                                std::cout << "{\"level\":" << (persisted ? "\"info\"" : "\"error\"")
-                                          << ",\"message\":\"terrain edit applied\",\"action\":"
-                                          << static_cast<unsigned>(terrain_edit->action)
-                                           << ",\"patches\":" << changed.size()
-                                           << ",\"persisted\":" << (persisted ? "true" : "false")
-                                           << ",\"physicsSynchronized\":"
-                                           << (physics_synchronized ? "true" : "false") << "}"
-                                           << std::endl;
+                                for (const auto& patch : changed) {
+                                    const auto packed =
+                                        (static_cast<std::uint32_t>(patch.y) << 8) | patch.x;
+                                    pending_terrain_patches.insert(packed);
+                                    pending_viewer_terrain_patches.insert(packed);
+                                }
+                                // Per-edit logging is itself part of the cost at
+                                // brush rates; the coalesced flush reports what
+                                // happened instead.
+                                static_cast<void>(terrain_edit->action);
                             }
                         }
                         const auto chat = homeworldz::viewer::decode_chat_from_viewer(packet->payload);
@@ -8931,6 +8934,56 @@ int main(int argc, char* argv[]) {
                       << ",\"sessions\":" << told << "}" << std::endl;
             pending_terrain_patches.clear();
             next_terrain_notice = now + std::chrono::milliseconds(250);
+        }
+
+        // Viewers learn the same way, at the same cadence and for the union
+        // rather than per edit: LayerData is what makes an edit visible, and it
+        // was being encoded and sent to every avatar once per ModifyLand.
+        if (!pending_viewer_terrain_patches.empty() && now >= next_viewer_terrain_notice) {
+            std::vector<homeworldz::viewer::TerrainPatch> patches;
+            patches.reserve(pending_viewer_terrain_patches.size());
+            for (const auto packed : pending_viewer_terrain_patches)
+                patches.push_back({static_cast<std::uint8_t>(packed & 0xffu),
+                                   static_cast<std::uint8_t>((packed >> 8) & 0xffu)});
+            constexpr std::size_t patches_per_packet = 16;
+            for (const auto& [recipient_endpoint, recipient] : avatars) {
+                static_cast<void>(recipient);
+                for (std::size_t offset = 0; offset < patches.size();
+                     offset += patches_per_packet) {
+                    const auto count = (std::min)(patches_per_packet, patches.size() - offset);
+                    const auto payload = homeworldz::viewer::encode_terrain(
+                        std::span<const homeworldz::viewer::TerrainPatch>(
+                            patches.data() + offset, count), *terrain_heightmap);
+                    if (const auto outgoing = circuits.send(
+                            recipient_endpoint, payload, true, now))
+                        static_cast<void>(send_udp(viewer_server, recipient_endpoint, *outgoing));
+                }
+            }
+            pending_viewer_terrain_patches.clear();
+            next_viewer_terrain_notice = now + std::chrono::milliseconds(250);
+        }
+
+        // The collision surface follows promptly but not per edit: an avatar
+        // standing on ground being smoothed needs it within a few frames, and
+        // rebuilding a million-sample heightfield is not a per-packet cost.
+        if (terrain_dirty && now >= next_terrain_physics) {
+            static_cast<void>(synchronize_physics_terrain());
+            next_terrain_physics = now + std::chrono::milliseconds(500);
+        }
+
+        // Durability is the slowest cadence of the three, because the whole
+        // heightmap is written each time and nothing is lost by trailing: an
+        // unclean stop can cost at most the last few seconds of terraforming,
+        // and a clean one flushes on shutdown.
+        if (terrain_dirty && now >= next_terrain_persist) {
+            const auto persisted = homeworldz::terrain::save_state(
+                terrain_state_path, *terrain_heightmap);
+            persist_terrain_revision();
+            if (!persisted)
+                std::cerr << "{\"level\":\"error\",\"message\":\"terrain persistence failed\""
+                             ",\"revision\":" << terrain_revision << "}" << std::endl;
+            terrain_dirty = false;
+            next_terrain_persist = now + std::chrono::seconds(3);
         }
 
         // Session avatars that crossed a border this tick; retired after the

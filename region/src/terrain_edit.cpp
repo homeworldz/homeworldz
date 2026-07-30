@@ -76,7 +76,13 @@ std::vector<viewer::TerrainPatch> apply(Heightmap& heightmap, const Heightmap& r
                                         const viewer::ModifyLand& edit) {
     if (edit.action > 5 || edit.areas.empty()) return {};
     if (heightmap.width() != revert.width()) return {};
-    const auto original = std::make_unique<Heightmap>(heightmap);
+    // Smooth reads the pre-edit neighbourhood, so it needs a snapshot; nothing
+    // else does. This copy was unconditional, which meant every raise, lower,
+    // flatten, noise and revert packet also allocated and copied the whole
+    // heightmap - 4 MB on a 1024 region, per ModifyLand, at brush rates
+    // (operator report of edits arriving twenty seconds late, 2026-07-30).
+    std::unique_ptr<Heightmap> original;
+    if (edit.action == 3) original = std::make_unique<Heightmap>(heightmap);
     std::set<std::pair<std::uint8_t, std::uint8_t>> patches;
     for (std::size_t area_index = 0; area_index < edit.areas.size(); ++area_index) {
         const auto& area = edit.areas[area_index];
@@ -105,8 +111,15 @@ std::vector<viewer::TerrainPatch> apply(Heightmap& heightmap, const Heightmap& r
                 case 0: next += (edit.height - next) * std::min(1.0F, weight * duration * 0.25F); break;
                 case 1: next += weight * duration; break;
                 case 2: next -= weight * duration; break;
+                // Smooth converges on the local average, so its rate only
+                // decides how many applications that takes. At 0.03 it took
+                // several seconds of held mouse button to level one peak while
+                // flatten (0.25) felt immediate - an eight-fold difference no
+                // one had chosen, only inherited. Raised to a rate in the same
+                // family as the other brushes; still a lerp toward a bounded
+                // target, so it cannot overshoot.
                 case 3: next += (neighbor_average(*original, x, y) - next) *
-                                     std::min(1.0F, weight * duration * 0.03F); break;
+                                     std::min(1.0F, weight * duration * 0.20F); break;
                 case 4: next += deterministic_noise(x, y) * weight * duration * 0.25F; break;
                 case 5: next += (revert[index] - next) * std::min(1.0F, weight * duration * 0.25F); break;
                 default: break;
