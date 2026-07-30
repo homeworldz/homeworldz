@@ -135,6 +135,43 @@ source file is still in front of them, not after the upload.
   creator's obligation, surfaced in the import UI rather than policed by
   the pipeline.
 
+## Scale: who owns size, and the trap in it
+
+The two upload paths disagree about where an object's size lives, and a
+renderer that assumes either answer universally gets the other one wrong by
+whatever factor the model happens to be. Measured on the live grid
+2026-07-30 rather than reasoned about:
+
+- **Session upload (GLB canonical).** The creator's bytes are stored
+  verbatim — a 3x2x1 quad uploaded and fetched back is byte-identical, sha256
+  and all — so the canonical glTF carries the **author's size**. The wrapper
+  prim's scale is *set from* those same declared bounds at upload
+  (measured `[3, 2, 1]`), which exists so the type-49 rendition, whose
+  geometry is normalized to a unit domain, stretches back to authored size
+  for viewers. A client reading the canonical glTF must therefore **not**
+  apply the wrapper scale to it: doing so squares the size.
+- **Viewer upload (SL mesh canonical).** The viewer normalizes and the prim
+  scale carries size, per Second Life semantics. A `gltf` rendition derived
+  from it is normalized too, because the authored size is not recorded in the
+  mesh asset at all — the same mesh may be referenced by objects at many
+  scales. Such an asset **must** have the object's scale applied.
+
+So the general rule is one division, not one convention: the factor to apply
+to an asset's geometry is `object.scale / referenceExtent`, where
+`referenceExtent` is the extent that asset's own geometry occupies (the
+authored bounds for a session upload, unit for anything normalized). It
+degenerates correctly in both directions and it keeps working when a user
+resizes the prim in-world, which the "just ignore the wrapper" shortcut does
+not.
+
+Only the region can compute that division — the numerator is scene state and
+the denominator is a property of the asset — so `referenceExtent` becomes a
+published field on the session object envelope's `geometry` block, landing
+with the `gltf` rendition where the normalized case first arrives. It is
+deliberately not published earlier: the authored extent is not recorded on
+existing objects, and a field that is right for new content and silently
+wrong for old content is the approximate contract this ADR keeps refusing.
+
 ## Rigging, in phases
 
 Static mesh ships first and proves the pipeline. Rigged mesh follows, as a
