@@ -119,7 +119,7 @@ std::vector<viewer::TerrainPatch> apply(Heightmap& heightmap, const Heightmap& r
                 // family as the other brushes; still a lerp toward a bounded
                 // target, so it cannot overshoot.
                 case 3: next += (neighbor_average(*original, x, y) - next) *
-                                     std::min(1.0F, weight * duration * 0.20F); break;
+                                     std::min(1.0F, weight * duration * 0.26F); break;
                 case 4: next += deterministic_noise(x, y) * weight * duration * 0.25F; break;
                 case 5: next += (revert[index] - next) * std::min(1.0F, weight * duration * 0.25F); break;
                 default: break;

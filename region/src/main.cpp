@@ -8984,19 +8984,48 @@ int main(int argc, char* argv[]) {
             for (const auto packed : pending_viewer_terrain_patches)
                 patches.push_back({static_cast<std::uint8_t>(packed & 0xffu),
                                    static_cast<std::uint8_t>((packed >> 8) & 0xffu)});
-            constexpr std::size_t patches_per_packet = 16;
-            for (const auto& [recipient_endpoint, recipient] : avatars) {
-                static_cast<void>(recipient);
-                for (std::size_t offset = 0; offset < patches.size();
-                     offset += patches_per_packet) {
-                    const auto count = (std::min)(patches_per_packet, patches.size() - offset);
-                    const auto payload = homeworldz::viewer::encode_terrain(
+            // Pack by encoded size, not by a patch count. Compressed patches
+            // vary from tens of bytes to hundreds depending on how busy the
+            // ground is, and a datagram over the path MTU fragments and gets
+            // dropped - which is invisible here and shows up as terrain that
+            // missed spots along a stroke. Coalescing made this reachable: one
+            // edit dirtied about three patches and always fit, while a quarter
+            // second of a fast brush unions many (operator report, 2026-07-30).
+            constexpr std::size_t datagram_budget = 1000;
+            constexpr std::size_t patches_per_packet = 4;
+            std::vector<std::vector<std::byte>> payloads;
+            for (std::size_t offset = 0; offset < patches.size(); ) {
+                auto count = (std::min)(patches_per_packet, patches.size() - offset);
+                auto payload = homeworldz::viewer::encode_terrain(
+                    std::span<const homeworldz::viewer::TerrainPatch>(
+                        patches.data() + offset, count), *terrain_heightmap);
+                // Too big, or refused outright: fall back to one patch per
+                // packet, which is the smallest unit the format has.
+                while (count > 1 && (payload.empty() || payload.size() > datagram_budget)) {
+                    count = 1;
+                    payload = homeworldz::viewer::encode_terrain(
                         std::span<const homeworldz::viewer::TerrainPatch>(
                             patches.data() + offset, count), *terrain_heightmap);
+                }
+                if (payload.empty()) {
+                    // A single patch that will not encode is a real fault and
+                    // used to be dropped in silence.
+                    std::cerr << "{\"level\":\"error\",\"message\":\"terrain patch would not encode\""
+                                 ",\"x\":" << static_cast<unsigned>(patches[offset].x)
+                              << ",\"y\":" << static_cast<unsigned>(patches[offset].y)
+                              << "}" << std::endl;
+                    ++offset;
+                    continue;
+                }
+                payloads.push_back(std::move(payload));
+                offset += count;
+            }
+            for (const auto& [recipient_endpoint, recipient] : avatars) {
+                static_cast<void>(recipient);
+                for (const auto& payload : payloads)
                     if (const auto outgoing = circuits.send(
                             recipient_endpoint, payload, true, now))
                         static_cast<void>(send_udp(viewer_server, recipient_endpoint, *outgoing));
-                }
             }
             pending_viewer_terrain_patches.clear();
             next_viewer_terrain_notice = now + std::chrono::milliseconds(250);
