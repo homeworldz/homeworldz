@@ -80,7 +80,20 @@ seam above encoding.
    the client core's ground comparison and fixed the same night. A fetch is a snapshot,
    so in-world terrain editing announces itself to connected sessions with a
    `terrainChanged` event naming the dirty 16 m patches (the event is itself
-   named in the hello's terrain block as `changedEvent`). Canonical asset
+   named in the hello's terrain block as `changedEvent`). Notification is
+   deliberately **lossy and detectable** rather than reliable (client core
+   measurement, 2026-07-30): a monotonic per-region `revision` rides the hello,
+   every `terrainChanged`, and the heightmap's `ETag`, so events may be
+   coalesced or dropped under load and a client still knows it is behind. The
+   region emits at most one event per 250 ms carrying the union of everything
+   dirtied since the last, because one event per brush tick cost each client a
+   whole-heightmap fetch - 4 MB on a 1024 region - and queued fetches faster
+   than they completed. `If-None-Match` answers 304 for a current client, and
+   the heightmap honours `Range` (`Accept-Ranges: bytes`), which matters
+   because the map is row-major: dirty rows are contiguous, so 16 rows of a
+   1024 region is 64 KB rather than 4 MB. Reconnects and crossings should
+   compare the revision rather than assume nothing was missed - that is where
+   a lost edit used to survive unnoticed. Canonical asset
    bytes reach a session through `GET /session/assets/{id}` on the same
    ticket, announced in the hello as `assets.base` (a base to append an id to, unlike
    `terrain.path`, which is complete); the reply's Content-Type

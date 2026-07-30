@@ -12,6 +12,7 @@
 #include <exception>
 #include <filesystem>
 #include <fstream>
+#include <set>
 #include <functional>
 #include <iostream>
 #include <limits>
@@ -969,6 +970,25 @@ int main(int argc, char* argv[]) {
     const auto region_data_path = std::filesystem::path(
         configured_value("region.data_path", "var/region"));
     const auto terrain_state_path = region_data_path / "terrain.f32";
+    // The terrain revision (client core request, 2026-07-30): monotonic per
+    // region, incremented on every applied edit, persisted beside the terrain
+    // it describes. Its value is that change notification can then be *lossy*
+    // and still correct - a client may miss any number of events, coalesced or
+    // dropped under load, and still detect that it is behind and reconcile in
+    // one fetch. Detectable incompleteness beats a delivery guarantee, and it
+    // is what the Second Life family lacks: there, a burst over the per-frame
+    // budget is simply gone, so it presents as terrain that never finishes
+    // rather than as an error.
+    const auto terrain_revision_path = region_data_path / "terrain.rev";
+    std::uint64_t terrain_revision = 0;
+    if (std::ifstream stored(terrain_revision_path); stored) {
+        std::uint64_t value = 0;
+        if (stored >> value) terrain_revision = value;
+    }
+    const auto persist_terrain_revision = [&] {
+        std::ofstream out(terrain_revision_path, std::ios::trunc);
+        if (out) out << terrain_revision << std::endl;
+    };
     // Retire an avatar whose viewer stops answering pings for this long (a lost
     // connection: crash, force-kill, or sustained packet loss) so its KillObject
     // broadcasts promptly rather than waiting on the grid session TTL. The region
@@ -1163,7 +1183,8 @@ int main(int argc, char* argv[]) {
                             resolved->arrival};
                     },
                     static_cast<std::size_t>(region_size_x),
-                    walkable_slope_degrees});
+                    walkable_slope_degrees,
+                    [&terrain_revision] { return terrain_revision; }});
                 if (!session_server) {
                     std::cerr << "{\"level\":\"error\",\"message\":\"region session listener failed\",\"port\":"
                               << session_port << "}" << std::endl;
@@ -1965,6 +1986,11 @@ int main(int argc, char* argv[]) {
     std::unordered_set<std::string> active_texture_transfers;
     std::unordered_map<std::string, PendingInventoryUpload> pending_inventory_uploads;
     std::unordered_map<std::string, PendingMeshModelUpload> pending_mesh_model_uploads;
+    // Dirty terrain patches awaiting one coalesced session event, keyed
+    // (y << 8) | x so a brush passing over the same patch repeatedly counts
+    // once. Flushed on the tick below at a bounded rate.
+    std::set<std::uint32_t> pending_terrain_patches;
+    std::chrono::steady_clock::time_point next_terrain_notice{};
     std::unordered_map<std::string, PendingInventoryAssetUpdate> pending_inventory_asset_updates;
     std::unordered_map<std::string, PendingInventoryAssetUpload> pending_inventory_asset_uploads;
     std::unordered_map<std::string, PendingInventoryAssetXfer> pending_inventory_asset_xfers;
@@ -2765,9 +2791,60 @@ int main(int argc, char* argv[]) {
                                 homeworldz::api::to_json(homeworldz::api::Error{
                                     "unauthorized", "a valid grid service token is required"}));
                         } else {
-                            response = homeworldz::http::response_for_content(
-                                request, 200, "application/vnd.homeworldz.heightmap-f32le",
-                                encode_heightmap(*terrain_heightmap));
+                            // The revision as an ETag, so a client that is
+                            // already current spends no bytes learning it - and
+                            // a reconnect or a crossing, where a missed edit
+                            // used to survive unnoticed, becomes one cheap
+                            // question. Ranges are honoured too: the map is
+                            // row-major, so dirty rows are contiguous and 16
+                            // rows of a 1024 region is 64 KB against 4 MB.
+                            const auto etag = "\"" + std::to_string(terrain_revision) + "\"";
+                            const auto known = homeworldz::http::request_header_value(
+                                request, "If-None-Match");
+                            auto body = encode_heightmap(*terrain_heightmap);
+                            const auto range_header =
+                                homeworldz::http::request_header_value(request, "Range");
+                            if (known == etag) {
+                                response = homeworldz::http::response_for_content(
+                                    request, 304, "application/vnd.homeworldz.heightmap-f32le",
+                                    {});
+                            } else if (range_header.starts_with("bytes=")) {
+                                std::size_t offset = 0;
+                                std::size_t length = body.size();
+                                const auto dash = range_header.find('-', 6);
+                                bool ranged = false;
+                                if (dash != std::string::npos) {
+                                    const auto from = range_header.substr(6, dash - 6);
+                                    const auto to = range_header.substr(dash + 1);
+                                    char* end = nullptr;
+                                    offset = std::strtoull(from.c_str(), &end, 10);
+                                    if (end != nullptr && *end == 0 && offset < body.size()) {
+                                        if (to.empty()) {
+                                            length = body.size() - offset;
+                                            ranged = true;
+                                        } else {
+                                            const auto last = std::strtoull(to.c_str(), &end, 10);
+                                            if (end != nullptr && *end == 0 && last >= offset) {
+                                                length = last - offset + 1;
+                                                ranged = true;
+                                            }
+                                        }
+                                    }
+                                }
+                                response = ranged
+                                    ? homeworldz::http::response_for_range(
+                                          request, "application/vnd.homeworldz.heightmap-f32le",
+                                          body, offset, length)
+                                    : homeworldz::http::response_for_content(
+                                          request, 416,
+                                          "application/vnd.homeworldz.heightmap-f32le", {});
+                            } else {
+                                response = homeworldz::http::response_for_content(
+                                    request, 200, "application/vnd.homeworldz.heightmap-f32le",
+                                    std::move(body));
+                            }
+                            homeworldz::http::add_header(response, "ETag", etag);
+                            homeworldz::http::add_header(response, "Accept-Ranges", "bytes");
                         }
                     }
                     if (response.path == "/session/terrain") {
@@ -8404,31 +8481,24 @@ int main(int argc, char* argv[]) {
                                                 viewer_server, recipient_endpoint, *outgoing));
                                     }
                                 }
-                                if (session_server) {
-                                    // Sessions fetch terrain as a snapshot
-                                    // (GET /session/terrain), so an edit must
-                                    // announce itself or their floor goes
-                                    // silently stale. The dirty 16m patches
-                                    // ride along; a client may refetch either
-                                    // way. Additive event, named in the hello
-                                    // terrain block.
-                                    std::string patch_list;
-                                    for (const auto& patch : changed) {
-                                        if (!patch_list.empty()) patch_list += ',';
-                                        patch_list += '[' + std::to_string(patch.x) + ',' +
-                                                      std::to_string(patch.y) + ']';
-                                    }
-                                    const auto notice = homeworldz::session::encode_envelope(
-                                        "terrainChanged", {},
-                                        "{\"path\":\"/session/terrain\",\"patchSize\":16,"
-                                        "\"patches\":[" + patch_list + "]}");
-                                    for (const auto& [session_key, session_avatar] : avatars) {
-                                        static_cast<void>(session_key);
-                                        if (session_avatar.transport == AvatarTransport::session)
-                                            session_server->send_to(
-                                                session_avatar.session_id, notice);
-                                    }
-                                }
+                                // The revision advances once per applied edit,
+                                // whatever the notification does afterwards.
+                                ++terrain_revision;
+                                persist_terrain_revision();
+                                // Sessions are told the ground moved, but not
+                                // once per brush tick: a drag produced one
+                                // event per tick, each of which cost a client
+                                // a whole-heightmap fetch - 4 MB on a 1024
+                                // region - so the edit path queued fetches
+                                // faster than they completed and saturated
+                                // this thread along the way. Dirty patches
+                                // accumulate here and one coalesced event goes
+                                // out below, carrying the union and the
+                                // revision (client core measurement,
+                                // 2026-07-30).
+                                for (const auto& patch : changed)
+                                    pending_terrain_patches.insert(
+                                        (static_cast<std::uint32_t>(patch.y) << 8) | patch.x);
                                 std::cout << "{\"level\":" << (persisted ? "\"info\"" : "\"error\"")
                                           << ",\"message\":\"terrain edit applied\",\"action\":"
                                           << static_cast<unsigned>(terrain_edit->action)
@@ -8792,6 +8862,38 @@ int main(int argc, char* argv[]) {
         const auto elapsed = std::chrono::duration<double>(now - previous_tick).count();
         const auto fixed_steps = simulation.advance(elapsed);
         std::vector<std::pair<std::string, std::string>> departed_avatars;
+        // One terrain event per quarter second at most, carrying the union of
+        // everything dirtied since the last one. Lossy by design and safe
+        // because the revision rides along: a client that misses this entirely
+        // still learns it is behind the next time it hears from us or reads an
+        // ETag.
+        if (!pending_terrain_patches.empty() && now >= next_terrain_notice && session_server) {
+            std::string patch_list;
+            for (const auto packed : pending_terrain_patches) {
+                if (!patch_list.empty()) patch_list += ',';
+                patch_list += '[' + std::to_string(packed & 0xffu) + ',' +
+                              std::to_string((packed >> 8) & 0xffu) + ']';
+            }
+            const auto notice = homeworldz::session::encode_envelope(
+                "terrainChanged", {},
+                "{\"path\":\"/session/terrain\",\"patchSize\":16"
+                ",\"revision\":" + std::to_string(terrain_revision) +
+                ",\"patches\":[" + patch_list + "]}");
+            std::size_t told = 0;
+            for (const auto& [session_key, session_avatar] : avatars) {
+                static_cast<void>(session_key);
+                if (session_avatar.transport != AvatarTransport::session) continue;
+                session_server->send_to(session_avatar.session_id, notice);
+                ++told;
+            }
+            std::cout << "{\"level\":\"info\",\"message\":\"terrain change announced\""
+                         ",\"revision\":" << terrain_revision
+                      << ",\"patches\":" << pending_terrain_patches.size()
+                      << ",\"sessions\":" << told << "}" << std::endl;
+            pending_terrain_patches.clear();
+            next_terrain_notice = now + std::chrono::milliseconds(250);
+        }
+
         // Session avatars that crossed a border this tick; retired after the
         // loop so the map is not mutated while iterating.
         std::vector<std::string> crossing_session_avatars;

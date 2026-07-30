@@ -106,7 +106,8 @@ struct Command {
 class SessionCore {
 public:
     SessionCore(std::string region_name, TicketValidator validator,
-                std::size_t terrain_width, double walkable_slope_degrees);
+                std::size_t terrain_width, double walkable_slope_degrees,
+                std::function<std::uint64_t()> terrain_revision);
 
     struct Result {
         std::vector<std::string> send;
@@ -134,6 +135,9 @@ private:
     TicketValidator validator_;
     std::size_t terrain_width_;
     double walkable_slope_degrees_;
+    // Read at greeting time rather than captured: an edit may land between
+    // construction and a client's arrival.
+    std::function<std::uint64_t()> terrain_revision_;
     bool established_{};
     SessionIdentity identity_;
 };

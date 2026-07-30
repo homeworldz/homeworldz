@@ -28,5 +28,11 @@ Response response_for_content(std::string_view request, int status_code,
 Response response_for_range(std::string_view request, std::string_view content_type,
                             std::string_view full_body, std::size_t offset, std::size_t length);
 
+// Add one header to an already-built response, after the status line. For the
+// cases where a header is a property of the resource rather than of the reply
+// shape - an ETag, Accept-Ranges - and so is not worth a parameter on every
+// constructor. Does nothing to a malformed response rather than corrupting it.
+void add_header(Response& response, std::string_view name, std::string_view value);
+
 } // namespace homeworldz::http
 

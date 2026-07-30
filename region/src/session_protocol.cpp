@@ -283,9 +283,11 @@ std::string encode_envelope(std::string_view type, std::string_view correlation_
 }
 
 SessionCore::SessionCore(std::string region_name, TicketValidator validator,
-                         std::size_t terrain_width, double walkable_slope_degrees)
+                         std::size_t terrain_width, double walkable_slope_degrees,
+                         std::function<std::uint64_t()> terrain_revision)
     : region_name_(std::move(region_name)), validator_(std::move(validator)),
-      terrain_width_(terrain_width), walkable_slope_degrees_(walkable_slope_degrees) {}
+      terrain_width_(terrain_width), walkable_slope_degrees_(walkable_slope_degrees),
+      terrain_revision_(std::move(terrain_revision)) {}
 
 SessionCore::Result SessionCore::refuse(std::string reason) const {
     Result result;
@@ -366,7 +368,15 @@ SessionCore::Result SessionCore::handle_text(std::string_view text) {
             ",\"interpolation\":\"cell-triangles-diagonal-x,y+1-x+1,y\"" +
             // A fetch is a snapshot; this event names the dirty patches when
             // in-world editing changes the ground under a connected session.
-            ",\"changedEvent\":\"terrainChanged\"}" +
+            ",\"changedEvent\":\"terrainChanged\"" +
+            // The revision this ground is at. It rides every terrainChanged
+            // and is the heightmap's ETag, so notification can be coalesced
+            // or dropped and a client still detects staleness - on a
+            // reconnect or a crossing too, where a missed edit otherwise
+            // survives unnoticed (client core, 2026-07-30).
+            ",\"revision\":" +
+            std::to_string(terrain_revision_ ? terrain_revision_() : 0) +
+            ",\"ranges\":true}" +
             // Where canonical asset bytes come from: an asset id appended to
             // this base, on the same ticket. Named `base` rather than `path`
             // deliberately — `terrain.path` is a complete path and this is not,

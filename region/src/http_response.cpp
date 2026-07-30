@@ -153,6 +153,14 @@ Response response_for_content(std::string_view request, int status_code,
     return {status_code, std::move(request_id), std::move(method), std::move(path), std::move(content)};
 }
 
+void add_header(Response& response, std::string_view name, std::string_view value) {
+    const std::string crlf{static_cast<char>(13), static_cast<char>(10)};
+    const auto line_end = response.content.find(crlf);
+    if (line_end == std::string::npos) return;
+    response.content.insert(line_end + crlf.size(),
+                            std::string(name) + ": " + std::string(value) + crlf);
+}
+
 Response response_for_range(std::string_view request, std::string_view content_type,
                             std::string_view full_body, std::size_t offset, std::size_t length) {
     std::string method;

@@ -28,6 +28,8 @@ public:
         // This region's configured walkable slope, published in the hello
         // avatar block.
         double walkable_slope_degrees{};
+        // Current terrain revision, read per greeting.
+        std::function<std::uint64_t()> terrain_revision;
     };
 
     // start returns a running server, or null when the listener could not be
