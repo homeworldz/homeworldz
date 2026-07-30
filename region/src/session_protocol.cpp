@@ -5,6 +5,7 @@
 #include "homeworldz/mesh_acceptance.h"
 
 #include <charconv>
+#include <span>
 
 namespace homeworldz::session {
 namespace {
@@ -156,6 +157,38 @@ std::string json_number_text(double value) {
     const auto [end, error] = std::to_chars(buffer.data(), buffer.data() + buffer.size(), value);
     if (error != std::errc{}) return "0";
     return std::string(buffer.data(), end);
+}
+
+std::string base64(std::span<const std::byte> bytes) {
+    static constexpr char alphabet[] =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string out;
+    out.reserve((bytes.size() + 2) / 3 * 4);
+    std::size_t index = 0;
+    while (index + 2 < bytes.size()) {
+        const auto a = static_cast<unsigned>(bytes[index]);
+        const auto b = static_cast<unsigned>(bytes[index + 1]);
+        const auto c = static_cast<unsigned>(bytes[index + 2]);
+        out.push_back(alphabet[a >> 2]);
+        out.push_back(alphabet[((a & 0x3u) << 4) | (b >> 4)]);
+        out.push_back(alphabet[((b & 0xfu) << 2) | (c >> 6)]);
+        out.push_back(alphabet[c & 0x3fu]);
+        index += 3;
+    }
+    if (index + 1 == bytes.size()) {
+        const auto a = static_cast<unsigned>(bytes[index]);
+        out.push_back(alphabet[a >> 2]);
+        out.push_back(alphabet[(a & 0x3u) << 4]);
+        out += "==";
+    } else if (index + 2 == bytes.size()) {
+        const auto a = static_cast<unsigned>(bytes[index]);
+        const auto b = static_cast<unsigned>(bytes[index + 1]);
+        out.push_back(alphabet[a >> 2]);
+        out.push_back(alphabet[((a & 0x3u) << 4) | (b >> 4)]);
+        out.push_back(alphabet[(b & 0xfu) << 2]);
+        out.push_back('=');
+    }
+    return out;
 }
 
 std::string json_string(std::string_view value) {
@@ -376,7 +409,15 @@ SessionCore::Result SessionCore::handle_text(std::string_view text) {
             // survives unnoticed (client core, 2026-07-30).
             ",\"revision\":" +
             std::to_string(terrain_revision_ ? terrain_revision_() : 0) +
-            ",\"ranges\":true}" +
+            ",\"ranges\":true" +
+            // A terrainChanged may carry the changed heights outright, so an
+            // edit costs no fetch. Same format as the map itself, patch-sized
+            // and row-major within the patch, base64 in the JSON envelope, and
+            // each patch states its own origin. Named here as the same media
+            // type deliberately: one encoding of heights, not two (client core
+            // caution, 2026-07-30).
+            ",\"patchHeights\":{\"format\":\"heightmap-f32le\""
+            ",\"encoding\":\"base64\",\"rowMajorWithinPatch\":true}}" +
             // Where canonical asset bytes come from: an asset id appended to
             // this base, on the same ticket. Named `base` rather than `path`
             // deliberately — `terrain.path` is a complete path and this is not,

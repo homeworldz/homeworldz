@@ -8874,11 +8874,49 @@ int main(int argc, char* argv[]) {
                 patch_list += '[' + std::to_string(packed & 0xffu) + ',' +
                               std::to_string((packed >> 8) & 0xffu) + ']';
             }
+            // The heights themselves, so an edit costs no fetch at all: a 16x16
+            // patch of float32 is 1 KB, against a whole-heightmap fetch of 4 MB
+            // on a 1024 region. Each entry carries its own origin rather than
+            // relying on arrival order - a coalesced event whose positions are
+            // implied by array order is a contract that breaks the first time
+            // either side sorts it (client core, 2026-07-30). The block is the
+            // same heightmap-f32le the map endpoint serves, patch-sized and
+            // row-major within the patch: one published encoding, not two.
+            constexpr std::size_t patch_extent = 16;
+            constexpr std::size_t maximum_patches_with_heights = 64;
+            std::string heights;
+            if (pending_terrain_patches.size() <= maximum_patches_with_heights) {
+                for (const auto packed : pending_terrain_patches) {
+                    const auto patch_x = static_cast<std::size_t>(packed & 0xffu);
+                    const auto patch_y = static_cast<std::size_t>((packed >> 8) & 0xffu);
+                    std::vector<std::byte> block;
+                    block.reserve(patch_extent * patch_extent * sizeof(float));
+                    for (std::size_t row = 0; row < patch_extent; ++row)
+                        for (std::size_t column = 0; column < patch_extent; ++column) {
+                            const auto x = patch_x * patch_extent + column;
+                            const auto y = patch_y * patch_extent + row;
+                            const float sample = x < terrain_width && y < terrain_width
+                                ? (*terrain_heightmap)[y * terrain_width + x] : 0.0F;
+                            const auto bits = std::bit_cast<std::uint32_t>(sample);
+                            for (int shift = 0; shift < 32; shift += 8)
+                                block.push_back(static_cast<std::byte>((bits >> shift) & 0xffu));
+                        }
+                    if (!heights.empty()) heights += ',';
+                    heights += "{\"x\":" + std::to_string(patch_x) +
+                               ",\"y\":" + std::to_string(patch_y) +
+                               ",\"data\":\"" + homeworldz::session::base64(block) + "\"}";
+                }
+            }
             const auto notice = homeworldz::session::encode_envelope(
                 "terrainChanged", {},
                 "{\"path\":\"/session/terrain\",\"patchSize\":16"
                 ",\"revision\":" + std::to_string(terrain_revision) +
-                ",\"patches\":[" + patch_list + "]}");
+                ",\"patches\":[" + patch_list + "]" +
+                // Absent when a burst dirties more than the cap: the revision
+                // makes that safe, because the client refetches on a mismatch
+                // rather than being left silently behind.
+                (heights.empty() ? std::string{} : ",\"heights\":[" + heights + "]") +
+                "}");
             std::size_t told = 0;
             for (const auto& [session_key, session_avatar] : avatars) {
                 static_cast<void>(session_key);
@@ -8889,6 +8927,7 @@ int main(int argc, char* argv[]) {
             std::cout << "{\"level\":\"info\",\"message\":\"terrain change announced\""
                          ",\"revision\":" << terrain_revision
                       << ",\"patches\":" << pending_terrain_patches.size()
+                      << ",\"heightsIncluded\":" << (heights.empty() ? "false" : "true")
                       << ",\"sessions\":" << told << "}" << std::endl;
             pending_terrain_patches.clear();
             next_terrain_notice = now + std::chrono::milliseconds(250);

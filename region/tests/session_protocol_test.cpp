@@ -1,6 +1,7 @@
 #include "homeworldz/mesh_acceptance.h"
 #include "homeworldz/session_protocol.h"
 
+#include <span>
 #include <string>
 
 using homeworldz::session::Envelope;
@@ -118,8 +119,23 @@ int main() {
                                "\"spacing\":1,\"interpolation\":"
                                "\"cell-triangles-diagonal-x,y+1-x+1,y\","
                                "\"changedEvent\":\"terrainChanged\","
-                               "\"revision\":7,\"ranges\":true}") == std::string::npos)
+                               "\"revision\":7,\"ranges\":true,"
+                               "\"patchHeights\":{\"format\":\"heightmap-f32le\","
+                               "\"encoding\":\"base64\",\"rowMajorWithinPatch\":true}}")
+        == std::string::npos)
         return 34;
+    // base64 round-trips against a known vector, since a terrainChanged's
+    // heights are unreadable if this is subtly wrong and nothing else here
+    // would notice.
+    {
+        const std::string text = "Man";
+        const auto encoded = homeworldz::session::base64(std::as_bytes(std::span(text)));
+        if (encoded != "TWFu") return 36;
+        const std::string one = "M";
+        if (homeworldz::session::base64(std::as_bytes(std::span(one))) != "TQ==") return 37;
+        const std::string two = "Ma";
+        if (homeworldz::session::base64(std::as_bytes(std::span(two))) != "TWE=") return 38;
+    }
     // Canonical asset bytes are fetchable, and the hello says from where: a
     // session that learns an asset id must have a way to read it.
     if (greeting->payload.find("\"assets\":{\"base\":\"/session/assets/\"}") == std::string::npos)

@@ -10,6 +10,7 @@
 #include <array>
 #include <cstdint>
 #include <functional>
+#include <span>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -45,6 +46,10 @@ std::string encode_envelope(std::string_view type, std::string_view correlation_
 
 // json_string renders a quoted, escaped JSON string.
 std::string json_string(std::string_view value);
+
+// Standard base64, for the binary a JSON envelope has to carry (terrain patch
+// heights today). No line breaks, padded.
+std::string base64(std::span<const std::byte> bytes);
 
 // json_field extracts a string field from a JSON object's raw text; empty
 // when absent. Sufficient for the session protocol's flat payloads.
