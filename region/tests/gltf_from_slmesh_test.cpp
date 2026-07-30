@@ -92,6 +92,39 @@ int main() {
     }
     if (round_trip.high_triangles != reference_triangles) return 12;
 
+    // A flat fixture, because the round trip above cannot fail on axes: if
+    // both directions rotated by nothing, or by any pair of inverses, the
+    // comparison still passes. Only an asset with an unmistakable thin axis
+    // answers "did the emitted glTF actually get rotated" — a cube or a
+    // unit-box mesh agrees with every orientation equally (client core, whose
+    // flat plates are the only assets on the live grid able to witness a
+    // regeneration, 2026-07-30).
+    //
+    // declared_world_bounds maps glTF axes back to region axes on the way in,
+    // so a source flat in region Z must come back flat in region Z. If emit
+    // forgot to rotate, the flat axis would land in region Y instead.
+    {
+        homeworldz::slmesh::Submesh plate;
+        plate.positions = {{-0.5f, -0.5f, 0.0f}, {0.5f, -0.5f, 0.0f},
+                           {0.5f, 0.5f, 0.0f}, {-0.5f, 0.5f, 0.0f}};
+        plate.indices = {0, 1, 2, 0, 2, 3};
+        homeworldz::slmesh::Mesh flat;
+        flat.high = {plate};
+        flat.medium = flat.high;
+        flat.low = flat.high;
+        flat.lowest = flat.high;
+        flat.physics_hull = source.physics_hull;
+        const auto flat_stored = homeworldz::slmesh::serialize(flat);
+        if (flat_stored.empty()) return 14;
+        const auto flat_derived = homeworldz::mesh::gltf_from_sl_mesh(flat_stored);
+        if (!flat_derived.ok) return 15;
+        const auto flat_bounds = homeworldz::mesh::declared_world_bounds(flat_derived.glb);
+        if (!flat_bounds.ok) return 16;
+        if (flat_bounds.extent[2] > 0.01f) return 17;         // thin axis stayed region Z
+        if (flat_bounds.extent[0] < 0.9f) return 18;          // and the wide axes are wide
+        if (flat_bounds.extent[1] < 0.9f) return 19;
+    }
+
     // Refusals carry a reason rather than empty bytes.
     const std::vector<std::byte> garbage{std::byte{'g'}, std::byte{'l'},
                                          std::byte{'T'}, std::byte{'F'}};
