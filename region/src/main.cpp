@@ -1744,15 +1744,40 @@ int main(int argc, char* argv[]) {
     const auto synchronize_physics_terrain = [&]() {
         if (!physics_world) return false;
         try {
+            // The heightmap has one sample per metre, so the collision surface
+            // must too: sample i belongs at x = i exactly.
+            //
+            // This used to stretch the field instead - spacing =
+            // width / (count - 1) - to cover the last metre between the final
+            // sample and the region border. That reasoning was sound and the
+            // remedy was not: a spacing of 1.000977 on a 1024 region displaces
+            // sample i by i * 0.000977, so the ground physics stands on is
+            // read up to a metre away from the ground everyone is shown. On
+            // flat terrain nothing shows; on a slope an avatar rests above or
+            // below the visible surface in proportion to the gradient, which
+            // is exactly what the client core measured on the operator's test
+            // slope (0.637 m per unit gradient near x = 640, and a spread
+            // across the sweep that tracks x rather than the angle).
+            //
+            // Instead the field is padded by two samples with the edge value
+            // repeated: alignment stays exact, the surface extends past the
+            // border rather than short of it, and Jolt's requirement that the
+            // sample count divide by its block size is satisfied (an odd
+            // count is rejected, so one extra sample would not do).
+            const auto terrain_samples = terrain_heightmap->width();
+            const auto padded = terrain_samples + 2;
             homeworldz::physics::HeightFieldDefinition definition;
-            definition.samples.assign(terrain_heightmap->begin(), terrain_heightmap->end());
-            definition.sample_count = static_cast<std::uint32_t>(terrain_heightmap->width());
-            // Terrain samples describe the complete region extent. There are
-            // sample_count - 1 intervals between the first sample at 0 and the
-            // far region border; unit spacing would incorrectly end the collision
-            // surface one metre early and let edge-bound bodies fall off.
-            definition.spacing = static_cast<double>(terrain_heightmap->width()) /
-                static_cast<double>(definition.sample_count - 1);
+            definition.samples.resize(static_cast<std::size_t>(padded) * padded);
+            for (std::size_t y = 0; y < padded; ++y) {
+                const auto source_y = (std::min)(y, terrain_samples - 1);
+                for (std::size_t x = 0; x < padded; ++x) {
+                    const auto source_x = (std::min)(x, terrain_samples - 1);
+                    definition.samples[y * padded + x] =
+                        (*terrain_heightmap)[source_y * terrain_samples + source_x];
+                }
+            }
+            definition.sample_count = static_cast<std::uint32_t>(padded);
+            definition.spacing = 1.0;
             const auto replacement = physics_world->create_heightfield(definition);
             if (replacement == 0) return false;
             if (physics_terrain != 0) physics_world->remove_body(physics_terrain);
@@ -1765,6 +1790,38 @@ int main(int argc, char* argv[]) {
         }
     };
     const auto physics_terrain_ready = synchronize_physics_terrain();
+    // The collision surface must be the surface everyone is shown. Nothing
+    // enforced that, and a spacing that displaced samples in proportion to
+    // their coordinate went unnoticed for as long as the only terrain was
+    // flat - where any horizontal misalignment reads identically to none.
+    // Checked at integer coordinates, where the heightfield's triangles pass
+    // exactly through the samples, so a correct field agrees to float
+    // precision and a displaced one cannot.
+    if (physics_terrain_ready && physics_world && physics_terrain != 0) {
+        double worst = 0.0;
+        int worst_x = 0, worst_y = 0;
+        const auto step = (std::max<std::size_t>)(1, terrain_width / 16);
+        for (std::size_t y = 0; y + 1 < terrain_width; y += step)
+            for (std::size_t x = 0; x + 1 < terrain_width; x += step) {
+                const auto hit = physics_world->ray_cast_body(
+                    physics_terrain, {static_cast<double>(x), static_cast<double>(y), 4096.0},
+                    {0, 0, -1}, 8192.0);
+                if (!hit) continue;
+                const auto expected = (*terrain_heightmap)[y * terrain_width + x];
+                const auto difference = std::abs(hit->point.z - expected);
+                if (difference > worst) {
+                    worst = difference;
+                    worst_x = static_cast<int>(x);
+                    worst_y = static_cast<int>(y);
+                }
+            }
+        const bool aligned = worst <= 0.01;
+        std::cout << "{\"level\":" << (aligned ? "\"info\"" : "\"error\"")
+                  << ",\"message\":\"terrain collision alignment checked\""
+                     ",\"worstDeviation\":" << worst
+                  << ",\"atX\":" << worst_x << ",\"atY\":" << worst_y
+                  << ",\"aligned\":" << (aligned ? "true" : "false") << "}" << std::endl;
+    }
     std::cout << "{\"level\":" << (physics_terrain_ready ? "\"info\"" : "\"warning\"")
               << ",\"message\":\"physics terrain initialized\",\"samples\":"
               << terrain_heightmap->size() << ",\"synchronized\":"
