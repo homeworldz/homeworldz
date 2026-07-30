@@ -23,6 +23,7 @@
 #include <Jolt/RegisterTypes.h>
 
 #include <algorithm>
+#include <iostream>
 #include <mutex>
 #include <stdexcept>
 #include <thread>
@@ -264,6 +265,11 @@ public:
             0.0F, static_cast<float>(static_cast<double>(count - 1) * definition.spacing), 0.0F};
         JPH::BodyCreationSettings settings(
             shape.Get(), position, rotation, JPH::EMotionType::Static, Layers::static_body);
+        // The same ghost-contact remedy for bodies rather than characters: a
+        // rolling or sliding prim crosses the same internal triangle edges an
+        // avatar does, and the character-side flag does not cover body-vs-body
+        // contacts.
+        settings.mEnhancedInternalEdgeRemoval = true;
         settings.mFriction = static_cast<float>(definition.friction);
         settings.mRestitution = static_cast<float>(definition.restitution);
         const auto native = system_.GetBodyInterface().CreateAndAddBody(settings, JPH::EActivation::DontActivate);
@@ -334,6 +340,22 @@ public:
         // exactly that, and it costs contact-resolution work rather than
         // correctness.
         character->SetEnhancedInternalEdgeRemoval(true);
+        // Read back rather than assume, and say so once. A setting with no
+        // effect and a setting that never took are indistinguishable from
+        // outside the process, and the client core declined to accept a
+        // falsification that could not tell them apart - correctly. This makes
+        // the experiment's precondition observable instead of asserted
+        // (2026-07-30).
+        static bool reported = false;
+        if (!reported) {
+            reported = true;
+            std::cout << "{\"level\":\"info\",\"message\":\"character contact settings\""
+                         ",\"enhancedInternalEdgeRemoval\":"
+                      << (character->GetEnhancedInternalEdgeRemoval() ? "true" : "false")
+                      << ",\"maxSlopeDegrees\":" << character_walkable_slope_degrees
+                      << ",\"radius\":" << definition.radius
+                      << ",\"height\":" << definition.height << "}" << std::endl;
+        }
         const auto id = next_character_++;
         characters_.emplace(id, JoltCharacter{
             std::move(character), definition.entity_id, definition.height, definition.step_height, false});
