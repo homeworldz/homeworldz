@@ -324,6 +324,16 @@ public:
         auto character = JPH::Ref<JPH::CharacterVirtual>(new JPH::CharacterVirtual(
             &settings, JPH::RVec3(vec(feet)),
             JPH::Quat::sIdentity(), &system_));
+        // A capsule crossing the internal edges of a triangulated surface picks
+        // up contacts against the edges themselves, whose normals are not the
+        // surface normal. On terrain that shows as a walking avatar riding a few
+        // centimetres off the ground it rests on, in an amount that depends on
+        // which way it crosses the triangles - measured by the client core as a
+        // direction-dependent residual on the operator's slope, larger downhill
+        // than uphill and absent at rest (2026-07-30). This is Jolt's remedy for
+        // exactly that, and it costs contact-resolution work rather than
+        // correctness.
+        character->SetEnhancedInternalEdgeRemoval(true);
         const auto id = next_character_++;
         characters_.emplace(id, JoltCharacter{
             std::move(character), definition.entity_id, definition.height, definition.step_height, false});
