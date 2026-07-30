@@ -130,6 +130,28 @@ int main() {
     const auto unauthorized = homeworldz::http::response_for_content(
         "GET /asset HTTP/1.1\r\n\r\n", 401, "application/json", "{}");
     passed &= contains(unauthorized.content, "HTTP/1.1 401 Unauthorized");
+    // Every code the handlers use reaches the wire as itself. These two were
+    // emitted as "500 Internal Server Error" until 2026-07-30 while the log
+    // recorded the intended code: a successful mesh upload read as a server
+    // failure to any client that believed the status line, and a mesh refusal
+    // lost the 422 that distinguishes "your model is not acceptable" from
+    // "the region broke".
+    const auto created = homeworldz::http::response_for_content(
+        "POST /session/uploads/mesh HTTP/1.1\r\n\r\n", 201, "application/json", "{}");
+    passed &= created.status_code == 201 &&
+              contains(created.content, "HTTP/1.1 201 Created");
+    const auto refused = homeworldz::http::response_for_content(
+        "POST /session/uploads/mesh HTTP/1.1\r\n\r\n", 422, "application/json", "{}");
+    passed &= refused.status_code == 422 &&
+              contains(refused.content, "HTTP/1.1 422 Unprocessable Content");
+    // An unlisted code keeps its number and simply has no phrase; only a code
+    // outside the valid range is treated as the caller's bug.
+    const auto unlisted = homeworldz::http::response_for_content(
+        "GET /teapot HTTP/1.1\r\n\r\n", 418, "application/json", "{}");
+    passed &= contains(unlisted.content, "HTTP/1.1 418\r\n");
+    const auto nonsense = homeworldz::http::response_for_content(
+        "GET /x HTTP/1.1\r\n\r\n", 7, "application/json", "{}");
+    passed &= contains(nonsense.content, "HTTP/1.1 500 Internal Server Error");
     passed &= !homeworldz::http::request_content_length(
                    "POST /caps/seed/id HTTP/1.1\r\nContent-Length: invalid\r\n\r\n");
     const auto seed = homeworldz::viewer::seed_capability_xml(

@@ -108,12 +108,43 @@ Response response_for_content(std::string_view request, int status_code,
     std::string method;
     std::string path;
     parse_request_line(request, method, path);
-    std::string_view status = "HTTP/1.1 500 Internal Server Error\r\n";
-    if (status_code == 200) status = "HTTP/1.1 200 OK\r\n";
-    else if (status_code == 400) status = "HTTP/1.1 400 Bad Request\r\n";
-    else if (status_code == 401) status = "HTTP/1.1 401 Unauthorized\r\n";
-    else if (status_code == 404) status = "HTTP/1.1 404 Not Found\r\n";
-    else if (status_code == 405) status = "HTTP/1.1 405 Method Not Allowed\r\n";
+    // The status line carries the code the handler chose. This used to be a
+    // short if-chain that fell through to 500 for anything it did not list,
+    // which meant a successful mesh upload (201) and a mesh refusal carrying
+    // its creator-facing reason (422) both left as "500 Internal Server
+    // Error" while the log recorded what was intended — the response said one
+    // thing and the log another, and only the log was ever read. An unlisted
+    // code now keeps its number and loses only its phrase, which is legal and
+    // honest; a code outside the valid range is the caller's bug and becomes
+    // a real 500 (found by a scale probe reading raw bytes, 2026-07-30).
+    const auto phrase = [](int code) -> std::string_view {
+        switch (code) {
+        case 200: return "OK";
+        case 201: return "Created";
+        case 202: return "Accepted";
+        case 204: return "No Content";
+        case 206: return "Partial Content";
+        case 304: return "Not Modified";
+        case 400: return "Bad Request";
+        case 401: return "Unauthorized";
+        case 403: return "Forbidden";
+        case 404: return "Not Found";
+        case 405: return "Method Not Allowed";
+        case 409: return "Conflict";
+        case 413: return "Content Too Large";
+        case 416: return "Range Not Satisfiable";
+        case 422: return "Unprocessable Content";
+        case 429: return "Too Many Requests";
+        case 500: return "Internal Server Error";
+        case 501: return "Not Implemented";
+        case 503: return "Service Unavailable";
+        default: return {};
+        }
+    };
+    if (status_code < 100 || status_code > 599) status_code = 500;
+    const auto reason = phrase(status_code);
+    const std::string status = "HTTP/1.1 " + std::to_string(status_code) +
+        (reason.empty() ? std::string{} : " " + std::string(reason)) + "\r\n";
     auto request_id = parse_request_header(request, request_id_header);
     if (!valid_request_id(request_id)) request_id = new_request_id();
     auto content = std::string(status) + "Content-Type: " + std::string(content_type) +
