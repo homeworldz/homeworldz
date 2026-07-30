@@ -43,7 +43,17 @@ private:
 std::unique_ptr<Heightmap> load_state(const std::filesystem::path& path,
                                       std::size_t expected_width = 256);
 bool save_state(const std::filesystem::path& path, const Heightmap& heightmap);
+// How fast the smooth brush converges on the local average per application.
+// It is a feel constant, not a correctness one - smoothing lerps toward a
+// bounded target, so the rate only decides how many applications level a
+// feature. Inherited at 0.03 against flatten's 0.25, which meant seconds of
+// held mouse button per peak; raised on the operator's judgement in three
+// steps (0.20, 0.26, 0.36) and made overridable per region
+// (region.smooth_strength) so tuning it no longer needs a deployment.
+inline constexpr float default_smooth_strength = 0.36F;
+
 std::vector<viewer::TerrainPatch> apply(Heightmap& heightmap, const Heightmap& revert,
-                                        const viewer::ModifyLand& edit);
+                                        const viewer::ModifyLand& edit,
+                                        float smooth_strength = default_smooth_strength);
 
 } // namespace homeworldz::terrain

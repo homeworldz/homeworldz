@@ -1000,6 +1000,12 @@ int main(int argc, char* argv[]) {
     // The walkable slope limit, overridable per region and published in the
     // session hello. Every character this region creates uses the same value
     // the hello announces — one configured number, no drift.
+    // Read once at startup like the other feel constants; an operator tuning it
+    // restarts the region, which is the same cost as any other ini change.
+    const auto terrain_smooth_strength = static_cast<float>(std::clamp(
+        configured_int("region.smooth_strength_percent",
+                       static_cast<int>(homeworldz::terrain::default_smooth_strength * 100.0F),
+                       1, 100), 1, 100)) / 100.0F;
     const auto walkable_slope_degrees = static_cast<double>(configured_int(
         "region.walkable_slope_degrees",
         static_cast<int>(homeworldz::physics::character_walkable_slope_degrees), 10, 89));
@@ -8507,7 +8513,8 @@ int main(int argc, char* argv[]) {
                         if (terrain_edit && terrain_edit->agent_id == identity->agent_id &&
                             terrain_edit->session_id == identity->session_id) {
                             const auto changed = homeworldz::terrain::apply(
-                                *terrain_heightmap, *revert_heightmap, *terrain_edit);
+                                *terrain_heightmap, *revert_heightmap, *terrain_edit,
+                                terrain_smooth_strength);
                             if (!changed.empty()) {
                                 // Applying the edit is an in-memory operation and
                                 // is all that happens here. Everything that costs
