@@ -367,6 +367,11 @@ SessionCore::Result SessionCore::handle_text(std::string_view text) {
             // A fetch is a snapshot; this event names the dirty patches when
             // in-world editing changes the ground under a connected session.
             ",\"changedEvent\":\"terrainChanged\"}" +
+            // Where canonical asset bytes come from: the id an upload reply or
+            // an object's geometry block names, appended to this path, on the
+            // same ticket. The reply's Content-Type states the format actually
+            // stored rather than one implied by the id.
+            ",\"assets\":{\"path\":\"/session/assets/\"}" +
             // The mesh acceptance gate, published so importing clients refuse
             // exactly what upload would refuse (ADR 0033: read, never encode).
             ",\"meshAcceptance\":" + homeworldz::mesh::acceptance_policy_json() + "}"));

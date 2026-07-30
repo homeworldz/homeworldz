@@ -607,6 +607,16 @@ std::optional<std::pair<std::string, std::string>> file_upload_data_request(std:
     return std::pair{std::string(session), std::string(token)};
 }
 
+// GET /session/assets/{uuid}: canonical bytes for a session client, keyed by
+// the asset id an upload reply or an object's geometry block named.
+std::optional<std::string> session_asset_request(std::string_view path) {
+    constexpr std::string_view prefix = "/session/assets/";
+    if (!path.starts_with(prefix)) return std::nullopt;
+    const auto asset = path.substr(prefix.size());
+    if (!homeworldz::viewer::parse_uuid(asset)) return std::nullopt;
+    return std::string(asset);
+}
+
 std::optional<std::pair<std::string, std::string>> model_upload_data_request(std::string_view path) {
     constexpr std::string_view prefix = "/caps/upload-model-data/";
     if (!path.starts_with(prefix)) return std::nullopt;
@@ -2104,7 +2114,21 @@ int main(int argc, char* argv[]) {
             ",\"rotation\":[" + std::to_string(entity.rotation.x) + "," +
                 std::to_string(entity.rotation.y) + "," + std::to_string(entity.rotation.z) + "," +
                 std::to_string(session_quat_w(entity.rotation.x, entity.rotation.y, entity.rotation.z)) + "]" +
-            ",\"scale\":" + session_vec3(entity.scale.x, entity.scale.y, entity.scale.z) + "}");
+            ",\"scale\":" + session_vec3(entity.scale.x, entity.scale.y, entity.scale.z) +
+            // What geometry this part uses, when it is not a prim shape. Without
+            // it a client receiving scene traffic can only draw placeholder
+            // boxes — it knows where every object is and never what any of them
+            // looks like (client core, 2026-07-29). Absent for prims, so a
+            // reader written before this field keeps working; the bytes come
+            // from /session/assets/{assetId}, whose Content-Type names the
+            // format (a session-uploaded mesh is glTF, a viewer-uploaded one is
+            // Second Life mesh).
+            (entity.sculpt_id.empty() ? std::string{} :
+                ",\"geometry\":{\"assetId\":" +
+                    homeworldz::session::json_string(entity.sculpt_id) +
+                    ",\"kind\":" + homeworldz::session::json_string(
+                        entity.sculpt_type == 5 ? "mesh" : "sculptMap") + "}") +
+            "}");
     };
     const auto session_avatar_envelope = [&](const LiveAvatar& participant) {
         const auto& state = participant.controller.state();
@@ -2785,6 +2809,74 @@ int main(int argc, char* argv[]) {
                             response = homeworldz::http::response_for_content(
                                 request, 200, "application/vnd.homeworldz.heightmap-f32le",
                                 encode_heightmap(*terrain_heightmap));
+                        }
+                    }
+                    if (const auto session_asset = session_asset_request(response.path)) {
+                        // Canonical asset bytes for session clients (client
+                        // core request, 2026-07-29): until now a session could
+                        // learn an asset id — from an upload reply, from an
+                        // object's geometry block — and had no way to fetch
+                        // one. Same credential as terrain and mesh upload, and
+                        // the same exposure the viewer asset capability
+                        // already has: any authenticated session may fetch any
+                        // asset by id.
+                        //
+                        // The bytes are canonical, never a rendition: a client
+                        // on the modern path wants what the creator uploaded.
+                        // Content-Type names the format it actually got, which
+                        // is load-bearing here — a mesh uploaded through the
+                        // session path is glTF, and one uploaded by a viewer
+                        // is Second Life mesh (ADR 0033's read-never-encode
+                        // storage), so a client cannot assume from the id.
+                        const auto authorization =
+                            homeworldz::http::request_header_value(request, "Authorization");
+                        constexpr std::string_view bearer = "Bearer ";
+                        std::optional<homeworldz::grid::TicketIdentity> requester;
+                        if (response.method == "GET" && authorization.starts_with(bearer) &&
+                            viewer_grid && registration) {
+                            try {
+                                homeworldz::grid::Client ticket_client(
+                                    homeworldz::grid::socket_transport(
+                                        configured_value("grid.url", "http://localhost:42000"),
+                                        region_access_key));
+                                requester = ticket_client.validate_region_ticket(
+                                    provisioned_region_id, authorization.substr(bearer.size()));
+                            } catch (const std::exception&) {
+                            }
+                        }
+                        if (response.method != "GET") {
+                            response = homeworldz::http::response_for_content(
+                                request, 405, "application/json",
+                                homeworldz::api::to_json(homeworldz::api::Error{
+                                    "method_not_allowed", "asset fetch requires GET"}));
+                        } else if (!requester) {
+                            response = homeworldz::http::response_for_content(
+                                request, 401, "application/json",
+                                homeworldz::api::to_json(homeworldz::api::Error{
+                                    "unauthorized",
+                                    "a valid region ticket bearer token is required"}));
+                        } else {
+                            try {
+                                const auto bytes = read_federated_asset(*session_asset);
+                                if (bytes.empty()) throw std::runtime_error("empty asset");
+                                const auto text = std::string_view(
+                                    reinterpret_cast<const char*>(bytes.data()), bytes.size());
+                                std::string content_type = "application/octet-stream";
+                                if (text.starts_with("glTF")) {
+                                    content_type = "model/gltf-binary";
+                                } else if (text.starts_with("{\"")) {
+                                    content_type = "application/json";
+                                } else if (homeworldz::slmesh::parse(bytes)) {
+                                    content_type = "application/vnd.ll.mesh";
+                                }
+                                response = homeworldz::http::response_for_content(
+                                    request, 200, content_type, std::string(text));
+                            } catch (const std::exception&) {
+                                response = homeworldz::http::response_for_content(
+                                    request, 404, "application/json",
+                                    homeworldz::api::to_json(homeworldz::api::Error{
+                                        "asset_not_found", "no such asset"}));
+                            }
                         }
                     }
                     if (response.path == homeworldz::mesh::upload_path) {

@@ -80,7 +80,15 @@ seam above encoding.
    the client core's ground comparison and fixed the same night. A fetch is a snapshot,
    so in-world terrain editing announces itself to connected sessions with a
    `terrainChanged` event naming the dirty 16 m patches (the event is itself
-   named in the hello's terrain block as `changedEvent`).
+   named in the hello's terrain block as `changedEvent`). Canonical asset
+   bytes reach a session through `GET /session/assets/{id}` on the same
+   ticket, announced in the hello as `assets.path`; the reply's Content-Type
+   names the format actually stored, because a mesh uploaded through the
+   session path is glTF while one uploaded by a viewer is Second Life mesh
+   (ADR 0033 stores each verbatim). Scene objects carry an optional
+   `geometry` block (`assetId` plus `kind`, mesh or sculptMap) so a client
+   can draw what an object is rather than a placeholder box - absent for
+   prims, so a reader written before it keeps working.
 5. **Departure splits into what the avatar owns and what the viewer owns.**
    `retire_avatar(key)` (kill broadcast, physics removal, avatar-keyed maps)
    serves both transports; `clear_viewer_transport(endpoint)` (texture

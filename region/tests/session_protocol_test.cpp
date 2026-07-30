@@ -119,6 +119,10 @@ int main() {
                                "\"cell-triangles-diagonal-x,y+1-x+1,y\","
                                "\"changedEvent\":\"terrainChanged\"}") == std::string::npos)
         return 34;
+    // Canonical asset bytes are fetchable, and the hello says from where: a
+    // session that learns an asset id must have a way to read it.
+    if (greeting->payload.find("\"assets\":{\"path\":\"/session/assets/\"}") == std::string::npos)
+        return 35;
 
     // Ping answers pong carrying the correlation identifier.
     const auto pong = session.handle_text(
