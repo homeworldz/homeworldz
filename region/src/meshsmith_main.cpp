@@ -92,14 +92,18 @@ int main(int argc, char** argv) {
         // The upgrade sweep: everything a different generator produced
         // returns to the queue, and the loop below reconverts it.
         try {
-            const auto swept = transport->send("POST", "/api/v1/rendition-jobs/regenerate",
-                std::string(R"({"kind":"sl-mesh","generator":)") +
-                    json_string(homeworldz::mesh::generator) + "}");
-            if (swept.status_code == 200)
-                log("info", "regeneration sweep", ",\"response\":" + json_string(swept.body));
-            else
-                log("warning", "regeneration sweep refused",
-                    ",\"status\":" + std::to_string(swept.status_code));
+            for (const auto* swept_kind : {"sl-mesh", "gltf"}) {
+                const auto swept = transport->send("POST", "/api/v1/rendition-jobs/regenerate",
+                    std::string(R"({"kind":")") + swept_kind + R"(","generator":)" +
+                        json_string(homeworldz::mesh::generator) + "}");
+                if (swept.status_code == 200)
+                    log("info", "regeneration sweep", ",\"kind\":" + json_string(swept_kind) +
+                        ",\"response\":" + json_string(swept.body));
+                else
+                    log("warning", "regeneration sweep refused",
+                        ",\"kind\":" + json_string(swept_kind) +
+                        ",\"status\":" + std::to_string(swept.status_code));
+            }
         } catch (const std::exception& error) {
             log("warning", "regeneration sweep failed", ",\"error\":" + json_string(error.what()));
         }
@@ -108,7 +112,7 @@ int main(int argc, char** argv) {
         homeworldz::grid::HttpResponse claim;
         try {
             claim = transport->send("POST", "/api/v1/rendition-jobs/claim",
-                R"({"kinds":["sl-mesh"],"leaseSeconds":300})");
+                R"({"kinds":["sl-mesh","gltf"],"leaseSeconds":300})");
         } catch (const std::exception& error) {
             log("warning", "claim failed", ",\"error\":" + json_string(error.what()));
             claim.status_code = 0;
@@ -121,7 +125,8 @@ int main(int argc, char** argv) {
         }
         const auto job_id = field(claim.body, "id");
         const auto asset_id = field(claim.body, "assetId");
-        if (job_id.empty() || asset_id.empty()) {
+        const auto kind = field(claim.body, "kind");
+        if (job_id.empty() || asset_id.empty() || kind.empty()) {
             log("error", "claimed job has no identity", ",\"body\":" + json_string(claim.body));
             continue;
         }
@@ -142,28 +147,51 @@ int main(int argc, char** argv) {
                         std::to_string(canonical.status_code) + ")");
                 continue;
             }
-            const auto conversion = homeworldz::mesh::convert_glb(std::span(
+            const auto content = std::span(
                 reinterpret_cast<const std::byte*>(canonical.body.data()),
-                canonical.body.size()));
-            if (!conversion.ok) {
-                give_up(conversion.error);
+                canonical.body.size());
+            // Which direction this job runs is the canonical format's business,
+            // not the job's: a GLB derives the viewer's type-49, a stored
+            // type-49 derives the modern client's glTF (ADR 0033 M1 and M2).
+            std::vector<std::byte> derived;
+            std::string detail;
+            if (kind == "sl-mesh") {
+                const auto conversion = homeworldz::mesh::convert_glb(content);
+                if (!conversion.ok) {
+                    give_up(conversion.error);
+                    continue;
+                }
+                derived = conversion.sl_mesh;
+                detail = ",\"faces\":" + std::to_string(conversion.faces) +
+                    ",\"highTriangles\":" + std::to_string(conversion.high_triangles) +
+                    ",\"lowestTriangles\":" + std::to_string(conversion.lowest_triangles);
+            } else if (kind == "gltf") {
+                const auto conversion = homeworldz::mesh::gltf_from_sl_mesh(content);
+                if (!conversion.ok) {
+                    give_up(conversion.error);
+                    continue;
+                }
+                derived = conversion.glb;
+                detail = ",\"primitives\":" + std::to_string(conversion.primitives) +
+                    ",\"vertices\":" + std::to_string(conversion.vertices) +
+                    ",\"triangles\":" + std::to_string(conversion.triangles);
+            } else {
+                give_up("this worker does not convert " + kind);
                 continue;
             }
             const auto put = transport->send("PUT",
-                "/api/v1/assets/" + asset_id + "/renditions/sl-mesh?generator=" +
+                "/api/v1/assets/" + asset_id + "/renditions/" + kind + "?generator=" +
                     std::string(homeworldz::mesh::generator),
-                std::string_view(reinterpret_cast<const char*>(conversion.sl_mesh.data()),
-                                 conversion.sl_mesh.size()));
+                std::string_view(reinterpret_cast<const char*>(derived.data()),
+                                 derived.size()));
             if (put.status_code != 200) {
                 give_up("rendition store answered " + std::to_string(put.status_code));
                 continue;
             }
             log("info", "converted",
                 ",\"assetId\":" + json_string(asset_id) +
-                ",\"faces\":" + std::to_string(conversion.faces) +
-                ",\"highTriangles\":" + std::to_string(conversion.high_triangles) +
-                ",\"lowestTriangles\":" + std::to_string(conversion.lowest_triangles) +
-                ",\"bytes\":" + std::to_string(conversion.sl_mesh.size()));
+                ",\"kind\":" + json_string(kind) + detail +
+                ",\"bytes\":" + std::to_string(derived.size()));
         } catch (const std::exception& error) {
             give_up(std::string("worker error: ") + error.what());
         }

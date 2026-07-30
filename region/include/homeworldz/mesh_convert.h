@@ -47,9 +47,35 @@ struct WorldBounds {
 };
 WorldBounds declared_world_bounds(std::span<const std::byte> glb);
 
+// gltf_from_sl_mesh derives the `gltf` rendition from a stored type-49 asset:
+// ADR 0033 M2's remaining half, which makes viewer-authored meshes readable by
+// clients on the modern path — they never learn the legacy serialization, so
+// without this every Firestorm-uploaded object is a placeholder to them.
+//
+// The high LOD becomes one glTF primitive per submesh (a material face).
+// Geometry is emitted in the asset's own coordinates, which for a viewer-
+// authored mesh is the normalized unit domain — so a renderer applies the
+// object's scale over it, per ADR 0033 "Scale".
+//
+// COORDINATES: emitted in region axes (Z up), not glTF's Y-up convention.
+// This matches the forward converter, which reads uploaded GLB coordinates as
+// region coordinates without rotating them, so the two directions round-trip.
+// It is a deviation from the glTF convention and is stated rather than
+// silent; whether the pipeline should instead rotate on both sides is an open
+// question recorded in ADR 0033.
+struct GltfConversion {
+    bool ok{};
+    std::string error;
+    std::vector<std::byte> glb;
+    std::size_t primitives{};
+    std::size_t vertices{};
+    std::size_t triangles{};
+};
+GltfConversion gltf_from_sl_mesh(std::span<const std::byte> asset);
+
 // The generator tag stored with renditions this converter produces, bumped
 // when output changes so regeneration can find what it supersedes.
-inline constexpr const char* generator = "meshsmith/0.4";
+inline constexpr const char* generator = "meshsmith/0.5";
 
 } // namespace homeworldz::mesh
 

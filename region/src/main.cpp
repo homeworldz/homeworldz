@@ -2859,7 +2859,7 @@ int main(int argc, char* argv[]) {
                             try {
                                 const auto bytes = read_federated_asset(*session_asset);
                                 if (bytes.empty()) throw std::runtime_error("empty asset");
-                                const auto text = std::string_view(
+                                auto text = std::string(
                                     reinterpret_cast<const char*>(bytes.data()), bytes.size());
                                 std::string content_type = "application/octet-stream";
                                 if (text.starts_with("glTF")) {
@@ -2867,10 +2867,26 @@ int main(int argc, char* argv[]) {
                                 } else if (text.starts_with("{\"")) {
                                     content_type = "application/json";
                                 } else if (homeworldz::slmesh::parse(bytes)) {
+                                    // Canonical Second Life mesh: serve the glTF
+                                    // derivation when one exists, because this
+                                    // route exists for clients that do not read
+                                    // the legacy serialization. Symmetric with
+                                    // the viewer's GetMesh, which is served the
+                                    // legacy rendition of a canonical GLB — each
+                                    // family fetches one id and receives the form
+                                    // it can use. The Content-Type always names
+                                    // what was actually served.
                                     content_type = "application/vnd.ll.mesh";
+                                    if (viewer_grid) {
+                                        if (auto modern = viewer_grid->fetch_asset_rendition(
+                                                *session_asset, "gltf")) {
+                                            text = std::move(*modern);
+                                            content_type = "model/gltf-binary";
+                                        }
+                                    }
                                 }
                                 response = homeworldz::http::response_for_content(
-                                    request, 200, content_type, std::string(text));
+                                    request, 200, content_type, std::move(text));
                             } catch (const std::exception&) {
                                 response = homeworldz::http::response_for_content(
                                     request, 404, "application/json",
@@ -3655,8 +3671,17 @@ int main(int argc, char* argv[]) {
                                             return stored.viewer_id;
                                         };
                                         std::vector<std::string> mesh_assets;
-                                        for (const auto& mesh : resources.meshes)
+                                        for (const auto& mesh : resources.meshes) {
                                             mesh_assets.push_back(store_registered(mesh));
+                                            // A viewer-authored mesh is canonical
+                                            // Second Life mesh, which clients on
+                                            // the modern path never learn to read,
+                                            // so queue the glTF derivation now
+                                            // rather than at first fetch
+                                            // (ADR 0033 M2).
+                                            static_cast<void>(viewer_grid->request_asset_rendition(
+                                                mesh_assets.back(), "gltf"));
+                                        }
                                         std::vector<std::optional<homeworldz::viewer::Uuid>> textures;
                                         std::size_t texture_number = 0;
                                         for (const auto& texture_bytes : resources.textures) {
