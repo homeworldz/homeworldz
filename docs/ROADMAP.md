@@ -498,8 +498,19 @@ input formats.
   is the mesh pipeline's pointed at textures - modern canonical,
   `j2c-texture` derived - so the seed assets need re-sourcing from modern
   originals rather than a client exception.
-  Prerequisites, in order: re-source the layer assets so a modern client can
-  read them, make textures and elevation per-region state
+  The first prerequisite is done (2026-07-31): the four layers are now
+  1024×1024 PNG canonicals with the JPEG2000 derived, on new asset ids, and
+  the region's asset importer accepts PNG and JPEG so a seeded texture's
+  canonical form can be the modern one. The replacements are generative-AI
+  upscales of the Linden originals, so CC BY-SA 3.0 follows them and the
+  licence record says so. Two findings from doing it: the importer treated the
+  file extension as the test of what is an asset when the real test is a UUID
+  filename (adding PNG swept in the heightmap sources and crash-looped every
+  region), and **the derived JPEG2000 is now ~2 MB per layer, 8 MB of ground
+  per viewer login, against 24 KB for all four before** — because `encode_j2c`
+  is lossless while every terrain texture a viewer has ever loaded was lossy.
+  The canonical should stay lossless; the rendition wants a rate.
+  Remaining prerequisites: make textures and elevation per-region state
   (what `setregionterrain` would drive), then decide the blend contract
   knowing that a viewer's blend is not ours to specify — SL's noise term
   was never reproduced outside Linden, so a published rule is authoritative
