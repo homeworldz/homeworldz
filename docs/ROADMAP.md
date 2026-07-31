@@ -472,9 +472,18 @@ input formats.
   Each family fetches one asset id and receives the form it can read.
 - [ ] M3 material and texture renditions: glTF material JSON (type 57) for
   PBR-capable viewers and JPEG2000 texture extraction for the legacy
-  texture pipeline. Related gap found live 2026-07-29: the region serves no
-  RenderMaterials update capability, so viewer materials edits
-  (normal/specular assignments) silently do not persist.
+  texture pipeline. The related gap found live 2026-07-29 — no RenderMaterials
+  capability, so viewer materials edits silently did not persist — is served as
+  of 2026-07-31: LLSD binary read and written both ways with its zip, legacy
+  Blinn-Phong definitions modelled with identity as the definition's own hash
+  (so two viewers assigning the same material converge on one id and one row),
+  persisted in the region store and reloaded at startup, and the capability
+  advertised and answered for both GET and POST. **Wire compatibility is
+  unproven and deliberately instrumented rather than assumed:** the LLSD key
+  names are this project's reading of the format, no test can validate them
+  (a reader and writer built together agree either way), so every key a viewer
+  sends that the region does not recognise is logged by name. The first real
+  materials edit either confirms the field names or names the right ones.
   Texture serving was fixed 2026-07-31: the rule that a viewer gets the
   derived JPEG2000 rather than the canonical PNG was implemented on the older
   GetTexture capability only, and Firestorm fetches through ViewerAsset, which
