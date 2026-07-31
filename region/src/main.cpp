@@ -1855,7 +1855,11 @@ int main(int argc, char* argv[]) {
                 }
             return static_cast<double>(high - low) / quantization_steps + float_slack;
         };
-        double worst = 0.0, worst_bound = 0.0, worst_ratio = 0.0;
+        // Below any real ratio so the first sample always records: on ground
+        // flat enough that nothing deviates at all, a zero here would be
+        // reported as the bound and read as "no allowance" rather than "no
+        // deviation".
+        double worst = 0.0, worst_bound = 0.0, worst_ratio = -1.0;
         int worst_x = 0, worst_y = 0;
         const auto step = (std::max<std::size_t>)(1, terrain_width / 16);
         for (std::size_t y = 0; y + 1 < terrain_width; y += step)
