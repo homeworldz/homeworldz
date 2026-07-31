@@ -697,6 +697,23 @@ role machinery that shared ownership rests on.
 
 ## Phase 7: Reliable Operations and Distribution
 
+### Known hazards on the current deployment
+
+- [ ] **Nothing watches free disk space, on a host that is the only home for
+  everything.** The OVH box runs the grid, the API, the conversion worker and
+  all four regions; measured 2026-07-31 at 96 GB total, 9.9 GB used, 86 GB free,
+  11 GiB RAM, 6 cores. Headroom is comfortable today, so this is not urgent —
+  but a process that fills the disk takes the whole grid with it, and the first
+  sign would be regions failing rather than a warning. Recorded on its own
+  merits rather than as a footnote to any particular build-tooling question:
+  the gap exists whether or not another toolchain is ever installed there.
+  A free-space threshold in the region's health reporting is the obvious cheap
+  answer; it is the operator's call whether to spend the change on it.
+  Related: CPU is emphatically *not* the constraint — a full cold build of a
+  sibling project pinned to one job cost the regions a mean 1.9 ms/s of
+  scheduling delay with an 11 ms/s peak, and its link steps were cheaper than
+  its compile phase.
+
 ### Grid and region packages
 
 - [x] Produce separate versioned grid-owner and region-owner packages containing
