@@ -882,6 +882,16 @@ it builds against.
   paths now read `region.water_height` (default the same 20), and the hello
   states `water: {height}`: a height, not a surface, because the plane is
   flat and region-wide and the drawing is the client's business.
+- [x] Bound the terrain alignment invariant by what Jolt quantizes, after the
+  operator's carved 24 m walls made it fail on Gamma (2026-07-31) against a
+  flat 1 cm tolerance while the ground was fine. Jolt stores each sample as 8
+  bits within its own 2×2 block's range, measured over a 3×3 span, so a block
+  beside a cliff inherits the cliff's range. The bound is now each sample's own
+  quantization step — tighter almost everywhere (flat ground 1 cm → 2 mm, where
+  a real displacement could previously hide) and roomy only where the storage
+  needs it. All four regions run at 33–39% of allowance; Beta, entirely flat,
+  deviates by exactly zero, which is the measurement that rules out any cause
+  other than quantization.
 - [x] Measure what LayerData loses, after the client core saw rougher ground
   in Firestorm than in its own render of the same region and offered
   compression noise as a candidate. Ruled out by decoding the wire bytes with
