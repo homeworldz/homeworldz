@@ -861,10 +861,16 @@ std::size_t RegionStorage::import_asset_directory(const std::filesystem::path& d
     if (!std::filesystem::is_directory(directory)) return 0;
     std::size_t imported = 0;
     for (const auto& entry : std::filesystem::recursive_directory_iterator(directory)) {
+        // PNG and JPEG are here because a seeded texture's canonical form is a
+        // modern image now, with the JPEG2000 a viewer reads derived from it
+        // (ADR 0033 M3). Without them the only way to ship a texture was to
+        // ship the legacy form as the canonical, which is the inversion the
+        // mesh pipeline exists to remove.
+        const auto extension = entry.path().extension();
         if (!entry.is_regular_file() ||
-            (entry.path().extension() != ".j2c" && entry.path().extension() != ".ogg" &&
-             entry.path().extension() != ".bodypart" && entry.path().extension() != ".clothing" &&
-             entry.path().extension() != ".settings"))
+            (extension != ".j2c" && extension != ".png" && extension != ".jpg" &&
+             extension != ".jpeg" && extension != ".ogg" && extension != ".bodypart" &&
+             extension != ".clothing" && extension != ".settings"))
             continue;
         std::ifstream input(entry.path(), std::ios::binary | std::ios::ate);
         if (!input) throw std::runtime_error("asset source file could not be opened");

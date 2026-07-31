@@ -4462,11 +4462,19 @@ int main(int argc, char* argv[]) {
                                 is_estate_manager(homeworldz::viewer::format_uuid(identity->agent_id));
                             handshake.region_flags = region_flags();
                             handshake.water_height = static_cast<float>(water_height);
+                            // Dirt, grass, mountain, rock, in the elevation
+                            // order a viewer blends them. New ids rather than
+                            // the Second Life viewer artwork's own, because
+                            // these are 1024 adaptations of it and reusing
+                            // those ids would make both the id and the licence
+                            // record assert something untrue - and because a
+                            // viewer caches textures by id, so anyone who had
+                            // seen the 128 originals would keep seeing them.
                             constexpr std::array<std::string_view, 4> terrain_texture_ids{
-                                "b8d3965a-ad78-bf43-699b-bff8eca6c975",
-                                "abb783e6-3e93-26c0-248a-247666855da3",
-                                "179cdabd-398a-9b6b-1391-4dc333ba321f",
-                                "beb169c7-11ea-fff2-efe5-0f24dc881df2"};
+                                "98324081-ab9d-49a7-8406-f70e83d813d7",
+                                "cf2a4b28-cf6d-44ce-8e70-1ea4cb616a6d",
+                                "26700e50-492d-4243-9513-1905e8109e2b",
+                                "9a2248ec-28de-40a0-a459-9873e1f7464c"};
                             for (std::size_t index = 0; index < terrain_texture_ids.size(); ++index)
                                 if (const auto texture = homeworldz::viewer::parse_uuid(terrain_texture_ids[index]))
                                     handshake.terrain_textures[index] = *texture;
