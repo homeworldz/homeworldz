@@ -60,13 +60,15 @@ seam above encoding.
    the avatar's own computed height and hip offset. The support rule's
    honest domain, measured live 2026-07-29 (server-side samples, then the
    client core's cleaner sweeps): with Jolt active (every cloud region) z
-   is the Jolt capsule's rest position. Exactness is established only on
-   effectively flat ground — 0.000 m at gradient zero, ≤0.013 m at
-   gradients under 0.05 (~3°), the strictest filter anyone has measured
-   with. On any real slope the capsule contacts downhill of center and z
-   sits below ground-under-center + height/2, growing with gradient:
-   −0.107 m measured standing at a locally ~11° feature, −0.331 m at 39°
-   (inside walkable), ~0.5 m sliding at 51°. The walkable limit —
+   is the Jolt capsule's rest position, which the next section gives exactly.
+   (An earlier revision of this document reported the opposite sign here —
+   avatars resting *below* the flat arithmetic by −0.107 m at 11° and −0.331 m
+   at 39°. Those measurements were real and their cause was a collision
+   heightfield built with a stretched spacing, so the physics read ground up
+   to a metre horizontally from the ground clients were shown; see ADR-less
+   commit "The collision surface was stretched". Corrected 2026-07-30, and the
+   figures are kept here only so anyone who read the old claim finds out it
+   was retracted rather than quietly edited away.) The walkable limit —
    region-owned rather than Jolt's silent default,
    `character_walkable_slope_degrees` in physics.h (default 65°, Halcyon's
    MAX_WALKABLE_SLOPE, adopted 2026-07-29; per-region override
@@ -115,8 +117,10 @@ seam above encoding.
    0.39 m out and this is 0.087 m out, and it is exact across the range real
    terrain mostly occupies. Use it with the domain attached rather than
    widening the claim - "it is geometry so it holds everywhere" has now been
-   true up to a point three times running. The flat arithmetic is also the non-Jolt fallback's
-   clamp. Session z is the capsule center everywhere — the transform
+   true up to a point three times running.
+
+   The flat arithmetic is also the non-Jolt fallback's clamp. Session z is the
+   capsule center everywhere — the transform
    envelope briefly carried the hip-shifted viewer convention, found by
    the client core's ground comparison and fixed the same night. A fetch is a snapshot,
    so in-world terrain editing announces itself to connected sessions with a
