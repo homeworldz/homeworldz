@@ -1812,7 +1812,50 @@ int main(int argc, char* argv[]) {
     // exactly through the samples, so a correct field agrees to float
     // precision and a displaced one cannot.
     if (physics_terrain_ready && physics_world && physics_terrain != 0) {
-        double worst = 0.0;
+        // How far a sample may legitimately sit from the heightmap is not one
+        // number. Jolt stores each sample as 8 bits within the range of its own
+        // 2x2 block, and measures that range over a 3x3 span — one sample of
+        // border, "just like we do while building the hierarchical grids"
+        // (Jolt's HeightFieldShape.cpp). So a block beside a cliff inherits the
+        // cliff's range and its samples turn coarse, while flat ground stays
+        // exact. A flat 1 cm tolerance got this backwards at both ends: it
+        // called Gamma's brush-carved walls a misalignment (2026-07-31, worst
+        // 0.0135 m at a mild point two metres from a 24 m wall) while being
+        // slack enough on level ground to miss a real displacement many times
+        // over. The bound is now each sample's own quantization step, which is
+        // the tightest statement true everywhere — and it tightens to
+        // millimetres exactly where the old constant was blindest.
+        //
+        // The block grid belongs to the padded field, and the heightfield is
+        // built from row-reversed samples, so a world row's block neighbours
+        // are found back through that reversal rather than by assuming world
+        // coordinates land on block boundaries.
+        constexpr std::size_t block_size = 2;         // Jolt's mBlockSize default
+        constexpr double quantization_steps = 255.0;  // Jolt's mBitsPerSample default
+        // Float slack for a ray that falls 4 km before it arrives; well above
+        // the observed noise on ground whose block has no relief to quantize.
+        constexpr double float_slack = 0.002;
+        const auto padded = terrain_width + 2;
+        const auto sample_bound = [&](std::size_t x, std::size_t y) {
+            const auto column_start = (x / block_size) * block_size;
+            const auto reversed_start = ((padded - 1 - y) / block_size) * block_size;
+            float low = (std::numeric_limits<float>::max)();
+            float high = (std::numeric_limits<float>::lowest)();
+            for (std::size_t across = 0; across <= block_size; ++across)
+                for (std::size_t down = 0; down <= block_size; ++down) {
+                    const auto reversed = reversed_start + down;
+                    if (reversed >= padded) continue;
+                    // Padding repeats the edge sample, so clamping reads the
+                    // same value the padded field holds.
+                    const auto column = (std::min)(column_start + across, terrain_width - 1);
+                    const auto row = (std::min)(padded - 1 - reversed, terrain_width - 1);
+                    const auto value = (*terrain_heightmap)[row * terrain_width + column];
+                    low = (std::min)(low, value);
+                    high = (std::max)(high, value);
+                }
+            return static_cast<double>(high - low) / quantization_steps + float_slack;
+        };
+        double worst = 0.0, worst_bound = 0.0, worst_ratio = 0.0;
         int worst_x = 0, worst_y = 0;
         const auto step = (std::max<std::size_t>)(1, terrain_width / 16);
         for (std::size_t y = 0; y + 1 < terrain_width; y += step)
@@ -1823,16 +1866,25 @@ int main(int argc, char* argv[]) {
                 if (!hit) continue;
                 const auto expected = (*terrain_heightmap)[y * terrain_width + x];
                 const auto difference = std::abs(hit->point.z - expected);
-                if (difference > worst) {
+                const auto bound = sample_bound(x, y);
+                // Ranked by how much of its own allowance a sample used, not by
+                // metres: the largest deviation on a cliff is routinely more
+                // correct than a small one on a plain.
+                const auto ratio = difference / bound;
+                if (ratio > worst_ratio) {
+                    worst_ratio = ratio;
                     worst = difference;
+                    worst_bound = bound;
                     worst_x = static_cast<int>(x);
                     worst_y = static_cast<int>(y);
                 }
             }
-        const bool aligned = worst <= 0.01;
+        const bool aligned = worst_ratio <= 1.0;
         std::cout << "{\"level\":" << (aligned ? "\"info\"" : "\"error\"")
                   << ",\"message\":\"terrain collision alignment checked\""
                      ",\"worstDeviation\":" << worst
+                  << ",\"quantizationBound\":" << worst_bound
+                  << ",\"boundUsed\":" << worst_ratio
                   << ",\"atX\":" << worst_x << ",\"atY\":" << worst_y
                   << ",\"aligned\":" << (aligned ? "true" : "false") << "}" << std::endl;
     }
