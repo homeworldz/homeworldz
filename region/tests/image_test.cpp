@@ -78,6 +78,49 @@ int main() {
         return 1;
     }
 
+    // A four-channel image round-trips with its alpha intact. This is the
+    // path a GLB texture takes (ADR 0033 M3): PNGs are commonly RGBA even
+    // when fully opaque, and an encoder that dropped or corrupted the fourth
+    // component would turn an opaque face transparent in a viewer while every
+    // byte-level check upstream still passed.
+    {
+        Image rgba;
+        rgba.width = 8;
+        rgba.height = 8;
+        rgba.channels = 4;
+        rgba.pixels.resize(rgba.expected_size());
+        for (std::uint32_t y = 0; y < rgba.height; ++y)
+            for (std::uint32_t x = 0; x < rgba.width; ++x) {
+                const auto index = (static_cast<std::size_t>(y) * rgba.width + x) * 4;
+                const bool red = ((x + y) % 2) == 0;
+                rgba.pixels[index] = 255;
+                rgba.pixels[index + 1] = red ? 0 : 255;
+                rgba.pixels[index + 2] = red ? 0 : 255;
+                rgba.pixels[index + 3] = 255;  // fully opaque throughout
+            }
+        const auto coded = encode_j2c(rgba);
+        if (!coded || coded->empty()) {
+            std::cerr << "encode_j2c refused a four-channel image\n";
+            return 1;
+        }
+        const auto back = decode_j2c(*coded);
+        if (!back) {
+            std::cerr << "decode_j2c refused its own four-channel output\n";
+            return 1;
+        }
+        if (back->channels != 4) {
+            std::cerr << "four-channel round-trip lost a component: "
+                      << static_cast<int>(back->channels) << '\n';
+            return 1;
+        }
+        for (std::size_t pixel = 0; pixel < back->pixel_count(); ++pixel)
+            if (back->pixels[pixel * 4 + 3] != 255) {
+                std::cerr << "alpha did not survive the round-trip at pixel " << pixel
+                          << ": " << static_cast<int>(back->pixels[pixel * 4 + 3]) << '\n';
+                return 1;
+            }
+    }
+
     // Garbage input must be rejected, not crash.
     if (decode_j2c(std::vector<std::uint8_t>{0x00, 0x01, 0x02, 0x03, 0x04}).has_value()) {
         std::cerr << "decode_j2c accepted non-JPEG2000 input\n";
