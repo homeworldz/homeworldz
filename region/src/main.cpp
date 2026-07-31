@@ -3205,6 +3205,15 @@ int main(int argc, char* argv[]) {
                                             image.viewer_id, "j2c-texture"));
                                         texture_assets.push_back(image.viewer_id);
                                     }
+                                    std::cout << "{\"level\":\"info\",\"message\":"
+                                                 "\"mesh textures extracted\",\"images\":"
+                                              << extracted.textures.size()
+                                              << ",\"faces\":" << extracted.face_textures.size()
+                                              << ",\"textured\":"
+                                              << std::count_if(extracted.face_textures.begin(),
+                                                               extracted.face_textures.end(),
+                                                               [](int value) { return value >= 0; })
+                                              << "}" << std::endl;
                                     homeworldz::scene::Entity wrapper;
                                     wrapper.name = name;
                                     wrapper.creator_id = uploader->user_id;
