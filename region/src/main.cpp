@@ -17,6 +17,7 @@
 #include <functional>
 #include <iostream>
 #include <limits>
+#include <map>
 #include <memory>
 #include <optional>
 #include <iomanip>
@@ -34,6 +35,8 @@
 #include "homeworldz/appearance_bake.h"
 #include "homeworldz/avatar_controller.h"
 #include "homeworldz/capability_paths.h"
+#include "homeworldz/llsd_binary.h"
+#include "homeworldz/render_material.h"
 #include "homeworldz/falcon_runtime.h"
 #include "homeworldz/grid_client.h"
 #include "homeworldz/session_server.h"
@@ -625,6 +628,47 @@ void apply_material_contact_defaults(homeworldz::scene::Entity& entity) {
     entity.physics_restitution = material.restitution;
 }
 
+// The RenderMaterials envelope: a viewer's request and the region's reply are
+// both LLSD XML carrying one "Zipped" binary member, inside which is
+// zlib-deflated LLSD binary. Two layers, because the outer one is what the
+// capability framework speaks and the inner one is what the materials protocol
+// speaks.
+std::optional<std::vector<std::byte>> zipped_member(std::string_view body) {
+    const auto document = homeworldz::llsd::parse_xml(body);
+    if (!document) return std::nullopt;
+    const auto* zipped = document->find("Zipped");
+    if (zipped == nullptr || zipped->type != homeworldz::llsd::Value::Type::binary)
+        return std::nullopt;
+    return zipped->binary;
+}
+
+std::string zipped_llsd_reply(const homeworldz::llsd::Value& value) {
+    const auto deflated = homeworldz::llsd::deflate_bytes(homeworldz::llsd::to_binary(value));
+    return "<?xml version=\"1.0\"?><llsd><map><key>Zipped</key>"
+           "<binary encoding=\"base64\">" +
+           homeworldz::session::base64(deflated) + "</binary></map></llsd>";
+}
+
+// A stored material's id is kept as text; the wire wants the sixteen bytes.
+std::vector<std::byte> material_id_bytes(std::string_view text) {
+    std::vector<std::byte> out;
+    int high = -1;
+    for (const auto character : text) {
+        if (character == '-') continue;
+        int digit = -1;
+        if (character >= '0' && character <= '9') digit = character - '0';
+        else if (character >= 'a' && character <= 'f') digit = character - 'a' + 10;
+        else if (character >= 'A' && character <= 'F') digit = character - 'A' + 10;
+        else return {};
+        if (high < 0) high = digit;
+        else {
+            out.push_back(static_cast<std::byte>((high << 4) | digit));
+            high = -1;
+        }
+    }
+    return out.size() == 16 ? out : std::vector<std::byte>{};
+}
+
 const std::vector<std::byte>& default_prim_texture_entry() {
     static const auto entry = [] {
         const auto plywood = homeworldz::viewer::parse_uuid("89556747-24cb-43ed-920b-47caed15465f");
@@ -1170,10 +1214,23 @@ int main(int argc, char* argv[]) {
     const auto initial_spawn = default_spawn(*terrain_heightmap);
 
     homeworldz::scene::Scene scene;
+    // Legacy Blinn-Phong material definitions by id, in the LLSD binary the
+    // capability serves. Populated from storage below and by registrations.
+    std::map<std::string, std::vector<std::byte>> render_material_cache;
     std::unique_ptr<homeworldz::storage::RegionStorage> storage;
     try {
         storage = std::make_unique<homeworldz::storage::RegionStorage>(
             region_data_path);
+        // Material definitions a viewer registered previously. Held in memory
+        // because the capability answers them on the request path, and reloaded
+        // here so an assignment survives a restart - a material that lived only
+        // until the region bounced would be the same silent loss with a longer
+        // fuse.
+        for (auto& [id, definition] : storage->load_render_materials())
+            render_material_cache.emplace(id, std::move(definition));
+        if (!render_material_cache.empty())
+            std::cout << "{\"level\":\"info\",\"message\":\"render materials loaded\",\"count\":"
+                      << render_material_cache.size() << "}" << std::endl;
         const auto imported_assets = storage->import_asset_directory(
             configured_value("region.asset_path", "assets/region"), system_creator_id);
         if (imported_assets != 0) {
@@ -3525,6 +3582,10 @@ int main(int argc, char* argv[]) {
                         homeworldz::caps::capability_session(response.path, "/caps/mesh-upload-flag/");
                     const bool mesh_upload_flag = !mesh_upload_flag_session.empty();
                     if (mesh_upload_flag) session_id = mesh_upload_flag_session;
+                    const auto render_materials_session =
+                        homeworldz::caps::capability_session(response.path, "/caps/render-materials/");
+                    const bool render_materials = !render_materials_session.empty();
+                    if (render_materials) session_id = render_materials_session;
                     const auto notecard_update_session =
                         homeworldz::caps::capability_session(response.path, "/caps/update-notecard/");
                     const bool notecard_update = !notecard_update_session.empty();
@@ -3753,6 +3814,116 @@ int main(int argc, char* argv[]) {
                                 "<?xml version=\"1.0\"?><llsd><map>"
                                 "<key>mesh_upload_status</key><string>valid</string>"
                                 "</map></llsd>");
+                        } else if (authorized && render_materials) {
+                            // Legacy Blinn-Phong materials. A viewer POSTs the
+                            // definitions it wants ids for and GETs definitions
+                            // by id; both directions carry one "Zipped" binary
+                            // member holding zlib-deflated LLSD binary. Serving
+                            // nothing here is what made every materials edit
+                            // vanish silently: the viewer had no id to put on a
+                            // face and nothing reported a failure.
+                            const auto body = http_request_body(request);
+                            const auto& method = response.method;
+                            std::string reply_error;
+                            homeworldz::llsd::Value answer;
+                            answer.type = homeworldz::llsd::Value::Type::array;
+                            if (method == "GET") {
+                                for (const auto& [id, definition] : render_material_cache) {
+                                    if (const auto stored = homeworldz::llsd::parse_binary(
+                                            std::span<const std::byte>(definition))) {
+                                        homeworldz::llsd::Value entry;
+                                        entry.type = homeworldz::llsd::Value::Type::map;
+                                        homeworldz::llsd::Value id_value;
+                                        id_value.type = homeworldz::llsd::Value::Type::binary;
+                                        id_value.binary = material_id_bytes(id);
+                                        entry.members.emplace_back("ID", std::move(id_value));
+                                        entry.members.emplace_back("Material", *stored);
+                                        answer.elements.push_back(std::move(entry));
+                                    }
+                                }
+                            } else {
+                                // The request is itself a Zipped LLSD document
+                                // holding the definitions to register.
+                                const auto zipped = zipped_member(body);
+                                const auto inflated = zipped
+                                    ? homeworldz::llsd::inflate_bytes(*zipped) : std::nullopt;
+                                const auto document = inflated
+                                    ? homeworldz::llsd::parse_binary(*inflated) : std::nullopt;
+                                if (!document) {
+                                    reply_error = "the materials request carried no readable"
+                                                  " zipped LLSD";
+                                } else {
+                                    // A viewer may send one definition or a list;
+                                    // accept either rather than guessing.
+                                    std::vector<const homeworldz::llsd::Value*> definitions;
+                                    if (document->type == homeworldz::llsd::Value::Type::array)
+                                        for (const auto& element : document->elements)
+                                            definitions.push_back(&element);
+                                    else
+                                        definitions.push_back(&*document);
+                                    for (const auto* definition : definitions) {
+                                        const auto parsed =
+                                            homeworldz::material::from_llsd(*definition);
+                                        if (!parsed.ok) continue;
+                                        // The reading of this format is not
+                                        // verified against a viewer, so every key
+                                        // we did not recognise is reported. This
+                                        // log line is the evidence that either
+                                        // confirms the field names or names the
+                                        // right ones (render_material.h).
+                                        if (!parsed.unknown_keys.empty()) {
+                                            std::string keys;
+                                            for (const auto& key : parsed.unknown_keys) {
+                                                if (!keys.empty()) keys += ",";
+                                                keys += key;
+                                            }
+                                            std::cout << "{\"level\":\"warning\",\"message\":"
+                                                         "\"material definition carried keys this"
+                                                         " region does not know\",\"keys\":"
+                                                      << homeworldz::api::json_string(keys)
+                                                      << "}" << std::endl;
+                                        }
+                                        const auto id = homeworldz::material::identify(
+                                            parsed.material);
+                                        const auto text = homeworldz::material::format_id(id);
+                                        auto stored = homeworldz::llsd::to_binary(
+                                            homeworldz::material::to_llsd(parsed.material));
+                                        try {
+                                            storage->store_render_material(text, stored);
+                                        } catch (const std::exception& error) {
+                                            std::cout << "{\"level\":\"error\",\"message\":"
+                                                         "\"material persistence failed\",\"error\":"
+                                                      << homeworldz::api::json_string(error.what())
+                                                      << "}" << std::endl;
+                                        }
+                                        render_material_cache[text] = stored;
+                                        homeworldz::llsd::Value entry;
+                                        entry.type = homeworldz::llsd::Value::Type::map;
+                                        homeworldz::llsd::Value id_value;
+                                        id_value.type = homeworldz::llsd::Value::Type::binary;
+                                        id_value.binary.assign(id.begin(), id.end());
+                                        entry.members.emplace_back("ID", std::move(id_value));
+                                        entry.members.emplace_back(
+                                            "Material",
+                                            homeworldz::material::to_llsd(parsed.material));
+                                        answer.elements.push_back(std::move(entry));
+                                        std::cout << "{\"level\":\"info\",\"message\":"
+                                                     "\"material registered\",\"materialId\":"
+                                                  << homeworldz::api::json_string(text)
+                                                  << "}" << std::endl;
+                                    }
+                                }
+                            }
+                            if (!reply_error.empty()) {
+                                response = homeworldz::http::response_for_content(
+                                    request, 400, "application/json",
+                                    homeworldz::api::to_json(homeworldz::api::Error{
+                                        "invalid_materials_request", reply_error}));
+                            } else {
+                                response = homeworldz::http::response_for_content(
+                                    request, 200, "application/llsd+xml",
+                                    zipped_llsd_reply(answer));
+                            }
                         } else if (authorized && environment_settings && registration) {
                             response = homeworldz::http::response_for_content(
                                 request, 200, "application/llsd+xml",

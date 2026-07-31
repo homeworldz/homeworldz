@@ -648,6 +648,14 @@ RegionStorage::RegionStorage(std::filesystem::path data_path) : data_path_(std::
                        "updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,"
                        "PRIMARY KEY (cache_id, texture_index),"
                        "FOREIGN KEY (asset_id) REFERENCES asset_mappings(viewer_id));"
+                       // Legacy Blinn-Phong materials, keyed by the id a face
+                       // carries. The id is the hash of the definition, so an
+                       // insert of one already present is a no-op rather than a
+                       // conflict, and two viewers assigning the same material
+                       // share the row.
+                       "CREATE TABLE IF NOT EXISTS render_materials ("
+                       "material_id TEXT PRIMARY KEY, definition BLOB NOT NULL,"
+                       "created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);"
                        "CREATE TABLE IF NOT EXISTS parcels ("
                        "global_id TEXT PRIMARY KEY, local_id INTEGER NOT NULL,"
                        "name TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '',"
@@ -821,6 +829,41 @@ AssetMetadata RegionStorage::reconcile_asset_creator(std::string_view viewer_id,
     sqlite3_finalize(statement);
     if (result != SQLITE_DONE) throw std::runtime_error(sqlite3_errmsg(database_));
     return {std::string(viewer_id), std::string(creator_id), std::string(sha256), size};
+}
+
+void RegionStorage::store_render_material(std::string material_id,
+                                          std::span<const std::byte> definition) {
+    sqlite3_stmt* statement = nullptr;
+    // The id is the definition's own hash, so a second insert of the same
+    // material is the same row; nothing is updated because nothing can differ.
+    const char* sql = "INSERT INTO render_materials (material_id, definition) VALUES (?, ?) "
+                      "ON CONFLICT(material_id) DO NOTHING";
+    if (sqlite3_prepare_v2(database_, sql, -1, &statement, nullptr) != SQLITE_OK)
+        throw std::runtime_error(sqlite3_errmsg(database_));
+    sqlite3_bind_text(statement, 1, material_id.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_blob(statement, 2, definition.data(),
+                      static_cast<int>(definition.size()), SQLITE_TRANSIENT);
+    const auto result = sqlite3_step(statement);
+    sqlite3_finalize(statement);
+    if (result != SQLITE_DONE) throw std::runtime_error(sqlite3_errmsg(database_));
+}
+
+std::vector<std::pair<std::string, std::vector<std::byte>>>
+RegionStorage::load_render_materials() const {
+    std::vector<std::pair<std::string, std::vector<std::byte>>> out;
+    sqlite3_stmt* statement = nullptr;
+    const char* sql = "SELECT material_id, definition FROM render_materials";
+    if (sqlite3_prepare_v2(database_, sql, -1, &statement, nullptr) != SQLITE_OK)
+        throw std::runtime_error(sqlite3_errmsg(database_));
+    while (sqlite3_step(statement) == SQLITE_ROW) {
+        const auto* id = reinterpret_cast<const char*>(sqlite3_column_text(statement, 0));
+        const auto* blob = static_cast<const std::byte*>(sqlite3_column_blob(statement, 1));
+        const auto size = static_cast<std::size_t>(sqlite3_column_bytes(statement, 1));
+        out.emplace_back(id != nullptr ? id : "",
+                         std::vector<std::byte>(blob, blob + size));
+    }
+    sqlite3_finalize(statement);
+    return out;
 }
 
 void RegionStorage::store_baked_texture(std::string cache_id, std::uint8_t texture_index,

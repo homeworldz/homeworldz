@@ -40,6 +40,11 @@ public:
                               std::span<const std::byte> content);
     AssetMetadata reconcile_asset_creator(std::string_view viewer_id, std::string_view creator_id,
                                           std::string_view sha256, std::uint64_t size);
+    // Legacy Blinn-Phong material definitions, keyed by the id a face carries.
+    // Storing one already present is a no-op: the id is the definition's own
+    // hash, so the row cannot differ from what is being written.
+    void store_render_material(std::string material_id, std::span<const std::byte> definition);
+    std::vector<std::pair<std::string, std::vector<std::byte>>> load_render_materials() const;
     void store_baked_texture(std::string cache_id, std::uint8_t texture_index, std::string asset_id);
     std::optional<std::string> find_baked_texture(std::string_view cache_id,
                                                   std::uint8_t texture_index) const;

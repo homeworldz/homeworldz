@@ -157,6 +157,8 @@ std::string seed_capability_xml(std::string_view public_endpoint, std::string_vi
     const auto file_upload_url = xml_escape(base + "/caps/upload-file/" + std::string(session_id));
     const auto mesh_upload_flag_url =
         xml_escape(base + "/caps/mesh-upload-flag/" + std::string(session_id));
+    const auto render_materials_url =
+        xml_escape(base + "/caps/render-materials/" + std::string(session_id));
     const auto notecard_update_url = xml_escape(base + "/caps/update-notecard/" + std::string(session_id));
     const auto script_update_url = xml_escape(base + "/caps/update-script/" + std::string(session_id));
     const auto gesture_update_url = xml_escape(base + "/caps/update-gesture/" + std::string(session_id));
@@ -203,6 +205,11 @@ std::string seed_capability_xml(std::string_view public_endpoint, std::string_vi
            // RegionCapabilityRequestError at the creator (seen live,
            // 2026-07-29).
            "</uri><key>MeshUploadFlag</key><uri>" + mesh_upload_flag_url +
+           // Without this a viewer has nowhere to register a material and no id
+           // to put on a face, so every normal and specular assignment was
+           // discarded the moment it was made - and silently, because from the
+           // viewer's side nothing failed (found live 2026-07-29).
+           "</uri><key>RenderMaterials</key><uri>" + render_materials_url +
            "</uri><key>UpdateNotecardAgentInventory</key><uri>" + notecard_update_url +
            "</uri><key>UpdateScriptAgentInventory</key><uri>" + script_update_url +
            "</uri><key>UpdateScriptAgent</key><uri>" + script_update_url +

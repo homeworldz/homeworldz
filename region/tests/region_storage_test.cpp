@@ -332,6 +332,36 @@ int main() {
                 small->area(reopened.edge_cells()) != 64 * 64) return 1;
             if (reopened.parcel_at(10.0F, 10.0F) != small ||
                 reopened.parcel_at(200.0F, 200.0F) != whole) return 1;
+
+            // Material definitions persist, which is the whole point of the
+            // RenderMaterials work: an assignment that survived only until the
+            // region restarted would be the same silent loss with a longer
+            // fuse. Storing the same id twice is a no-op rather than an error,
+            // because the id is the definition's own hash and two viewers
+            // assigning the same material must share one row.
+            if (!storage.load_render_materials().empty()) return 1; // none stored yet
+            const std::vector<std::byte> definition{std::byte{'d'}, std::byte{'e'}, std::byte{'f'}};
+            const std::vector<std::byte> other{std::byte{'x'}};
+            storage.store_render_material("11112222-3333-4444-5555-666677778888", definition);
+            storage.store_render_material("11112222-3333-4444-5555-666677778888", definition);
+            storage.store_render_material("99998888-7777-6666-5555-444433332222", other);
+            const auto materials = storage.load_render_materials();
+            if (materials.size() != 2) return 1;
+            bool found_first = false, found_second = false;
+            for (const auto& [id, bytes] : materials) {
+                if (id == "11112222-3333-4444-5555-666677778888" && bytes == definition)
+                    found_first = true;
+                if (id == "99998888-7777-6666-5555-444433332222" && bytes == other)
+                    found_second = true;
+            }
+            if (!found_first || !found_second) return 1;
+        }
+        // Reopened from disk: the definitions are on the filesystem, not merely
+        // in the handle that wrote them.
+        {
+            homeworldz::storage::RegionStorage reopened(path);
+            const auto materials = reopened.load_render_materials();
+            if (materials.size() != 2) return 1;
         }
         std::filesystem::remove_all(path);
         return 0;
