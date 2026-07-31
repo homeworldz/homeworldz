@@ -3101,6 +3101,10 @@ int main(int argc, char* argv[]) {
                                 auto text = std::string(
                                     reinterpret_cast<const char*>(bytes.data()), bytes.size());
                                 std::string content_type = "application/octet-stream";
+                                // Set only where a derived rendition may stand in
+                                // for the canonical, which is what decides whether
+                                // this id's representation can ever change.
+                                bool derived_representation = false;
                                 const auto byte_at = [&](std::size_t index) {
                                     return index < bytes.size()
                                         ? static_cast<unsigned char>(bytes[index]) : 0u;
@@ -3132,6 +3136,15 @@ int main(int argc, char* argv[]) {
                                     // it can use. The Content-Type always names
                                     // what was actually served.
                                     content_type = "application/vnd.ll.mesh";
+                                    // This branch is the one place the route is
+                                    // not immutable by id, and it moves in two
+                                    // ways: a rendition is regenerated when the
+                                    // converter's generator changes (28 of them
+                                    // reconverted on 2026-07-31), and until one
+                                    // exists the honest answer is the legacy
+                                    // bytes, so two requests seconds apart can
+                                    // differ in body *and* Content-Type.
+                                    derived_representation = true;
                                     if (viewer_grid) {
                                         if (auto modern = viewer_grid->fetch_asset_rendition(
                                                 *session_asset, "gltf")) {
@@ -3151,8 +3164,44 @@ int main(int argc, char* argv[]) {
                                         }
                                     }
                                 }
-                                response = homeworldz::http::response_for_content(
-                                    request, 200, content_type, std::move(text));
+                                // A cache needs to know when a stored copy is
+                                // still good, and this route said nothing at all
+                                // — no validator, no freshness — so any reuse
+                                // rested on the client's own guess, and a cache
+                                // built on a guess serves stale bytes
+                                // confidently (client core, 2026-07-31).
+                                //
+                                // The validator is the digest of exactly what is
+                                // being served, so it cannot disagree with the
+                                // body: derived or canonical, ready or pending,
+                                // the ETag is computed after the decision rather
+                                // than from anything believed about it.
+                                const auto served = std::span(
+                                    reinterpret_cast<const std::byte*>(text.data()), text.size());
+                                const auto etag = "\"" + homeworldz::crypto::sha256_hex(served) + "\"";
+                                const auto known = homeworldz::http::request_header_value(
+                                    request, "If-None-Match");
+                                if (known == etag) {
+                                    response = homeworldz::http::response_for_content(
+                                        request, 304, content_type, {});
+                                } else {
+                                    response = homeworldz::http::response_for_content(
+                                        request, 200, content_type, std::move(text));
+                                }
+                                homeworldz::http::add_header(response, "ETag", etag);
+                                // Canonical bytes are never rewritten (ADR 0026),
+                                // so a canonical representation is immutable for
+                                // the life of its id and a client needs no round
+                                // trip at all on a second visit. A derived one is
+                                // regenerable, so it gets revalidation instead —
+                                // the distinction is real and invisible from
+                                // outside, which is why it is stated here rather
+                                // than left to be inferred.
+                                homeworldz::http::add_header(
+                                    response, "Cache-Control",
+                                    derived_representation
+                                        ? "private, no-cache"
+                                        : "private, max-age=31536000, immutable");
                             } catch (const std::exception&) {
                                 response = homeworldz::http::response_for_content(
                                     request, 404, "application/json",
