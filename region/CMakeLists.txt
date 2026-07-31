@@ -15,6 +15,7 @@ add_library(homeworldz-region-core
   src/region_config.cpp
   src/region_extensions.cpp
   src/region_transit.cpp
+  src/capability_paths.cpp
   src/region_storage.cpp
   src/scene.cpp
   src/sha256.cpp
@@ -133,6 +134,9 @@ add_test(NAME region-mesh-model-upload COMMAND homeworldz-mesh-model-upload-test
 add_executable(homeworldz-terrain-layerdata-tests tests/terrain_layerdata_test.cpp)
 target_link_libraries(homeworldz-terrain-layerdata-tests PRIVATE homeworldz-region-core)
 add_test(NAME region-terrain-layerdata COMMAND homeworldz-terrain-layerdata-tests)
+add_executable(homeworldz-capability-paths-tests tests/capability_paths_test.cpp)
+target_link_libraries(homeworldz-capability-paths-tests PRIVATE homeworldz-region-core)
+add_test(NAME region-capability-paths COMMAND homeworldz-capability-paths-tests)
 add_executable(homeworldz-meshsmith src/meshsmith_main.cpp)
 target_link_libraries(homeworldz-meshsmith PRIVATE homeworldz-region-core)
 add_test(NAME region-session-protocol COMMAND homeworldz-session-protocol-tests)

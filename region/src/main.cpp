@@ -33,6 +33,7 @@
 #include "homeworldz/api_models.h"
 #include "homeworldz/appearance_bake.h"
 #include "homeworldz/avatar_controller.h"
+#include "homeworldz/capability_paths.h"
 #include "homeworldz/falcon_runtime.h"
 #include "homeworldz/grid_client.h"
 #include "homeworldz/session_server.h"
@@ -495,81 +496,6 @@ void finish_http_response(socket_handle client) {
 #else
     shutdown(client, SHUT_WR);
 #endif
-}
-
-std::string capability_session(std::string_view path, std::string_view prefix) {
-    if (!path.starts_with(prefix)) return {};
-    auto session = path.substr(prefix.size());
-    if (const auto separator = session.find('/'); separator != std::string_view::npos) {
-        const auto visit = session.substr(separator + 1);
-        if (visit.empty() || visit.find('/') != std::string_view::npos ||
-            !homeworldz::viewer::parse_uuid(visit)) return {};
-        session = session.substr(0, separator);
-    }
-    if (session.empty()) return {};
-    return std::string(session);
-}
-
-std::string capability_visit(std::string_view path, std::string_view prefix) {
-    if (!path.starts_with(prefix)) return {};
-    const auto remainder = path.substr(prefix.size());
-    const auto separator = remainder.find('/');
-    if (separator == std::string_view::npos) return {};
-    const auto visit = remainder.substr(separator + 1);
-    if (visit.empty() || visit.find('/') != std::string_view::npos ||
-        !homeworldz::viewer::parse_uuid(visit)) return {};
-    return std::string(visit);
-}
-
-std::optional<std::pair<std::string, std::string>> texture_request(std::string_view path) {
-    constexpr std::string_view prefix = "/caps/texture/";
-    constexpr std::string_view key = "texture_id=";
-    if (!path.starts_with(prefix)) return std::nullopt;
-    // Accept both "<session>/?texture_id=<uuid>" and "<session>?texture_id=<uuid>";
-    // viewers differ on whether they append the trailing slash before the query.
-    const auto question = path.find('?', prefix.size());
-    if (question == std::string_view::npos) return std::nullopt;
-    auto session = path.substr(prefix.size(), question - prefix.size());
-    if (!session.empty() && session.back() == '/') session.remove_suffix(1);
-    const auto query = path.substr(question + 1);
-    if (!query.starts_with(key)) return std::nullopt;
-    const auto texture = query.substr(key.size());
-    if (session.empty() || texture.empty() || texture.find('&') != std::string_view::npos)
-        return std::nullopt;
-    return std::pair{std::string(session), std::string(texture)};
-}
-
-struct ViewerAssetRequest {
-    std::string session;
-    std::string asset;
-    // A mesh fetch is served the sl-mesh rendition, never the canonical GLB
-    // (ADR 0033): the type-49 bytes are what a viewer can render.
-    bool mesh{};
-    // A texture fetch is served the j2c-texture rendition where the canonical
-    // is a modern image, the same rule the older GetTexture capability applies
-    // — see the note where the two are unified.
-    bool texture{};
-};
-
-std::optional<ViewerAssetRequest> viewer_asset_request(std::string_view path) {
-    constexpr std::string_view prefix = "/caps/assets/";
-    if (!path.starts_with(prefix)) return std::nullopt;
-    // Accept both "<session>/?<type>_id=<uuid>" and "<session>?<type>_id=<uuid>".
-    // The type prefix varies (texture_id, bodypart_id, clothing_id, ...); the
-    // "_id=" marker is common to all and identifies the requested asset UUID.
-    const auto question = path.find('?', prefix.size());
-    if (question == std::string_view::npos) return std::nullopt;
-    auto session = path.substr(prefix.size(), question - prefix.size());
-    if (!session.empty() && session.back() == '/') session.remove_suffix(1);
-    const auto query = path.substr(question + 1);
-    const auto id_marker = query.find("_id=");
-    if (session.empty() || id_marker == std::string_view::npos || id_marker == 0 ||
-        query.find('&') != std::string_view::npos) return std::nullopt;
-    const auto asset = query.substr(id_marker + 4);
-    if (asset.empty()) return std::nullopt;
-    return ViewerAssetRequest{std::string(session), std::string(asset),
-                              query.starts_with("mesh_id="),
-                              query.starts_with("texture_id=")};
 }
 
 struct InternalAssetRequest {
@@ -3548,56 +3474,47 @@ int main(int argc, char* argv[]) {
                             }
                         }
                     }
-                    auto session_id = capability_session(response.path, "/caps/seed/");
+                    auto session_id = homeworldz::caps::capability_session(response.path, "/caps/seed/");
                     const bool seed = !session_id.empty();
-                    if (!seed) session_id = capability_session(response.path, "/caps/event/");
+                    if (!seed) session_id = homeworldz::caps::capability_session(response.path, "/caps/event/");
                     const bool event_queue = !seed && !session_id.empty();
                     const auto capability_visit_id = seed ?
-                        capability_visit(response.path, "/caps/seed/") :
-                        capability_visit(response.path, "/caps/event/");
-                    auto texture = texture_request(response.path);
-                    if (texture) session_id = texture->first;
-                    const auto viewer_asset = viewer_asset_request(response.path);
+                        homeworldz::caps::capability_visit(response.path, "/caps/seed/") :
+                        homeworldz::caps::capability_visit(response.path, "/caps/event/");
+                    const auto viewer_asset = homeworldz::caps::viewer_asset_request(response.path);
+                    // A texture is a texture whichever capability asked for it,
+                    // and texture_fetch is the single place that decides so —
+                    // see capability_paths.h for the bug that rule exists for.
+                    const auto texture =
+                        homeworldz::caps::texture_fetch(response.path, viewer_asset);
+                    if (texture) session_id = texture->session;
                     if (viewer_asset) session_id = viewer_asset->session;
-                    // A texture is a texture whichever capability asked for it.
-                    // Firestorm fetches through ViewerAsset (`/caps/assets/`
-                    // with `texture_id=`), not the older GetTexture cap, and
-                    // only GetTexture knew to serve the j2c-texture rendition —
-                    // so every GLB-extracted texture reached the viewer as the
-                    // creator's canonical PNG, which its decoder cannot read.
-                    // The face then held the grey placeholder forever, looking
-                    // for all the world like a lighting problem (found live
-                    // 2026-07-31). Folding the request into one shape here
-                    // leaves a single place that decides what a viewer is
-                    // handed, so the two cannot drift apart again.
-                    if (!texture && viewer_asset && viewer_asset->texture)
-                        texture = std::pair{viewer_asset->session, viewer_asset->asset};
                     std::string simulator_features_session;
                     if (!seed && !event_queue && !texture && !viewer_asset)
                         simulator_features_session =
-                            capability_session(response.path, "/caps/simulator-features/");
+                            homeworldz::caps::capability_session(response.path, "/caps/simulator-features/");
                     const bool simulator_features = !simulator_features_session.empty();
                     if (simulator_features) session_id = simulator_features_session;
                     std::string environment_session;
                     if (!seed && !event_queue && !texture && !viewer_asset && !simulator_features)
-                        environment_session = capability_session(response.path, "/caps/environment/");
+                        environment_session = homeworldz::caps::capability_session(response.path, "/caps/environment/");
                     const bool environment_settings = !environment_session.empty();
                     if (environment_settings) session_id = environment_session;
                     std::string remote_parcel_session;
                     if (!seed && !event_queue && !texture && !viewer_asset && !simulator_features &&
                         !environment_settings)
                         remote_parcel_session =
-                            capability_session(response.path, "/caps/remote-parcel/");
+                            homeworldz::caps::capability_session(response.path, "/caps/remote-parcel/");
                     const bool remote_parcel = !remote_parcel_session.empty();
                     if (remote_parcel) session_id = remote_parcel_session;
                     const auto baked_upload_session =
-                        capability_session(response.path, "/caps/upload-baked/");
+                        homeworldz::caps::capability_session(response.path, "/caps/upload-baked/");
                     const bool baked_upload = !baked_upload_session.empty();
                     if (baked_upload) session_id = baked_upload_session;
                     const auto baked_upload_data = baked_upload_data_request(response.path);
                     if (baked_upload_data) session_id = baked_upload_data->first;
                     const auto file_upload_session =
-                        capability_session(response.path, "/caps/upload-file/");
+                        homeworldz::caps::capability_session(response.path, "/caps/upload-file/");
                     const bool file_upload = !file_upload_session.empty();
                     if (file_upload) session_id = file_upload_session;
                     const auto file_upload_data = file_upload_data_request(response.path);
@@ -3605,27 +3522,27 @@ int main(int argc, char* argv[]) {
                     const auto model_upload_data = model_upload_data_request(response.path);
                     if (model_upload_data) session_id = model_upload_data->first;
                     const auto mesh_upload_flag_session =
-                        capability_session(response.path, "/caps/mesh-upload-flag/");
+                        homeworldz::caps::capability_session(response.path, "/caps/mesh-upload-flag/");
                     const bool mesh_upload_flag = !mesh_upload_flag_session.empty();
                     if (mesh_upload_flag) session_id = mesh_upload_flag_session;
                     const auto notecard_update_session =
-                        capability_session(response.path, "/caps/update-notecard/");
+                        homeworldz::caps::capability_session(response.path, "/caps/update-notecard/");
                     const bool notecard_update = !notecard_update_session.empty();
                     if (notecard_update) session_id = notecard_update_session;
                     const auto script_update_session =
-                        capability_session(response.path, "/caps/update-script/");
+                        homeworldz::caps::capability_session(response.path, "/caps/update-script/");
                     const bool script_update = !script_update_session.empty();
                     if (script_update) session_id = script_update_session;
                     const auto gesture_update_session =
-                        capability_session(response.path, "/caps/update-gesture/");
+                        homeworldz::caps::capability_session(response.path, "/caps/update-gesture/");
                     const bool gesture_update = !gesture_update_session.empty();
                     if (gesture_update) session_id = gesture_update_session;
                     const auto task_notecard_update_session =
-                        capability_session(response.path, "/caps/update-task-notecard/");
+                        homeworldz::caps::capability_session(response.path, "/caps/update-task-notecard/");
                     const bool task_notecard_update = !task_notecard_update_session.empty();
                     if (task_notecard_update) session_id = task_notecard_update_session;
                     const auto task_script_update_session =
-                        capability_session(response.path, "/caps/update-task-script/");
+                        homeworldz::caps::capability_session(response.path, "/caps/update-task-script/");
                     const bool task_script_update = !task_script_update_session.empty();
                     if (task_script_update) session_id = task_script_update_session;
                     const auto inventory_asset_update_data =
@@ -3698,9 +3615,9 @@ int main(int argc, char* argv[]) {
                                     std::chrono::steady_clock::now() + std::chrono::seconds(20)});
                                 response_deferred = true;
                             }
-                        } else if (authorized && texture && homeworldz::viewer::parse_uuid(texture->second)) {
+                        } else if (authorized && texture && homeworldz::viewer::parse_uuid(texture->texture)) {
                             try {
-                                const auto asset = read_federated_asset(texture->second);
+                                const auto asset = read_federated_asset(texture->texture);
                                 auto body = std::string(
                                     reinterpret_cast<const char*>(asset.data()), asset.size());
                                 // A texture extracted from a GLB is canonically
@@ -3719,13 +3636,13 @@ int main(int argc, char* argv[]) {
                                     std::memcmp(asset.data() + 4, "jP  ", 4) == 0;
                                 if (!j2c_codestream && !jp2_container && viewer_grid) {
                                     if (auto legacy = viewer_grid->fetch_asset_rendition(
-                                            texture->second, "j2c-texture")) {
+                                            texture->texture, "j2c-texture")) {
                                         body = std::move(*legacy);
                                     } else {
                                         // Not converted yet: queue it and answer
                                         // not-yet, the same contract mesh has.
                                         static_cast<void>(viewer_grid->request_asset_rendition(
-                                            texture->second, "j2c-texture"));
+                                            texture->texture, "j2c-texture"));
                                         throw std::runtime_error("texture rendition pending");
                                     }
                                 }
