@@ -866,6 +866,21 @@ it builds against.
   default-outfit bake and derives body geometry from it, so a viewer rezzes
   a properly shaped, clothed avatar rather than a default one
   ([CLIENT2-EMBODIMENT.md](CLIENT2-EMBODIMENT.md) milestone E3, viewer half).
+- [x] Publish the region's water to session clients — live 2026-07-31. A
+  viewer had always been told a height in `RegionHandshake`; the region never
+  set one, so every region silently used the built-in 20 m, and a session
+  client was told nothing at all and drew water wherever it guessed. Both
+  paths now read `region.water_height` (default the same 20), and the hello
+  states `water: {height}`: a height, not a surface, because the plane is
+  flat and region-wide and the drawing is the client's business.
+- [x] Measure what LayerData loses, after the client core saw rougher ground
+  in Firestorm than in its own render of the same region and offered
+  compression noise as a candidate. Ruled out by decoding the wire bytes with
+  an independent decoder: 50 m of rise inside one 16×16 patch returns within
+  0.12 m, a ±4 m one-metre-pitch checkerboard within 0.36 m, flat ground
+  within a tenth of a millimetre. Both families are drawing the same heights,
+  so the difference is in the drawing — which the terrain-surface item above
+  is already about.
 - [ ] Serve appearance *to* session clients, so they can render each other —
   the remaining half of E3, waiting on the asset formats below rather than
   on legacy texture-entry blobs.
