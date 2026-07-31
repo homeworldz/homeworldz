@@ -101,7 +101,9 @@ TextureExtraction extract_textures(std::span<const std::byte> glb);
 
 // The generator tag stored with renditions this converter produces, bumped
 // when output changes so regeneration can find what it supersedes.
-inline constexpr const char* generator = "meshsmith/0.6";
+// 0.7: derived JPEG2000 is compressed at 20:1 rather than lossless, so every
+// j2c-texture a previous generator produced is superseded and reconverts.
+inline constexpr const char* generator = "meshsmith/0.7";
 
 } // namespace homeworldz::mesh
 

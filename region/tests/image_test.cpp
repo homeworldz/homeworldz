@@ -1,6 +1,8 @@
 #include "homeworldz/image.h"
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <iostream>
 #include <vector>
@@ -73,8 +75,11 @@ int main() {
                   << decoded->height << "x" << static_cast<int>(decoded->channels) << '\n';
         return 1;
     }
+    // Small images stay lossless: a compression ratio aims at a byte count, and
+    // below a floor that count destroys the image to save nothing. This 32x24
+    // is under the floor, so it must come back bit-exact.
     if (decoded->pixels != src.pixels) {
-        std::cerr << "lossless round-trip did not reproduce pixels exactly\n";
+        std::cerr << "small-image round-trip did not reproduce pixels exactly\n";
         return 1;
     }
 
@@ -119,6 +124,68 @@ int main() {
                           << ": " << static_cast<int>(back->pixels[pixel * 4 + 3]) << '\n';
                 return 1;
             }
+    }
+
+    // Above the small-image floor the encode is lossy, because a viewer's
+    // JPEG2000 is a derived form and lossless made a 1024 terrain layer 2 MB
+    // (measured 2026-07-31). Two things have to hold together, and neither
+    // alone is worth anything: it must actually compress, and what comes back
+    // must still be the picture. So assert the size *and* the peak
+    // signal-to-noise ratio, on a photographic-ish gradient rather than a
+    // synthetic checkerboard, since hard edges are the one thing a wavelet
+    // coder flatters least and terrain is not made of them.
+    {
+        Image big;
+        big.width = 256;
+        big.height = 256;
+        big.channels = 3;
+        big.pixels.resize(big.expected_size());
+        for (std::uint32_t y = 0; y < big.height; ++y)
+            for (std::uint32_t x = 0; x < big.width; ++x) {
+                const auto index = (static_cast<std::size_t>(y) * big.width + x) * 3;
+                // Smooth ramps plus a low-amplitude ripple: continuous tone
+                // with real local variation, which is what a ground texture is.
+                const auto ripple = static_cast<int>(12.0 * std::sin(x * 0.15) * std::cos(y * 0.11));
+                big.pixels[index + 0] = static_cast<std::uint8_t>(
+                    std::clamp(static_cast<int>(x) / 2 + 40 + ripple, 0, 255));
+                big.pixels[index + 1] = static_cast<std::uint8_t>(
+                    std::clamp(static_cast<int>(y) / 2 + 60 - ripple, 0, 255));
+                big.pixels[index + 2] = static_cast<std::uint8_t>(
+                    std::clamp(static_cast<int>(x + y) / 4 + 30 + ripple, 0, 255));
+            }
+        const auto coded = encode_j2c(big);
+        if (!coded || coded->empty()) {
+            std::cerr << "encode_j2c refused a 256x256 image\n";
+            return 1;
+        }
+        // 20:1 against the raw samples, with slack for header and rounding.
+        const auto raw = big.pixels.size();
+        if (coded->size() > raw / 10) {
+            std::cerr << "lossy encode did not compress: " << coded->size() << " bytes from "
+                      << raw << " raw (expected near " << raw / 20 << ")\n";
+            return 1;
+        }
+        const auto back = decode_j2c(*coded);
+        if (!back || back->pixels.size() != big.pixels.size()) {
+            std::cerr << "lossy round-trip did not return the same shape\n";
+            return 1;
+        }
+        double squared = 0.0;
+        for (std::size_t i = 0; i < big.pixels.size(); ++i) {
+            const double difference =
+                static_cast<int>(back->pixels[i]) - static_cast<int>(big.pixels[i]);
+            squared += difference * difference;
+        }
+        const auto mean_squared = squared / static_cast<double>(big.pixels.size());
+        const auto psnr = mean_squared > 0.0 ? 10.0 * std::log10(255.0 * 255.0 / mean_squared) : 99.0;
+        // 40 dB is the conventional threshold for visually lossless
+        // photographic content; measured 2026-07-31 at well above it.
+        if (psnr < 40.0) {
+            std::cerr << "lossy round-trip lost too much: PSNR " << psnr << " dB\n";
+            return 1;
+        }
+        std::cerr << "image j2c lossy encode OK (" << raw << " raw -> " << coded->size()
+                  << " bytes, PSNR " << psnr << " dB)\n";
     }
 
     // Garbage input must be rejected, not crash.

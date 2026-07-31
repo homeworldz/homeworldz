@@ -106,6 +106,30 @@ OPJ_CODEC_FORMAT detect_format(const std::vector<std::uint8_t>& d) {
     return OPJ_CODEC_J2K;
 }
 
+// Target compression for derived JPEG2000, as a ratio against the raw samples.
+// Chosen to sit where the peak signal-to-noise ratio of a decode against its
+// own canonical stays above the ~40 dB that is conventionally taken as
+// visually lossless for photographic content, which the terrain layers and
+// avatar bakes both are; the figure this achieves in practice is asserted in
+// the image tests rather than trusted here.
+constexpr float j2c_compression_ratio = 20.0F;
+
+// ...but never aim below this many bytes. A ratio is meaningless on a small
+// image: 20:1 on an 8x8 RGBA targets thirteen bytes, which destroys it to save
+// nothing. Below the floor the encode stays lossless, so masks, swatches and
+// the small fixtures come back exactly.
+constexpr float j2c_minimum_target_bytes = 2048.0F;
+
+// The ratio to actually hand the encoder for an image of this many raw bytes,
+// or zero for lossless (OpenJPEG's own spelling of it).
+float j2c_rate_for(std::size_t raw_bytes) {
+    const auto raw = static_cast<float>(raw_bytes);
+    if (raw / j2c_compression_ratio >= j2c_minimum_target_bytes)
+        return j2c_compression_ratio;
+    const auto reduced = raw / j2c_minimum_target_bytes;
+    return reduced > 1.0F ? reduced : 0.0F;
+}
+
 }  // namespace
 
 std::optional<Image> decode_j2c(const std::vector<std::uint8_t>& data) {
@@ -219,7 +243,18 @@ std::optional<std::vector<std::uint8_t>> encode_j2c(const Image& image) {
     opj_set_default_encoder_parameters(&params);
     params.tcp_numlayers = 1;
     params.cp_disto_alloc = 1;
-    params.tcp_rates[0] = 0;  // rate 0 == lossless
+    // Every JPEG2000 this produces is a derived form for a viewer, and no
+    // texture a viewer has ever loaded was lossless - the Second Life terrain
+    // layers this grid shipped until today were 6 KB for 128x128, about 8:1.
+    // Encoding losslessly made a 1024 layer 2 MB, so four of them were 8 MB of
+    // ground at every login (measured 2026-07-31), and avatar bakes were
+    // running a quarter of a megabyte each for the same reason.
+    //
+    // The canonical stays lossless: it is a PNG or JPEG in the vault and this
+    // never touches it. Only the regenerable rendition is compressed, which is
+    // what the rendition layer is for - if this ratio is ever wrong, every
+    // affected asset reconverts from a canonical that never lost anything.
+    params.tcp_rates[0] = j2c_rate_for(image.pixels.size());
     // Wavelet decomposition levels must fit the image: the smallest dimension
     // has to survive numresolution-1 halvings. Clamp so small images (and
     // non-power-of-two bake slots) still encode.
