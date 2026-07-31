@@ -475,6 +475,15 @@ input formats.
   texture pipeline. Related gap found live 2026-07-29: the region serves no
   RenderMaterials update capability, so viewer materials edits
   (normal/specular assignments) silently do not persist.
+  Texture serving was fixed 2026-07-31: the rule that a viewer gets the
+  derived JPEG2000 rather than the canonical PNG was implemented on the older
+  GetTexture capability only, and Firestorm fetches through ViewerAsset, which
+  special-cased `mesh_id=` and returned canonical bytes for everything else.
+  Every server-side check passed — right id, 200, sound rendition — while the
+  viewer held its grey placeholder. Two capabilities that had to agree, made
+  to agree by duplication, is the defect worth remembering; the request is now
+  folded into one shape where it is parsed. Both parsers still live in
+  `main.cpp`'s anonymous namespace with no test able to reach them.
 - [ ] Terrain surface for session clients (client core request 2026-07-29,
   after the operator saw untextured ground in the desktop client). The
   ground's geometry is published and verified; its *surface* is not. Today
