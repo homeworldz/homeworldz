@@ -872,6 +872,13 @@ std::size_t RegionStorage::import_asset_directory(const std::filesystem::path& d
              extension != ".jpeg" && extension != ".ogg" && extension != ".bodypart" &&
              extension != ".clothing" && extension != ".settings"))
             continue;
+        // The filename *is* the asset id, so a stem that is not a UUID is not
+        // an asset - it is a file that happens to share an extension with one.
+        // Adding .png to the list above swept in the heightmap source images
+        // under assets/region/terrain and crash-looped every region on the
+        // store's own UUID check (2026-07-31). The extension was never the
+        // real test; this is.
+        if (!valid_uuid(entry.path().stem().string())) continue;
         std::ifstream input(entry.path(), std::ios::binary | std::ios::ate);
         if (!input) throw std::runtime_error("asset source file could not be opened");
         const auto length = static_cast<std::streamsize>(input.tellg());

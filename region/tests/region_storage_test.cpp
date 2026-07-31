@@ -249,9 +249,26 @@ int main() {
                 std::ofstream output(source / "12345678-1234-4234-8234-123456789abc.settings", std::ios::binary);
                 output.write(reinterpret_cast<const char*>(content.data()), static_cast<std::streamsize>(content.size()));
             }
+            // A texture's canonical form is a modern image (ADR 0033 M3), so
+            // PNG imports as an asset like any other.
+            {
+                std::ofstream output(source / "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa.png", std::ios::binary);
+                output.write(reinterpret_cast<const char*>(content.data()), static_cast<std::streamsize>(content.size()));
+            }
+            // But the filename *is* the asset id, so a file that merely shares
+            // an extension with an asset is not one. Accepting .png without
+            // this rule swept in the heightmap source images beside the real
+            // assets and crash-looped every region on the store's UUID check
+            // (2026-07-31); the extension was never the test that mattered.
+            {
+                std::ofstream output(source / "plateau-square.png", std::ios::binary);
+                output.write(reinterpret_cast<const char*>(content.data()), static_cast<std::streamsize>(content.size()));
+            }
             constexpr std::string_view importer = "33333333-3333-4333-8333-333333333333";
             if (storage.import_asset_directory(path / "missing", importer) != 0 ||
-                storage.import_asset_directory(path / "source", importer) != 5 ||
+                storage.import_asset_directory(path / "source", importer) != 6 ||
+                storage.read_asset("aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa") !=
+                    std::vector<std::byte>(content.begin(), content.end()) ||
                 storage.read_asset("cccccccc-cccc-4ccc-8ccc-cccccccccccc") !=
                     std::vector<std::byte>(content.begin(), content.end()) ||
                 storage.read_asset("dddddddd-dddd-4ddd-8ddd-dddddddddddd") !=
