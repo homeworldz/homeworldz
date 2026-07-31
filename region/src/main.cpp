@@ -545,6 +545,10 @@ struct ViewerAssetRequest {
     // A mesh fetch is served the sl-mesh rendition, never the canonical GLB
     // (ADR 0033): the type-49 bytes are what a viewer can render.
     bool mesh{};
+    // A texture fetch is served the j2c-texture rendition where the canonical
+    // is a modern image, the same rule the older GetTexture capability applies
+    // — see the note where the two are unified.
+    bool texture{};
 };
 
 std::optional<ViewerAssetRequest> viewer_asset_request(std::string_view path) {
@@ -564,7 +568,8 @@ std::optional<ViewerAssetRequest> viewer_asset_request(std::string_view path) {
     const auto asset = query.substr(id_marker + 4);
     if (asset.empty()) return std::nullopt;
     return ViewerAssetRequest{std::string(session), std::string(asset),
-                              query.starts_with("mesh_id=")};
+                              query.starts_with("mesh_id="),
+                              query.starts_with("texture_id=")};
 }
 
 struct InternalAssetRequest {
@@ -3494,10 +3499,23 @@ int main(int argc, char* argv[]) {
                     const auto capability_visit_id = seed ?
                         capability_visit(response.path, "/caps/seed/") :
                         capability_visit(response.path, "/caps/event/");
-                    const auto texture = texture_request(response.path);
+                    auto texture = texture_request(response.path);
                     if (texture) session_id = texture->first;
                     const auto viewer_asset = viewer_asset_request(response.path);
                     if (viewer_asset) session_id = viewer_asset->session;
+                    // A texture is a texture whichever capability asked for it.
+                    // Firestorm fetches through ViewerAsset (`/caps/assets/`
+                    // with `texture_id=`), not the older GetTexture cap, and
+                    // only GetTexture knew to serve the j2c-texture rendition —
+                    // so every GLB-extracted texture reached the viewer as the
+                    // creator's canonical PNG, which its decoder cannot read.
+                    // The face then held the grey placeholder forever, looking
+                    // for all the world like a lighting problem (found live
+                    // 2026-07-31). Folding the request into one shape here
+                    // leaves a single place that decides what a viewer is
+                    // handed, so the two cannot drift apart again.
+                    if (!texture && viewer_asset && viewer_asset->texture)
+                        texture = std::pair{viewer_asset->session, viewer_asset->asset};
                     std::string simulator_features_session;
                     if (!seed && !event_queue && !texture && !viewer_asset)
                         simulator_features_session =
