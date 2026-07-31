@@ -3049,8 +3049,24 @@ int main(int argc, char* argv[]) {
                                 auto text = std::string(
                                     reinterpret_cast<const char*>(bytes.data()), bytes.size());
                                 std::string content_type = "application/octet-stream";
+                                const auto byte_at = [&](std::size_t index) {
+                                    return index < bytes.size()
+                                        ? static_cast<unsigned char>(bytes[index]) : 0u;
+                                };
                                 if (text.starts_with("glTF")) {
                                     content_type = "model/gltf-binary";
+                                } else if (byte_at(0) == 0x89 && text.substr(1, 3) == "PNG") {
+                                    // Textures extracted from a GLB are canonical
+                                    // in the creator's own format, so this route
+                                    // serves real images and must name them - a
+                                    // client deciding what to decode should not
+                                    // have to sniff what the server already knew
+                                    // (ADR 0033 M3).
+                                    content_type = "image/png";
+                                } else if (byte_at(0) == 0xff && byte_at(1) == 0xd8) {
+                                    content_type = "image/jpeg";
+                                } else if (byte_at(0) == 0xff && byte_at(1) == 0x4f) {
+                                    content_type = "image/x-j2c";
                                 } else if (text.starts_with("{\"")) {
                                     content_type = "application/json";
                                 } else if (homeworldz::slmesh::parse(bytes)) {
