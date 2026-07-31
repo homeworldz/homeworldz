@@ -101,9 +101,21 @@ seam above encoding.
    from this arithmetic; the non-Jolt fallback is flat-only by construction,
    having a scalar ground height and no gradient to work from.
 
-   Verified 10-33 degrees. Above that it is extrapolation: the law is
-   geometry and should hold to the walkable limit, but no avatar has stood on
-   ground between 33 and 65 degrees on this grid, so nothing has measured it. The flat arithmetic is also the non-Jolt fallback's
+   **Domain, measured rather than assumed** (client core on the operator's
+   second test hill, 2026-07-30). The correction is exact to about 43 degrees
+   and then progressively over-predicts - the region rests an avatar *lower*
+   than the geometry says:
+
+       18.8 deg  +0.001    35.9 deg  +0.003    48.7 deg  -0.014   (9% of the term)
+       28.9 deg  -0.002    43.4 deg  +0.002    64.4 deg  -0.087  (22% of the term)
+
+   The onset between 43 and 64 is unmeasured, and no mechanism is claimed:
+   two were offered for deviations on this surface and both were wrong. The
+   correction still earns its place, because at 64 degrees the flat rule is
+   0.39 m out and this is 0.087 m out, and it is exact across the range real
+   terrain mostly occupies. Use it with the domain attached rather than
+   widening the claim - "it is geometry so it holds everywhere" has now been
+   true up to a point three times running. The flat arithmetic is also the non-Jolt fallback's
    clamp. Session z is the capsule center everywhere — the transform
    envelope briefly carried the hip-shifted viewer convention, found by
    the client core's ground comparison and fixed the same night. A fetch is a snapshot,
