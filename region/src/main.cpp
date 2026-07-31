@@ -3658,10 +3658,19 @@ int main(int argc, char* argv[]) {
                     const auto inventory_asset_update_data =
                         inventory_asset_update_data_request(response.path);
                     if (inventory_asset_update_data) session_id = inventory_asset_update_data->first;
+                    // Every capability with a handler below must appear here too,
+                    // or its request never reaches the chain and answers 404 with
+                    // nothing said. RenderMaterials was missing from this list and
+                    // did exactly that, four times, while the capability was
+                    // advertised and its path parsed correctly (found live
+                    // 2026-07-31). That is a third place the same fact has to be
+                    // written, after the seed reply and the path parser — the
+                    // fall-through warning further down exists because this list
+                    // cannot be checked from outside main.cpp.
                     if (seed || event_queue || texture || viewer_asset || simulator_features || environment_settings ||
                         remote_parcel ||
                         baked_upload || baked_upload_data || file_upload || file_upload_data ||
-                        model_upload_data || mesh_upload_flag ||
+                        model_upload_data || mesh_upload_flag || render_materials ||
                         notecard_update || script_update || gesture_update ||
                         task_notecard_update || task_script_update || inventory_asset_update_data) {
                         bool authorized = false;
@@ -3670,7 +3679,15 @@ int main(int argc, char* argv[]) {
                         const auto expected_method =
                             texture || viewer_asset || simulator_features || environment_settings ||
                             mesh_upload_flag ? "GET" : "POST";
-                        if (response.method == expected_method && registration && viewer_sessions) {
+                        // RenderMaterials is read with GET and written with PUT —
+                        // Firestorm uses PUT, observed on the wire — so one
+                        // expected method cannot express it. POST is accepted too
+                        // rather than guessing which viewers differ.
+                        const bool method_accepted = render_materials
+                            ? (response.method == "GET" || response.method == "PUT" ||
+                               response.method == "POST")
+                            : response.method == expected_method;
+                        if (method_accepted && registration && viewer_sessions) {
                             authorized_session = viewer_sessions->validate(session_id);
                             authorized = authorized_session &&
                                          authorized_session->destination_region_id == registration->region_id();
@@ -4513,8 +4530,23 @@ int main(int argc, char* argv[]) {
                             }
                         } else {
                             response = homeworldz::http::response_for_content(
-                                request, response.method == expected_method ? 404 : 405,
+                                request, method_accepted ? 404 : 405,
                                 "application/llsd+xml", "<llsd><undef/></llsd>");
+                            // A capability request that reaches here matched a path
+                            // and then no handler, which is a server-side mistake
+                            // wearing a client-side answer: four RenderMaterials
+                            // PUTs got 404 this way and read as ordinary traffic in
+                            // the log (2026-07-31). The gate list above, the seed
+                            // reply and the handler chain are three places that
+                            // must agree and no test can compare them, so the
+                            // disagreement is made to announce itself instead.
+                            std::cout << "{\"level\":\"warning\",\"message\":\"capability request"
+                                         " matched no handler\",\"method\":"
+                                      << homeworldz::api::json_string(response.method)
+                                      << ",\"path\":" << homeworldz::api::json_string(response.path)
+                                      << ",\"authorized\":" << (authorized ? "true" : "false")
+                                      << ",\"methodAccepted\":" << (method_accepted ? "true" : "false")
+                                      << "}" << std::endl;
                         }
                     }
                     if (!response_deferred) {
