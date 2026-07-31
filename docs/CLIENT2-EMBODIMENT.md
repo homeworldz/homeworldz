@@ -147,7 +147,20 @@ seam above encoding.
    (ADR 0033 stores each verbatim). Scene objects carry an optional
    `geometry` block (`assetId` plus `kind`, mesh or sculptMap) so a client
    can draw what an object is rather than a placeholder box - absent for
-   prims, so a reader written before it keeps working. The hello also
+   prims, so a reader written before it keeps working.
+   **Asset caching (2026-07-31).** Every asset response carries an `ETag` that
+   is the digest of exactly what was served, and honours `If-None-Match` with a
+   bodiless `304`. Freshness is two answers, not one, and the difference is
+   invisible from outside — which is why it is published rather than left to be
+   inferred. A **canonical** representation is `immutable`: canonical bytes are
+   never rewritten (ADR 0026), so a cached copy is good for the life of the id
+   and a returning client needs no round trip at all. A **derived** one — where
+   the stored asset is Second Life mesh and the glTF rendition stands in for it
+   — is `no-cache` and must be revalidated, because a rendition is regenerated
+   when the converter's generator changes, and until one exists the route
+   answers with the legacy bytes, so two requests seconds apart can differ in
+   body *and* `Content-Type`. Store either; trust only the canonical one
+   without asking. The hello also
    states the region's water as `water: {height}` — a height, not a
    surface, because the plane is flat and region-wide and everything about
    how it is drawn is the client's business (client core, 2026-07-30).
