@@ -8,6 +8,7 @@
 // converter's own reason, an empty queue answered by sleeping. Dying is safe
 // — the lease lapses and the job is claimable again.
 #include "homeworldz/grid_client.h"
+#include "homeworldz/image.h"
 #include "homeworldz/mesh_convert.h"
 
 #include <chrono>
@@ -92,7 +93,7 @@ int main(int argc, char** argv) {
         // The upgrade sweep: everything a different generator produced
         // returns to the queue, and the loop below reconverts it.
         try {
-            for (const auto* swept_kind : {"sl-mesh", "gltf"}) {
+            for (const auto* swept_kind : {"sl-mesh", "gltf", "j2c-texture"}) {
                 const auto swept = transport->send("POST", "/api/v1/rendition-jobs/regenerate",
                     std::string(R"({"kind":")") + swept_kind + R"(","generator":)" +
                         json_string(homeworldz::mesh::generator) + "}");
@@ -112,7 +113,7 @@ int main(int argc, char** argv) {
         homeworldz::grid::HttpResponse claim;
         try {
             claim = transport->send("POST", "/api/v1/rendition-jobs/claim",
-                R"({"kinds":["sl-mesh","gltf"],"leaseSeconds":300})");
+                R"({"kinds":["sl-mesh","gltf","j2c-texture"],"leaseSeconds":300})");
         } catch (const std::exception& error) {
             log("warning", "claim failed", ",\"error\":" + json_string(error.what()));
             claim.status_code = 0;
@@ -175,6 +176,31 @@ int main(int argc, char** argv) {
                 detail = ",\"primitives\":" + std::to_string(conversion.primitives) +
                     ",\"vertices\":" + std::to_string(conversion.vertices) +
                     ",\"triangles\":" + std::to_string(conversion.triangles);
+            } else if (kind == "j2c-texture") {
+                // A viewer cannot read the PNG or JPEG a GLB embeds, so the
+                // canonical image derives the JPEG2000 the legacy texture
+                // pipeline fetches - the same direction as sl-mesh, for
+                // images (ADR 0033 M3).
+                const std::vector<std::uint8_t> source(
+                    reinterpret_cast<const std::uint8_t*>(canonical.body.data()),
+                    reinterpret_cast<const std::uint8_t*>(canonical.body.data()) +
+                        canonical.body.size());
+                const auto decoded = homeworldz::image::decode_png_or_jpeg(source);
+                if (!decoded) {
+                    give_up("the canonical image is neither PNG nor JPEG");
+                    continue;
+                }
+                const auto encoded = homeworldz::image::encode_j2c(*decoded);
+                if (!encoded) {
+                    give_up("JPEG2000 encoding failed");
+                    continue;
+                }
+                derived.assign(reinterpret_cast<const std::byte*>(encoded->data()),
+                               reinterpret_cast<const std::byte*>(encoded->data()) +
+                                   encoded->size());
+                detail = ",\"width\":" + std::to_string(decoded->width) +
+                    ",\"height\":" + std::to_string(decoded->height) +
+                    ",\"channels\":" + std::to_string(decoded->channels);
             } else {
                 give_up("this worker does not convert " + kind);
                 continue;

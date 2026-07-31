@@ -3175,6 +3175,35 @@ int main(int argc, char* argv[]) {
                                     // already vault-held.
                                     if (!viewer_grid->store_vault_asset(stored.viewer_id, content))
                                         throw std::runtime_error("vault write-through failed");
+                                    // The GLB's textures become assets of their
+                                    // own (ADR 0033 M3). A viewer cannot read a
+                                    // PNG embedded in a GLB, so each image is
+                                    // stored canonically as the creator's own
+                                    // bytes - a format the modern client reads
+                                    // directly - and a j2c-texture rendition is
+                                    // queued for the viewer pipeline. The same
+                                    // canonical/derived split the mesh uses,
+                                    // pointed at images, rather than storing
+                                    // JPEG2000 at rest and inverting it.
+                                    const auto extracted = homeworldz::mesh::extract_textures(content);
+                                    if (!extracted.ok)
+                                        throw std::runtime_error(extracted.error);
+                                    std::vector<std::string> texture_assets;
+                                    for (const auto& texture : extracted.textures) {
+                                        const auto image = storage->store_asset(
+                                            homeworldz::viewer::random_uuid(),
+                                            uploader->user_id, texture.bytes);
+                                        if (!viewer_grid->register_asset(
+                                                image.viewer_id, image.creator_id, image.sha256,
+                                                image.size, region_public_endpoint, true) ||
+                                            !viewer_grid->store_vault_asset(
+                                                image.viewer_id, texture.bytes))
+                                            throw std::runtime_error(
+                                                "texture asset registration failed");
+                                        static_cast<void>(viewer_grid->request_asset_rendition(
+                                            image.viewer_id, "j2c-texture"));
+                                        texture_assets.push_back(image.viewer_id);
+                                    }
                                     homeworldz::scene::Entity wrapper;
                                     wrapper.name = name;
                                     wrapper.creator_id = uploader->user_id;
@@ -3187,7 +3216,31 @@ int main(int argc, char* argv[]) {
                                     // entry is a bundled asset the startup
                                     // write-through keeps vault-held, so the
                                     // commit closure stays deadlock-free.
-                                    wrapper.texture_entry = default_prim_texture_entry();
+                                    //
+                                    // Where the GLB carried images, the faces
+                                    // name them instead: the extraction reports
+                                    // a texture per face in the same order the
+                                    // converter emits faces, from one shared
+                                    // traversal, so face N means the same face
+                                    // to both (ADR 0033 M3). Until the
+                                    // j2c-texture rendition exists a viewer
+                                    // asking for one of these gets not-yet,
+                                    // which is the same contract mesh has.
+                                    if (texture_assets.empty()) {
+                                        wrapper.texture_entry = default_prim_texture_entry();
+                                    } else {
+                                        std::vector<homeworldz::mesh_model::Face> faces;
+                                        std::vector<std::optional<homeworldz::viewer::Uuid>> images;
+                                        for (const auto& asset : texture_assets)
+                                            images.push_back(homeworldz::viewer::parse_uuid(asset));
+                                        for (const auto index : extracted.face_textures)
+                                            faces.push_back({index, {1.0f, 1.0f, 1.0f, 1.0f}});
+                                        const auto plywood = homeworldz::viewer::parse_uuid(
+                                            "89556747-24cb-43ed-920b-47caed15465f").value();
+                                        wrapper.texture_entry =
+                                            homeworldz::mesh_model::instance_texture_entry(
+                                                plywood, faces, images);
+                                    }
                                     wrapper.scale.x = std::clamp(bounds.extent[0], 0.01f, 64.0f);
                                     wrapper.scale.y = std::clamp(bounds.extent[1], 0.01f, 64.0f);
                                     wrapper.scale.z = std::clamp(bounds.extent[2], 0.01f, 64.0f);
@@ -3540,9 +3593,36 @@ int main(int argc, char* argv[]) {
                         } else if (authorized && texture && homeworldz::viewer::parse_uuid(texture->second)) {
                             try {
                                 const auto asset = read_federated_asset(texture->second);
+                                auto body = std::string(
+                                    reinterpret_cast<const char*>(asset.data()), asset.size());
+                                // A texture extracted from a GLB is canonically
+                                // the creator's PNG or JPEG, which this
+                                // capability's clients cannot read. Serve the
+                                // j2c-texture rendition where the canonical is
+                                // not already JPEG2000 - symmetric with GetMesh
+                                // serving the legacy rendition of a canonical
+                                // GLB, and with the session asset route serving
+                                // the modern form of a legacy mesh. Each family
+                                // asks for one id and receives what it reads
+                                // (ADR 0033 M3).
+                                const auto j2c_codestream = asset.size() >= 4 &&
+                                    asset[0] == std::byte{0xff} && asset[1] == std::byte{0x4f};
+                                const auto jp2_container = asset.size() >= 12 &&
+                                    std::memcmp(asset.data() + 4, "jP  ", 4) == 0;
+                                if (!j2c_codestream && !jp2_container && viewer_grid) {
+                                    if (auto legacy = viewer_grid->fetch_asset_rendition(
+                                            texture->second, "j2c-texture")) {
+                                        body = std::move(*legacy);
+                                    } else {
+                                        // Not converted yet: queue it and answer
+                                        // not-yet, the same contract mesh has.
+                                        static_cast<void>(viewer_grid->request_asset_rendition(
+                                            texture->second, "j2c-texture"));
+                                        throw std::runtime_error("texture rendition pending");
+                                    }
+                                }
                                 response = homeworldz::http::response_for_content(
-                                    request, 200, "image/x-j2c",
-                                    std::string(reinterpret_cast<const char*>(asset.data()), asset.size()));
+                                    request, 200, "image/x-j2c", std::move(body));
                             } catch (const std::exception&) {
                                 response = homeworldz::http::response_for_content(
                                     request, 404, "application/json",
