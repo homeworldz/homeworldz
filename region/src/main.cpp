@@ -1010,6 +1010,13 @@ int main(int argc, char* argv[]) {
     const auto walkable_slope_degrees = static_cast<double>(configured_int(
         "region.walkable_slope_degrees",
         static_cast<int>(homeworldz::physics::character_walkable_slope_degrees), 10, 89));
+    // The region's water plane. Viewers have always been told a height in
+    // RegionHandshake and session clients were told nothing at all, so both
+    // now read this one number; the 20 m default is the value the handshake
+    // struct has carried since it was written, kept so no region moves its
+    // water by being upgraded.
+    const auto water_height = static_cast<double>(
+        configured_int("region.water_height", 20, 0, 4096));
     std::unique_ptr<homeworldz::grid::RegistrationLifecycle> registration;
     std::unique_ptr<homeworldz::session::Server> session_server;
     std::unique_ptr<homeworldz::grid::Client> viewer_grid;
@@ -1191,6 +1198,7 @@ int main(int argc, char* argv[]) {
                     },
                     static_cast<std::size_t>(region_size_x),
                     walkable_slope_degrees,
+                    water_height,
                     [&terrain_revision] { return terrain_revision; }});
                 if (!session_server) {
                     std::cerr << "{\"level\":\"error\",\"message\":\"region session listener failed\",\"port\":"
@@ -4379,6 +4387,7 @@ int main(int argc, char* argv[]) {
                             handshake.is_estate_owner =
                                 is_estate_manager(homeworldz::viewer::format_uuid(identity->agent_id));
                             handshake.region_flags = region_flags();
+                            handshake.water_height = static_cast<float>(water_height);
                             constexpr std::array<std::string_view, 4> terrain_texture_ids{
                                 "b8d3965a-ad78-bf43-699b-bff8eca6c975",
                                 "abb783e6-3e93-26c0-248a-247666855da3",
@@ -4816,6 +4825,7 @@ int main(int argc, char* argv[]) {
                             reply.use_estate_sun = region_estate ? region_estate->use_global_time : true;
                             reply.sun_hour = region_estate ?
                                 static_cast<float>(region_estate->sun_hour) : 0.0F;
+                            reply.water_height = static_cast<float>(water_height);
                             auto response = homeworldz::viewer::encode_region_info(reply);
                             if (!response.empty())
                                 if (const auto outgoing = circuits.send(

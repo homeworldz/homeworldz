@@ -317,10 +317,10 @@ std::string encode_envelope(std::string_view type, std::string_view correlation_
 
 SessionCore::SessionCore(std::string region_name, TicketValidator validator,
                          std::size_t terrain_width, double walkable_slope_degrees,
-                         std::function<std::uint64_t()> terrain_revision)
+                         double water_height, std::function<std::uint64_t()> terrain_revision)
     : region_name_(std::move(region_name)), validator_(std::move(validator)),
       terrain_width_(terrain_width), walkable_slope_degrees_(walkable_slope_degrees),
-      terrain_revision_(std::move(terrain_revision)) {}
+      water_height_(water_height), terrain_revision_(std::move(terrain_revision)) {}
 
 SessionCore::Result SessionCore::refuse(std::string reason) const {
     Result result;
@@ -418,6 +418,12 @@ SessionCore::Result SessionCore::handle_text(std::string_view text) {
             // caution, 2026-07-30).
             ",\"patchHeights\":{\"format\":\"heightmap-f32le\""
             ",\"encoding\":\"base64\",\"rowMajorWithinPatch\":true}}" +
+            // The region's water: a height, not a surface. The plane is flat
+            // and region-wide, in the same vertical datum as terrain heights,
+            // and everything about how it is drawn is the client's business
+            // (client core, 2026-07-30). Viewers learn the same number from
+            // RegionHandshake; this is the session client's copy of it.
+            ",\"water\":{\"height\":" + json_number_text(water_height_) + "}" +
             // Where canonical asset bytes come from: an asset id appended to
             // this base, on the same ticket. Named `base` rather than `path`
             // deliberately — `terrain.path` is a complete path and this is not,

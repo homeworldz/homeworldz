@@ -28,6 +28,8 @@ public:
         // This region's configured walkable slope, published in the hello
         // avatar block.
         double walkable_slope_degrees{};
+        // The region's water plane height, published in the hello water block.
+        double water_height{};
         // Current terrain revision, read per greeting.
         std::function<std::uint64_t()> terrain_revision;
     };

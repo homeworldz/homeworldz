@@ -147,7 +147,15 @@ seam above encoding.
    (ADR 0033 stores each verbatim). Scene objects carry an optional
    `geometry` block (`assetId` plus `kind`, mesh or sculptMap) so a client
    can draw what an object is rather than a placeholder box - absent for
-   prims, so a reader written before it keeps working.
+   prims, so a reader written before it keeps working. The hello also
+   states the region's water as `water: {height}` — a height, not a
+   surface, because the plane is flat and region-wide and everything about
+   how it is drawn is the client's business (client core, 2026-07-30).
+   Viewers had this from the start in `RegionHandshake`; session clients
+   were told nothing, so a client comparing itself to Firestorm was
+   comparing a guessed water line against a published one. It is now
+   `region.water_height` on both paths, defaulting to the 20 m the
+   handshake had always hard-coded.
 5. **Departure splits into what the avatar owns and what the viewer owns.**
    `retire_avatar(key)` (kill broadcast, physics removal, avatar-keyed maps)
    serves both transports; `clear_viewer_transport(endpoint)` (texture

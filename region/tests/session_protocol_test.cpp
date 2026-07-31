@@ -72,19 +72,19 @@ int main() {
     };
 
     // The first message must be auth; anything else closes.
-    SessionCore impatient("Sandbox", validator, 256, 65.0, [] { return 7u; });
+    SessionCore impatient("Sandbox", validator, 256, 65.0, 20.0, [] { return 7u; });
     if (const auto result = impatient.handle_text(R"({"type":"ping","version":1})"); !result.close)
         return 8;
 
     // A refused ticket closes with the refusal named.
-    SessionCore refused("Sandbox", validator, 256, 65.0, [] { return 7u; });
+    SessionCore refused("Sandbox", validator, 256, 65.0, 20.0, [] { return 7u; });
     if (const auto result = refused.handle_text(
             R"({"type":"auth","version":1,"payload":{"token":"bad"}})");
         !result.close || result.close_reason.find("ticket") == std::string::npos)
         return 9;
 
     // The happy path: auth resolves, hello names the region and identity.
-    SessionCore session("Sandbox", validator, 256, 65.0, [] { return 7u; });
+    SessionCore session("Sandbox", validator, 256, 65.0, 20.0, [] { return 7u; });
     const auto hello = session.handle_text(
         R"({"type":"auth","version":1,"payload":{"token":"good-ticket"}})");
     if (hello.close || hello.send.size() != 1 || !session.established() ||
@@ -124,6 +124,11 @@ int main() {
                                "\"encoding\":\"base64\",\"rowMajorWithinPatch\":true}}")
         == std::string::npos)
         return 34;
+    // The water plane: a height, not a surface. A viewer gets this in
+    // RegionHandshake and a session client got nothing at all until now, so a
+    // client drew water wherever it guessed (client core, 2026-07-30).
+    if (greeting->payload.find("\"water\":{\"height\":20}") == std::string::npos)
+        return 35;
     // base64 round-trips against a known vector, since a terrainChanged's
     // heights are unreadable if this is subtly wrong and nothing else here
     // would notice.
@@ -194,7 +199,7 @@ int main() {
     if (!leave.command || leave.command->kind != Kind::leave) return 25;
 
     // Commands from an unauthenticated connection never reach the host.
-    SessionCore stranger("Sandbox", validator, 256, 65.0, [] { return 7u; });
+    SessionCore stranger("Sandbox", validator, 256, 65.0, 20.0, [] { return 7u; });
     if (const auto result = stranger.handle_text(R"({"type":"spawn","version":1})");
         !result.close)
         return 26;
