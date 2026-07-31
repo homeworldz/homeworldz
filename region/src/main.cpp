@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <atomic>
 #include <bit>
+#include <cstring>
 #include <charconv>
 #include <cctype>
 #include <csignal>
