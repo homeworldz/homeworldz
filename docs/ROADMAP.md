@@ -543,6 +543,17 @@ input formats.
   the same ground. Publishing an approximate rule early is worse than
   publishing none (the client core's own preference, and the reason the
   contact model stayed unpublished).
+- [x] Close the texture pipeline's asymmetry — live 2026-07-31. Mesh converted
+  both directions but textures only converted modern to legacy, so every texture
+  created in Firestorm was canonically JPEG2000 and invisible to the first-party
+  client, which refuses that format by rule. `png-texture` is the reverse
+  rendition: decode the canonical JPEG2000, re-encode as lossless PNG, and serve
+  it from the session asset route as a derived representation. Verified against
+  the operator's own normal and specular maps, uploaded through Firestorm that
+  evening: both served as `image/png` where the canonical is `ff4f`. It recovers
+  the stored pixels, not the detail the viewer's uploader discarded — it
+  downsizes anything over 1024 and encodes lossily — so uploading through the
+  client remains the better path for new art.
 - [ ] V-HACD convex decomposition for mesh physics; the shipped physics
   block is the conservative bounding-box hull.
 - [x] Regenerate stale renditions — live 2026-07-29: the generator column

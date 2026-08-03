@@ -160,7 +160,18 @@ seam above encoding.
    when the converter's generator changes, and until one exists the route
    answers with the legacy bytes, so two requests seconds apart can differ in
    body *and* `Content-Type`. Store either; trust only the canonical one
-   without asking. The hello also
+   **Textures convert both ways too (2026-07-31).** A texture a viewer uploaded
+   is canonically JPEG2000, which this client refuses by rule, so `png-texture`
+   derives a lossless PNG from it and the asset route serves that instead —
+   exactly as it serves glTF for a canonical Second Life mesh. So a texture
+   created in Firestorm is readable here without exception, and the
+   `Content-Type` names what was actually served rather than what the id
+   nominally holds. Being derived, it is `no-cache`; only canonical bytes are
+   immutable. The conversion recovers the pixels the viewer stored, not the
+   detail its uploader already discarded — Firestorm downsizes anything over
+   1024 and encodes lossily on the way in, so uploading through this client
+   preserves more.
+   The hello also
    states the region's water as `water: {height}` — a height, not a
    surface, because the plane is flat and region-wide and everything about
    how it is drawn is the client's business (client core, 2026-07-30).
