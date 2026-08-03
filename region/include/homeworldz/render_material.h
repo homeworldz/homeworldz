@@ -76,4 +76,23 @@ struct ParsedMaterial {
 ParsedMaterial from_llsd(const llsd::Value& value);
 llsd::Value to_llsd(const RenderMaterial& material);
 
+// Whether this map carries at least one field a material is made of.
+//
+// The envelope a viewer sends is not a bare definition — Firestorm wraps them
+// in a "FullMaterialsPerFace" array of per-face entries (observed on the wire
+// 2026-07-31) — and guessing the wrapper's shape is what made the region parse
+// the envelope *as* a material and register an all-default one while reporting
+// success. So definitions are found by what they contain rather than by where
+// they sit, which is correct for any wrapper without knowing it.
+bool looks_like_material(const llsd::Value& value);
+
+// Every definition anywhere in a document, in document order. Descends maps and
+// arrays and does not recurse into a map already identified as a definition.
+std::vector<const llsd::Value*> find_materials(const llsd::Value& document);
+
+// A compact rendering of a document's shape: keys, types, array lengths, and
+// scalar values. For logging an unfamiliar body so the next question is answered
+// by evidence rather than by another guess.
+std::string describe(const llsd::Value& value, std::size_t limit = 2000);
+
 } // namespace homeworldz::material

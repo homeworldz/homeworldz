@@ -3920,14 +3920,33 @@ int main(int argc, char* argv[]) {
                                     reply_error = "the materials request carried no readable"
                                                   " zipped LLSD";
                                 } else {
-                                    // A viewer may send one definition or a list;
-                                    // accept either rather than guessing.
-                                    std::vector<const homeworldz::llsd::Value*> definitions;
-                                    if (document->type == homeworldz::llsd::Value::Type::array)
-                                        for (const auto& element : document->elements)
-                                            definitions.push_back(&element);
-                                    else
-                                        definitions.push_back(&*document);
+                                    // Definitions are found by what they contain,
+                                    // not by where they sit. Firestorm wraps them
+                                    // in a "FullMaterialsPerFace" array of
+                                    // per-face entries; treating the document as
+                                    // either one definition or a flat list parsed
+                                    // that envelope *as* a material and registered
+                                    // an all-default one while answering 200
+                                    // (found live 2026-07-31, and it looked
+                                    // exactly like success). Searching by content
+                                    // is right for any wrapper without needing to
+                                    // know its shape.
+                                    const auto definitions =
+                                        homeworldz::material::find_materials(*document);
+                                    // The shape itself, logged once per request, so
+                                    // the next surprise is answered by evidence
+                                    // rather than by another guess about the
+                                    // envelope.
+                                    std::cout << "{\"level\":\"info\",\"message\":\"materials"
+                                                 " request\",\"definitions\":"
+                                              << definitions.size() << ",\"shape\":"
+                                              << homeworldz::api::json_string(
+                                                     homeworldz::material::describe(*document))
+                                              << "}" << std::endl;
+                                    if (definitions.empty())
+                                        std::cout << "{\"level\":\"warning\",\"message\":\"materials"
+                                                     " request carried no recognizable"
+                                                     " definition\"}" << std::endl;
                                     for (const auto* definition : definitions) {
                                         const auto parsed =
                                             homeworldz::material::from_llsd(*definition);

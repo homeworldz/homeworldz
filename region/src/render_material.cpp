@@ -213,4 +213,83 @@ llsd::Value to_llsd(const RenderMaterial& material) {
     return out;
 }
 
+
+bool looks_like_material(const llsd::Value& value) {
+    if (value.type != llsd::Value::Type::map) return false;
+    for (const auto& [key, member] : value.members) {
+        static_cast<void>(member);
+        if (std::find_if(known_keys.begin(), known_keys.end(), [&key](const char* known) {
+                return key == known;
+            }) != known_keys.end())
+            return true;
+    }
+    return false;
+}
+
+namespace {
+
+void collect_materials(const llsd::Value& value, std::vector<const llsd::Value*>& out, int depth) {
+    if (depth > 16) return;
+    if (looks_like_material(value)) {
+        out.push_back(&value);
+        return; // a definition's members are fields, not nested definitions
+    }
+    if (value.type == llsd::Value::Type::map)
+        for (const auto& [key, member] : value.members) {
+            static_cast<void>(key);
+            collect_materials(member, out, depth + 1);
+        }
+    else if (value.type == llsd::Value::Type::array)
+        for (const auto& element : value.elements) collect_materials(element, out, depth + 1);
+}
+
+void describe_into(const llsd::Value& value, std::string& out, std::size_t limit) {
+    if (out.size() >= limit) return;
+    switch (value.type) {
+    case llsd::Value::Type::undefined: out += "undef"; return;
+    case llsd::Value::Type::boolean: out += value.boolean ? "true" : "false"; return;
+    case llsd::Value::Type::integer: out += std::to_string(value.integer); return;
+    case llsd::Value::Type::real: out += std::to_string(value.real); return;
+    case llsd::Value::Type::uuid: out += "uuid(" + value.text + ")"; return;
+    case llsd::Value::Type::string: out += "\"" + value.text + "\""; return;
+    case llsd::Value::Type::uri: out += "uri(" + value.text + ")"; return;
+    case llsd::Value::Type::binary:
+        out += "binary[" + std::to_string(value.binary.size()) + "]";
+        return;
+    case llsd::Value::Type::map:
+        out += "{";
+        for (std::size_t index = 0; index < value.members.size(); ++index) {
+            if (out.size() >= limit) { out += "..."; break; }
+            if (index != 0) out += ",";
+            out += value.members[index].first + ":";
+            describe_into(value.members[index].second, out, limit);
+        }
+        out += "}";
+        return;
+    case llsd::Value::Type::array:
+        out += "[" + std::to_string(value.elements.size()) + ":";
+        for (std::size_t index = 0; index < value.elements.size(); ++index) {
+            if (out.size() >= limit) { out += "..."; break; }
+            if (index != 0) out += ",";
+            describe_into(value.elements[index], out, limit);
+        }
+        out += "]";
+        return;
+    }
+}
+
+} // namespace
+
+std::vector<const llsd::Value*> find_materials(const llsd::Value& document) {
+    std::vector<const llsd::Value*> out;
+    collect_materials(document, out, 0);
+    return out;
+}
+
+std::string describe(const llsd::Value& value, std::size_t limit) {
+    std::string out;
+    describe_into(value, out, limit);
+    return out;
+}
+
 } // namespace homeworldz::material

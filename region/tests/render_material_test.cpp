@@ -72,6 +72,17 @@ int main() {
         const auto text = format_id(identify(first));
         check(text.size() == 36 && text[8] == '-' && text[13] == '-',
               "an id formats as a hyphenated 16-byte value");
+
+        // The id of a material with every field defaulted, recorded as a golden
+        // value. Not decoration: a parser that reads the wrong part of a
+        // document registers *this* material and reports success, which is
+        // precisely what happened on 2026-07-31 when the envelope was parsed as
+        // a definition. Seeing this id in a log means nothing was read.
+        const auto empty_id = format_id(identify(RenderMaterial{}));
+        std::cerr << "  id of an all-default material: " << empty_id << '\n';
+        check(empty_id == "3fca6644-2ec9-c38e-cf83-0cd3c89fb68e",
+              "the all-default material's id is the known value — if this fails the"
+              " canonical form changed, and every stored id is stale");
     }
 
     // --- Defaults. Repeats default to one, not zero: a material that arrived
@@ -171,6 +182,57 @@ int main() {
             check(identify(parsed.material) == identify(material),
                   "identity survives serialization");
         }
+    }
+
+
+    // --- Definitions are found by content, not position. This is the fix for
+    // 2026-07-31: Firestorm wraps definitions in a "FullMaterialsPerFace" array
+    // of per-face entries, and a parser that assumed the document was either one
+    // definition or a flat list of them parsed the *envelope* as a material,
+    // registered an all-default one, and answered 200. It looked like success in
+    // every log line except the unknown-key warning.
+    {
+        const auto make_material = [] {
+            Value m;
+            m.type = Value::Type::map;
+            Value id;
+            id.type = Value::Type::uuid;
+            id.text = "26700e50-492d-4243-9513-1905e8109e2b";
+            m.members.emplace_back("SpecMap", id);
+            return m;
+        };
+        // The envelope Firestorm actually sends, as far as its outer key is known.
+        Value entry;
+        entry.type = Value::Type::map;
+        Value face;
+        face.type = Value::Type::integer;
+        face.integer = 0;
+        entry.members.emplace_back("Face", face);
+        entry.members.emplace_back("Material", make_material());
+        Value list;
+        list.type = Value::Type::array;
+        list.elements.push_back(entry);
+        Value envelope;
+        envelope.type = Value::Type::map;
+        envelope.members.emplace_back("FullMaterialsPerFace", list);
+
+        const auto found = homeworldz::material::find_materials(envelope);
+        check(found.size() == 1, "one definition found inside the per-face envelope");
+        if (found.size() == 1) {
+            const auto parsed = from_llsd(*found[0]);
+            check(parsed.material.specular_map == "26700e50-492d-4243-9513-1905e8109e2b",
+                  "the definition's own fields are read, not the envelope's");
+            check(identify(parsed.material) != identify(RenderMaterial{}),
+                  "and the result is NOT the all-default material - the symptom of the bug");
+        }
+        // The envelope alone is not a definition, however deeply it is wrapped.
+        check(!homeworldz::material::looks_like_material(envelope),
+              "an envelope carrying no material field is not a material");
+        check(homeworldz::material::find_materials(Value{}).empty(),
+              "a document with no definitions yields none rather than one of defaults");
+        // A bare definition still works: the search must not require a wrapper.
+        const auto bare = homeworldz::material::find_materials(make_material());
+        check(bare.size() == 1, "a bare definition is still found");
     }
 
     if (failures != 0) {
