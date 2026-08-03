@@ -473,17 +473,33 @@ input formats.
 - [ ] M3 material and texture renditions: glTF material JSON (type 57) for
   PBR-capable viewers and JPEG2000 texture extraction for the legacy
   texture pipeline. The related gap found live 2026-07-29 — no RenderMaterials
-  capability, so viewer materials edits silently did not persist — is served as
-  of 2026-07-31: LLSD binary read and written both ways with its zip, legacy
-  Blinn-Phong definitions modelled with identity as the definition's own hash
-  (so two viewers assigning the same material converge on one id and one row),
-  persisted in the region store and reloaded at startup, and the capability
-  advertised and answered for both GET and POST. **Wire compatibility is
-  unproven and deliberately instrumented rather than assumed:** the LLSD key
-  names are this project's reading of the format, no test can validate them
-  (a reader and writer built together agree either way), so every key a viewer
-  sends that the region does not recognise is logged by name. The first real
-  materials edit either confirms the field names or names the right ones.
+  capability, so viewer materials edits silently did not persist — is **closed
+  and verified end to end on 2026-07-31**: assigned in Firestorm, registered,
+  written onto the named faces, persisted, and read back after a relog with the
+  Normal and Specular pickers populated.
+
+  The format is recorded from the wire rather than guessed. All seventeen LLSD
+  key names were confirmed exactly as modelled, offsets and repeats scaled by
+  10000. Three things measurement supplied that reasoning had not: definitions
+  arrive wrapped in a `FullMaterialsPerFace` array of `{Face, ID, Material}`
+  entries where `ID` is the *object's* local id, so the request tells the server
+  which face to write the material id onto; the same definition arrives once per
+  face rather than once with a face mask, which is why identity by content
+  matters; and a viewer resolves a face's material by GETting all of them on
+  login rather than querying specific ids — the id-query path is implemented and
+  has never been exercised.
+
+  Three defects on the way there, each caught by instrumentation rather than by a
+  test, and each looking exactly like success. The capability was advertised and
+  its path parsed but it was missing from the dispatch gate, so four PUTs
+  answered 404 and read as ordinary traffic. The envelope was then parsed *as* a
+  definition, registering the all-default material and answering 200 — which is
+  why that material's id is now a golden value in the tests, since seeing it in a
+  log means nothing was read. And the definitions were stored while nothing
+  referenced them, because writing the id onto the named face had never been
+  implemented; a TextureEntry codec that edits rather than only builds was the
+  missing piece. The unknown-key warning exposed the second and a relog exposed
+  the third.
   Texture serving was fixed 2026-07-31: the rule that a viewer gets the
   derived JPEG2000 rather than the canonical PNG was implemented on the older
   GetTexture capability only, and Firestorm fetches through ViewerAsset, which

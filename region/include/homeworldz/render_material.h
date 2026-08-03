@@ -9,13 +9,24 @@
 // because from the viewer's side nothing failed - it simply never got an id
 // back to store (found live 2026-07-29).
 //
-// **The field names below are not verified against a viewer.** They are this
-// project's reading of the format, and a round-trip test would only prove that
-// this file agrees with itself. So the capability logs the keys of every
-// definition a viewer actually sends, and the first real edit will either
-// confirm these names or name the ones to use. Until that happens, treat wire
-// compatibility as unproven; the storage, the identity, and the persistence
-// below are testable on their own and are tested.
+// **The field names below are confirmed against Firestorm** (2026-07-31): a
+// real assignment arrived with all seventeen keys spelled exactly as here, no
+// key unrecognised, and offsets and repeats scaled by 10000 as modelled — a
+// repeat of 1.0 arriving as 10000. They were a guess until that measurement and
+// no test here could have settled it, because a reader and writer built together
+// agree either way. The unknown-key reporting below is what turned the guess
+// into evidence, and it stays: the next viewer may differ.
+//
+// Two things the wire said that reasoning had not. A definition is wrapped in a
+// "FullMaterialsPerFace" array of {Face, ID, Material} entries, where ID is the
+// *object's* local id — so the request tells the server which face to write the
+// resulting material id onto, and a server that only stores definitions leaves
+// them referenced by nothing. And the same definition arrives once per face
+// rather than once with a face mask, which is why identity by content matters.
+//
+// A viewer resolves a face's material by GETting *all* of them on login rather
+// than asking for specific ids. The id-query path is implemented and has never
+// been exercised.
 
 #include "homeworldz/llsd_xml.h"
 
