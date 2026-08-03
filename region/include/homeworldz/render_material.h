@@ -86,9 +86,25 @@ llsd::Value to_llsd(const RenderMaterial& material);
 // they sit, which is correct for any wrapper without knowing it.
 bool looks_like_material(const llsd::Value& value);
 
-// Every definition anywhere in a document, in document order. Descends maps and
-// arrays and does not recurse into a map already identified as a definition.
-std::vector<const llsd::Value*> find_materials(const llsd::Value& document);
+// Where a definition was found, and what the document said to do with it. A
+// viewer's entry names the object and face to apply the material to — the
+// server is what writes the resulting id into that face — so the siblings of a
+// definition matter as much as the definition. Absent when the document carried
+// a bare definition with no placement.
+struct Placement {
+    const llsd::Value* definition{};
+    std::optional<std::int64_t> local_id;  // "ID" beside Material: the object
+    std::optional<std::int64_t> face;      // "Face" beside Material
+};
+
+// Every definition anywhere in a document, in document order, each with the
+// placement its enclosing map gave it. Descends maps and arrays and does not
+// recurse into a map already identified as a definition.
+std::vector<Placement> find_materials(const llsd::Value& document);
+
+// Every 16-byte binary value in a document: the shape a query for known
+// materials takes, as opposed to a registration carrying definitions.
+std::vector<std::array<std::byte, 16>> find_material_ids(const llsd::Value& document);
 
 // A compact rendering of a document's shape: keys, types, array lengths, and
 // scalar values. For logging an unfamiliar body so the next question is answered

@@ -228,19 +228,59 @@ bool looks_like_material(const llsd::Value& value) {
 
 namespace {
 
-void collect_materials(const llsd::Value& value, std::vector<const llsd::Value*>& out, int depth) {
+void collect_materials(const llsd::Value& value, std::vector<Placement>& out, int depth) {
     if (depth > 16) return;
     if (looks_like_material(value)) {
-        out.push_back(&value);
-        return; // a definition's members are fields, not nested definitions
+        // A bare definition with nothing around it to place it.
+        out.push_back(Placement{&value, std::nullopt, std::nullopt});
+        return;
     }
-    if (value.type == llsd::Value::Type::map)
+    if (value.type == llsd::Value::Type::map) {
+        // A map holding a definition is that definition's placement: its
+        // siblings say which object and face the material is for.
+        bool held_definition = false;
+        for (const auto& [key, member] : value.members) {
+            static_cast<void>(key);
+            if (!looks_like_material(member)) continue;
+            Placement placement{&member, std::nullopt, std::nullopt};
+            if (const auto* id = value.find("ID"); id != nullptr &&
+                (id->type == llsd::Value::Type::integer ||
+                 id->type == llsd::Value::Type::real))
+                placement.local_id = id->as_integer();
+            if (const auto* face = value.find("Face"); face != nullptr &&
+                (face->type == llsd::Value::Type::integer ||
+                 face->type == llsd::Value::Type::real))
+                placement.face = face->as_integer();
+            out.push_back(placement);
+            held_definition = true;
+        }
+        if (held_definition) return;
         for (const auto& [key, member] : value.members) {
             static_cast<void>(key);
             collect_materials(member, out, depth + 1);
         }
-    else if (value.type == llsd::Value::Type::array)
+        return;
+    }
+    if (value.type == llsd::Value::Type::array)
         for (const auto& element : value.elements) collect_materials(element, out, depth + 1);
+}
+
+void collect_material_ids(const llsd::Value& value,
+                          std::vector<std::array<std::byte, 16>>& out, int depth) {
+    if (depth > 16) return;
+    if (value.type == llsd::Value::Type::binary && value.binary.size() == 16) {
+        std::array<std::byte, 16> id{};
+        std::copy(value.binary.begin(), value.binary.end(), id.begin());
+        out.push_back(id);
+        return;
+    }
+    if (value.type == llsd::Value::Type::map)
+        for (const auto& [key, member] : value.members) {
+            static_cast<void>(key);
+            collect_material_ids(member, out, depth + 1);
+        }
+    else if (value.type == llsd::Value::Type::array)
+        for (const auto& element : value.elements) collect_material_ids(element, out, depth + 1);
 }
 
 void describe_into(const llsd::Value& value, std::string& out, std::size_t limit) {
@@ -280,9 +320,15 @@ void describe_into(const llsd::Value& value, std::string& out, std::size_t limit
 
 } // namespace
 
-std::vector<const llsd::Value*> find_materials(const llsd::Value& document) {
-    std::vector<const llsd::Value*> out;
+std::vector<Placement> find_materials(const llsd::Value& document) {
+    std::vector<Placement> out;
     collect_materials(document, out, 0);
+    return out;
+}
+
+std::vector<std::array<std::byte, 16>> find_material_ids(const llsd::Value& document) {
+    std::vector<std::array<std::byte, 16>> out;
+    collect_material_ids(document, out, 0);
     return out;
 }
 

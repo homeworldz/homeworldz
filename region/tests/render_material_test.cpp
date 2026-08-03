@@ -208,6 +208,11 @@ int main() {
         face.type = Value::Type::integer;
         face.integer = 0;
         entry.members.emplace_back("Face", face);
+        // The object's local id, as Firestorm sends it beside the definition.
+        Value object_id;
+        object_id.type = Value::Type::integer;
+        object_id.integer = 31;
+        entry.members.emplace_back("ID", object_id);
         entry.members.emplace_back("Material", make_material());
         Value list;
         list.type = Value::Type::array;
@@ -219,11 +224,18 @@ int main() {
         const auto found = homeworldz::material::find_materials(envelope);
         check(found.size() == 1, "one definition found inside the per-face envelope");
         if (found.size() == 1) {
-            const auto parsed = from_llsd(*found[0]);
+            const auto parsed = from_llsd(*found[0].definition);
             check(parsed.material.specular_map == "26700e50-492d-4243-9513-1905e8109e2b",
                   "the definition's own fields are read, not the envelope's");
             check(identify(parsed.material) != identify(RenderMaterial{}),
                   "and the result is NOT the all-default material - the symptom of the bug");
+            // The placement is the other half: without the object and face the
+            // material is stored and nothing ever references it, which is
+            // exactly the state the operator's prims were left in.
+            check(found[0].local_id.has_value() && *found[0].local_id == 31,
+                  "the enclosing entry's object id travels with the definition");
+            check(found[0].face.has_value() && *found[0].face == 0,
+                  "and so does its face index");
         }
         // The envelope alone is not a definition, however deeply it is wrapped.
         check(!homeworldz::material::looks_like_material(envelope),
@@ -233,6 +245,21 @@ int main() {
         // A bare definition still works: the search must not require a wrapper.
         const auto bare = homeworldz::material::find_materials(make_material());
         check(bare.size() == 1, "a bare definition is still found");
+        if (bare.size() == 1)
+            check(!bare[0].local_id && !bare[0].face,
+                  "a bare definition carries no placement rather than a guessed one");
+
+        // A query — ids and no definitions — must not read as a registration.
+        Value query;
+        query.type = Value::Type::array;
+        Value wanted;
+        wanted.type = Value::Type::binary;
+        wanted.binary.assign(16, std::byte{0xC3});
+        query.elements.push_back(wanted);
+        check(homeworldz::material::find_materials(query).empty(),
+              "a query carries no definitions");
+        check(homeworldz::material::find_material_ids(query).size() == 1,
+              "and its requested id is found");
     }
 
     if (failures != 0) {

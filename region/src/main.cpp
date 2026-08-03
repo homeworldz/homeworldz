@@ -37,6 +37,7 @@
 #include "homeworldz/capability_paths.h"
 #include "homeworldz/llsd_binary.h"
 #include "homeworldz/render_material.h"
+#include "homeworldz/texture_entry.h"
 #include "homeworldz/falcon_runtime.h"
 #include "homeworldz/grid_client.h"
 #include "homeworldz/session_server.h"
@@ -3943,11 +3944,42 @@ int main(int argc, char* argv[]) {
                                               << homeworldz::api::json_string(
                                                      homeworldz::material::describe(*document))
                                               << "}" << std::endl;
-                                    if (definitions.empty())
-                                        std::cout << "{\"level\":\"warning\",\"message\":\"materials"
-                                                     " request carried no recognizable"
-                                                     " definition\"}" << std::endl;
-                                    for (const auto* definition : definitions) {
+                                    if (definitions.empty()) {
+                                        // No definitions means this is a query, not
+                                        // a registration: a viewer asking for the
+                                        // materials behind ids it found on faces.
+                                        // Answer those rather than nothing, since
+                                        // an unanswered query is why a relogged
+                                        // viewer showed empty pickers.
+                                        const auto wanted =
+                                            homeworldz::material::find_material_ids(*document);
+                                        for (const auto& id : wanted) {
+                                            const auto text =
+                                                homeworldz::material::format_id(id);
+                                            const auto found = render_material_cache.find(text);
+                                            if (found == render_material_cache.end()) continue;
+                                            if (const auto stored = homeworldz::llsd::parse_binary(
+                                                    std::span<const std::byte>(found->second))) {
+                                                homeworldz::llsd::Value entry;
+                                                entry.type = homeworldz::llsd::Value::Type::map;
+                                                homeworldz::llsd::Value id_value;
+                                                id_value.type =
+                                                    homeworldz::llsd::Value::Type::binary;
+                                                id_value.binary.assign(id.begin(), id.end());
+                                                entry.members.emplace_back("ID",
+                                                                           std::move(id_value));
+                                                entry.members.emplace_back("Material", *stored);
+                                                answer.elements.push_back(std::move(entry));
+                                            }
+                                        }
+                                        std::cout << "{\"level\":\"info\",\"message\":\"materials"
+                                                     " query\",\"requested\":" << wanted.size()
+                                                  << ",\"answered\":" << answer.elements.size()
+                                                  << "}" << std::endl;
+                                    }
+                                    bool scene_changed = false;
+                                    for (const auto& placement : definitions) {
+                                        const auto* definition = placement.definition;
                                         const auto parsed =
                                             homeworldz::material::from_llsd(*definition);
                                         if (!parsed.ok) continue;
@@ -3997,6 +4029,66 @@ int main(int argc, char* argv[]) {
                                                      "\"material registered\",\"materialId\":"
                                                   << homeworldz::api::json_string(text)
                                                   << "}" << std::endl;
+
+                                        // Storing the definition was never enough:
+                                        // the request names an object and a face,
+                                        // and the server is what writes the id into
+                                        // that face's TextureEntry. Skipping this is
+                                        // why a relog showed empty pickers — the
+                                        // material existed and nothing referenced it
+                                        // (found live 2026-07-31).
+                                        if (!placement.local_id || !placement.face) continue;
+                                        auto* target = scene.find(
+                                            static_cast<std::uint32_t>(*placement.local_id));
+                                        if (target == nullptr) continue;
+                                        if (target->owner_id != authorized_agent_id ||
+                                            (target->owner_permissions &
+                                             homeworldz::scene::permission_modify) == 0)
+                                            continue;
+                                        const auto face =
+                                            static_cast<unsigned>(*placement.face);
+                                        if (face >= homeworldz::texture_entry::max_faces) continue;
+                                        auto entry_bytes = target->texture_entry;
+                                        if (entry_bytes.empty())
+                                            entry_bytes = default_prim_texture_entry();
+                                        auto decoded = homeworldz::texture_entry::parse(
+                                            std::span<const std::byte>(entry_bytes));
+                                        if (!decoded) continue;
+                                        // A definition naming neither map is the
+                                        // viewer asking to remove the material, not
+                                        // a material made of nothing — so the face
+                                        // goes back to the nil id rather than
+                                        // pointing at an empty record.
+                                        const bool removing = parsed.material.normal_map.empty() &&
+                                                              parsed.material.specular_map.empty();
+                                        std::vector<std::byte> face_material(16, std::byte{});
+                                        if (!removing)
+                                            face_material.assign(id.begin(), id.end());
+                                        homeworldz::texture_entry::set_face(
+                                            *decoded, homeworldz::texture_entry::material_id, face,
+                                            face_material);
+                                        auto rewritten =
+                                            homeworldz::texture_entry::encode(*decoded);
+                                        if (rewritten == target->texture_entry) continue;
+                                        target->texture_entry = std::move(rewritten);
+                                        scene_changed = true;
+                                        std::cout << "{\"level\":\"info\",\"message\":\"material"
+                                                     " applied to face\",\"localId\":"
+                                                  << *placement.local_id << ",\"face\":" << face
+                                                  << ",\"materialId\":"
+                                                  << homeworldz::api::json_string(
+                                                         removing ? "removed" : text)
+                                                  << "}" << std::endl;
+                                    }
+                                    if (scene_changed) {
+                                        try {
+                                            storage->save_snapshot(scene);
+                                        } catch (const std::exception& error) {
+                                            std::cout << "{\"level\":\"error\",\"message\":\"material"
+                                                         " face persistence failed\",\"error\":"
+                                                      << homeworldz::api::json_string(error.what())
+                                                      << "}" << std::endl;
+                                        }
                                     }
                                 }
                             }
