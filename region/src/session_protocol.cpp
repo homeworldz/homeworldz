@@ -1,6 +1,7 @@
 #include "homeworldz/session_protocol.h"
 
 #include "homeworldz/avatar_controller.h"
+#include "homeworldz/terrain_layers.h"
 #include "homeworldz/physics.h"
 #include "homeworldz/mesh_acceptance.h"
 
@@ -315,6 +316,31 @@ std::string encode_envelope(std::string_view type, std::string_view correlation_
     return rendered;
 }
 
+namespace {
+
+// The layer ids and elevation corners as JSON lists. Written here rather than
+// hand-assembled inline so the hello and the handshake cannot disagree about
+// their order.
+std::string layer_asset_list() {
+    std::string out;
+    for (const auto asset : homeworldz::terrain::layer_assets) {
+        if (!out.empty()) out += ",";
+        out += "\"" + std::string(asset) + "\"";
+    }
+    return out;
+}
+
+std::string corner_list(const std::array<float, 4>& values) {
+    std::string out = "[";
+    for (std::size_t index = 0; index < values.size(); ++index) {
+        if (index != 0) out += ",";
+        out += json_number_text(values[index]);
+    }
+    return out + "]";
+}
+
+} // namespace
+
 SessionCore::SessionCore(std::string region_name, TicketValidator validator,
                          std::size_t terrain_width, double walkable_slope_degrees,
                          double water_height, std::function<std::uint64_t()> terrain_revision)
@@ -417,7 +443,33 @@ SessionCore::Result SessionCore::handle_text(std::string_view text) {
             // type deliberately: one encoding of heights, not two (client core
             // caution, 2026-07-30).
             ",\"patchHeights\":{\"format\":\"heightmap-f32le\""
-            ",\"encoding\":\"base64\",\"rowMajorWithinPatch\":true}}" +
+            ",\"encoding\":\"base64\",\"rowMajorWithinPatch\":true}" +
+            // The ground's surface, not just its shape. Four textures selected
+            // by elevation, lowest to highest, fetched from assets.base like
+            // any other asset — they are canonical PNG since 2026-07-31, so a
+            // client that refuses JPEG2000 can read them and a cache can hold
+            // them for the life of the id.
+            //
+            // `startHeight` and `heightRange` are per corner in the order
+            // south-west, north-west, south-east, north-east; a layer's band is
+            // [start, start + range] with the corners interpolated across the
+            // region. `gridWide` says these are the same on every region — a
+            // fact worth stating rather than leaving a client to assume, since
+            // when it stops being true a client that was told will notice.
+            //
+            // No blend rule is published, deliberately: the region implements
+            // none, viewers each blend in their own code, and the original
+            // grid's version was never reproduced outside it. Any rule stated
+            // here would be authoritative for this client and approximate
+            // against a viewer on the same hill, and an approximate rule is
+            // worse than none.
+            ",\"layers\":{\"assets\":[" + layer_asset_list() +
+            "],\"selectedBy\":\"elevation\"" +
+            ",\"startHeight\":" + corner_list(homeworldz::terrain::layer_start_height) +
+            ",\"heightRange\":" + corner_list(homeworldz::terrain::layer_height_range) +
+            ",\"corners\":\"sw,nw,se,ne\"" +
+            ",\"gridWide\":" +
+            (homeworldz::terrain::layers_are_grid_wide ? "true" : "false") + "}}" +
             // The region's water: a height, not a surface. The plane is flat
             // and region-wide, in the same vertical datum as terrain heights,
             // and everything about how it is drawn is the client's business

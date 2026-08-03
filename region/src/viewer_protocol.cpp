@@ -1,5 +1,7 @@
 #include "homeworldz/viewer_protocol.h"
 
+#include "homeworldz/terrain_layers.h"
+
 #include <algorithm>
 #include <bit>
 #include <charconv>
@@ -801,7 +803,11 @@ std::vector<std::byte> encode_region_handshake(const RegionHandshake& message) {
     append_uuid(output, zero); // cache ID
     for (const auto& texture : message.terrain_textures) append_uuid(output, texture); // terrain base
     for (const auto& texture : message.terrain_textures) append_uuid(output, texture); // terrain detail
-    for (const float value : {10.F, 10.F, 10.F, 10.F, 60.F, 60.F, 60.F, 60.F}) append_f32(output, value);
+    // Per-corner start height then height range, the band each layer is
+    // selected within. Shared with the session hello so a viewer and a client
+    // are told the same numbers (homeworldz/terrain_layers.h).
+    for (const float value : terrain::layer_start_height) append_f32(output, value);
+    for (const float value : terrain::layer_height_range) append_f32(output, value);
     append_uuid(output, message.region_id);
     append_le_u32(output, 0); // CPU class
     append_le_u32(output, 1); // CPU ratio

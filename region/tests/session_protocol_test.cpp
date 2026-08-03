@@ -1,5 +1,6 @@
 #include "homeworldz/mesh_acceptance.h"
 #include "homeworldz/session_protocol.h"
+#include "homeworldz/terrain_layers.h"
 
 #include <span>
 #include <string>
@@ -121,7 +122,9 @@ int main() {
                                "\"changedEvent\":\"terrainChanged\","
                                "\"revision\":7,\"ranges\":true,"
                                "\"patchHeights\":{\"format\":\"heightmap-f32le\","
-                               "\"encoding\":\"base64\",\"rowMajorWithinPatch\":true}}")
+                               // One closing brace, not two: the terrain object
+                               // continues into the layers block below.
+                               "\"encoding\":\"base64\",\"rowMajorWithinPatch\":true}")
         == std::string::npos)
         return 34;
     // The water plane: a height, not a surface. A viewer gets this in
@@ -129,6 +132,30 @@ int main() {
     // client drew water wherever it guessed (client core, 2026-07-30).
     if (greeting->payload.find("\"water\":{\"height\":20}") == std::string::npos)
         return 35;
+    // The ground's surface: which four textures, and the elevation band that
+    // selects between them. Without these a client knows the shape of the
+    // ground and nothing about how it looks, so it draws one flat colour
+    // (client core, 2026-07-31). The ids must be the same ones the viewer's
+    // RegionHandshake names — asserted against the shared definition rather
+    // than a literal, since two copies of this list is the defect it was
+    // hoisted to prevent.
+    {
+        std::string expected = "\"layers\":{\"assets\":[";
+        for (const auto asset : homeworldz::terrain::layer_assets) {
+            if (expected.back() != '[') expected += ",";
+            expected += "\"" + std::string(asset) + "\"";
+        }
+        expected += "],\"selectedBy\":\"elevation\""
+                    ",\"startHeight\":[10,10,10,10]"
+                    ",\"heightRange\":[60,60,60,60]"
+                    ",\"corners\":\"sw,nw,se,ne\""
+                    ",\"gridWide\":true}";
+        if (greeting->payload.find(expected) == std::string::npos) return 36;
+    }
+    // No blend rule is published, and that is deliberate: the region implements
+    // none, and an approximate rule is worse than none. Asserted so a future
+    // change that invents one has to delete this line and think about it.
+    if (greeting->payload.find("\"blend\"") != std::string::npos) return 37;
     // base64 round-trips against a known vector, since a terrainChanged's
     // heights are unreadable if this is subtly wrong and nothing else here
     // would notice.

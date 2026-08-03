@@ -169,6 +169,29 @@ seam above encoding.
    comparing a guessed water line against a published one. It is now
    `region.water_height` on both paths, defaulting to the 20 m the
    handshake had always hard-coded.
+   **The ground's surface (2026-07-31).** `terrain.layers` names the four
+   textures and the elevation band that selects between them: `assets` lowest
+   to highest, `startHeight` and `heightRange` per corner in the order
+   south-west, north-west, south-east, north-east, a layer's band being
+   `[start, start + range]` with the corners interpolated across the region.
+   They are ordinary assets, fetched from `assets.base`, canonical PNG since
+   the layers were re-sourced — so a client that refuses JPEG2000 can read the
+   ground it stands on, and a cache can hold them for the life of the id.
+   `gridWide: true` states that these are compile-time constants shared by
+   every region rather than per-region operator state; making them per-region
+   is a named prerequisite of the terrain-surface roadmap item and is not done.
+   That fact is published rather than left to be assumed, so that the day it
+   stops being true, a client that was told will notice and one that guessed
+   will not.
+   **No blend rule is published, and that is deliberate.** The region
+   implements none; viewers each blend in their own code and the original
+   grid's version was never reproduced outside it. Any rule stated here would
+   be authoritative for the first-party client and approximate against a viewer
+   standing on the same hill, so the two families will differ subtly on the
+   same ground no matter what is written. Publishing an approximate rule is
+   worse than publishing none — the same reasoning that kept the contact model
+   unpublished. A test asserts the key stays absent, so inventing one has to be
+   a deliberate act.
 5. **Departure splits into what the avatar owns and what the viewer owns.**
    `retire_avatar(key)` (kill broadcast, physics removal, avatar-keyed maps)
    serves both transports; `clear_viewer_transport(endpoint)` (texture
