@@ -42,6 +42,11 @@ std::optional<std::vector<std::uint8_t>> encode_j2c(const Image& image);
 // carries. These are the only two formats glTF allows for embedded images, so
 // this is the entry point for extracting a GLB's textures (ADR 0033 M3).
 // Returns nullopt on malformed or unsupported input.
+// PNG, for the modern rendition of a texture a viewer uploaded as JPEG2000.
+// Lossless, so it adds nothing to whatever the viewer's uploader already
+// discarded.
+std::optional<std::vector<std::uint8_t>> encode_png(const Image& image);
+
 std::optional<Image> decode_png_or_jpeg(const std::vector<std::uint8_t>& data);
 
 // Decode a TGA blob into an Image. Supports uncompressed and RLE, grayscale

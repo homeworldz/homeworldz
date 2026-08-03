@@ -188,6 +188,71 @@ int main() {
                   << " bytes, PSNR " << psnr << " dB)\n";
     }
 
+
+    // PNG encoding, the reverse rendition direction. A texture a viewer uploaded
+    // is canonically JPEG2000 and the first-party client refuses that by rule, so
+    // it needs a modern copy. PNG is lossless, so the rendition must reproduce
+    // the canonical's pixels *exactly* — anything less would be a second
+    // generation of loss on top of the viewer's own.
+    {
+        const Image source = make_gradient(48, 32);
+        const auto png = homeworldz::image::encode_png(source);
+        if (!png || png->empty()) {
+            std::cerr << "encode_png failed\n";
+            return 1;
+        }
+        // A real PNG, by its signature, not merely some bytes.
+        static const std::uint8_t signature[] = {0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a};
+        if (png->size() < sizeof(signature) ||
+            !std::equal(std::begin(signature), std::end(signature), png->begin())) {
+            std::cerr << "encode_png did not produce a PNG signature\n";
+            return 1;
+        }
+        const auto back = homeworldz::image::decode_png_or_jpeg(*png);
+        if (!back) {
+            std::cerr << "the PNG we wrote could not be decoded\n";
+            return 1;
+        }
+        if (back->width != source.width || back->height != source.height ||
+            back->channels != source.channels) {
+            std::cerr << "PNG round-trip changed the shape\n";
+            return 1;
+        }
+        if (back->pixels != source.pixels) {
+            std::cerr << "PNG round-trip was not lossless\n";
+            return 1;
+        }
+        // And the path a viewer-uploaded texture actually takes: JPEG2000
+        // canonical in, PNG rendition out, both readable.
+        const auto j2c = homeworldz::image::encode_j2c(source);
+        if (!j2c) {
+            std::cerr << "encode_j2c failed for the reverse-direction fixture\n";
+            return 1;
+        }
+        const auto decoded_j2c = homeworldz::image::decode_j2c(*j2c);
+        if (!decoded_j2c) {
+            std::cerr << "decode_j2c failed for the reverse-direction fixture\n";
+            return 1;
+        }
+        const auto rendition = homeworldz::image::encode_png(*decoded_j2c);
+        if (!rendition) {
+            std::cerr << "encode_png refused a JPEG2000 decode\n";
+            return 1;
+        }
+        const auto final_image = homeworldz::image::decode_png_or_jpeg(*rendition);
+        if (!final_image || final_image->pixels != decoded_j2c->pixels) {
+            std::cerr << "the png-texture rendition did not preserve the canonical decode\n";
+            return 1;
+        }
+        std::cerr << "image png encode OK (" << source.pixels.size() << " raw -> "
+                  << png->size() << " bytes, lossless; j2c->png rendition preserved)\n";
+        // An empty image is refused rather than producing a zero-pixel PNG.
+        if (homeworldz::image::encode_png(Image{})) {
+            std::cerr << "encode_png accepted an empty image\n";
+            return 1;
+        }
+    }
+
     // Garbage input must be rejected, not crash.
     if (decode_j2c(std::vector<std::uint8_t>{0x00, 0x01, 0x02, 0x03, 0x04}).has_value()) {
         std::cerr << "decode_j2c accepted non-JPEG2000 input\n";

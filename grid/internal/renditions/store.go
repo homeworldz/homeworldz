@@ -43,6 +43,10 @@ var (
 // ErrInvalid instead of a constraint error.
 var validKinds = map[string]bool{
 	"gltf": true, "sl-mesh": true, "sl-material": true, "j2c-texture": true,
+	// The reverse of j2c-texture: a viewer-uploaded texture is canonically
+	// JPEG2000, which the first-party client refuses by rule, so it needs a
+	// modern copy derived from it (migration 000030).
+	"png-texture": true,
 }
 
 // MaxRenditionSize bounds a stored rendition; it matches the vault's blob cap

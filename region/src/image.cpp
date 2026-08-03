@@ -22,6 +22,15 @@
 #define STBI_FAILURE_USERMSG
 #include <stb_image.h>
 
+// stb_image_write, for the reverse direction: a texture a viewer uploaded is
+// canonically JPEG2000, which the first-party client refuses by rule, so it needs
+// a modern rendition derived from it. Only PNG is used — it is lossless, so the
+// rendition adds no loss of its own on top of whatever the viewer's uploader
+// already did.
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#define STBI_WRITE_NO_STDIO
+#include <stb_image_write.h>
+
 namespace homeworldz::image {
 
 #if defined(HOMEWORLDZ_OPENJPEG)
@@ -503,6 +512,25 @@ Image composite_rgba(std::uint32_t width, std::uint32_t height,
         }
     }
     return acc;
+}
+
+
+std::optional<std::vector<std::uint8_t>> encode_png(const Image& image) {
+    if (image.empty() || image.channels < 1 || image.channels > 4) return std::nullopt;
+    if (image.pixels.size() != image.expected_size()) return std::nullopt;
+    std::vector<std::uint8_t> out;
+    const auto sink = [](void* context, void* data, int size) {
+        auto* target = static_cast<std::vector<std::uint8_t>*>(context);
+        const auto* bytes = static_cast<const std::uint8_t*>(data);
+        target->insert(target->end(), bytes, bytes + size);
+    };
+    const auto stride = static_cast<int>(image.width) * image.channels;
+    if (stbi_write_png_to_func(sink, &out, static_cast<int>(image.width),
+                               static_cast<int>(image.height), image.channels,
+                               image.pixels.data(), stride) == 0)
+        return std::nullopt;
+    if (out.empty()) return std::nullopt;
+    return out;
 }
 
 std::optional<Image> decode_png_or_jpeg(const std::vector<std::uint8_t>& data) {

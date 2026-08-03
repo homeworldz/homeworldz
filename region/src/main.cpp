@@ -3124,7 +3124,32 @@ int main(int argc, char* argv[]) {
                                 } else if (byte_at(0) == 0xff && byte_at(1) == 0xd8) {
                                     content_type = "image/jpeg";
                                 } else if (byte_at(0) == 0xff && byte_at(1) == 0x4f) {
+                                    // Canonical JPEG2000 means a viewer uploaded
+                                    // this texture, and this route's clients
+                                    // refuse that format by rule — so every
+                                    // texture made in Firestorm was invisible to
+                                    // them. Serve the png-texture rendition,
+                                    // exactly as the mesh branch below serves
+                                    // glTF for a canonical Second Life mesh: each
+                                    // family asks for one id and receives the
+                                    // form it can read (ADR 0033).
                                     content_type = "image/x-j2c";
+                                    derived_representation = true;
+                                    if (viewer_grid) {
+                                        if (auto modern = viewer_grid->fetch_asset_rendition(
+                                                *session_asset, "png-texture")) {
+                                            text = std::move(*modern);
+                                            content_type = "image/png";
+                                        } else {
+                                            // Not converted yet: queue it and
+                                            // answer honestly with what is stored,
+                                            // so content predating the derivation
+                                            // heals on first demand.
+                                            static_cast<void>(
+                                                viewer_grid->request_asset_rendition(
+                                                    *session_asset, "png-texture"));
+                                        }
+                                    }
                                 } else if (text.starts_with("{\"")) {
                                     content_type = "application/json";
                                 } else if (homeworldz::slmesh::parse(bytes)) {
