@@ -146,9 +146,16 @@ int main() {
             expected += "\"" + std::string(asset) + "\"";
         }
         expected += "],\"selectedBy\":\"elevation\""
-                    ",\"startHeight\":[10,10,10,10]"
-                    ",\"heightRange\":[60,60,60,60]"
+                    // Absolute metres both: layer 1's ceiling and layer 4's
+                    // floor. Not a start and a span - the viewer displays what
+                    // the region sends, and it labels these Low and High.
+                    ",\"lowHeight\":[10,10,10,10]"
+                    ",\"highHeight\":[60,60,60,60]"
                     ",\"corners\":\"sw,nw,se,ne\""
+                    // The two bounds do not imply where layer 2 becomes layer 3,
+                    // so the rule is published rather than left to be guessed.
+                    ",\"selection\":\"1 below low; 2 low..mid; 3 mid..high;"
+                    " 4 above high; mid=(low+high)/2\""
                     ",\"gridWide\":true}";
         if (greeting->payload.find(expected) == std::string::npos) return 36;
     }

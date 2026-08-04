@@ -465,9 +465,17 @@ SessionCore::Result SessionCore::handle_text(std::string_view text) {
             // worse than none.
             ",\"layers\":{\"assets\":[" + layer_asset_list() +
             "],\"selectedBy\":\"elevation\"" +
-            ",\"startHeight\":" + corner_list(homeworldz::terrain::layer_start_height) +
-            ",\"heightRange\":" + corner_list(homeworldz::terrain::layer_height_range) +
+            ",\"lowHeight\":" + corner_list(homeworldz::terrain::layer_low_height) +
+            ",\"highHeight\":" + corner_list(homeworldz::terrain::layer_high_height) +
             ",\"corners\":\"sw,nw,se,ne\"" +
+            // Which layer applies at a height, stated because the two bounds do
+            // not imply it: they fix layer 1's ceiling and layer 4's floor, and
+            // the division between 2 and 3 is the midpoint. Absolute metres,
+            // both of them — the protocol's historical names say start height
+            // and height range, and the viewer's own Region/Estate dialog says
+            // low and high, which is what they are.
+            ",\"selection\":\"1 below low; 2 low..mid; 3 mid..high;"
+            " 4 above high; mid=(low+high)/2\"" +
             ",\"gridWide\":" +
             (homeworldz::terrain::layers_are_grid_wide ? "true" : "false") + "}}" +
             // The region's water: a height, not a surface. The plane is flat

@@ -40,12 +40,34 @@ inline constexpr std::array<std::string_view, 4> layer_assets{
     "97a0e146-6773-4d69-8cf9-263758a430ca",  // Rock060
     "1437e5fc-e6f4-4f00-8247-2395ad489b0e"}; // Rock002, alpha removed
 
-// Per corner, in the order the handshake writes them: south-west, north-west,
-// south-east, north-east. A layer's band is [start, start + range] with the
-// corner values interpolated across the region; uniform here, so the band is
-// 10 m to 70 m everywhere.
-inline constexpr std::array<float, 4> layer_start_height{10.0F, 10.0F, 10.0F, 10.0F};
-inline constexpr std::array<float, 4> layer_height_range{60.0F, 60.0F, 60.0F, 60.0F};
+// The two elevations that select between the four layers, per corner, in the
+// order the handshake writes them: south-west, north-west, south-east,
+// north-east. Corner values are interpolated across the region.
+//
+// **Both are absolute heights in metres**, not a start and a span. The viewer's
+// Region/Estate → Terrain tab states the semantics outright — "the LOW value is
+// the MAXIMUM height of Texture #1, and the HIGH value is the MINIMUM height of
+// Texture #4" — and it displays exactly what the region sends: with 10 and 60 on
+// the wire it shows Low 10, High 60, where a start-plus-range reading would have
+// displayed 70. The protocol's historical field names say start height and
+// height range; the meaning is low and high.
+//
+//     layer 1   below low
+//     layer 2   low .. midpoint
+//     layer 3   midpoint .. high
+//     layer 4   above high
+//
+// So the defaults below put layer 1 entirely below 10 m. With water at 20 m that
+// is wholly submerged, and no dry ground can show it — which is why the operator
+// could see three layers and not the first (2026-08-04). Raising low above the
+// waterline is what makes layer 1 visible, and that is an operator decision
+// rather than a default worth changing blind.
+inline constexpr std::array<float, 4> layer_low_height{10.0F, 10.0F, 10.0F, 10.0F};
+inline constexpr std::array<float, 4> layer_high_height{60.0F, 60.0F, 60.0F, 60.0F};
+
+// Where layer 2 gives way to layer 3: halfway between low and high, which is the
+// only division the two bounds determine on their own.
+inline constexpr float layer_midpoint(float low, float high) { return (low + high) * 0.5F; }
 
 // True while the values above are compile-time constants shared by every
 // region. Published so a client reads the fact rather than assuming it.
