@@ -9,22 +9,23 @@
 // capabilities that had to obey it (both found live 2026-07-31). A client and a
 // viewer standing on the same ground must at least be told the same ids.
 //
-// **Region-wide constants, not per-region state.** Making these operator
-// settings is a named prerequisite of the terrain-surface work in
-// docs/ROADMAP.md and is not done. Published anyway, and published with that
-// fact attached, because "identical on every region" is something a client
-// should be told rather than left to hardcode — the moment it stops being true,
-// a client that was told will notice and one that assumed will not.
+// **The values below are defaults, not constants.** Each region starts at them
+// and an operator may change its own through the viewer's Region/Estate →
+// Terrain tab; `Settings` at the foot of this file is one region's live copy,
+// persisted and reloaded. Whether a region still holds the defaults is itself
+// published, so a client reads the fact rather than assuming it.
 //
-// **No blend rule is published, deliberately.** The region implements none:
-// viewers each blend in their own code, and the original grid's version was
-// never reproduced outside it, so any rule stated here would be authoritative
-// for the first-party client and approximate against a viewer standing on the
-// same hill. Publishing an approximate rule is worse than publishing none
-// (client core's own preference, and the reason the contact model stayed
-// unpublished).
+// **Which layer applies at a height is published; how two layers blend into
+// each other is only partly.** The selection rule is exact and stated. The
+// transition width is a region setting (`region.terrain_blend_tenths`) that only
+// a client shading its own terrain can honour — no legacy message carries a
+// blend width, so a viewer computes its own, including a noise term never
+// reproduced outside Linden. Two families will therefore differ subtly on the
+// same ground however much is published, which is worth knowing in advance
+// rather than discovering as a discrepancy.
 
 #include <array>
+#include <string>
 #include <string_view>
 
 namespace homeworldz::terrain {
@@ -69,8 +70,29 @@ inline constexpr std::array<float, 4> layer_high_height{60.0F, 60.0F, 60.0F, 60.
 // only division the two bounds determine on their own.
 inline constexpr float layer_midpoint(float low, float high) { return (low + high) * 0.5F; }
 
-// True while the values above are compile-time constants shared by every
-// region. Published so a client reads the fact rather than assuming it.
-inline constexpr bool layers_are_grid_wide = true;
+// One region's live layer settings: what the constants above start it at, and
+// what an operator may have changed since through the viewer's Region/Estate →
+// Terrain tab. The values are per region from here on, so `gridWide` in the
+// hello is no longer a constant either — it reports whether this region still
+// holds the defaults.
+struct Settings {
+    std::array<std::string, 4> assets{
+        std::string(layer_assets[0]), std::string(layer_assets[1]),
+        std::string(layer_assets[2]), std::string(layer_assets[3])};
+    std::array<float, 4> low{layer_low_height};
+    std::array<float, 4> high{layer_high_height};
+
+    // True while nothing has been changed from the shipped defaults. Published
+    // rather than assumed: the day a region differs, a client that was told
+    // notices and one that hardcoded does not.
+    bool matches_defaults() const {
+        for (std::size_t index = 0; index < 4; ++index)
+            if (assets[index] != layer_assets[index] ||
+                low[index] != layer_low_height[index] ||
+                high[index] != layer_high_height[index])
+                return false;
+        return true;
+    }
+};
 
 } // namespace homeworldz::terrain

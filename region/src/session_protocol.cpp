@@ -321,9 +321,9 @@ namespace {
 // The layer ids and elevation corners as JSON lists. Written here rather than
 // hand-assembled inline so the hello and the handshake cannot disagree about
 // their order.
-std::string layer_asset_list() {
+std::string layer_asset_list(const std::array<std::string, 4>& assets) {
     std::string out;
-    for (const auto asset : homeworldz::terrain::layer_assets) {
+    for (const auto& asset : assets) {
         if (!out.empty()) out += ",";
         out += "\"" + std::string(asset) + "\"";
     }
@@ -344,10 +344,12 @@ std::string corner_list(const std::array<float, 4>& values) {
 SessionCore::SessionCore(std::string region_name, TicketValidator validator,
                          std::size_t terrain_width, double walkable_slope_degrees,
                          double water_height, double terrain_blend_metres,
+                         std::function<terrain::Settings()> terrain_layers,
                          std::function<std::uint64_t()> terrain_revision)
     : region_name_(std::move(region_name)), validator_(std::move(validator)),
       terrain_width_(terrain_width), walkable_slope_degrees_(walkable_slope_degrees),
       water_height_(water_height), terrain_blend_metres_(terrain_blend_metres),
+      terrain_layers_(std::move(terrain_layers)),
       terrain_revision_(std::move(terrain_revision)) {}
 
 SessionCore::Result SessionCore::refuse(std::string reason) const {
@@ -385,6 +387,7 @@ SessionCore::Result SessionCore::handle_text(std::string_view text) {
         // avatar-interest sweep period — the floor on how stale a remote
         // transform can be, which is what a client's extrapolation cap should
         // be derived from. Additive fields, per the payload contract.
+        const auto layers = terrain_layers_ ? terrain_layers_() : terrain::Settings{};
         result.send.push_back(encode_envelope("hello", {},
             "{\"region\":" + json_string(region_name_) +
             ",\"identity\":{\"id\":" + json_string(identity_.user_id) +
@@ -465,10 +468,10 @@ SessionCore::Result SessionCore::handle_text(std::string_view text) {
             // here would be authoritative for this client and approximate
             // against a viewer on the same hill, and an approximate rule is
             // worse than none.
-            ",\"layers\":{\"assets\":[" + layer_asset_list() +
+            ",\"layers\":{\"assets\":[" + layer_asset_list(layers.assets) +
             "],\"selectedBy\":\"elevation\"" +
-            ",\"lowHeight\":" + corner_list(homeworldz::terrain::layer_low_height) +
-            ",\"highHeight\":" + corner_list(homeworldz::terrain::layer_high_height) +
+            ",\"lowHeight\":" + corner_list(layers.low) +
+            ",\"highHeight\":" + corner_list(layers.high) +
             ",\"corners\":\"sw,nw,se,ne\"" +
             // Which layer applies at a height, stated because the two bounds do
             // not imply it: they fix layer 1's ceiling and layer 4's floor, and
@@ -484,7 +487,7 @@ SessionCore::Result SessionCore::handle_text(std::string_view text) {
             // viewer computes its own and this cannot change it.
             ",\"blendMetres\":" + json_number_text(terrain_blend_metres_) +
             ",\"gridWide\":" +
-            (homeworldz::terrain::layers_are_grid_wide ? "true" : "false") + "}}" +
+            std::string(layers.matches_defaults() ? "true" : "false") + "}}" +
             // The region's water: a height, not a surface. The plane is flat
             // and region-wide, in the same vertical datum as terrain heights,
             // and everything about how it is drawn is the client's business

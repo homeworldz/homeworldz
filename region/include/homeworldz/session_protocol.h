@@ -1,5 +1,7 @@
 #pragma once
 
+#include "homeworldz/terrain_layers.h"
+
 // The region-session protocol layer (docs/CLIENT2.md, "A shared C++ protocol
 // library for the region session"): envelope encoding, first-byte encoding
 // discrimination, and the session state machine, carrying no transport. Both
@@ -113,6 +115,7 @@ public:
     SessionCore(std::string region_name, TicketValidator validator,
                 std::size_t terrain_width, double walkable_slope_degrees,
                 double water_height, double terrain_blend_metres,
+                std::function<terrain::Settings()> terrain_layers,
                 std::function<std::uint64_t()> terrain_revision);
 
     struct Result {
@@ -143,6 +146,9 @@ private:
     double walkable_slope_degrees_;
     double water_height_;
     double terrain_blend_metres_;
+    // Read per greeting, not captured: an operator's Terrain tab change reaches
+    // the next client to connect rather than waiting for a restart.
+    std::function<terrain::Settings()> terrain_layers_;
     // Read at greeting time rather than captured: an edit may land between
     // construction and a client's arrival.
     std::function<std::uint64_t()> terrain_revision_;

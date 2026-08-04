@@ -1003,6 +1003,15 @@ int main(int argc, char* argv[]) {
     // through an integer setting.
     const auto terrain_blend_metres = static_cast<double>(
         configured_int("region.terrain_blend_tenths", 20, 0, 200)) / 10.0;
+    // This region's live terrain layers: the shipped defaults until an operator
+    // changes them from the viewer's Region/Estate -> Terrain tab, then whatever
+    // was persisted. Read by both publish paths, so a viewer and a session
+    // client are always told the same thing.
+    homeworldz::terrain::Settings terrain_layers;
+    // What the viewer has staged but not yet committed. Seeded from the live
+    // values at startup so a commit that follows only one of the two staging
+    // messages carries the current setting for the other, not a default.
+    homeworldz::terrain::Settings pending_terrain_layers;
     std::unique_ptr<homeworldz::grid::RegistrationLifecycle> registration;
     std::unique_ptr<homeworldz::session::Server> session_server;
     std::unique_ptr<homeworldz::grid::Client> viewer_grid;
@@ -1186,6 +1195,7 @@ int main(int argc, char* argv[]) {
                     walkable_slope_degrees,
                     water_height,
                     terrain_blend_metres,
+                    [&terrain_layers] { return terrain_layers; },
                     [&terrain_revision] { return terrain_revision; }});
                 if (!session_server) {
                     std::cerr << "{\"level\":\"error\",\"message\":\"region session listener failed\",\"port\":"
@@ -1240,6 +1250,16 @@ int main(int argc, char* argv[]) {
         // fuse.
         for (auto& [id, definition] : storage->load_render_materials())
             render_material_cache.emplace(id, std::move(definition));
+        // Terrain layers an operator set previously. Absent means untouched, which
+        // is deliberately distinct from "set to the defaults": only the second is
+        // a decision, and only the first should follow a change of defaults.
+        if (storage->load_terrain_settings(terrain_layers.assets, terrain_layers.low,
+                                          terrain_layers.high)) {
+            pending_terrain_layers = terrain_layers;
+            std::cout << "{\"level\":\"info\",\"message\":\"terrain layers loaded\""
+                      << ",\"low\":" << terrain_layers.low[0]
+                      << ",\"high\":" << terrain_layers.high[0] << "}" << std::endl;
+        }
         if (!render_material_cache.empty())
             std::cout << "{\"level\":\"info\",\"message\":\"render materials loaded\",\"count\":"
                       << render_material_cache.size() << "}" << std::endl;
@@ -4781,11 +4801,12 @@ int main(int argc, char* argv[]) {
                             // One definition, shared with the session hello,
                             // so a viewer and a client are told the same ids
                             // (homeworldz/terrain_layers.h).
-                            constexpr auto& terrain_texture_ids =
-                                homeworldz::terrain::layer_assets;
+                            const auto& terrain_texture_ids = terrain_layers.assets;
                             for (std::size_t index = 0; index < terrain_texture_ids.size(); ++index)
                                 if (const auto texture = homeworldz::viewer::parse_uuid(terrain_texture_ids[index]))
                                     handshake.terrain_textures[index] = *texture;
+                            handshake.terrain_low = terrain_layers.low;
+                            handshake.terrain_high = terrain_layers.high;
                             if (const auto response = circuits.send(endpoint,
                                     homeworldz::viewer::encode_region_handshake(handshake), true, now, true)) {
                                 const auto sent = send_udp(viewer_server, endpoint, *response);
@@ -5297,6 +5318,90 @@ int main(int argc, char* argv[]) {
                                     region_estate = *updated;
                                 send_estate_detail(endpoint, identity->agent_id,
                                                    estate_message->invoice, now);
+                            } else if ((method == "texturedetail" ||
+                                        method == "textureheights" ||
+                                        method == "texturecommit") && manager) {
+                                // The viewer's Region/Estate -> Terrain tab. It sends
+                                // the three in order on Apply: the four texture ids,
+                                // the four per-corner elevation pairs, then a bare
+                                // commit. Staged and applied together, because the
+                                // viewer's own sequence is stage-stage-commit and a
+                                // region that applied each as it arrived would hold a
+                                // half-changed terrain for as long as the packets took
+                                // — and would keep it forever if the commit were lost.
+                                if (method == "texturedetail") {
+                                    for (const auto& parameter : estate_message->params) {
+                                        // "<layer> <uuid>"
+                                        const auto space = parameter.find(' ');
+                                        if (space == std::string::npos) continue;
+                                        const auto layer = to_u32(parameter.substr(0, space));
+                                        auto id = parameter.substr(space + 1);
+                                        // Wire strings are NUL-terminated, so the
+                                        // trailing byte is part of the parameter.
+                                        while (!id.empty() &&
+                                               (id.back() == char{0} || id.back() == ' '))
+                                            id.pop_back();
+                                        if (layer < 4 && homeworldz::viewer::parse_uuid(id))
+                                            pending_terrain_layers.assets[layer] = std::move(id);
+                                    }
+                                } else if (method == "textureheights") {
+                                    for (const auto& parameter : estate_message->params) {
+                                        // "<corner> <low> <high>", both absolute metres.
+                                        std::uint32_t corner = 0;
+                                        float low = 0.0F;
+                                        float high = 0.0F;
+                                        const char* cursor = parameter.data();
+                                        const char* end = cursor + parameter.size();
+                                        auto scanned = std::from_chars(cursor, end, corner);
+                                        if (scanned.ec != std::errc{}) continue;
+                                        cursor = scanned.ptr;
+                                        while (cursor != end && *cursor == ' ') ++cursor;
+                                        auto low_scan = std::from_chars(cursor, end, low);
+                                        if (low_scan.ec != std::errc{}) continue;
+                                        cursor = low_scan.ptr;
+                                        while (cursor != end && *cursor == ' ') ++cursor;
+                                        if (std::from_chars(cursor, end, high).ec != std::errc{})
+                                            continue;
+                                        // The viewer's own spinner range. A value outside
+                                        // it is a decode error, not an operator choice, so
+                                        // it is dropped rather than stored.
+                                        if (corner >= 4 || low < -500.0F || low > 4000.0F ||
+                                            high < -500.0F || high > 4000.0F)
+                                            continue;
+                                        pending_terrain_layers.low[corner] = low;
+                                        pending_terrain_layers.high[corner] = high;
+                                    }
+                                } else {
+                                    terrain_layers = pending_terrain_layers;
+                                    if (storage) {
+                                        try {
+                                            storage->save_terrain_settings(terrain_layers.assets,
+                                                                           terrain_layers.low,
+                                                                           terrain_layers.high);
+                                        } catch (const std::exception& error) {
+                                            std::cout << "{\"level\":\"error\",\"message\":"
+                                                         "\"terrain layers not saved\",\"error\":"
+                                                      << homeworldz::api::json_string(error.what())
+                                                      << "}" << std::endl;
+                                        }
+                                    }
+                                    // Viewers already connected keep the terrain they were
+                                    // handed at login: RegionHandshake is the only message
+                                    // that carries these, and re-sending it mid-session
+                                    // restarts more of the viewer's region state than a
+                                    // texture change warrants. Session clients read the
+                                    // hello, so they pick it up on their next connect.
+                                    // Said plainly here so "it did not change" is a known
+                                    // limit rather than a suspected failure.
+                                    std::cout << "{\"level\":\"info\",\"message\":\"terrain"
+                                                 " layers committed\",\"by\":"
+                                              << homeworldz::api::json_string(agent)
+                                              << ",\"low\":" << terrain_layers.low[0]
+                                              << ",\"high\":" << terrain_layers.high[0]
+                                              << ",\"defaults\":"
+                                              << (terrain_layers.matches_defaults() ? "true" : "false")
+                                              << ",\"appliesTo\":\"new logins\"}" << std::endl;
+                                }
                             } else {
                                 // An estate method with no handler is a viewer
                                 // asking for something the region silently drops

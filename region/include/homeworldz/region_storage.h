@@ -4,6 +4,7 @@
 #include "homeworldz/scene.h"
 
 #include <cstdint>
+#include <array>
 #include <filesystem>
 #include <optional>
 #include <span>
@@ -53,6 +54,16 @@ public:
     std::vector<AssetMetadata> list_assets() const;
     std::optional<AssetMetadata> find_asset(std::string_view viewer_id) const;
     std::vector<std::byte> read_asset(std::string_view viewer_id) const;
+
+    // The region's terrain layer settings, as an operator changed them through
+    // the viewer's Region/Estate tab. Nothing stored means the region still
+    // holds the shipped defaults.
+    void save_terrain_settings(const std::array<std::string, 4>& assets,
+                               const std::array<float, 4>& low,
+                               const std::array<float, 4>& high);
+    bool load_terrain_settings(std::array<std::string, 4>& assets,
+                               std::array<float, 4>& low,
+                               std::array<float, 4>& high) const;
 
     // Replace all persisted parcels (and their access lists) atomically.
     void save_parcels(const std::vector<parcel::Parcel>& parcels);

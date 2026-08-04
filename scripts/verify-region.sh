@@ -25,7 +25,35 @@ log=${HOMEWORLDZ_VERIFY_LOG:-/tmp/homeworldz-verify.log}
 
 : > "$log"
 status=0
-bash "$root/scripts/build-region.sh" --test >>"$log" 2>&1 || status=$?
+
+# On Windows the toolchain is not on PATH: cmake and the standard library both
+# come from vcvars64.bat, so build-region.sh (Ninja, nproc, native c++) does not
+# apply and its absence-of-cmake check is what fires. Use the existing
+# build/vcpkg tree through a vcvars shell instead, keeping one entry point — and
+# the same rule — on both platforms. Two commands, each status checked, because
+# a `&&` chain would report only the last.
+if [[ -n "${OS:-}" && $OS == Windows_NT ]] && ! command -v cmake >/dev/null; then
+  vcvars=${HOMEWORLDZ_VCVARS:-'C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvars64.bat'}
+  win_root=$(cygpath -w "$root")
+  build=${HOMEWORLDZ_BUILD_DIR:-'build\vcpkg'}
+  # Written to a batch file rather than passed as one `cmd //c` string: the
+  # vcvars path contains spaces, and quotes nested through bash into cmd are the
+  # kind of detail that fails as "command not recognized" and reads as a missing
+  # toolchain. Each step's exit code is checked on its own line, because a `&&`
+  # chain reports only the last one — the same mistake as the pipeline above.
+  script=$(mktemp --suffix=.cmd)
+  {
+    echo "@echo off"
+    echo "call \"$vcvars\" >nul || exit /b 1"
+    echo "cd /d \"$win_root\" || exit /b 1"
+    echo "cmake --build $build || exit /b 1"
+    echo "ctest --test-dir $build --output-on-failure || exit /b 1"
+  } > "$script"
+  cmd //c "$(cygpath -w "$script")" >>"$log" 2>&1 || status=$?
+  rm -f "$script"
+else
+  bash "$root/scripts/build-region.sh" --test >>"$log" 2>&1 || status=$?
+fi
 
 if ((status != 0)); then
   echo "FAILED (exit $status). Last 40 lines of $log:"

@@ -806,8 +806,8 @@ std::vector<std::byte> encode_region_handshake(const RegionHandshake& message) {
     // Per-corner low then high: the maximum height of layer 1 and the minimum
     // height of layer 4, both absolute. Shared with the session hello so a
     // viewer and a client are told the same numbers (terrain_layers.h).
-    for (const float value : terrain::layer_low_height) append_f32(output, value);
-    for (const float value : terrain::layer_high_height) append_f32(output, value);
+    for (const float value : message.terrain_low) append_f32(output, value);
+    for (const float value : message.terrain_high) append_f32(output, value);
     append_uuid(output, message.region_id);
     append_le_u32(output, 0); // CPU class
     append_le_u32(output, 1); // CPU ratio

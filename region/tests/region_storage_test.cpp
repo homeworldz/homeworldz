@@ -355,6 +355,33 @@ int main() {
                     found_second = true;
             }
             if (!found_first || !found_second) return 1;
+
+            // Terrain layers an operator set from the viewer's Terrain tab.
+            // Absent must be distinguishable from stored, because "never
+            // touched" should follow a change of defaults and "set to these
+            // values" must not — a load that quietly reported the defaults
+            // either way would erase that difference.
+            std::array<std::string, 4> layer_ids{};
+            std::array<float, 4> layer_low{};
+            std::array<float, 4> layer_high{};
+            if (storage.load_terrain_settings(layer_ids, layer_low, layer_high)) return 1; // never set
+            const std::array<std::string, 4> chosen{
+                "aaaaaaaa-0000-4000-8000-000000000001",
+                "bbbbbbbb-0000-4000-8000-000000000002",
+                "cccccccc-0000-4000-8000-000000000003",
+                "dddddddd-0000-4000-8000-000000000004"};
+            // Per-corner and asymmetric on purpose: a bug that wrote one value
+            // to all four, or swapped low with high, passes any uniform fixture.
+            const std::array<float, 4> chosen_low{20.0F, 21.5F, 22.0F, 23.25F};
+            const std::array<float, 4> chosen_high{60.0F, 61.5F, 62.0F, 63.25F};
+            storage.save_terrain_settings(chosen, chosen_low, chosen_high);
+            if (!storage.load_terrain_settings(layer_ids, layer_low, layer_high)) return 1;
+            if (layer_ids != chosen || layer_low != chosen_low || layer_high != chosen_high) return 1;
+            // Saving again replaces the single row rather than adding one.
+            const std::array<float, 4> raised{30.0F, 30.0F, 30.0F, 30.0F};
+            storage.save_terrain_settings(chosen, raised, chosen_high);
+            if (!storage.load_terrain_settings(layer_ids, layer_low, layer_high)) return 1;
+            if (layer_low != raised || layer_high != chosen_high) return 1;
         }
         // Reopened from disk: the definitions are on the filesystem, not merely
         // in the handle that wrote them.
@@ -362,6 +389,12 @@ int main() {
             homeworldz::storage::RegionStorage reopened(path);
             const auto materials = reopened.load_render_materials();
             if (materials.size() != 2) return 1;
+            std::array<std::string, 4> layer_ids{};
+            std::array<float, 4> layer_low{};
+            std::array<float, 4> layer_high{};
+            if (!reopened.load_terrain_settings(layer_ids, layer_low, layer_high)) return 1;
+            if (layer_ids[3] != "dddddddd-0000-4000-8000-000000000004" ||
+                layer_low[0] != 30.0F || layer_high[3] != 63.25F) return 1;
         }
         std::filesystem::remove_all(path);
         return 0;

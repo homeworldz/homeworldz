@@ -656,6 +656,19 @@ RegionStorage::RegionStorage(std::filesystem::path data_path) : data_path_(std::
                        "CREATE TABLE IF NOT EXISTS render_materials ("
                        "material_id TEXT PRIMARY KEY, definition BLOB NOT NULL,"
                        "created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);"
+                       // One row, id 1: this region's terrain layer settings as
+                       // an operator changed them. Absent means the region still
+                       // holds the shipped defaults, which is a different state
+                       // from "changed to something that happens to equal them".
+                       "CREATE TABLE IF NOT EXISTS terrain_settings ("
+                       "id INTEGER PRIMARY KEY CHECK (id = 1),"
+                       "asset0 TEXT NOT NULL, asset1 TEXT NOT NULL,"
+                       "asset2 TEXT NOT NULL, asset3 TEXT NOT NULL,"
+                       "low0 REAL NOT NULL, low1 REAL NOT NULL,"
+                       "low2 REAL NOT NULL, low3 REAL NOT NULL,"
+                       "high0 REAL NOT NULL, high1 REAL NOT NULL,"
+                       "high2 REAL NOT NULL, high3 REAL NOT NULL,"
+                       "updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);"
                        "CREATE TABLE IF NOT EXISTS parcels ("
                        "global_id TEXT PRIMARY KEY, local_id INTEGER NOT NULL,"
                        "name TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '',"
@@ -829,6 +842,57 @@ AssetMetadata RegionStorage::reconcile_asset_creator(std::string_view viewer_id,
     sqlite3_finalize(statement);
     if (result != SQLITE_DONE) throw std::runtime_error(sqlite3_errmsg(database_));
     return {std::string(viewer_id), std::string(creator_id), std::string(sha256), size};
+}
+
+void RegionStorage::save_terrain_settings(const std::array<std::string, 4>& assets,
+                                         const std::array<float, 4>& low,
+                                         const std::array<float, 4>& high) {
+    sqlite3_stmt* statement = nullptr;
+    const char* sql =
+        "INSERT INTO terrain_settings (id, asset0, asset1, asset2, asset3,"
+        " low0, low1, low2, low3, high0, high1, high2, high3)"
+        " VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        " ON CONFLICT(id) DO UPDATE SET asset0=excluded.asset0, asset1=excluded.asset1,"
+        " asset2=excluded.asset2, asset3=excluded.asset3, low0=excluded.low0,"
+        " low1=excluded.low1, low2=excluded.low2, low3=excluded.low3,"
+        " high0=excluded.high0, high1=excluded.high1, high2=excluded.high2,"
+        " high3=excluded.high3, updated_at=CURRENT_TIMESTAMP";
+    if (sqlite3_prepare_v2(database_, sql, -1, &statement, nullptr) != SQLITE_OK)
+        throw std::runtime_error(sqlite3_errmsg(database_));
+    for (int index = 0; index < 4; ++index)
+        sqlite3_bind_text(statement, index + 1, assets[static_cast<std::size_t>(index)].c_str(),
+                          -1, SQLITE_TRANSIENT);
+    for (int index = 0; index < 4; ++index)
+        sqlite3_bind_double(statement, index + 5, low[static_cast<std::size_t>(index)]);
+    for (int index = 0; index < 4; ++index)
+        sqlite3_bind_double(statement, index + 9, high[static_cast<std::size_t>(index)]);
+    const auto result = sqlite3_step(statement);
+    sqlite3_finalize(statement);
+    if (result != SQLITE_DONE) throw std::runtime_error(sqlite3_errmsg(database_));
+}
+
+bool RegionStorage::load_terrain_settings(std::array<std::string, 4>& assets,
+                                          std::array<float, 4>& low,
+                                          std::array<float, 4>& high) const {
+    sqlite3_stmt* statement = nullptr;
+    const char* sql = "SELECT asset0, asset1, asset2, asset3, low0, low1, low2, low3,"
+                      " high0, high1, high2, high3 FROM terrain_settings WHERE id = 1";
+    if (sqlite3_prepare_v2(database_, sql, -1, &statement, nullptr) != SQLITE_OK)
+        throw std::runtime_error(sqlite3_errmsg(database_));
+    bool found = false;
+    if (sqlite3_step(statement) == SQLITE_ROW) {
+        found = true;
+        for (int index = 0; index < 4; ++index) {
+            const auto* text = reinterpret_cast<const char*>(sqlite3_column_text(statement, index));
+            assets[static_cast<std::size_t>(index)] = text != nullptr ? text : "";
+            low[static_cast<std::size_t>(index)] =
+                static_cast<float>(sqlite3_column_double(statement, index + 4));
+            high[static_cast<std::size_t>(index)] =
+                static_cast<float>(sqlite3_column_double(statement, index + 8));
+        }
+    }
+    sqlite3_finalize(statement);
+    return found;
 }
 
 void RegionStorage::store_render_material(std::string material_id,

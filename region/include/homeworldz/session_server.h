@@ -32,6 +32,9 @@ public:
         double water_height{};
         // Terrain layer transition width in metres; see the hello's blendMetres.
         double terrain_blend_metres{};
+        // This region's live terrain layers, read per greeting so an operator's
+        // change reaches the next client to connect.
+        std::function<terrain::Settings()> terrain_layers;
         // Current terrain revision, read per greeting.
         std::function<std::uint64_t()> terrain_revision;
     };
