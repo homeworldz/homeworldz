@@ -5318,9 +5318,23 @@ int main(int argc, char* argv[]) {
                                     region_estate = *updated;
                                 send_estate_detail(endpoint, identity->agent_id,
                                                    estate_message->invoice, now);
-                            } else if ((method == "texturedetail" ||
-                                        method == "textureheights" ||
-                                        method == "texturecommit") && manager) {
+                            } else if (method == "texturedetail" ||
+                                       method == "textureheights" ||
+                                       method == "texturecommit") {
+                              if (!manager) {
+                                // Said as a refusal, not left to the no-handler
+                                // warning below. "Not permitted" and "not
+                                // implemented" look identical from the viewer -
+                                // the tab simply fails to stick - so an operator
+                                // applying from the wrong avatar would read the
+                                // generic warning as the feature being absent.
+                                std::cout << "{\"level\":\"warning\",\"message\":"
+                                             "\"terrain change refused\",\"method\":"
+                                          << homeworldz::api::json_string(method)
+                                          << ",\"by\":" << homeworldz::api::json_string(agent)
+                                          << ",\"reason\":\"not an estate manager or owner\"}"
+                                          << std::endl;
+                              } else {
                                 // The viewer's Region/Estate -> Terrain tab. It sends
                                 // the three in order on Apply: the four texture ids,
                                 // the four per-corner elevation pairs, then a bare
@@ -5427,6 +5441,7 @@ int main(int argc, char* argv[]) {
                                               << ",\"sessionClientsTold\":" << told
                                               << ",\"viewersApplyOn\":\"next login\"}" << std::endl;
                                 }
+                              }
                             } else {
                                 // An estate method with no handler is a viewer
                                 // asking for something the region silently drops
