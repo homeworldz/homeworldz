@@ -1050,6 +1050,46 @@ it builds against.
      relied on something — but it is **unverified against the rights holder** as
      of this date. Confirm from the archive or from Machinimatrix directly before
      relying on it.
+  **MakeHuman examined next, 2026-08-04, and the chain verifies at every step**
+  (client core generated the candidates; every claim below re-checked here against
+  the upstream repository rather than the summary). Two bodies, MPFB 2.0.17 under
+  Blender 4.5, one macro axis apart: 36,972 triangles and 163 joints each, and
+  distinct files by digest rather than by claim.
+  1. The skeleton **declares its own licence**. `data/rigs/default.mhskel` carries
+     `license: "CC0"` and `copyright: "(c) 2020 Data Collection AB, Joel Palmius,
+     Jonas Hauquier"` in its own metadata — read from the repository. That is the
+     asset speaking for itself, which is exactly the standard Ruth2's rig failed:
+     there a downstream project summarised someone else's terms and the terms did
+     not confirm.
+  2. `LICENSE.md` enumerates five CC0 asset categories — base mesh and proxies,
+     targets and modifiers, textures, clothes, poses and expressions — and **does
+     not name skeletons**. Verified, and recorded because it is the residual the
+     client core flagged rather than let be discovered later. Silent, not contrary:
+     the file's own declaration and the project's blanket asset statement both say
+     CC0, and the enumeration simply omits the category.
+  3. The code is AGPL and that is the tool, not the output. `LICENSE.md` says so
+     itself: "no output from MakeHuman contains any trace of program logic" and
+     "no limitation on what you can do with this combined output". A generator's
+     licence no more covers its exports than an image editor's covers an image.
+  Two things this side measured that matter for adoption.
+  **The exported GLBs carry no licence metadata at all** — `asset.copyright` is
+  absent from both. Worth fixing before adoption rather than after: the whole
+  reason the skeleton's claim is strong is that the file speaks for itself, and an
+  export that declares nothing loses that property on the way into a
+  content-addressed vault. The terrain precedent is a licence record beside the
+  assets (`assets/region/library/terrain/LICENSE.md`), and these would want both
+  that *and* `asset.copyright` set at export.
+  **The height is settled from the files.** Both report a Y extent of **1.6946 m**
+  from their POSITION accessor bounds with identity node transforms, which agrees
+  with Blender for both bodies; a reported 1.850 m for one of them is not a reading
+  these files support. Origin sits at the feet within 2.7 cm (min Y −0.0267 /
+  −0.0263, max Y 1.6679 / 1.6683), so placing the origin exactly on the ground
+  sinks the soles by that much — which is the number anything positioning feet
+  precisely needs, and the resolution to the client core's open question.
+  Still not adopted, and still the operator's decision. Accepting a canonical body
+  commits the grid to a licensing position, and publishing appearance is the
+  prerequisite before any client can be told to wear one — a body only one client
+  can draw is the partial the client core has refused three times.
 - [x] Dress a session avatar for viewers: spawn seeds the server-side
   default-outfit bake and derives body geometry from it, so a viewer rezzes
   a properly shaped, clothed avatar rather than a default one
