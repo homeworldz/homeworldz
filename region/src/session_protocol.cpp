@@ -341,6 +341,45 @@ std::string corner_list(const std::array<float, 4>& values) {
 
 } // namespace
 
+
+std::string terrain_layers_json(const terrain::Settings& layers, double blend_metres) {
+    return "{\"assets\":[" + layer_asset_list(layers.assets) +
+           "],\"selectedBy\":\"elevation\""
+           ",\"lowHeight\":" + corner_list(layers.low) +
+           ",\"highHeight\":" + corner_list(layers.high) +
+           ",\"corners\":\"sw,nw,se,ne\""
+           // Which layer applies at a height, stated because the two bounds do
+           // not imply it: they fix layer 1's ceiling and layer 4's floor, and
+           // the division between 2 and 3 is the midpoint. Absolute metres,
+           // both of them - the protocol's historical names say start height
+           // and height range, and the viewer's own Region/Estate dialog says
+           // low and high, which is what they are.
+           ",\"selection\":\"1 below low; 2 low..mid; 3 mid..high;"
+           " 4 above high; mid=(low+high)/2\""
+           // The transition width, in metres, straddling each boundary
+           // symmetrically. Advisory and honoured only by a client that shades
+           // its own terrain: no legacy message carries a blend width, so a
+           // viewer computes its own and this cannot change it. The mixing
+           // curve stays unpublished - the region implements none, and an
+           // approximate one is authoritative for this client while merely
+           // approximate against a viewer on the same hill.
+           ",\"blendMetres\":" + json_number_text(blend_metres) +
+           // Whether this region still holds the shipped defaults. Was a
+           // compile-time true; layers became per-region operator state on
+           // 2026-08-04 and the field kept its meaning, which is why it was
+           // worth publishing while it was still trivially true.
+           ",\"gridWide\":" +
+           std::string(layers.matches_defaults() ? "true" : "false") +
+           // Named so a client discovers the event rather than reading a
+           // document for it, exactly as terrain names terrainChanged. The
+           // event carries this same block, so handling it is re-reading what
+           // was already parsed once.
+           ",\"changedEvent\":\"terrainLayersChanged\"}";
+}
+
+
+
+
 SessionCore::SessionCore(std::string region_name, TicketValidator validator,
                          std::size_t terrain_width, double walkable_slope_degrees,
                          double water_height, double terrain_blend_metres,
@@ -451,43 +490,16 @@ SessionCore::Result SessionCore::handle_text(std::string_view text) {
             ",\"encoding\":\"base64\",\"rowMajorWithinPatch\":true}" +
             // The ground's surface, not just its shape. Four textures selected
             // by elevation, lowest to highest, fetched from assets.base like
-            // any other asset — they are canonical PNG since 2026-07-31, so a
+            // any other asset - they are canonical PNG since 2026-07-31, so a
             // client that refuses JPEG2000 can read them and a cache can hold
             // them for the life of the id.
             //
-            // `startHeight` and `heightRange` are per corner in the order
-            // south-west, north-west, south-east, north-east; a layer's band is
-            // [start, start + range] with the corners interpolated across the
-            // region. `gridWide` says these are the same on every region — a
-            // fact worth stating rather than leaving a client to assume, since
-            // when it stops being true a client that was told will notice.
-            //
-            // No blend rule is published, deliberately: the region implements
-            // none, viewers each blend in their own code, and the original
-            // grid's version was never reproduced outside it. Any rule stated
-            // here would be authoritative for this client and approximate
-            // against a viewer on the same hill, and an approximate rule is
-            // worse than none.
-            ",\"layers\":{\"assets\":[" + layer_asset_list(layers.assets) +
-            "],\"selectedBy\":\"elevation\"" +
-            ",\"lowHeight\":" + corner_list(layers.low) +
-            ",\"highHeight\":" + corner_list(layers.high) +
-            ",\"corners\":\"sw,nw,se,ne\"" +
-            // Which layer applies at a height, stated because the two bounds do
-            // not imply it: they fix layer 1's ceiling and layer 4's floor, and
-            // the division between 2 and 3 is the midpoint. Absolute metres,
-            // both of them — the protocol's historical names say start height
-            // and height range, and the viewer's own Region/Estate dialog says
-            // low and high, which is what they are.
-            ",\"selection\":\"1 below low; 2 low..mid; 3 mid..high;"
-            " 4 above high; mid=(low+high)/2\"" +
-            // The transition width, in metres, straddling each boundary
-            // symmetrically. Advisory and honoured only by a client that shades
-            // its own terrain: no legacy message carries a blend width, so a
-            // viewer computes its own and this cannot change it.
-            ",\"blendMetres\":" + json_number_text(terrain_blend_metres_) +
-            ",\"gridWide\":" +
-            std::string(layers.matches_defaults() ? "true" : "false") + "}}" +
+            // The block's own fields are documented on terrain_layers_json,
+            // which builds it for both the greeting and terrainLayersChanged.
+            // Per region since 2026-08-04: an operator sets them from the
+            // viewer's Region/Estate -> Terrain tab, so a client must read them
+            // per region and per connect rather than once for the grid.
+            ",\"layers\":" + terrain_layers_json(layers, terrain_blend_metres_) + "}" +
             // The region's water: a height, not a surface. The plane is flat
             // and region-wide, in the same vertical datum as terrain heights,
             // and everything about how it is drawn is the client's business

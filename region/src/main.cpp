@@ -5393,6 +5393,30 @@ int main(int argc, char* argv[]) {
                                     // hello, so they pick it up on their next connect.
                                     // Said plainly here so "it did not change" is a known
                                     // limit rather than a suspected failure.
+                                    // Session clients are told outright. A viewer
+                                    // cannot be: RegionHandshake is the only
+                                    // message carrying these and re-sending it
+                                    // mid-session restarts more region state than
+                                    // a texture change warrants. The session
+                                    // channel is ours, so it gets an event and the
+                                    // ground converges without a reconnect - the
+                                    // same block the greeting publishes, from one
+                                    // function, so the two cannot disagree.
+                                    std::size_t told = 0;
+                                    if (session_server) {
+                                        const auto notice = homeworldz::session::encode_envelope(
+                                            "terrainLayersChanged", {},
+                                            "{\"layers\":" +
+                                            homeworldz::session::terrain_layers_json(
+                                                terrain_layers, terrain_blend_metres) + "}");
+                                        for (const auto& [session_key, session_avatar] : avatars) {
+                                            static_cast<void>(session_key);
+                                            if (session_avatar.transport != AvatarTransport::session)
+                                                continue;
+                                            session_server->send_to(session_avatar.session_id, notice);
+                                            ++told;
+                                        }
+                                    }
                                     std::cout << "{\"level\":\"info\",\"message\":\"terrain"
                                                  " layers committed\",\"by\":"
                                               << homeworldz::api::json_string(agent)
@@ -5400,7 +5424,8 @@ int main(int argc, char* argv[]) {
                                               << ",\"high\":" << terrain_layers.high[0]
                                               << ",\"defaults\":"
                                               << (terrain_layers.matches_defaults() ? "true" : "false")
-                                              << ",\"appliesTo\":\"new logins\"}" << std::endl;
+                                              << ",\"sessionClientsTold\":" << told
+                                              << ",\"viewersApplyOn\":\"next login\"}" << std::endl;
                                 }
                             } else {
                                 // An estate method with no handler is a viewer

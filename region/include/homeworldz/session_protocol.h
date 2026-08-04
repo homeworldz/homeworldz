@@ -110,6 +110,12 @@ struct Command {
 // SessionCore is one connection's protocol state machine, transport-free so
 // it is testable and shareable: the transport feeds it inbound text and
 // carries away what it says to send.
+// The terrain layers block, exactly as the hello publishes it. One definition
+// because the greeting and the terrainLayersChanged event both carry it, and two
+// hand-assembled copies of the same JSON is how this repo has repeatedly come to
+// state one thing in one place and another elsewhere.
+std::string terrain_layers_json(const terrain::Settings& layers, double blend_metres);
+
 class SessionCore {
 public:
     SessionCore(std::string region_name, TicketValidator validator,

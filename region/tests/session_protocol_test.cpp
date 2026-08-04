@@ -177,7 +177,13 @@ int main() {
                     // False because this region has been changed from the
                     // defaults. A client reads the fact instead of assuming the
                     // grid is uniform.
-                    ",\"gridWide\":false}";
+                    ",\"gridWide\":false"
+                    // The layers' own change event, so a client discovers it
+                    // rather than reading a document. Layers are per region and
+                    // an operator changes them without a restart, so unlike
+                    // water the greeting alone no longer suffices for the life
+                    // of a connection.
+                    ",\"changedEvent\":\"terrainLayersChanged\"}";
         if (greeting->payload.find(expected) == std::string::npos) return 36;
     }
     // The blend *width* is published above as blendMetres; the blend *curve* is

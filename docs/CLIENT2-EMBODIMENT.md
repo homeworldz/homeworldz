@@ -209,10 +209,22 @@ seam above encoding.
    reason it was published while it was still trivially true.
    Read `assets`, `lowHeight`, and `highHeight` from the hello per region and
    per connect. A client that cached them once for the grid will now be wrong on
-   any region an operator has changed. An already-connected client is not
-   notified: a change reaches the next client to connect, because the legacy
-   path has no message for it either and re-handshaking a live viewer restarts
-   more region state than a texture change warrants.
+   any region an operator has changed.
+   **A connected client is told:** `changedEvent: "terrainLayersChanged"` names
+   the event, discovered from the block itself rather than from this document,
+   exactly as `terrain` names `terrainChanged`. It carries `layers` — the same
+   block, from the same function — so handling it is re-reading what was already
+   parsed once at greeting. No revision and no refetch: the block is the whole
+   state.
+   This is the one place the session path is *better* than the legacy one rather
+   than merely equal to it. A viewer cannot be told, because `RegionHandshake`
+   is the only message carrying these and re-sending it mid-session restarts
+   more region state than a texture change warrants — so a viewer picks the
+   change up on its next login while a session client sees it immediately.
+   Worth contrasting with `water`, where the note that the greeting alone
+   suffices for the life of a connection still holds: changing water height
+   needs a region restart, which re-greets. Layers do not, so they needed an
+   event that water does not.
    **The blend width is published; the blend curve is not.** `blendMetres` is
    how wide the transition between two layers should be, straddling each
    boundary symmetrically — `region.terrain_blend_tenths`, 2 m by default. It is
