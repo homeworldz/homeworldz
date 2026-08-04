@@ -11,12 +11,24 @@ Lowest elevation to highest:
 - `e0a13caa-d4dc-4efe-8605-bfbf8411177b.png` — layer 1, dirt — ambientCG `Ground079L`
 - `150cbea9-6ecf-4d31-aeae-0fddbda311b5.png` — layer 2, grass — ambientCG `Grass005`
 - `97a0e146-6773-4d69-8cf9-263758a430ca.png` — layer 3, mountain — ambientCG `Rock060`
-- `d992da50-328f-4052-89e5-dc08a1b67a2b.png` — layer 4, rock — ambientCG `Rock002`
+- `1437e5fc-e6f4-4f00-8247-2395ad489b0e.png` — layer 4, rock — ambientCG `Rock002`,
+  alpha channel removed (see below)
 
 Each is the `Color` map of its 1K PNG set from <https://ambientcg.com>, released
 under Creative Commons CC0 1.0 Universal:
-<https://creativecommons.org/publicdomain/zero/1.0/>. Unmodified — copied and
-renamed to their asset ids, nothing else. Everything on ambientCG is CC0.
+<https://creativecommons.org/publicdomain/zero/1.0/>. Everything on ambientCG is
+CC0.
+
+Layers 1 to 3 are unmodified — copied and renamed to their asset ids, nothing
+else. **Layer 4 had its alpha channel removed**, and only that: its RGB is
+byte-identical to the source, verified by comparison (zero differing pixels).
+Rock002's `Color` map ships as RGBA with alpha ranging 249 to 255 — about two
+percent short of opaque, which is authoring noise rather than intent, since a
+rock diffuse map has no reason to be translucent. Left in place it would have
+cost a third more in the derived JPEG2000 and risked a client honouring it and
+drawing faintly see-through ground. Because canonical bytes are never rewritten
+(ADR 0026), the flattened image is a new asset rather than a replacement of the
+original id.
 
 **CC0 means no attribution is required and no share-alike follows.** That is the
 point of choosing it: the grid's default ground can be redistributed inside a

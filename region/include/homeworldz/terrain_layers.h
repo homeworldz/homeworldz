@@ -38,7 +38,7 @@ inline constexpr std::array<std::string_view, 4> layer_assets{
     "e0a13caa-d4dc-4efe-8605-bfbf8411177b",  // Ground079L
     "150cbea9-6ecf-4d31-aeae-0fddbda311b5",  // Grass005
     "97a0e146-6773-4d69-8cf9-263758a430ca",  // Rock060
-    "d992da50-328f-4052-89e5-dc08a1b67a2b"}; // Rock002
+    "1437e5fc-e6f4-4f00-8247-2395ad489b0e"}; // Rock002, alpha removed
 
 // Per corner, in the order the handshake writes them: south-west, north-west,
 // south-east, north-east. A layer's band is [start, start + range] with the
