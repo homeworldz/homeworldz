@@ -1,6 +1,7 @@
 #include "homeworldz/avatar_controller.h"
 
 #include <set>
+#include <string>
 #include <string_view>
 #include <cmath>
 
@@ -195,6 +196,55 @@ int main() {
             ids.insert(id);
         }
         if (names.size() != std::size(every) || ids.size() != std::size(every)) return 33;
+
+        // Every movement id is recognised as one, and something else is not.
+        for (const auto animation : every)
+            if (!homeworldz::viewer::is_movement_animation_id(
+                    homeworldz::viewer::movement_animation_id(animation))) return 34;
+        if (homeworldz::viewer::is_movement_animation_id(
+                "0dd0d0d0-1111-4222-8333-444444444444")) return 35;
+    }
+
+    // The payload the session avatar announcement and the motion event share.
+    // Tested here because the client core's sharpest finding lands on this side:
+    // a published field whose correctness nothing can observe comes to be
+    // believed rather than known. The emission still lives in main.cpp, but the
+    // part with reasoning in it does not.
+    {
+        using homeworldz::viewer::motion_fields_json;
+        using homeworldz::viewer::MovementAnimation;
+        const std::string gesture = "aaaa1111-2222-4333-8444-555555555555";
+        const std::string other = "bbbb1111-2222-4333-8444-555555555555";
+        const std::string walk_id{
+            homeworldz::viewer::movement_animation_id(MovementAnimation::walk)};
+        const std::string stand_id{
+            homeworldz::viewer::movement_animation_id(MovementAnimation::stand)};
+
+        // Nothing playing: the state alone, and clips present but empty rather
+        // than absent, so a client parses one shape always.
+        if (motion_fields_json(MovementAnimation::stand, {}) !=
+            "\"motion\":\"stand\",\"clips\":[]") return 36;
+
+        // The movement animation is in the list, as it always is on a live
+        // avatar, and must not be echoed as a clip: that is the same fact twice,
+        // once portably and once as an id the client cannot use.
+        const std::string walking[]{walk_id};
+        if (motion_fields_json(MovementAnimation::walk, walking) !=
+            "\"motion\":\"walk\",\"clips\":[]") return 37;
+
+        // A gesture alongside it survives, and order is preserved.
+        const std::string mixed[]{walk_id, gesture, other};
+        if (motion_fields_json(MovementAnimation::walk, mixed) !=
+            "\"motion\":\"walk\",\"clips\":[\"" + gesture + "\",\"" + other + "\"]")
+            return 38;
+
+        // A movement id left behind by a state change - stand still listed while
+        // the avatar walks - is filtered too. Filtering only the current state's
+        // id would leak it as a clip, and a client would draw a standing
+        // animation on a walking avatar while being told it is walking.
+        const std::string stale[]{stand_id, walk_id, gesture};
+        if (motion_fields_json(MovementAnimation::walk, stale) !=
+            "\"motion\":\"walk\",\"clips\":[\"" + gesture + "\"]") return 39;
     }
     return 0;
 }

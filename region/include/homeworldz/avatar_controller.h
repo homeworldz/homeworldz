@@ -6,6 +6,8 @@
 #include <array>
 #include <cstdint>
 #include <optional>
+#include <span>
+#include <string>
 #include <string_view>
 
 namespace homeworldz::viewer {
@@ -70,6 +72,28 @@ std::string_view movement_animation_id(MovementAnimation animation);
 // per representation, over the same enum, so a new state cannot be given an id
 // and no name.
 std::string_view movement_animation_name(MovementAnimation animation);
+
+// Is this animation id one of the ten movement states? Those are published as
+// `motion`, so they must not also appear in `clips` - a client would otherwise be
+// told the same fact twice, once portably and once as a Linden asset id it cannot
+// use. Checked against every state rather than the current one, so an entry left
+// behind by a state change is still recognised for what it is.
+bool is_movement_animation_id(std::string_view animation_id);
+
+// The `motion` and `clips` members of a session payload, for the avatar
+// announcement and the motion event alike.
+//
+// It lives here, rather than as a lambda where it is sent from, because the
+// client core made the point that lands hardest on this side: a published field
+// whose correctness nothing can observe comes to be believed rather than known,
+// which is the shape of a check that cannot fail (2026-08-04). The emission is
+// still in main.cpp, but the part with reasoning in it - which ids are clips and
+// which are already named - is reachable from a test.
+//
+// `playing` is every animation active on the avatar, movement states included;
+// the filtering happens here so no caller can forget it.
+std::string motion_fields_json(MovementAnimation state,
+                               std::span<const std::string> playing);
 
 // The movement model's authoritative constants. Published to session clients
 // in the hello payload so client-side prediction can simulate what this

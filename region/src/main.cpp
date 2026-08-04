@@ -2317,52 +2317,19 @@ int main(int argc, char* argv[]) {
                         entity.sculpt_type == 5 ? "mesh" : "sculptMap") + "}") +
             "}");
     };
-    // Is this one of the ten movement animations? Those are represented by the
-    // `motion` name, so they must not also appear as clips - a client would
-    // otherwise be told the same fact twice, once portably and once as a Linden
-    // asset id it cannot use. Compared against every movement state rather than
-    // only the current one, so an entry left behind by a state change is still
-    // recognised for what it is.
-    const auto is_movement_animation = [](const homeworldz::viewer::Uuid& id) {
-        using homeworldz::viewer::MovementAnimation;
-        constexpr MovementAnimation every[]{
-            MovementAnimation::stand, MovementAnimation::walk, MovementAnimation::run,
-            MovementAnimation::jump, MovementAnimation::fall, MovementAnimation::fly,
-            MovementAnimation::hover, MovementAnimation::hover_up,
-            MovementAnimation::hover_down, MovementAnimation::land};
-        for (const auto animation : every)
-            if (const auto movement = homeworldz::viewer::parse_uuid(
-                    homeworldz::viewer::movement_animation_id(animation)))
-                if (*movement == id) return true;
-        return false;
-    };
-    // Animations playing on this avatar that `motion` does not describe: gestures
-    // and anything a script or viewer started through AgentAnimation. They are
-    // published as asset ids because that is all they are - creator content with
-    // no state name to give it, which is the exception the client core asked the
-    // field to be shaped for (2026-08-04). Legacy animation assets today, with no
-    // modern rendition, so the contract says do not fetch them yet: a client that
-    // knows a clip is playing and cannot draw it is better off than one that
-    // believes the avatar is standing.
-    const auto session_clip_list = [&](const std::string& key) {
-        std::string list;
-        const auto found = avatar_animations.find(key);
-        if (found != avatar_animations.end())
-            for (const auto& entry : found->second) {
-                if (is_movement_animation(entry.animation_id)) continue;
-                if (!list.empty()) list.push_back(',');
-                list += "\"" + homeworldz::viewer::format_uuid(entry.animation_id) + "\"";
-            }
-        return "[" + list + "]";
-    };
-    // What the avatar is doing, in both representations, as one block. Shared by
-    // the `avatar` announcement and the `motion` event so the two cannot come to
-    // describe it differently.
+    // Every animation active on this avatar, as formatted ids. The decision about
+    // which of them are clips and which are already named by `motion` belongs to
+    // motion_fields_json, so it cannot be made differently in two places or
+    // forgotten in one.
     const auto session_motion_fields = [&](const LiveAvatar& participant, const std::string& key) {
-        return "\"motion\":" + homeworldz::session::json_string(std::string(
-                   homeworldz::viewer::movement_animation_name(
-                       participant.controller.movement_animation()))) +
-               ",\"clips\":" + session_clip_list(key);
+        std::vector<std::string> playing;
+        if (const auto found = avatar_animations.find(key); found != avatar_animations.end()) {
+            playing.reserve(found->second.size());
+            for (const auto& entry : found->second)
+                playing.push_back(homeworldz::viewer::format_uuid(entry.animation_id));
+        }
+        return homeworldz::viewer::motion_fields_json(
+            participant.controller.movement_animation(), playing);
     };
     const auto session_motion_envelope = [&](const LiveAvatar& participant, const std::string& key) {
         return homeworldz::session::encode_envelope("motion", {},

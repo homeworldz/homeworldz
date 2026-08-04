@@ -1,5 +1,7 @@
 #include "homeworldz/avatar_controller.h"
 
+#include <string>
+
 #include <algorithm>
 #include <cmath>
 
@@ -35,6 +37,29 @@ std::string_view movement_animation_name(MovementAnimation animation) {
     case MovementAnimation::stand:
     default: return "stand";
     }
+}
+
+bool is_movement_animation_id(std::string_view animation_id) {
+    constexpr MovementAnimation every[]{
+        MovementAnimation::stand, MovementAnimation::walk, MovementAnimation::run,
+        MovementAnimation::jump, MovementAnimation::fall, MovementAnimation::fly,
+        MovementAnimation::hover, MovementAnimation::hover_up,
+        MovementAnimation::hover_down, MovementAnimation::land};
+    for (const auto animation : every)
+        if (movement_animation_id(animation) == animation_id) return true;
+    return false;
+}
+
+std::string motion_fields_json(MovementAnimation state,
+                               std::span<const std::string> playing) {
+    std::string clips;
+    for (const auto& animation_id : playing) {
+        if (is_movement_animation_id(animation_id)) continue;
+        if (!clips.empty()) clips.push_back(',');
+        clips += "\"" + animation_id + "\"";
+    }
+    return "\"motion\":\"" + std::string(movement_animation_name(state)) +
+           "\",\"clips\":[" + clips + "]";
 }
 
 std::optional<AvatarGeometry> avatar_geometry(const AgentSetAppearance& appearance) {
