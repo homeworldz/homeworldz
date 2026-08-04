@@ -9,6 +9,7 @@ const (
 	LibraryTerrainID        = "00000000-0000-4000-8000-000000000020"
 	LibraryInitialOutfitsID = "00000000-0000-4000-8000-000000000010"
 	LibraryDefaultAvatarID  = "00000000-0000-4000-8000-000000000011"
+	LibraryBodiesID         = "00000000-0000-4000-8000-000000000030"
 )
 
 // LibraryFolders is the grid-owned, read-only inventory catalog. Its stable
@@ -29,6 +30,11 @@ func LibraryFolders() []Folder {
 			Name: "Initial Outfits", TypeDefault: -1, Version: 1},
 		{ID: LibraryDefaultAvatarID, OwnerUserID: LibraryOwnerID, ParentID: LibraryInitialOutfitsID,
 			Name: "Default Avatar", TypeDefault: -1, Version: 1},
+		// Whole-body meshes, as objects rather than body parts: a mesh body is an
+		// attachment in this protocol family, so it rezzes and attaches like any
+		// object and is not a wearable.
+		{ID: LibraryBodiesID, OwnerUserID: LibraryOwnerID, ParentID: LibraryRootID,
+			Name: "Bodies", TypeDefault: -1, Version: 1},
 	}
 }
 
@@ -111,6 +117,27 @@ func LibraryItems() []Item {
 			AssetType: 5, InventoryType: 18, Name: "Default Pants", Flags: 5,
 			BasePermissions: fullPermissions, CurrentPermissions: fullPermissions,
 			EveryonePermissions: fullPermissions, NextPermissions: fullPermissions},
+		// MakeHuman CC0 bodies, static bind pose (2026-08-04). AssetType 6 and
+		// InventoryType 6 are object: each item names an object asset that wraps
+		// the mesh, because a viewer rezzes an object and never a bare mesh.
+		//
+		// **These are for looking at, not for wearing.** SL rigged mesh must be
+		// weighted to the viewer's own 71 named joints (character/avatar_skeleton
+		// .xml); these carry MakeHuman's 163 under different names, so the
+		// skinning was stripped rather than shipped to land on joints no viewer
+		// has. Re-rigging to the viewer skeleton is what makes a wearable body,
+		// and it is content work. Licence record in
+		// assets/region/library/bodies/LICENSE.md.
+		{ID: "00000000-0000-4000-8000-000000000031", OwnerUserID: LibraryOwnerID,
+			CreatorUserID: LibraryOwnerID, FolderID: LibraryBodiesID,
+			AssetID: "5a2e7f10-8c34-4b96-a1d7-6e3f92b45c08", AssetType: 6, InventoryType: 6,
+			Name: "Female", BasePermissions: fullPermissions,
+			CurrentPermissions: fullPermissions, EveryonePermissions: fullPermissions, NextPermissions: fullPermissions},
+		{ID: "00000000-0000-4000-8000-000000000032", OwnerUserID: LibraryOwnerID,
+			CreatorUserID: LibraryOwnerID, FolderID: LibraryBodiesID,
+			AssetID: "9e6a3d72-4f18-4c85-b23f-8d51e07ba946", AssetType: 6, InventoryType: 6,
+			Name: "Male", BasePermissions: fullPermissions,
+			CurrentPermissions: fullPermissions, EveryonePermissions: fullPermissions, NextPermissions: fullPermissions},
 	}
 }
 
