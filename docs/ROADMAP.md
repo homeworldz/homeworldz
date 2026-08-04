@@ -577,6 +577,16 @@ input formats.
   outright and displays exactly what the region sends. A consequence: the
   default low of 10 m sits below the default water height of 20 m, so layer 1
   has no dry ground and a region shows three layers until an operator raises it.
+  Verified from both ends, 2026-08-04. The client core probed the grass layer it
+  had fetched and rendered: 1024x1024, **97522 distinct colours**, mean r101 g132
+  b44. Probing the source PNG on the operator's disk gives 1024x1024, **97522**,
+  mean 101.452 / 131.833 / 43.623 - the same distinct count exactly, and the
+  channel means differing only by their rounding against this side's truncation.
+  Two codebases sharing no code, measuring opposite ends of import, vault,
+  rendition selection, and serving, agreeing on a 97522-way fingerprint: the
+  canonical PNG path is lossless in fact and not merely by intent. It also
+  settles a flat-looking render as distance and mipmapping at a grazing angle
+  rather than a flat image.
   Remaining: the blend contract. The **width** is now published
   (`blendMetres`, from `region.terrain_blend_tenths`) and is advisory — only a
   client shading its own terrain can honour it, because no legacy message

@@ -194,6 +194,25 @@ seam above encoding.
    published `startHeight`/`heightRange` and described a band divided in four.
    That was wrong, and is retracted here rather than quietly edited away,
    because a client may have built against it (corrected 2026-08-04).
+   **If you are porting from the old names, the rename is not the change — the
+   meaning is.** `[start, start + range]` became `[low, high]`. A reader that
+   renamed the two fields and touched nothing else computes a window sixty metres
+   too tall on the defaults, is wrong at every elevation, and fails nothing,
+   because every value it produces is a plausible height. Rename the fields
+   *and* delete the addition.
+   The rename was load-bearing for exactly that reason and is worth keeping in
+   mind for future contract changes here: a client core reader hit it and refused
+   the whole block rather than silently computing the wrong window (2026-08-04),
+   which is the outcome the rename was for. Changing a field's meaning without
+   changing its name would have produced the silent version.
+   The same applies to `selection`, and there is a measurement for it. With no
+   rule published, the client core had guessed four equal quarters of the window.
+   On 10 to 60 that puts boundaries at 22.5, 35 and 47.5 against the real 10, 35
+   and 60 — **the middle one agrees by coincidence and the outer two do not**,
+   which is the worst arrangement for noticing by eye, since the bands change in
+   roughly the right part of a hill and are wrong about where. Withholding an
+   approximate rule was right, and publishing the exact one was right; the
+   interval between them is the argument for the second.
    A consequence worth stating: the default low of 10 m sits below the default
    water height of 20 m, so layer 1 has no dry ground to appear on and a region
    shows three layers rather than four until an operator raises it.
