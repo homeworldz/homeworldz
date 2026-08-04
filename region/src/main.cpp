@@ -5297,6 +5297,29 @@ int main(int argc, char* argv[]) {
                                     region_estate = *updated;
                                 send_estate_detail(endpoint, identity->agent_id,
                                                    estate_message->invoice, now);
+                            } else {
+                                // An estate method with no handler is a viewer
+                                // asking for something the region silently drops
+                                // — the operator's Region/Estate Terrain tab
+                                // Apply among them. Naming the method and its
+                                // parameters turns the next such request into
+                                // evidence rather than into nothing happening,
+                                // which is how the materials envelope was
+                                // learned rather than guessed.
+                                std::string params;
+                                for (const auto& parameter : estate_message->params) {
+                                    if (!params.empty()) params += " | ";
+                                    params += parameter;
+                                }
+                                std::cout << "{\"level\":\"warning\",\"message\":\"estate method"
+                                             " has no handler\",\"method\":"
+                                          << homeworldz::api::json_string(method)
+                                          << ",\"paramCount\":" << estate_message->params.size()
+                                          << ",\"params\":"
+                                          << homeworldz::api::json_string(params)
+                                          << ",\"manager\":" << (manager ? "true" : "false")
+                                          << ",\"owner\":" << (owner ? "true" : "false")
+                                          << "}" << std::endl;
                             }
                         }
                         if (const auto requested_names =
