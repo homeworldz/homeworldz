@@ -182,9 +182,21 @@ seam above encoding.
    handshake had always hard-coded.
    **The ground's surface (2026-07-31).** `terrain.layers` names the four
    textures and the elevation band that selects between them: `assets` lowest
-   to highest, `startHeight` and `heightRange` per corner in the order
-   south-west, north-west, south-east, north-east, a layer's band being
-   `[start, start + range]` with the corners interpolated across the region.
+   to highest, and `lowHeight` and `highHeight` per corner in the order
+   south-west, north-west, south-east, north-east, interpolated across the
+   region. **Both are absolute metres, not a start and a span:** low is layer
+   1's ceiling, high is layer 4's floor, and the two bounds do not by themselves
+   say where layer 2 becomes layer 3 — the midpoint does, and the `selection`
+   string states the whole rule. The viewer's own Region/Estate → Terrain tab
+   labels these Low and High and displays exactly what the region sends, which
+   is how the earlier reading was caught: with 10 and 60 on the wire it shows
+   60, where a span would have shown 70. An earlier revision of this document
+   published `startHeight`/`heightRange` and described a band divided in four.
+   That was wrong, and is retracted here rather than quietly edited away,
+   because a client may have built against it (corrected 2026-08-04).
+   A consequence worth stating: the default low of 10 m sits below the default
+   water height of 20 m, so layer 1 has no dry ground to appear on and a region
+   shows three layers rather than four until an operator raises it.
    They are ordinary assets, fetched from `assets.base`, canonical PNG since
    the layers were re-sourced — so a client that refuses JPEG2000 can read the
    ground it stands on, and a cache can hold them for the life of the id.
