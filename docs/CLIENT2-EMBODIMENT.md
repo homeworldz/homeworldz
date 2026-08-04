@@ -276,6 +276,28 @@ seam above encoding.
    blobs in the first cut (texture-entry byte blobs are a legacy shape);
    what a session client renders for other avatars is deferred to the
    asset-format work (ROADMAP Phase 10).
+   **Motion is published, as a name (2026-08-04).** The client core named three
+   blockers behind drawing avatars as anything but capsules, and observed that
+   the third — "nothing publishes animation, not one field" — was the one
+   already computed server-side and simply never given an envelope. It has one
+   now. `motion` is one of `stand`, `walk`, `run`, `jump`, `fall`, `fly`,
+   `hover`, `hoverUp`, `hoverDown`, `land`.
+   A **name, not the animation UUID**, for the same reason water is a height and
+   not a surface: the id names Linden-authored content that ships inside the
+   viewer, so it identifies an animation only to something that already has it,
+   and is useless to a client built from nothing. The name says what the avatar
+   is doing and leaves how to draw it entirely to the client.
+   It arrives two ways, the same field either way. The `avatar` announcement
+   carries the current value, so a client that arrives mid-stride is not left
+   with an avatar standing still; a `motion` envelope (`id`, `motion`) follows on
+   every change. On change and not on every transform — transforms run at frame
+   rate and this does not — and behind the same interest filter, so you are
+   never told about an avatar you were not told exists.
+   This does **not** answer the other two blockers, and is not meant to: there is
+   still no canonical glTF body (the legacy one is viewer-licensed content, the
+   same wall the terrain layers hit) and appearance is still unpublished. The
+   capsule is still the honest amount. What changes is that a capsule can now
+   report what it is doing, and the state will be there when a body arrives.
 8. **Crossings cost one new message.** The transit machinery needs no
    change; the session equivalent of `EnableSimulator`/`CrossedRegion` is a
    single `crossing` envelope carrying `{regionHandle, sessionURL of the

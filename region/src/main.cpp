@@ -2324,7 +2324,15 @@ int main(int argc, char* argv[]) {
             ",\"userId\":" + homeworldz::session::json_string(participant.user_id) +
             ",\"position\":" + session_vec3(state.position.x, state.position.y, state.position.z) +
             ",\"rotation\":[" + std::to_string(state.rotation[0]) + "," +
-                std::to_string(state.rotation[1]) + "," + std::to_string(state.rotation[2]) + "]}");
+                std::to_string(state.rotation[1]) + "," + std::to_string(state.rotation[2]) + "]" +
+            // What this avatar is doing right now, so a client that arrives
+            // mid-stride is not left standing until the next change. `motion`
+            // envelopes carry it from then on, and this is the same field name
+            // with the same values - one thing to parse, whether it came as
+            // initial state or as an update.
+            ",\"motion\":" + homeworldz::session::json_string(std::string(
+                homeworldz::viewer::movement_animation_name(
+                    participant.controller.movement_animation()))) + "}");
     };
     const auto session_kill_envelope = [](homeworldz::scene::EntityId entity_id) {
         return homeworldz::session::encode_envelope("kill", {},
@@ -10026,12 +10034,46 @@ int main(int argc, char* argv[]) {
             const auto movement_agent_id = homeworldz::viewer::parse_uuid(avatar.user_id);
             auto& animations = avatar_animations[endpoint];
             const auto previous = movement_animations.find(endpoint);
-            bool animation_changed = previous == movement_animations.end() ||
-                                     previous->second != desired_animation;
+            // Two different questions, deliberately separated. The state
+            // changed: what a session client is told about. The viewer needs a
+            // resend: also true when the id has fallen out of its list, which is
+            // a legacy bookkeeping fact and not a change in what the avatar is
+            // doing.
+            const bool state_changed = previous == movement_animations.end() ||
+                                       previous->second != desired_animation;
+            bool animation_changed = state_changed;
             if (desired_id) {
                 const auto present = std::find_if(animations.begin(), animations.end(),
                     [&](const auto& entry) { return entry.animation_id == *desired_id; });
                 animation_changed = animation_changed || present == animations.end();
+            }
+            if (state_changed) {
+                // Recorded here rather than inside the viewer branch below: that
+                // branch also requires the legacy UUID to parse, so a state
+                // without one would never be recorded and would re-announce
+                // itself on every tick forever.
+                movement_animations.insert_or_assign(endpoint, desired_animation);
+                if (session_server) {
+                    // The state's portable name, not its Linden asset id. Sent
+                    // on change rather than on every transform, because that is
+                    // when it changes - transforms run at frame rate and this
+                    // does not. Same interest filter as transform: a client is
+                    // not told about an avatar it has not been told exists.
+                    const auto motion_envelope =
+                        homeworldz::session::encode_envelope("motion", {},
+                            "{\"id\":\"" + std::to_string(avatar.entity_id) + "\"" +
+                            ",\"motion\":\"" +
+                            std::string(homeworldz::viewer::movement_animation_name(
+                                desired_animation)) + "\"}");
+                    for (const auto& [recipient_key, recipient] : avatars) {
+                        if (recipient.transport != AvatarTransport::session) continue;
+                        const auto known = session_avatar_interest.find(recipient_key);
+                        if (known == session_avatar_interest.end() ||
+                            !known->second.contains(avatar.entity_id))
+                            continue;
+                        session_server->send_to(recipient.session_id, motion_envelope);
+                    }
+                }
             }
             if (animation_changed && desired_id && movement_agent_id) {
                 if (previous != movement_animations.end()) {
@@ -10044,7 +10086,6 @@ int main(int argc, char* argv[]) {
                 auto& sequence = next_animation_sequences[endpoint];
                 if (sequence < 2) sequence = 2;
                 animations.push_back({*desired_id, sequence++, *movement_agent_id});
-                movement_animations.insert_or_assign(endpoint, desired_animation);
                 const homeworldz::viewer::AvatarAnimation update{*movement_agent_id, animations};
                 const auto payload = homeworldz::viewer::encode_avatar_animation(update);
                 for (const auto& [recipient_endpoint, recipient] : avatars) {

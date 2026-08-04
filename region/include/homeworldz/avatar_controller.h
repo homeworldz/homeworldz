@@ -56,7 +56,20 @@ enum class MovementAnimation {
     land,
 };
 
+// The legacy animation asset a viewer plays for this state. Linden-authored
+// content that ships inside the viewer, so it identifies an animation only to
+// something with that content already: useless to a client built from nothing,
+// which is why the name below exists beside it rather than instead of it.
 std::string_view movement_animation_id(MovementAnimation animation);
+
+// The same state as a portable name, published to session clients. A name
+// rather than the UUID for the reason water is a height rather than a surface:
+// the id names Linden viewer content a client with no legacy code cannot fetch
+// or play, while the name says what the avatar is doing and leaves how to draw
+// it to the client (client core's third avatar blocker, 2026-08-04). One switch
+// per representation, over the same enum, so a new state cannot be given an id
+// and no name.
+std::string_view movement_animation_name(MovementAnimation animation);
 
 // The movement model's authoritative constants. Published to session clients
 // in the hello payload so client-side prediction can simulate what this

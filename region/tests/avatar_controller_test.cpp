@@ -1,5 +1,7 @@
 #include "homeworldz/avatar_controller.h"
 
+#include <set>
+#include <string_view>
 #include <cmath>
 
 int main() {
@@ -167,5 +169,32 @@ int main() {
     lander.apply(update);
     for (int index = 0; index < 400; ++index) lander.step(0.05);
     if (!lander.state().grounded || lander.state().velocity.x != 0.0) return 30;
+
+    // Every state has both representations, and no two states share either. The
+    // legacy id names Linden viewer content; the name is what session clients
+    // are told. Asserted rather than trusted because both are switch statements
+    // with a `default`, so a state added to the enum and forgotten in either one
+    // compiles, runs, and silently reports the wrong thing - `stand` for a
+    // walking avatar, which is exactly the failure that looks like success.
+    {
+        using homeworldz::viewer::MovementAnimation;
+        constexpr MovementAnimation every[]{
+            MovementAnimation::stand, MovementAnimation::walk, MovementAnimation::run,
+            MovementAnimation::jump, MovementAnimation::fall, MovementAnimation::fly,
+            MovementAnimation::hover, MovementAnimation::hover_up,
+            MovementAnimation::hover_down, MovementAnimation::land};
+        // Guards the list itself against the enum growing past it: land is last.
+        if (static_cast<int>(MovementAnimation::land) + 1 !=
+            static_cast<int>(std::size(every))) return 31;
+        std::set<std::string_view> names, ids;
+        for (const auto animation : every) {
+            const auto name = homeworldz::viewer::movement_animation_name(animation);
+            const auto id = homeworldz::viewer::movement_animation_id(animation);
+            if (name.empty() || id.size() != 36) return 32;
+            names.insert(name);
+            ids.insert(id);
+        }
+        if (names.size() != std::size(every) || ids.size() != std::size(every)) return 33;
+    }
     return 0;
 }

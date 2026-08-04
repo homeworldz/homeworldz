@@ -21,6 +21,22 @@ std::string_view movement_animation_id(MovementAnimation animation) {
     }
 }
 
+std::string_view movement_animation_name(MovementAnimation animation) {
+    switch (animation) {
+    case MovementAnimation::walk: return "walk";
+    case MovementAnimation::run: return "run";
+    case MovementAnimation::jump: return "jump";
+    case MovementAnimation::fall: return "fall";
+    case MovementAnimation::fly: return "fly";
+    case MovementAnimation::hover: return "hover";
+    case MovementAnimation::hover_up: return "hoverUp";
+    case MovementAnimation::hover_down: return "hoverDown";
+    case MovementAnimation::land: return "land";
+    case MovementAnimation::stand:
+    default: return "stand";
+    }
+}
+
 std::optional<AvatarGeometry> avatar_geometry(const AgentSetAppearance& appearance) {
     // Match the Halcyon/InWorldz visual-parameter height and hip calculation.
     // The viewer-provided Size is a fallback for clients with a shorter block.
