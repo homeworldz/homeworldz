@@ -239,10 +239,25 @@ but stays unchecked until its complete wording is satisfied.
   returns `estateupdateinfo` + the `setaccess` lists, `estateaccessdelta` adds and
   removes bans/allowed users/managers, and `estatechangeinfo` toggles the estate
   flags. Estate bans and private-estate access gate region entry; estate owner and
-  managers bypass parcel and estate restrictions. Viewer-driven terrain textures
-  and elevations landed 2026-08-04 (`texturedetail`, `textureheights`,
-  `texturecommit`); region restart and estate kick/teleport-home admin actions
-  remain. Live Firestorm acceptance on the Sandbox Region
+  managers bypass parcel and estate restrictions. The Region/Estate Terrain tab is
+  handled in full as of 2026-08-04: textures and elevations (`texturedetail`,
+  `textureheights`, `texturecommit`) and then water height, the terrain edit
+  limits, and region sun (`setregionterrain`). Region restart and estate
+  kick/teleport-home admin actions remain.
+  Three things learned by handling the second message. Its estate sun fields
+  (params 6-8) are **hard-coded by the viewer** to Y/N/0 whatever the estate
+  actually holds - indra says so itself, "*NOTE: this resets estate sun info" -
+  so the region ignores them; honouring them would wipe an estate's sun
+  configuration every time an operator touched the tab, and it would look exactly
+  like success. The terrain raise and lower limits were **announced in
+  `RegionInfo` and enforced nowhere**, so both fields read as settings while being
+  decoration; they are now bounded against the region's baseline rather than the
+  current height, because a bound against the current height is a rate and
+  repeated edits walk straight past it. And re-sending `RegionHandshake`
+  mid-session is **correct rather than disruptive** - see the retraction in
+  CLIENT2-EMBODIMENT.md; the viewer diffs the composition and refreshes the
+  Region/Estate floater, and an earlier decision here not to re-send it is what
+  made an operator reopen the form to stale values. Live Firestorm acceptance on the Sandbox Region
   (2026-07-25): the Region tab, Estate tab (My Estate / owner Jim Tarber), and
   Covenant tab populate correctly.
 - [ ] Apply permissions recursively and consistently to linksets, object

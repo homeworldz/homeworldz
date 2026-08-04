@@ -141,7 +141,12 @@ int main() {
     // The water plane: a height, not a surface. A viewer gets this in
     // RegionHandshake and a session client got nothing at all until now, so a
     // client drew water wherever it guessed (client core, 2026-07-30).
-    if (greeting->payload.find("\"water\":{\"height\":20}") == std::string::npos)
+    // The event name rides with it, as terrain's does: water became settable from
+    // the Region/Estate form on 2026-08-04, so the greeting alone no longer holds
+    // for the life of a connection and a client should not have to read a document
+    // to learn that.
+    if (greeting->payload.find(
+            "\"water\":{\"height\":20,\"changedEvent\":\"waterChanged\"}") == std::string::npos)
         return 35;
     // The ground's surface: which four textures, and the elevation band that
     // selects between them. Without these a client knows the shape of the

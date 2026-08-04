@@ -342,6 +342,15 @@ std::string corner_list(const std::array<float, 4>& values) {
 } // namespace
 
 
+std::string water_json(double height) {
+    return "{\"height\":" + json_number_text(height) +
+           // Named so a client discovers the event rather than reading a
+           // document, as terrain does. Water was fixed for the life of a region
+           // process until the Region/Estate form could set it (2026-08-04), so
+           // the greeting alone no longer suffices for a connection's lifetime.
+           ",\"changedEvent\":\"waterChanged\"}";
+}
+
 std::string terrain_layers_json(const terrain::Settings& layers, double blend_metres) {
     return "{\"assets\":[" + layer_asset_list(layers.assets) +
            "],\"selectedBy\":\"elevation\""
@@ -505,7 +514,7 @@ SessionCore::Result SessionCore::handle_text(std::string_view text) {
             // and everything about how it is drawn is the client's business
             // (client core, 2026-07-30). Viewers learn the same number from
             // RegionHandshake; this is the session client's copy of it.
-            ",\"water\":{\"height\":" + json_number_text(water_height_) + "}" +
+            ",\"water\":" + water_json(water_height_) +
             // Where canonical asset bytes come from: an asset id appended to
             // this base, on the same ticket. Named `base` rather than `path`
             // deliberately — `terrain.path` is a complete path and this is not,

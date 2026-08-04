@@ -65,6 +65,22 @@ public:
                                std::array<float, 4>& low,
                                std::array<float, 4>& high) const;
 
+    // The region's own settings from the viewer's Region/Estate form, as
+    // distinct from the terrain layers above: water height, the terrain edit
+    // limits, and region sun. Nothing stored means the region still runs on its
+    // configured defaults, which is a different state from having been set to
+    // values that happen to equal them.
+    struct RegionSettings {
+        double water_height{};
+        double terrain_raise{};
+        double terrain_lower{};
+        bool use_estate_sun{true};
+        bool fixed_sun{};
+        double sun_hour{};
+    };
+    void save_region_settings(const RegionSettings& settings);
+    std::optional<RegionSettings> load_region_settings() const;
+
     // Replace all persisted parcels (and their access lists) atomically.
     void save_parcels(const std::vector<parcel::Parcel>& parcels);
     // Load persisted parcels; nullopt when the region has never stored any.

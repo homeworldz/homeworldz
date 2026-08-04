@@ -235,15 +235,26 @@ seam above encoding.
    block, from the same function — so handling it is re-reading what was already
    parsed once at greeting. No revision and no refetch: the block is the whole
    state.
-   This is the one place the session path is *better* than the legacy one rather
-   than merely equal to it. A viewer cannot be told, because `RegionHandshake`
-   is the only message carrying these and re-sending it mid-session restarts
-   more region state than a texture change warrants — so a viewer picks the
-   change up on its next login while a session client sees it immediately.
-   Worth contrasting with `water`, where the note that the greeting alone
-   suffices for the life of a connection still holds: changing water height
-   needs a region restart, which re-greets. Layers do not, so they needed an
-   event that water does not.
+   **Correction (2026-08-04): an earlier revision of this section claimed a viewer
+   *cannot* be told, and called this the one place the session path is better than
+   the legacy one. Both were wrong.** The reasoning given was that `RegionHandshake`
+   is the only message carrying terrain and that re-sending it mid-session restarts
+   more region state than a texture change warrants. Reading the viewer instead of
+   reasoning about it settles it the other way: `unpackRegionHandshake` diffs the
+   composition, calls `dirtyAllPatches()` when it changed, and refreshes the
+   Region/Estate floater — it is written for the repeat. Firestorm's own comment on
+   the PBR path spells the exchange out: "viewer: POST ModifyRegion / simulator:
+   RegionHandshake / viewer: GET ModifyRegion". The region now re-handshakes every
+   connected viewer on commit. The symptom that exposed it was an operator changing
+   the elevations, reopening the form, and seeing the old values.
+   So the two transports are equal here, which is the intended state. What remains
+   true is the reason the event exists at all: a session client has no
+   `RegionHandshake`, so it needs its own message to be told the same thing.
+   **`water` now changes too, and names its own event.** It was fixed for the life
+   of a region process, which is why the greeting alone used to suffice; the
+   Region/Estate form can now set it per region, so the block carries
+   `changedEvent: "waterChanged"` and that event carries the same `water` block from
+   the same function. The note that said water needed no event is superseded.
    **The blend width is published; the blend curve is not.** `blendMetres` is
    how wide the transition between two layers should be, straddling each
    boundary symmetrically — `region.terrain_blend_tenths`, 2 m by default. It is

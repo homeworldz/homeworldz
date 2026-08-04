@@ -1007,7 +1007,27 @@ int main(int argc, char* argv[]) {
     // changes them from the viewer's Region/Estate -> Terrain tab, then whatever
     // was persisted. Read by both publish paths, so a viewer and a session
     // client are always told the same thing.
+    // The Region/Estate form's own settings. Seeded from configuration, then
+    // replaced by anything an operator has persisted. `water_height` above is now
+    // the *default* rather than the value: it is what a region starts at, and the
+    // form can change it for this region only.
+    homeworldz::storage::RegionStorage::RegionSettings region_settings{
+        water_height,
+        homeworldz::terrain::default_terrain_raise_limit,
+        homeworldz::terrain::default_terrain_lower_limit,
+        true, false, 0.0};
     homeworldz::terrain::Settings terrain_layers;
+    // Sends RegionHandshake. Used at login and again whenever the terrain or
+    // water changes, because that is the only message carrying either and the
+    // viewer is built for the repeat: `unpackRegionHandshake` tracks whether the
+    // composition changed, calls `dirtyAllPatches()` when it did, and refreshes
+    // the Region/Estate floater. Firestorm's own comment on the PBR path spells
+    // the exchange out - "viewer: POST ModifyRegion / simulator: RegionHandshake
+    // / viewer: GET ModifyRegion". An earlier note here claimed re-sending
+    // restarts more viewer state than a texture change warrants; that was wrong,
+    // and the symptom was an operator reopening the form to stale values
+    // (2026-08-04).
+    std::function<bool(const std::string&, const homeworldz::viewer::Uuid&)> send_region_handshake;
     // What the viewer has staged but not yet committed. Seeded from the live
     // values at startup so a commit that follows only one of the two staging
     // messages carries the current setting for the other, not a default.
@@ -1250,6 +1270,14 @@ int main(int argc, char* argv[]) {
         // fuse.
         for (auto& [id, definition] : storage->load_render_materials())
             render_material_cache.emplace(id, std::move(definition));
+        if (const auto stored = storage->load_region_settings()) {
+            region_settings = *stored;
+            std::cout << "{\"level\":\"info\",\"message\":\"region settings loaded\""
+                      << ",\"water\":" << region_settings.water_height
+                      << ",\"terrainRaise\":" << region_settings.terrain_raise
+                      << ",\"terrainLower\":" << region_settings.terrain_lower
+                      << "}" << std::endl;
+        }
         // Terrain layers an operator set previously. Absent means untouched, which
         // is deliberately distinct from "set to the defaults": only the second is
         // a decision, and only the first should follow a change of defaults.
@@ -2623,6 +2651,50 @@ int main(int argc, char* argv[]) {
             if (estate & p_deny_minors) flags |= 1U << 30;        // DenyAgeUnverified
         }
         return flags;
+    };
+    // Assigned here, where the estate helpers it needs are in scope. Declared
+    // earlier so the terrain handlers can reach it.
+    send_region_handshake = [&](const std::string& endpoint,
+                                const homeworldz::viewer::Uuid& agent_id) {
+        const auto region_id = registration ?
+            homeworldz::viewer::parse_uuid(registration->region_id()) : std::nullopt;
+        if (!region_id) return false;
+        homeworldz::viewer::RegionHandshake handshake;
+        handshake.name = region_name;
+        handshake.region_id = *region_id;
+        // The estate/region owner is authoritative from the grid record; fall back
+        // to this agent only when the grid supplied no owner (older records).
+        const auto estate_owner_id = region_estate && !region_estate->owner_id.empty()
+            ? region_estate->owner_id : region_owner_id;
+        const auto region_owner = homeworldz::viewer::parse_uuid(estate_owner_id);
+        handshake.owner_id = region_owner ? *region_owner : agent_id;
+        handshake.is_estate_owner =
+            is_estate_manager(homeworldz::viewer::format_uuid(agent_id));
+        handshake.region_flags = region_flags();
+        handshake.water_height = static_cast<float>(region_settings.water_height);
+        // One definition, shared with the session hello, so a viewer and a client
+        // are told the same ids (homeworldz/terrain_layers.h).
+        for (std::size_t index = 0; index < terrain_layers.assets.size(); ++index)
+            if (const auto texture =
+                    homeworldz::viewer::parse_uuid(terrain_layers.assets[index]))
+                handshake.terrain_textures[index] = *texture;
+        handshake.terrain_low = terrain_layers.low;
+        handshake.terrain_high = terrain_layers.high;
+        const auto response = circuits.send(endpoint,
+            homeworldz::viewer::encode_region_handshake(handshake), true, std::chrono::steady_clock::now(), true);
+        if (!response) {
+            std::cout << "{\"level\":\"error\",\"message\":\"region handshake not queued\","
+                         "\"endpoint\":" << homeworldz::api::json_string(endpoint) << "}"
+                      << std::endl;
+            return false;
+        }
+        const auto sent = send_udp(viewer_server, endpoint, *response);
+        std::cout << "{\"level\":" << (sent ? "\"info\"" : "\"error\"")
+                  << ",\"message\":\"region handshake sent\",\"endpoint\":"
+                  << homeworldz::api::json_string(endpoint)
+                  << ",\"bytes\":" << response->size()
+                  << ",\"success\":" << (sent ? "true" : "false") << "}" << std::endl;
+        return sent;
     };
     // Estate flags in RegionFlags form for the estateupdateinfo reply (floater UI).
     const auto estate_detail_flags = [&]() -> std::uint32_t {
@@ -4805,50 +4877,7 @@ int main(int argc, char* argv[]) {
                     const auto identity = circuits.identity(endpoint);
                     if (identity && homeworldz::viewer::decode_use_circuit_code(packet->payload)) {
                         handshake_replies.erase(endpoint);
-                        const auto region_id = registration ?
-                            homeworldz::viewer::parse_uuid(registration->region_id()) : std::nullopt;
-                        if (region_id) {
-                            homeworldz::viewer::RegionHandshake handshake;
-                            handshake.name = region_name;
-                            handshake.region_id = *region_id;
-                            // The estate/region owner is authoritative from the grid record;
-                            // fall back to the connecting agent only when the grid supplied no
-                            // owner (older records), preserving prior single-user behavior.
-                            const auto estate_owner_id = region_estate && !region_estate->owner_id.empty()
-                                ? region_estate->owner_id : region_owner_id;
-                            const auto region_owner = homeworldz::viewer::parse_uuid(estate_owner_id);
-                            handshake.owner_id = region_owner ? *region_owner : identity->agent_id;
-                            handshake.is_estate_owner =
-                                is_estate_manager(homeworldz::viewer::format_uuid(identity->agent_id));
-                            handshake.region_flags = region_flags();
-                            handshake.water_height = static_cast<float>(water_height);
-                            // One definition, shared with the session hello,
-                            // so a viewer and a client are told the same ids
-                            // (homeworldz/terrain_layers.h).
-                            const auto& terrain_texture_ids = terrain_layers.assets;
-                            for (std::size_t index = 0; index < terrain_texture_ids.size(); ++index)
-                                if (const auto texture = homeworldz::viewer::parse_uuid(terrain_texture_ids[index]))
-                                    handshake.terrain_textures[index] = *texture;
-                            handshake.terrain_low = terrain_layers.low;
-                            handshake.terrain_high = terrain_layers.high;
-                            if (const auto response = circuits.send(endpoint,
-                                    homeworldz::viewer::encode_region_handshake(handshake), true, now, true)) {
-                                const auto sent = send_udp(viewer_server, endpoint, *response);
-                                std::cout << "{\"level\":" << (sent ? "\"info\"" : "\"error\"")
-                                          << ",\"message\":\"region handshake sent\",\"endpoint\":"
-                                          << homeworldz::api::json_string(endpoint)
-                                          << ",\"bytes\":" << response->size()
-                                          << ",\"success\":" << (sent ? "true" : "false");
-#ifdef _WIN32
-                                if (!sent) std::cout << ",\"socketError\":" << WSAGetLastError();
-#endif
-                                std::cout << "}" << std::endl;
-                            } else {
-                                std::cout << "{\"level\":\"error\",\"message\":\"region handshake not queued\","
-                                             "\"endpoint\":"
-                                          << homeworldz::api::json_string(endpoint) << "}" << std::endl;
-                            }
-                        }
+                        static_cast<void>(send_region_handshake(endpoint, identity->agent_id));
                     } else if (identity) {
                         if (const auto ping_id = homeworldz::viewer::decode_start_ping_check(packet->payload)) {
                             if (const auto pong = circuits.send(endpoint,
@@ -5260,7 +5289,20 @@ int main(int argc, char* argv[]) {
                             reply.use_estate_sun = region_estate ? region_estate->use_global_time : true;
                             reply.sun_hour = region_estate ?
                                 static_cast<float>(region_estate->sun_hour) : 0.0F;
-                            reply.water_height = static_cast<float>(water_height);
+                            reply.water_height = static_cast<float>(region_settings.water_height);
+                            // Announced *and* enforced now. These were the struct's
+                            // defaults and nothing read them, so the form's fields
+                            // were decoration.
+                            reply.terrain_raise_limit =
+                                static_cast<float>(region_settings.terrain_raise);
+                            reply.terrain_lower_limit =
+                                static_cast<float>(region_settings.terrain_lower);
+                            // A region may override the estate's sun; while it
+                            // defers, the estate's values are the answer.
+                            if (!region_settings.use_estate_sun) {
+                                reply.use_estate_sun = false;
+                                reply.sun_hour = static_cast<float>(region_settings.sun_hour);
+                            }
                             auto response = homeworldz::viewer::encode_region_info(reply);
                             if (!response.empty())
                                 if (const auto outgoing = circuits.send(
@@ -5459,15 +5501,21 @@ int main(int argc, char* argv[]) {
                                     // hello, so they pick it up on their next connect.
                                     // Said plainly here so "it did not change" is a known
                                     // limit rather than a suspected failure.
-                                    // Session clients are told outright. A viewer
-                                    // cannot be: RegionHandshake is the only
-                                    // message carrying these and re-sending it
-                                    // mid-session restarts more region state than
-                                    // a texture change warrants. The session
-                                    // channel is ours, so it gets an event and the
-                                    // ground converges without a reconnect - the
-                                    // same block the greeting publishes, from one
-                                    // function, so the two cannot disagree.
+                                    // Every connected viewer is re-handshaked. That
+                                    // is the message carrying terrain, and the
+                                    // viewer is written for the repeat: it diffs
+                                    // the composition, re-textures the ground when
+                                    // it changed, and refreshes the Region/Estate
+                                    // floater. Session clients get their own event
+                                    // built from the same function as the greeting.
+                                    std::size_t viewers_told = 0;
+                                    for (const auto& [viewer_key, viewer_avatar] : avatars) {
+                                        if (viewer_avatar.transport != AvatarTransport::lludp) continue;
+                                        if (const auto viewer_agent = homeworldz::viewer::parse_uuid(
+                                                viewer_avatar.user_id))
+                                            if (send_region_handshake(viewer_key, *viewer_agent))
+                                                ++viewers_told;
+                                    }
                                     std::size_t told = 0;
                                     if (session_server) {
                                         const auto notice = homeworldz::session::encode_envelope(
@@ -5491,7 +5539,126 @@ int main(int argc, char* argv[]) {
                                               << ",\"defaults\":"
                                               << (terrain_layers.matches_defaults() ? "true" : "false")
                                               << ",\"sessionClientsTold\":" << told
-                                              << ",\"viewersApplyOn\":\"next login\"}" << std::endl;
+                                              << ",\"viewersReHandshaked\":" << viewers_told
+                                              << "}" << std::endl;
+                                }
+                              }
+                            } else if (method == "setregionterrain") {
+                              if (!manager) {
+                                std::cout << "{\"level\":\"warning\",\"message\":"
+                                             "\"region terrain change refused\",\"by\":"
+                                          << homeworldz::api::json_string(agent)
+                                          << ",\"reason\":\"not an estate manager or owner\"}"
+                                          << std::endl;
+                              } else if (estate_message->params.size() < 6) {
+                                std::cout << "{\"level\":\"warning\",\"message\":"
+                                             "\"region terrain change ignored\",\"paramCount\":"
+                                          << estate_message->params.size()
+                                          << ",\"reason\":\"fewer parameters than the message defines\"}"
+                                          << std::endl;
+                              } else {
+                                // The Region/Estate -> Terrain tab's other half. Field
+                                // order is from the viewer's own sender
+                                // (llregioninfomodel.cpp, sendRegionTerrain):
+                                //   0 water height, 1 terrain raise, 2 terrain lower,
+                                //   3 'Y' use estate sun, 4 'Y' fixed sun, 5 sun hour,
+                                //   6..8 the *estate's* use-global-time, fixed sun, sun hour.
+                                //
+                                // 6..8 are deliberately ignored. The viewer hard-codes
+                                // them to Y / N / 0 whatever the estate actually holds,
+                                // and says so itself: "*NOTE: this resets estate sun
+                                // info." Honouring them would wipe an estate's sun
+                                // configuration every time an operator touched this tab,
+                                // and it would look exactly like success.
+                                const auto number = [](const std::string& text) {
+                                    double value = 0.0;
+                                    const auto* begin = text.data();
+                                    const auto* end = begin + text.size();
+                                    return std::from_chars(begin, end, value).ec == std::errc{}
+                                        ? std::optional<double>{value} : std::nullopt;
+                                };
+                                const auto flag = [](const std::string& text) {
+                                    return !text.empty() && (text[0] == 'Y' || text[0] == 'y');
+                                };
+                                auto proposed = region_settings;
+                                bool sane = true;
+                                if (const auto value = number(estate_message->params[0]);
+                                    value && *value >= 0.0 && *value <= 4096.0)
+                                    proposed.water_height = *value;
+                                else sane = false;
+                                // The viewer's own spinner range for both limits.
+                                if (const auto value = number(estate_message->params[1]);
+                                    value && *value >= 0.0 && *value <= 1000.0)
+                                    proposed.terrain_raise = *value;
+                                else sane = false;
+                                if (const auto value = number(estate_message->params[2]);
+                                    value && *value >= -1000.0 && *value <= 0.0)
+                                    proposed.terrain_lower = *value;
+                                else sane = false;
+                                proposed.use_estate_sun = flag(estate_message->params[3]);
+                                proposed.fixed_sun = flag(estate_message->params[4]);
+                                if (const auto value = number(estate_message->params[5]);
+                                    value && *value >= 0.0 && *value < 24.0)
+                                    proposed.sun_hour = *value;
+                                else sane = false;
+                                if (!sane) {
+                                    std::cout << "{\"level\":\"warning\",\"message\":"
+                                                 "\"region terrain change ignored\",\"reason\":"
+                                                 "\"a value did not parse or was out of range\"}"
+                                              << std::endl;
+                                } else {
+                                    const bool water_changed =
+                                        proposed.water_height != region_settings.water_height;
+                                    region_settings = proposed;
+                                    if (storage) {
+                                        try {
+                                            storage->save_region_settings(region_settings);
+                                        } catch (const std::exception& error) {
+                                            std::cout << "{\"level\":\"error\",\"message\":"
+                                                         "\"region settings not saved\",\"error\":"
+                                                      << homeworldz::api::json_string(error.what())
+                                                      << "}" << std::endl;
+                                        }
+                                    }
+                                    // Water rides RegionHandshake, so viewers learn it
+                                    // the same way they learn terrain.
+                                    std::size_t viewers_told = 0;
+                                    for (const auto& [viewer_key, viewer_avatar] : avatars) {
+                                        if (viewer_avatar.transport != AvatarTransport::lludp) continue;
+                                        if (const auto viewer_agent = homeworldz::viewer::parse_uuid(
+                                                viewer_avatar.user_id))
+                                            if (send_region_handshake(viewer_key, *viewer_agent))
+                                                ++viewers_told;
+                                    }
+                                    std::size_t sessions_told = 0;
+                                    if (session_server && water_changed) {
+                                        const auto notice = homeworldz::session::encode_envelope(
+                                            "waterChanged", {},
+                                            "{\"water\":" +
+                                            homeworldz::session::water_json(
+                                                region_settings.water_height) + "}");
+                                        for (const auto& [recipient_key, recipient] : avatars) {
+                                            static_cast<void>(recipient_key);
+                                            if (recipient.transport != AvatarTransport::session)
+                                                continue;
+                                            session_server->send_to(recipient.session_id, notice);
+                                            ++sessions_told;
+                                        }
+                                    }
+                                    std::cout << "{\"level\":\"info\",\"message\":\"region"
+                                                 " terrain settings committed\",\"by\":"
+                                              << homeworldz::api::json_string(agent)
+                                              << ",\"water\":" << region_settings.water_height
+                                              << ",\"terrainRaise\":" << region_settings.terrain_raise
+                                              << ",\"terrainLower\":" << region_settings.terrain_lower
+                                              << ",\"useEstateSun\":"
+                                              << (region_settings.use_estate_sun ? "true" : "false")
+                                              << ",\"fixedSun\":"
+                                              << (region_settings.fixed_sun ? "true" : "false")
+                                              << ",\"sunHour\":" << region_settings.sun_hour
+                                              << ",\"viewersReHandshaked\":" << viewers_told
+                                              << ",\"sessionClientsTold\":" << sessions_told
+                                              << ",\"estateSunFieldsIgnored\":true}" << std::endl;
                                 }
                               }
                             } else {
@@ -9320,7 +9487,9 @@ int main(int argc, char* argv[]) {
                             terrain_edit->session_id == identity->session_id) {
                             const auto changed = homeworldz::terrain::apply(
                                 *terrain_heightmap, *revert_heightmap, *terrain_edit,
-                                terrain_smooth_strength);
+                                terrain_smooth_strength,
+                                static_cast<float>(region_settings.terrain_raise),
+                                static_cast<float>(region_settings.terrain_lower));
                             if (!changed.empty()) {
                                 // Applying the edit is an in-memory operation and
                                 // is all that happens here. Everything that costs

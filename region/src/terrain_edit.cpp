@@ -74,9 +74,16 @@ bool save_state(const std::filesystem::path& path, const Heightmap& heightmap) {
 
 std::vector<viewer::TerrainPatch> apply(Heightmap& heightmap, const Heightmap& revert,
                                         const viewer::ModifyLand& edit,
-                                        float smooth_strength) {
+                                        float smooth_strength, float raise_limit,
+                                        float lower_limit) {
     if (edit.action > 5 || edit.areas.empty()) return {};
     if (heightmap.width() != revert.width()) return {};
+    // Normalised so a reversed or same-signed pair cannot invert the window and
+    // reject every edit. The viewer sends raise positive and lower negative; an
+    // operator typing them the other way round should get a usable region, not a
+    // frozen one.
+    const auto upper_offset = std::max(raise_limit, lower_limit);
+    const auto lower_offset = std::min(raise_limit, lower_limit);
     // Smooth reads the pre-edit neighbourhood, so it needs a snapshot; nothing
     // else does. This copy was unconditional, which meant every raise, lower,
     // flatten, noise and revert packet also allocated and copied the whole
@@ -126,6 +133,15 @@ std::vector<viewer::TerrainPatch> apply(Heightmap& heightmap, const Heightmap& r
                 default: break;
                 }
                 next = std::clamp(next, minimum_height, maximum_height);
+                // The edit limits, measured from the region's original height so
+                // that repeated edits cannot walk past them a little at a time.
+                // Revert is exempt: it moves the ground back toward the baseline,
+                // so it can only ever reduce the distance being bounded, and
+                // clamping it would strand terrain that predates a tightened
+                // limit outside a window it can no longer leave.
+                if (edit.action != 5)
+                    next = std::clamp(next, revert[index] + lower_offset,
+                                      revert[index] + upper_offset);
                 if (std::abs(next - heightmap[index]) < 0.0001F) continue;
                 heightmap[index] = next;
                 patches.emplace(static_cast<std::uint8_t>(x / 16), static_cast<std::uint8_t>(y / 16));

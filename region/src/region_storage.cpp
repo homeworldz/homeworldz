@@ -660,6 +660,17 @@ RegionStorage::RegionStorage(std::filesystem::path data_path) : data_path_(std::
                        // an operator changed them. Absent means the region still
                        // holds the shipped defaults, which is a different state
                        // from "changed to something that happens to equal them".
+                       // One row, id 1: the Region/Estate form's own settings.
+                       // Separate from terrain_settings because the two are set
+                       // by different messages and either can be untouched while
+                       // the other is not.
+                       "CREATE TABLE IF NOT EXISTS region_settings ("
+                       "id INTEGER PRIMARY KEY CHECK (id = 1),"
+                       "water_height REAL NOT NULL,"
+                       "terrain_raise REAL NOT NULL, terrain_lower REAL NOT NULL,"
+                       "use_estate_sun INTEGER NOT NULL, fixed_sun INTEGER NOT NULL,"
+                       "sun_hour REAL NOT NULL,"
+                       "updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);"
                        "CREATE TABLE IF NOT EXISTS terrain_settings ("
                        "id INTEGER PRIMARY KEY CHECK (id = 1),"
                        "asset0 TEXT NOT NULL, asset1 TEXT NOT NULL,"
@@ -842,6 +853,49 @@ AssetMetadata RegionStorage::reconcile_asset_creator(std::string_view viewer_id,
     sqlite3_finalize(statement);
     if (result != SQLITE_DONE) throw std::runtime_error(sqlite3_errmsg(database_));
     return {std::string(viewer_id), std::string(creator_id), std::string(sha256), size};
+}
+
+void RegionStorage::save_region_settings(const RegionSettings& settings) {
+    sqlite3_stmt* statement = nullptr;
+    const char* sql =
+        "INSERT INTO region_settings (id, water_height, terrain_raise, terrain_lower,"
+        " use_estate_sun, fixed_sun, sun_hour) VALUES (1, ?, ?, ?, ?, ?, ?)"
+        " ON CONFLICT(id) DO UPDATE SET water_height=excluded.water_height,"
+        " terrain_raise=excluded.terrain_raise, terrain_lower=excluded.terrain_lower,"
+        " use_estate_sun=excluded.use_estate_sun, fixed_sun=excluded.fixed_sun,"
+        " sun_hour=excluded.sun_hour, updated_at=CURRENT_TIMESTAMP";
+    if (sqlite3_prepare_v2(database_, sql, -1, &statement, nullptr) != SQLITE_OK)
+        throw std::runtime_error(sqlite3_errmsg(database_));
+    sqlite3_bind_double(statement, 1, settings.water_height);
+    sqlite3_bind_double(statement, 2, settings.terrain_raise);
+    sqlite3_bind_double(statement, 3, settings.terrain_lower);
+    sqlite3_bind_int(statement, 4, settings.use_estate_sun ? 1 : 0);
+    sqlite3_bind_int(statement, 5, settings.fixed_sun ? 1 : 0);
+    sqlite3_bind_double(statement, 6, settings.sun_hour);
+    const auto result = sqlite3_step(statement);
+    sqlite3_finalize(statement);
+    if (result != SQLITE_DONE) throw std::runtime_error(sqlite3_errmsg(database_));
+}
+
+std::optional<RegionStorage::RegionSettings> RegionStorage::load_region_settings() const {
+    sqlite3_stmt* statement = nullptr;
+    const char* sql = "SELECT water_height, terrain_raise, terrain_lower, use_estate_sun,"
+                      " fixed_sun, sun_hour FROM region_settings WHERE id = 1";
+    if (sqlite3_prepare_v2(database_, sql, -1, &statement, nullptr) != SQLITE_OK)
+        throw std::runtime_error(sqlite3_errmsg(database_));
+    std::optional<RegionSettings> found;
+    if (sqlite3_step(statement) == SQLITE_ROW) {
+        RegionSettings settings;
+        settings.water_height = sqlite3_column_double(statement, 0);
+        settings.terrain_raise = sqlite3_column_double(statement, 1);
+        settings.terrain_lower = sqlite3_column_double(statement, 2);
+        settings.use_estate_sun = sqlite3_column_int(statement, 3) != 0;
+        settings.fixed_sun = sqlite3_column_int(statement, 4) != 0;
+        settings.sun_hour = sqlite3_column_double(statement, 5);
+        found = settings;
+    }
+    sqlite3_finalize(statement);
+    return found;
 }
 
 void RegionStorage::save_terrain_settings(const std::array<std::string, 4>& assets,

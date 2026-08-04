@@ -55,8 +55,22 @@ bool save_state(const std::filesystem::path& path, const Heightmap& heightmap);
 // one leaves nowhere to go.
 inline constexpr float default_smooth_strength = 0.50F;
 
+// How far an edit may move the ground from the region's original height, in
+// metres, above and below. The bound is measured against `revert` rather than
+// against the current height, which is what makes it a limit rather than a rate:
+// otherwise repeated edits walk past it a little at a time.
+//
+// The viewer's Region/Estate -> Terrain tab sets both and sends them in
+// `setregionterrain`. Before that was handled the region announced 100 and -100
+// in `RegionInfo` and enforced neither, so the fields read as settings and were
+// decoration - the shape of advertising a control that does nothing.
+inline constexpr float default_terrain_raise_limit = 100.0F;
+inline constexpr float default_terrain_lower_limit = -100.0F;
+
 std::vector<viewer::TerrainPatch> apply(Heightmap& heightmap, const Heightmap& revert,
                                         const viewer::ModifyLand& edit,
-                                        float smooth_strength = default_smooth_strength);
+                                        float smooth_strength = default_smooth_strength,
+                                        float raise_limit = default_terrain_raise_limit,
+                                        float lower_limit = default_terrain_lower_limit);
 
 } // namespace homeworldz::terrain

@@ -377,6 +377,21 @@ int main() {
             storage.save_terrain_settings(chosen, chosen_low, chosen_high);
             if (!storage.load_terrain_settings(layer_ids, layer_low, layer_high)) return 1;
             if (layer_ids != chosen || layer_low != chosen_low || layer_high != chosen_high) return 1;
+            // The Region/Estate form's own settings, kept separate from the
+            // layers because either can be untouched while the other is not.
+            if (storage.load_region_settings()) return 54;  // never set
+            homeworldz::storage::RegionStorage::RegionSettings wanted{
+                22.5, 80.0, -40.0, false, true, 13.25};
+            storage.save_region_settings(wanted);
+            const auto read_back = storage.load_region_settings();
+            if (!read_back) return 55;
+            // Every field, and the two booleans set opposite to their defaults:
+            // a struct copied field-by-field with one line missing passes any
+            // test that only checks the numbers.
+            if (read_back->water_height != 22.5 || read_back->terrain_raise != 80.0 ||
+                read_back->terrain_lower != -40.0 || read_back->use_estate_sun != false ||
+                read_back->fixed_sun != true || read_back->sun_hour != 13.25) return 56;
+
             // Saving again replaces the single row rather than adding one.
             const std::array<float, 4> raised{30.0F, 30.0F, 30.0F, 30.0F};
             storage.save_terrain_settings(chosen, raised, chosen_high);
@@ -392,6 +407,8 @@ int main() {
             std::array<std::string, 4> layer_ids{};
             std::array<float, 4> layer_low{};
             std::array<float, 4> layer_high{};
+            const auto settings = reopened.load_region_settings();
+            if (!settings || settings->water_height != 22.5 || !settings->fixed_sun) return 57;
             if (!reopened.load_terrain_settings(layer_ids, layer_low, layer_high)) return 1;
             if (layer_ids[3] != "dddddddd-0000-4000-8000-000000000004" ||
                 layer_low[0] != 30.0F || layer_high[3] != 63.25F) return 1;

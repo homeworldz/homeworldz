@@ -110,6 +110,10 @@ struct Command {
 // SessionCore is one connection's protocol state machine, transport-free so
 // it is testable and shareable: the transport feeds it inbound text and
 // carries away what it says to send.
+// The water block, exactly as the hello publishes it. One definition because the
+// greeting and the waterChanged event both carry it.
+std::string water_json(double height);
+
 // The terrain layers block, exactly as the hello publishes it. One definition
 // because the greeting and the terrainLayersChanged event both carry it, and two
 // hand-assembled copies of the same JSON is how this repo has repeatedly come to
