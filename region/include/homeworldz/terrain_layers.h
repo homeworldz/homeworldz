@@ -29,14 +29,16 @@
 
 namespace homeworldz::terrain {
 
-// Lowest to highest: dirt, grass, mountain, rock. These are the 1024x1024 PNG
-// canonicals of 2026-07-31, not the Second Life originals whose ids they
-// replaced — see assets/region/library/terrain/LICENSE.md.
+// Lowest to highest: dirt, grass, mountain, rock. 1024x1024 PNG canonicals from
+// ambientCG, CC0 — so the grid's default ground carries no attribution or
+// share-alike obligation at all, which the previous set did (it was a
+// generative-AI upscale of Second Life viewer artwork, and CC BY-SA followed the
+// derivative). See assets/region/library/terrain/LICENSE.md.
 inline constexpr std::array<std::string_view, 4> layer_assets{
-    "98324081-ab9d-49a7-8406-f70e83d813d7",
-    "cf2a4b28-cf6d-44ce-8e70-1ea4cb616a6d",
-    "26700e50-492d-4243-9513-1905e8109e2b",
-    "9a2248ec-28de-40a0-a459-9873e1f7464c"};
+    "e0a13caa-d4dc-4efe-8605-bfbf8411177b",  // Ground079L
+    "150cbea9-6ecf-4d31-aeae-0fddbda311b5",  // Grass005
+    "97a0e146-6773-4d69-8cf9-263758a430ca",  // Rock060
+    "d992da50-328f-4052-89e5-dc08a1b67a2b"}; // Rock002
 
 // Per corner, in the order the handshake writes them: south-west, north-west,
 // south-east, north-east. A layer's band is [start, start + range] with the
