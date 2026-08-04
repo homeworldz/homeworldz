@@ -41,6 +41,14 @@ std::string acceptance_policy_json() {
         ",\"maxTextures\":" + std::to_string(max_textures) +
         ",\"maxImageBytes\":" + std::to_string(max_image_bytes) +
         ",\"maxRigInfluences\":" + std::to_string(max_rig_influences) +
+        // Which limits are in force now and which describe a capability not yet
+        // switched on. maxRigInfluences was published ahead of M4 so importers
+        // read the number rather than encode it, but a reader seeing a rig limit
+        // beside "rigged": false reasonably calls that a contradiction - the
+        // client core did, 2026-08-04. Saying so in the payload costs one key and
+        // removes the guess.
+        ",\"forwardLooking\":[" +
+        std::string(rigged_accepted ? "" : "\"maxRigInfluences\"") + "]" +
         ",\"draco\":" + (draco_accepted ? "true" : "false") +
         ",\"rigged\":" + (rigged_accepted ? "true" : "false") +
         ",\"allowedExtensions\":[" + extensions + "]}";

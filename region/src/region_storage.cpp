@@ -1027,11 +1027,17 @@ std::size_t RegionStorage::import_asset_directory(const std::filesystem::path& d
         // (ADR 0033 M3). Without them the only way to ship a texture was to
         // ship the legacy form as the canonical, which is the inversion the
         // mesh pipeline exists to remove.
+        //
+        // `.glb` and `.object` were added for bundled mesh content: a canonical
+        // glTF mesh, and the `homeworldz-object-v1` wrapper that gives it a place
+        // in inventory. Bundling a mesh needs both, because a viewer rezzes an
+        // object and never a bare mesh.
         const auto extension = entry.path().extension();
         if (!entry.is_regular_file() ||
             (extension != ".j2c" && extension != ".png" && extension != ".jpg" &&
              extension != ".jpeg" && extension != ".ogg" && extension != ".bodypart" &&
-             extension != ".clothing" && extension != ".settings"))
+             extension != ".clothing" && extension != ".settings" &&
+             extension != ".glb" && extension != ".object"))
             continue;
         // The filename *is* the asset id, so a stem that is not a UUID is not
         // an asset - it is a file that happens to share an extension with one.

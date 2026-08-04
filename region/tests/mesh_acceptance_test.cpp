@@ -114,6 +114,11 @@ int main() {
     if (policy.find("\"uploadPath\":\"/session/uploads/mesh\"") == std::string::npos ||
         policy.find("\"maxTriangles\":262144") == std::string::npos ||
         policy.find("\"maxRigInfluences\":4") == std::string::npos ||
+        // A rig limit published beside "rigged": false reads as a contradiction
+        // unless the payload says which limits are not yet in force. It is named
+        // rather than removed, because an importer should read the number instead
+        // of encoding its own (client core, 2026-08-04).
+        policy.find("\"forwardLooking\":[\"maxRigInfluences\"]") == std::string::npos ||
         policy.find("\"draco\":false") == std::string::npos ||
         policy.find("\"rigged\":false") == std::string::npos ||
         policy.find("KHR_texture_transform") == std::string::npos)
