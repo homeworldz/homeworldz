@@ -239,9 +239,10 @@ but stays unchecked until its complete wording is satisfied.
   returns `estateupdateinfo` + the `setaccess` lists, `estateaccessdelta` adds and
   removes bans/allowed users/managers, and `estatechangeinfo` toggles the estate
   flags. Estate bans and private-estate access gate region entry; estate owner and
-  managers bypass parcel and estate restrictions. Viewer-driven terrain-texture
-  settings (`setregionterrain`), region restart, and estate kick/teleport-home
-  admin actions remain. Live Firestorm acceptance on the Sandbox Region
+  managers bypass parcel and estate restrictions. Viewer-driven terrain textures
+  and elevations landed 2026-08-04 (`texturedetail`, `textureheights`,
+  `texturecommit`); region restart and estate kick/teleport-home admin actions
+  remain. Live Firestorm acceptance on the Sandbox Region
   (2026-07-25): the Region tab, Estate tab (My Estate / owner Jim Tarber), and
   Covenant tab populate correctly.
 - [ ] Apply permissions recursively and consistently to linksets, object
@@ -535,14 +536,36 @@ input formats.
   per viewer login, against 24 KB for all four before** — because `encode_j2c`
   is lossless while every terrain texture a viewer has ever loaded was lossy.
   The canonical should stay lossless; the rendition wants a rate.
-  Remaining prerequisites: make textures and elevation per-region state
-  (what `setregionterrain` would drive), then decide the blend contract
-  knowing that a viewer's blend is not ours to specify — SL's noise term
-  was never reproduced outside Linden, so a published rule is authoritative
-  for first-party clients only and the two families will differ subtly on
-  the same ground. Publishing an approximate rule early is worse than
-  publishing none (the client core's own preference, and the reason the
-  contact model stayed unpublished).
+  The second prerequisite is done (2026-08-04): textures and elevations are
+  per-region operator state, set from the viewer's own Region/Estate → Terrain
+  tab and persisted. The viewer was already sending it — `texturedetail`,
+  `textureheights`, `texturecommit` on Apply — and the region dropped all three
+  silently, so the tab could be filled in with no effect whatever. They are now
+  staged and applied together, mirroring the viewer's own stage-stage-commit
+  sequence rather than applying each as it arrives. Two decisions worth
+  recording: a stored row is distinguishable from no row, because "never
+  touched" should follow a change of defaults and "set to exactly the defaults"
+  must not; and an already-connected viewer keeps the terrain it was handed at
+  login, since `RegionHandshake` is the only message carrying these and
+  re-sending it mid-session restarts more viewer region state than a texture
+  change warrants.
+  Also settled: the elevation semantics were wrong here and in the client
+  contract. The protocol's field names say start height and height range; the
+  meaning is **absolute low and high** — layer 1's ceiling and layer 4's floor,
+  with the 2/3 boundary at their midpoint. The viewer's Terrain tab states it
+  outright and displays exactly what the region sends. A consequence: the
+  default low of 10 m sits below the default water height of 20 m, so layer 1
+  has no dry ground and a region shows three layers until an operator raises it.
+  Remaining: the blend contract. The **width** is now published
+  (`blendMetres`, from `region.terrain_blend_tenths`) and is advisory — only a
+  client shading its own terrain can honour it, because no legacy message
+  carries one and a viewer computes its own regardless. The **curve** stays
+  unpublished: a viewer's blend is not ours to specify, SL's noise term was
+  never reproduced outside Linden, so a published mixing function is
+  authoritative for first-party clients only and the two families will differ
+  subtly on the same ground. Publishing an approximate rule early is worse than
+  publishing none (the client core's own preference, and the reason the contact
+  model stayed unpublished).
 - [x] Close the texture pipeline's asymmetry — live 2026-07-31. Mesh converted
   both directions but textures only converted modern to legacy, so every texture
   created in Firestorm was canonically JPEG2000 and invisible to the first-party

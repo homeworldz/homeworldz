@@ -180,8 +180,9 @@ int main() {
                     ",\"gridWide\":false}";
         if (greeting->payload.find(expected) == std::string::npos) return 36;
     }
-    // No blend rule is published, and that is deliberate: the region implements
-    // none, and an approximate rule is worse than none. Asserted so a future
+    // The blend *width* is published above as blendMetres; the blend *curve* is
+    // not, and that is deliberate: the region implements none, and an
+    // approximate mixing function is worse than none. Asserted so a future
     // change that invents one has to delete this line and think about it.
     if (greeting->payload.find("\"blend\"") != std::string::npos) return 37;
     // base64 round-trips against a known vector, since a terrainChanged's

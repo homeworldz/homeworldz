@@ -200,21 +200,33 @@ seam above encoding.
    They are ordinary assets, fetched from `assets.base`, canonical PNG since
    the layers were re-sourced — so a client that refuses JPEG2000 can read the
    ground it stands on, and a cache can hold them for the life of the id.
-   `gridWide: true` states that these are compile-time constants shared by
-   every region rather than per-region operator state; making them per-region
-   is a named prerequisite of the terrain-surface roadmap item and is not done.
-   That fact is published rather than left to be assumed, so that the day it
-   stops being true, a client that was told will notice and one that guessed
-   will not.
-   **No blend rule is published, and that is deliberate.** The region
-   implements none; viewers each blend in their own code and the original
-   grid's version was never reproduced outside it. Any rule stated here would
-   be authoritative for the first-party client and approximate against a viewer
-   standing on the same hill, so the two families will differ subtly on the
-   same ground no matter what is written. Publishing an approximate rule is
-   worse than publishing none — the same reasoning that kept the contact model
-   unpublished. A test asserts the key stays absent, so inventing one has to be
-   a deliberate act.
+   `gridWide` **was `true` and is now per region (2026-08-04).** It said these
+   were compile-time constants shared by every region; they are now operator
+   state, set from the viewer's own Region/Estate → Terrain tab and persisted
+   per region. The field survives with its meaning intact — it reports whether
+   *this* region still holds the shipped defaults — so a client that read the
+   fact rather than assuming grid uniformity needs no change, which is the whole
+   reason it was published while it was still trivially true.
+   Read `assets`, `lowHeight`, and `highHeight` from the hello per region and
+   per connect. A client that cached them once for the grid will now be wrong on
+   any region an operator has changed. An already-connected client is not
+   notified: a change reaches the next client to connect, because the legacy
+   path has no message for it either and re-handshaking a live viewer restarts
+   more region state than a texture change warrants.
+   **The blend width is published; the blend curve is not.** `blendMetres` is
+   how wide the transition between two layers should be, straddling each
+   boundary symmetrically — `region.terrain_blend_tenths`, 2 m by default. It is
+   advisory, and only a client that shades its own terrain can honour it: no
+   legacy message carries a blend width, so a viewer computes its own transition
+   including a noise term never reproduced outside Linden, and nothing the region
+   sends can narrow it.
+   What stays unpublished is the curve — how the two layers mix across that
+   width. The region implements none, so any function stated here would be
+   authoritative for the first-party client and approximate against a viewer on
+   the same hill; the two families will differ subtly on the same ground no
+   matter what is written, and an approximate rule is worse than none, the same
+   reasoning that kept the contact model unpublished. A test asserts the `blend`
+   key stays absent, so inventing one has to be a deliberate act.
 5. **Departure splits into what the avatar owns and what the viewer owns.**
    `retire_avatar(key)` (kill broadcast, physics removal, avatar-keyed maps)
    serves both transports; `clear_viewer_transport(endpoint)` (texture
