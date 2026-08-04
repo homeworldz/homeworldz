@@ -989,6 +989,52 @@ frontends — is developed and tracked in its own repository, with its own
 roadmap, status, and progress; phases 9 and 10 here are the server-side surface
 it builds against.
 
+- [ ] A canonical avatar body. **Blocked on content licensing, not on protocol
+  work, and deliberately without a milestone.** The client core drew avatars as
+  capsules and asked the grid for a body; checking gave three noes, of which this
+  is the one that does not resolve with code. The legacy body mesh and skeleton
+  ship *inside the viewer* (96 files in Firestorm's `character/`), so they are
+  Linden viewer content under the viewer's licence and the obvious conversion is
+  closed. A default body is therefore **content authoring, not code** — a grid
+  feature waiting on art. The terrain layers are the precedent: the first attempt
+  was a generative upscale of Linden artwork, which carried CC BY-SA into the
+  ground, and it took re-sourcing from CC0 to get clear.
+  **Ruth2 and Roth2 examined, 2026-08-04** (operator's suggestion, relayed by the
+  client core, verified here against the repository rather than a summary). They
+  are real, current (Ruth2 v4, Roth2 v2), mesh, and distributed as Collada `.dae`
+  for legacy viewer upload — **no glTF**. The licence file assigns components
+  separately: mesh body parts **AGPL** (Shin Ingen 2018, Ada Radius 2020), the UV
+  map **CC-BY, Linden Lab**, button meshes **CC-BY-3.0** (Serie Sumei), rig
+  components **CC-BY-3.0** (Machinimatrix.org).
+  Three things follow, and they are considerations rather than a decision — this
+  is not legal advice and the choice is the operator's.
+  1. The AGPL clause that matters here is the one about work "made available in a
+     service", because converting to glTF is plausibly a modification and it is
+     **the grid** making the result available, not the client. That is
+     dischargeable — publish the converted asset and the conversion pipeline —
+     and it would be an obligation taken knowingly, which is the distinction the
+     terrain episode turned on. But AGPL is written for software, so what counts
+     as Corresponding Source for a mesh is genuinely unclear (the `.blend`? the
+     Collada?), and an obligation nobody can cleanly discharge is worse to accept
+     than a strict one that is precise.
+  2. It is **not a Linden-free path**: the UV map is CC-BY from Linden Lab. With
+     an explicit grant this time rather than by accident, which is the important
+     difference from the upscale, but the component is still there.
+  3. **The rig claim does not currently verify upstream, and it is the part that
+     matters most** — a body can be authored, a skeleton is the hard part to
+     originate. Ruth2 attributes CC-BY-3.0 to Machinimatrix for the rig
+     components. Machinimatrix's *current* licence page (Avastar 2.92) says "The
+     Avastar source code is distributed under the Blender compatible GPL licence"
+     and "All parts of the products which are not explicitly marked as GPL are
+     not distributed according to GPL license terms and may not be redistributed",
+     mentions CC-BY-4.0 for the Avamesh developer kit, and **does not mention
+     CC-BY-3.0 at all**. The pages that reportedly carried the CC-BY-3.0 wording
+     now redirect to a legacy landing page with no licence text; an archived
+     snapshot exists (2026-01-23) but could not be read from here. So the grant
+     may well have been made and later restated — the Ruth2 authors presumably
+     relied on something — but it is **unverified against the rights holder** as
+     of this date. Confirm from the archive or from Machinimatrix directly before
+     relying on it.
 - [x] Dress a session avatar for viewers: spawn seeds the server-side
   default-outfit bake and derives body geometry from it, so a viewer rezzes
   a properly shaped, clothed avatar rather than a default one
