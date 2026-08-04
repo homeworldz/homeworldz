@@ -287,12 +287,40 @@ seam above encoding.
    viewer, so it identifies an animation only to something that already has it,
    and is useless to a client built from nothing. The name says what the avatar
    is doing and leaves how to draw it entirely to the client.
-   It arrives two ways, the same field either way. The `avatar` announcement
+   It arrives two ways, the same fields either way. The `avatar` announcement
    carries the current value, so a client that arrives mid-stride is not left
-   with an avatar standing still; a `motion` envelope (`id`, `motion`) follows on
-   every change. On change and not on every transform — transforms run at frame
-   rate and this does not — and behind the same interest filter, so you are
-   never told about an avatar you were not told exists.
+   with an avatar standing still; a `motion` envelope (`id`, `motion`, `clips`)
+   follows on every change. On change and not on every transform — transforms run
+   at frame rate and this does not — and behind the same interest filter, so you
+   are never told about an avatar you were not told exists.
+   **`clips` is the custom case, and it was already diverging.** A viewer can
+   start any animation by asset id through `AgentAnimation` — gestures, anything
+   a script plays — and the region broadcasts those to other viewers. Session
+   clients were told nothing, so an avatar mid-gesture read as animated to one
+   client family and idle to the other. `clips` is the array of animation asset
+   ids playing that `motion` does not describe; the movement animations are
+   filtered out of it, so no fact arrives twice.
+   **Do not fetch them yet.** They are legacy animation assets with no modern
+   rendition — the same wall as JPEG2000, and the animation-format decision
+   (canonical glTF, legacy derived) has not been made. Publishing them anyway is
+   the deliberate choice, on the client core's own principle that "not advertised"
+   must read differently from "advertised and broken": a client that knows a clip
+   is playing and cannot draw it is better placed than one that believes the
+   avatar is standing. A gesture played while standing still emits a `motion`
+   envelope of its own, since otherwise it would wait for a movement change that
+   might never come.
+   The shape — a short state name always present, plus an optional asset id for
+   creator content — is the client core's proposal (2026-08-04) and mirrors how
+   an object names both a kind and an asset. Their argument for state over clips
+   is recorded because it is stronger than convenience: **state is the fact and a
+   clip is a rendering of it.** A client that thinks you are standing while the
+   region has you sitting is wrong about the world, not about the picture, which
+   puts motion in the same category as the walkable limit, the terrain selection
+   rule and the water height. It also degrades honestly — an unknown state name
+   still draws a capsule and says so, where an undecodable clip is geometry that
+   cannot move, which is the T-pose failure again — and it earns its place even
+   in a client that draws capsules forever, since prediction is better with the
+   region's own view of what the body is doing.
    This does **not** answer the other two blockers, and is not meant to: there is
    still no canonical glTF body (the legacy one is viewer-licensed content, the
    same wall the terrain layers hit) and appearance is still unpublished. The

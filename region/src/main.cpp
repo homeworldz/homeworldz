@@ -2317,7 +2317,59 @@ int main(int argc, char* argv[]) {
                         entity.sculpt_type == 5 ? "mesh" : "sculptMap") + "}") +
             "}");
     };
-    const auto session_avatar_envelope = [&](const LiveAvatar& participant) {
+    // Is this one of the ten movement animations? Those are represented by the
+    // `motion` name, so they must not also appear as clips - a client would
+    // otherwise be told the same fact twice, once portably and once as a Linden
+    // asset id it cannot use. Compared against every movement state rather than
+    // only the current one, so an entry left behind by a state change is still
+    // recognised for what it is.
+    const auto is_movement_animation = [](const homeworldz::viewer::Uuid& id) {
+        using homeworldz::viewer::MovementAnimation;
+        constexpr MovementAnimation every[]{
+            MovementAnimation::stand, MovementAnimation::walk, MovementAnimation::run,
+            MovementAnimation::jump, MovementAnimation::fall, MovementAnimation::fly,
+            MovementAnimation::hover, MovementAnimation::hover_up,
+            MovementAnimation::hover_down, MovementAnimation::land};
+        for (const auto animation : every)
+            if (const auto movement = homeworldz::viewer::parse_uuid(
+                    homeworldz::viewer::movement_animation_id(animation)))
+                if (*movement == id) return true;
+        return false;
+    };
+    // Animations playing on this avatar that `motion` does not describe: gestures
+    // and anything a script or viewer started through AgentAnimation. They are
+    // published as asset ids because that is all they are - creator content with
+    // no state name to give it, which is the exception the client core asked the
+    // field to be shaped for (2026-08-04). Legacy animation assets today, with no
+    // modern rendition, so the contract says do not fetch them yet: a client that
+    // knows a clip is playing and cannot draw it is better off than one that
+    // believes the avatar is standing.
+    const auto session_clip_list = [&](const std::string& key) {
+        std::string list;
+        const auto found = avatar_animations.find(key);
+        if (found != avatar_animations.end())
+            for (const auto& entry : found->second) {
+                if (is_movement_animation(entry.animation_id)) continue;
+                if (!list.empty()) list.push_back(',');
+                list += "\"" + homeworldz::viewer::format_uuid(entry.animation_id) + "\"";
+            }
+        return "[" + list + "]";
+    };
+    // What the avatar is doing, in both representations, as one block. Shared by
+    // the `avatar` announcement and the `motion` event so the two cannot come to
+    // describe it differently.
+    const auto session_motion_fields = [&](const LiveAvatar& participant, const std::string& key) {
+        return "\"motion\":" + homeworldz::session::json_string(std::string(
+                   homeworldz::viewer::movement_animation_name(
+                       participant.controller.movement_animation()))) +
+               ",\"clips\":" + session_clip_list(key);
+    };
+    const auto session_motion_envelope = [&](const LiveAvatar& participant, const std::string& key) {
+        return homeworldz::session::encode_envelope("motion", {},
+            "{\"id\":\"" + std::to_string(participant.entity_id) + "\"," +
+            session_motion_fields(participant, key) + "}");
+    };
+    const auto session_avatar_envelope = [&](const LiveAvatar& participant, const std::string& key) {
         const auto& state = participant.controller.state();
         return homeworldz::session::encode_envelope("avatar", {},
             "{\"id\":\"" + std::to_string(participant.entity_id) + "\"" +
@@ -2327,12 +2379,9 @@ int main(int argc, char* argv[]) {
                 std::to_string(state.rotation[1]) + "," + std::to_string(state.rotation[2]) + "]" +
             // What this avatar is doing right now, so a client that arrives
             // mid-stride is not left standing until the next change. `motion`
-            // envelopes carry it from then on, and this is the same field name
-            // with the same values - one thing to parse, whether it came as
-            // initial state or as an update.
-            ",\"motion\":" + homeworldz::session::json_string(std::string(
-                homeworldz::viewer::movement_animation_name(
-                    participant.controller.movement_animation()))) + "}");
+            // envelopes carry the same fields from then on - one thing to parse,
+            // whether it came as initial state or as an update.
+            "," + session_motion_fields(participant, key) + "}");
     };
     const auto session_kill_envelope = [](homeworldz::scene::EntityId entity_id) {
         return homeworldz::session::encode_envelope("kill", {},
@@ -7056,10 +7105,33 @@ int main(int argc, char* argv[]) {
                                         recipient_endpoint, payload, false, now, true))
                                     static_cast<void>(send_udp(viewer_server, recipient_endpoint, *outgoing));
                             }
+                            // Session clients too, or a clip would appear only at
+                            // the next movement change: a gesture played while
+                            // standing still would never be published at all, and
+                            // the avatar would read as idle to one client family
+                            // and animated to the other.
+                            std::size_t session_told = 0;
+                            if (session_server) {
+                                if (const auto emitter = avatars.find(endpoint);
+                                    emitter != avatars.end()) {
+                                    const auto notice =
+                                        session_motion_envelope(emitter->second, endpoint);
+                                    for (const auto& [recipient_key, recipient] : avatars) {
+                                        if (recipient.transport != AvatarTransport::session) continue;
+                                        const auto known = session_avatar_interest.find(recipient_key);
+                                        if (known == session_avatar_interest.end() ||
+                                            !known->second.contains(emitter->second.entity_id))
+                                            continue;
+                                        session_server->send_to(recipient.session_id, notice);
+                                        ++session_told;
+                                    }
+                                }
+                            }
                             std::cout << "{\"level\":\"info\",\"message\":\"avatar animation state updated\","
                                          "\"changes\":" << agent_animation->animations.size()
                                       << ",\"active\":" << animations.size()
-                                      << ",\"recipients\":" << avatars.size() << "}" << std::endl;
+                                      << ",\"recipients\":" << avatars.size()
+                                      << ",\"sessionClientsTold\":" << session_told << "}" << std::endl;
                         }
                         const auto asset_upload =
                             homeworldz::viewer::decode_asset_upload_request(packet->payload);
@@ -9520,7 +9592,7 @@ int main(int argc, char* argv[]) {
                         if (other_key == participant_key) continue;
                         if (!session_interested(live, other)) continue;
                         session_server->send_to(inbound.session_id,
-                                                session_avatar_envelope(other));
+                                                session_avatar_envelope(other, other_key));
                         known_avatars.insert(other.entity_id);
                     }
                     for (const auto& [entity_id, scene_entity] : scene.entities()) {
@@ -9561,7 +9633,7 @@ int main(int argc, char* argv[]) {
                                     viewer_server, recipient_endpoint, *dressed));
                         }
                     }
-                    const auto arrival_envelope = session_avatar_envelope(live);
+                    const auto arrival_envelope = session_avatar_envelope(live, participant_key);
                     for (const auto& [other_key, other] : avatars) {
                         if (other_key == participant_key ||
                             other.transport != AvatarTransport::session) continue;
@@ -10059,12 +10131,7 @@ int main(int argc, char* argv[]) {
                     // when it changes - transforms run at frame rate and this
                     // does not. Same interest filter as transform: a client is
                     // not told about an avatar it has not been told exists.
-                    const auto motion_envelope =
-                        homeworldz::session::encode_envelope("motion", {},
-                            "{\"id\":\"" + std::to_string(avatar.entity_id) + "\"" +
-                            ",\"motion\":\"" +
-                            std::string(homeworldz::viewer::movement_animation_name(
-                                desired_animation)) + "\"}");
+                    const auto motion_envelope = session_motion_envelope(avatar, endpoint);
                     for (const auto& [recipient_key, recipient] : avatars) {
                         if (recipient.transport != AvatarTransport::session) continue;
                         const auto known = session_avatar_interest.find(recipient_key);
@@ -10192,12 +10259,11 @@ int main(int argc, char* argv[]) {
                 if (observer.transport != AvatarTransport::session) continue;
                 auto& known = session_avatar_interest[observer_key];
                 for (const auto& [subject_key, subject] : avatars) {
-                    static_cast<void>(subject_key);
                     const auto interested = session_interested(observer, subject);
                     const auto present = known.count(subject.entity_id) != 0;
                     if (interested && !present) {
                         session_server->send_to(observer.session_id,
-                                                session_avatar_envelope(subject));
+                                                session_avatar_envelope(subject, subject_key));
                         known.insert(subject.entity_id);
                     } else if (!interested && present) {
                         session_server->send_to(observer.session_id,
