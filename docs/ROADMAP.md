@@ -508,8 +508,29 @@ input formats.
   Every server-side check passed — right id, 200, sound rendition — while the
   viewer held its grey placeholder. Two capabilities that had to agree, made
   to agree by duplication, is the defect worth remembering; the request is now
-  folded into one shape where it is parsed. Both parsers still live in
-  `main.cpp`'s anonymous namespace with no test able to reach them.
+  folded into one shape where it is parsed. The parsers were hoisted into
+  `capability_paths.{h,cpp}` with tests on 2026-07-31, including one asserting
+  every seeded capability is reachable at the path its own handler parses.
+
+  **What actually gates the PBR tab, measured 2026-08-04.** The operator found
+  Firestorm's PBR tab crossed out — "a big X through all texture fields" — and a
+  note here said the fix was advertising `PBREnabled`/`GLTFEnabled` in
+  `SimulatorFeatures`. That was wrong twice over. The flag names this viewer
+  actually reads are `PBRTerrainEnabled`, `PBRMaterialSwatchEnabled`, and
+  `PBRTerrainTransformsEnabled`, and the gate on *applying* a material is not a
+  flag at all: `LLMaterialEditor::applyToSelection` refuses with "Not connected
+  to materials capable region, missing ModifyMaterialParams cap", and
+  `LLGLTFMaterialList::modifyMaterialCoro` posts overrides to that capability.
+  Read out of the shipped 51 MB viewer binary's string table, which is evidence
+  about the build the operator is running rather than about a source tree.
+
+  So M3 is three capabilities, not a flag: `ModifyMaterialParams` for per-face
+  overrides, and `UpdateMaterialAgentInventory` /
+  `UpdateMaterialTaskInventory` for saving a material asset. The flags stay
+  false until those exist, per the rule stated on `SimulatorFeatures` itself —
+  advertising a feature the region does not implement produces controls that
+  silently do nothing, which is precisely the class of defect this milestone
+  already supplied three of.
 - [ ] Terrain surface for session clients (client core request 2026-07-29,
   after the operator saw untextured ground in the desktop client). The
   ground's geometry is published and verified; its *surface* is not. Today
