@@ -5355,6 +5355,17 @@ int main(int argc, char* argv[]) {
                                         while (!id.empty() &&
                                                (id.back() == char{0} || id.back() == ' '))
                                             id.pop_back();
+                                        // The null id parses fine and would leave
+                                        // the ground untextured with nothing said,
+                                        // which is the silent-failure shape this
+                                        // project keeps meeting. A cleared picker
+                                        // is refused and named.
+                                        if (id == "00000000-0000-0000-0000-000000000000") {
+                                            std::cout << "{\"level\":\"warning\",\"message\":"
+                                                         "\"terrain layer id is null\",\"layer\":"
+                                                      << layer << "}" << std::endl;
+                                            continue;
+                                        }
                                         if (layer < 4 && homeworldz::viewer::parse_uuid(id))
                                             pending_terrain_layers.assets[layer] = std::move(id);
                                     }
@@ -5386,6 +5397,23 @@ int main(int argc, char* argv[]) {
                                         pending_terrain_layers.high[corner] = high;
                                     }
                                 } else {
+                                    // A commit that changes nothing means the
+                                    // staging messages did not arrive first. They
+                                    // are one burst from one Apply and LLUDP
+                                    // promises delivery, not order, so this is
+                                    // possible and recovers on the next Apply -
+                                    // but only if it was visible rather than
+                                    // looking like a successful no-change.
+                                    const bool changed =
+                                        terrain_layers.assets != pending_terrain_layers.assets ||
+                                        terrain_layers.low != pending_terrain_layers.low ||
+                                        terrain_layers.high != pending_terrain_layers.high;
+                                    if (!changed)
+                                        std::cout << "{\"level\":\"warning\",\"message\":"
+                                                     "\"terrain commit changed nothing\",\"note\":"
+                                                     "\"staging did not arrive before the commit,"
+                                                     " or the values were already these\"}"
+                                                  << std::endl;
                                     terrain_layers = pending_terrain_layers;
                                     if (storage) {
                                         try {
