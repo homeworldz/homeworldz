@@ -994,6 +994,15 @@ int main(int argc, char* argv[]) {
     // water by being upgraded.
     const auto water_height = static_cast<double>(
         configured_int("region.water_height", 20, 0, 4096));
+    // How wide the transition between two terrain layers is, in metres, straddling
+    // each boundary symmetrically - 2 means one metre either side. Advisory: a
+    // client that shades its own terrain honours it, and a viewer cannot, because
+    // nothing in the legacy protocol carries a blend width and Firestorm computes
+    // its own transition with a noise term that was never reproduced outside
+    // Linden. Configured in tenths of a metre so a sub-metre value is expressible
+    // through an integer setting.
+    const auto terrain_blend_metres = static_cast<double>(
+        configured_int("region.terrain_blend_tenths", 20, 0, 200)) / 10.0;
     std::unique_ptr<homeworldz::grid::RegistrationLifecycle> registration;
     std::unique_ptr<homeworldz::session::Server> session_server;
     std::unique_ptr<homeworldz::grid::Client> viewer_grid;
@@ -1176,6 +1185,7 @@ int main(int argc, char* argv[]) {
                     static_cast<std::size_t>(region_size_x),
                     walkable_slope_degrees,
                     water_height,
+                    terrain_blend_metres,
                     [&terrain_revision] { return terrain_revision; }});
                 if (!session_server) {
                     std::cerr << "{\"level\":\"error\",\"message\":\"region session listener failed\",\"port\":"

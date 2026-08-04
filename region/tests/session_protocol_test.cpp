@@ -73,19 +73,19 @@ int main() {
     };
 
     // The first message must be auth; anything else closes.
-    SessionCore impatient("Sandbox", validator, 256, 65.0, 20.0, [] { return 7u; });
+    SessionCore impatient("Sandbox", validator, 256, 65.0, 20.0, 2.0, [] { return 7u; });
     if (const auto result = impatient.handle_text(R"({"type":"ping","version":1})"); !result.close)
         return 8;
 
     // A refused ticket closes with the refusal named.
-    SessionCore refused("Sandbox", validator, 256, 65.0, 20.0, [] { return 7u; });
+    SessionCore refused("Sandbox", validator, 256, 65.0, 20.0, 2.0, [] { return 7u; });
     if (const auto result = refused.handle_text(
             R"({"type":"auth","version":1,"payload":{"token":"bad"}})");
         !result.close || result.close_reason.find("ticket") == std::string::npos)
         return 9;
 
     // The happy path: auth resolves, hello names the region and identity.
-    SessionCore session("Sandbox", validator, 256, 65.0, 20.0, [] { return 7u; });
+    SessionCore session("Sandbox", validator, 256, 65.0, 20.0, 2.0, [] { return 7u; });
     const auto hello = session.handle_text(
         R"({"type":"auth","version":1,"payload":{"token":"good-ticket"}})");
     if (hello.close || hello.send.size() != 1 || !session.established() ||
@@ -156,6 +156,10 @@ int main() {
                     // so the rule is published rather than left to be guessed.
                     ",\"selection\":\"1 below low; 2 low..mid; 3 mid..high;"
                     " 4 above high; mid=(low+high)/2\""
+                    // The transition width, advisory: only a client that shades
+                    // its own terrain can honour it. No legacy message carries a
+                    // blend width, so a viewer computes its own regardless.
+                    ",\"blendMetres\":2"
                     ",\"gridWide\":true}";
         if (greeting->payload.find(expected) == std::string::npos) return 36;
     }
@@ -233,7 +237,7 @@ int main() {
     if (!leave.command || leave.command->kind != Kind::leave) return 25;
 
     // Commands from an unauthenticated connection never reach the host.
-    SessionCore stranger("Sandbox", validator, 256, 65.0, 20.0, [] { return 7u; });
+    SessionCore stranger("Sandbox", validator, 256, 65.0, 20.0, 2.0, [] { return 7u; });
     if (const auto result = stranger.handle_text(R"({"type":"spawn","version":1})");
         !result.close)
         return 26;

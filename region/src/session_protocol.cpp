@@ -343,10 +343,12 @@ std::string corner_list(const std::array<float, 4>& values) {
 
 SessionCore::SessionCore(std::string region_name, TicketValidator validator,
                          std::size_t terrain_width, double walkable_slope_degrees,
-                         double water_height, std::function<std::uint64_t()> terrain_revision)
+                         double water_height, double terrain_blend_metres,
+                         std::function<std::uint64_t()> terrain_revision)
     : region_name_(std::move(region_name)), validator_(std::move(validator)),
       terrain_width_(terrain_width), walkable_slope_degrees_(walkable_slope_degrees),
-      water_height_(water_height), terrain_revision_(std::move(terrain_revision)) {}
+      water_height_(water_height), terrain_blend_metres_(terrain_blend_metres),
+      terrain_revision_(std::move(terrain_revision)) {}
 
 SessionCore::Result SessionCore::refuse(std::string reason) const {
     Result result;
@@ -476,6 +478,11 @@ SessionCore::Result SessionCore::handle_text(std::string_view text) {
             // low and high, which is what they are.
             ",\"selection\":\"1 below low; 2 low..mid; 3 mid..high;"
             " 4 above high; mid=(low+high)/2\"" +
+            // The transition width, in metres, straddling each boundary
+            // symmetrically. Advisory and honoured only by a client that shades
+            // its own terrain: no legacy message carries a blend width, so a
+            // viewer computes its own and this cannot change it.
+            ",\"blendMetres\":" + json_number_text(terrain_blend_metres_) +
             ",\"gridWide\":" +
             (homeworldz::terrain::layers_are_grid_wide ? "true" : "false") + "}}" +
             // The region's water: a height, not a surface. The plane is flat

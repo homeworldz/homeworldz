@@ -112,7 +112,8 @@ class SessionCore {
 public:
     SessionCore(std::string region_name, TicketValidator validator,
                 std::size_t terrain_width, double walkable_slope_degrees,
-                double water_height, std::function<std::uint64_t()> terrain_revision);
+                double water_height, double terrain_blend_metres,
+                std::function<std::uint64_t()> terrain_revision);
 
     struct Result {
         std::vector<std::string> send;
@@ -141,6 +142,7 @@ private:
     std::size_t terrain_width_;
     double walkable_slope_degrees_;
     double water_height_;
+    double terrain_blend_metres_;
     // Read at greeting time rather than captured: an edit may land between
     // construction and a client's arrival.
     std::function<std::uint64_t()> terrain_revision_;

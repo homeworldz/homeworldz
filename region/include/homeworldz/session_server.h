@@ -30,6 +30,8 @@ public:
         double walkable_slope_degrees{};
         // The region's water plane height, published in the hello water block.
         double water_height{};
+        // Terrain layer transition width in metres; see the hello's blendMetres.
+        double terrain_blend_metres{};
         // Current terrain revision, read per greeting.
         std::function<std::uint64_t()> terrain_revision;
     };
