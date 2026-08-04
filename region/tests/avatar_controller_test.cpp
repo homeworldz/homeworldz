@@ -1,5 +1,6 @@
 #include "homeworldz/avatar_controller.h"
 
+#include <iostream>
 #include <set>
 #include <string>
 #include <string_view>
@@ -203,6 +204,99 @@ int main() {
                     homeworldz::viewer::movement_animation_id(animation))) return 34;
         if (homeworldz::viewer::is_movement_animation_id(
                 "0dd0d0d0-1111-4222-8333-444444444444")) return 35;
+    }
+
+    // Every published state actually occurs. The client core reported seeing six
+    // of the ten and asked itself the right question - six observed cannot be
+    // told from six *observable* without a denominator - and the half of that
+    // question which is this side's is whether a name can be produced at all. A
+    // state that cannot would leave every client waiting forever for something
+    // impossible, and publishing it would be advertising a control that does
+    // nothing, one layer down. This is also the part of a state diagram worth
+    // having: derived from the controller, so it cannot drift from it.
+    {
+        using homeworldz::viewer::MovementAnimation;
+        std::set<MovementAnimation> seen;
+        const auto observe = [&](homeworldz::viewer::AvatarController& subject) {
+            seen.insert(subject.movement_animation());
+        };
+        homeworldz::viewer::AgentUpdate input;
+        input.body_rotation = {0.F, 0.F, 0.F};
+
+        // Grounded and still, then walking, then running: the run threshold is
+        // 6 m/s and the fast flag is what crosses it, so a controller that
+        // ignored the flag on the ground would make `run` unreachable.
+        homeworldz::viewer::AvatarController ground;
+        input.control_flags = 0;
+        ground.apply(input);
+        ground.step(0.1);
+        observe(ground);
+        input.control_flags = homeworldz::viewer::control_forward;
+        ground.apply(input);
+        ground.step(0.1);
+        observe(ground);
+        input.control_flags = homeworldz::viewer::control_forward |
+                              homeworldz::viewer::control_fast_forward;
+        ground.apply(input);
+        ground.step(0.1);
+        observe(ground);
+
+        // Up, then the descent back: jump while rising, fall while dropping, and
+        // land in the moment after touchdown.
+        homeworldz::viewer::AvatarController leaper;
+        input.control_flags = homeworldz::viewer::control_up;
+        leaper.apply(input);
+        leaper.step(0.1);
+        observe(leaper);
+        input.control_flags = 0;
+        leaper.apply(input);
+        for (int index = 0; index < 20; ++index) {
+            leaper.step(0.1);
+            observe(leaper);
+        }
+
+        // Flight: horizontal motion is `fly` whatever the vertical, so hover and
+        // its two vertical variants need the horizontal input released.
+        homeworldz::viewer::AvatarController flier;
+        input.control_flags = homeworldz::viewer::control_fly |
+                              homeworldz::viewer::control_forward;
+        flier.apply(input);
+        flier.step(0.1);
+        observe(flier);
+        // Releasing everything but fly is not immediately `hover`: engaging
+        // flight imparts a rise, so the state passes through `hoverUp` until the
+        // vertical velocity decays. That is the transition the client core
+        // observed in flight and could not have predicted from the vocabulary,
+        // and it is why this steps until it settles rather than once.
+        input.control_flags = homeworldz::viewer::control_fly;
+        flier.apply(input);
+        for (int index = 0; index < 40; ++index) {
+            flier.step(0.1);
+            observe(flier);
+        }
+        input.control_flags = homeworldz::viewer::control_fly | homeworldz::viewer::control_up;
+        flier.apply(input);
+        flier.step(0.1);
+        observe(flier);
+        input.control_flags = homeworldz::viewer::control_fly | homeworldz::viewer::control_down;
+        flier.apply(input);
+        flier.step(0.1);
+        observe(flier);
+
+        // Named individually rather than counted, so a failure says which state
+        // was never produced instead of only how many were.
+        constexpr MovementAnimation every[]{
+            MovementAnimation::stand, MovementAnimation::walk, MovementAnimation::run,
+            MovementAnimation::jump, MovementAnimation::fall, MovementAnimation::fly,
+            MovementAnimation::hover, MovementAnimation::hover_up,
+            MovementAnimation::hover_down, MovementAnimation::land};
+        for (const auto animation : every)
+            if (!seen.contains(animation)) {
+                std::cerr << "state never occurred: "
+                          << homeworldz::viewer::movement_animation_name(animation)
+                          << std::endl;
+                return 40;
+            }
     }
 
     // The payload the session avatar announcement and the motion event share.
