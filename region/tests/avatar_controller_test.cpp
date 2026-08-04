@@ -1,6 +1,8 @@
 #include "homeworldz/avatar_controller.h"
 
 #include <iostream>
+#include <vector>
+#include <algorithm>
 #include <set>
 #include <string>
 #include <string_view>
@@ -297,6 +299,77 @@ int main() {
                           << std::endl;
                 return 40;
             }
+    }
+
+    // The viewer's animation list holds exactly one movement animation. This is
+    // the invariant that broke on 2026-08-04 and it broke in a way no server-side
+    // check noticed: the operator reported an avatar flailing as if falling at
+    // all times, then - after clearing animations - walking forever while stood
+    // still. Both are one fault. The old code erased "the previously recorded
+    // state's id" from a map that had already been assigned the new value, so it
+    // removed the new id and left the old one in the list; every state an avatar
+    // passed through accumulated and the viewer played them together.
+    {
+        using homeworldz::viewer::MovementAnimation;
+        using homeworldz::viewer::apply_movement_animation;
+        std::vector<homeworldz::viewer::AvatarAnimationEntry> playing;
+        const homeworldz::viewer::Uuid agent{std::byte{7}};
+        std::int32_t sequence = 0;
+        const auto count_of = [&](MovementAnimation animation) {
+            const auto id = homeworldz::viewer::parse_uuid(
+                homeworldz::viewer::movement_animation_id(animation));
+            return id ? std::count_if(playing.begin(), playing.end(),
+                [&](const auto& entry) { return entry.animation_id == *id; }) : -1;
+        };
+        const auto movement_entries = [&] {
+            return std::count_if(playing.begin(), playing.end(), [](const auto& entry) {
+                return homeworldz::viewer::is_movement_animation_id(
+                    homeworldz::viewer::format_uuid(entry.animation_id));
+            });
+        };
+
+        // Walking: added, and reported as a change so viewers are told.
+        if (!apply_movement_animation(playing, MovementAnimation::walk, agent, sequence)) return 41;
+        if (count_of(MovementAnimation::walk) != 1 || movement_entries() != 1) return 42;
+        // Called again with no change: nothing added, and no resend claimed.
+        if (apply_movement_animation(playing, MovementAnimation::walk, agent, sequence)) return 43;
+        if (movement_entries() != 1) return 44;
+
+        // Stopping. The reported failure exactly: walk must be gone, not merely
+        // joined by stand.
+        if (!apply_movement_animation(playing, MovementAnimation::stand, agent, sequence)) return 45;
+        if (count_of(MovementAnimation::walk) != 0) return 46;
+        if (count_of(MovementAnimation::stand) != 1 || movement_entries() != 1) return 47;
+
+        // The accumulation case, walked through every state in turn: never more
+        // than one movement animation, whatever route was taken to get there.
+        constexpr MovementAnimation route[]{
+            MovementAnimation::fall, MovementAnimation::land, MovementAnimation::stand,
+            MovementAnimation::walk, MovementAnimation::run, MovementAnimation::jump,
+            MovementAnimation::fly, MovementAnimation::hover_up,
+            MovementAnimation::hover_down, MovementAnimation::hover};
+        for (const auto animation : route) {
+            apply_movement_animation(playing, animation, agent, sequence);
+            if (movement_entries() != 1) return 48;
+            if (count_of(animation) != 1) return 49;
+        }
+
+        // A gesture is not a movement animation and must survive all of it.
+        const auto gesture = homeworldz::viewer::parse_uuid("aaaa1111-2222-4333-8444-555555555555");
+        if (!gesture) return 50;
+        playing.push_back({*gesture, sequence++, agent});
+        apply_movement_animation(playing, MovementAnimation::walk, agent, sequence);
+        if (playing.size() != 2 || movement_entries() != 1) return 51;
+
+        // Sequence numbers rise, since a viewer uses them to order updates, and
+        // stay above the range the legacy path reserves for itself.
+        std::int32_t fresh = 0;
+        std::vector<homeworldz::viewer::AvatarAnimationEntry> ordered;
+        apply_movement_animation(ordered, MovementAnimation::walk, agent, fresh);
+        if (ordered.size() != 1 || ordered[0].sequence < 2) return 52;
+        const auto first = ordered[0].sequence;
+        apply_movement_animation(ordered, MovementAnimation::run, agent, fresh);
+        if (ordered.size() != 1 || ordered[0].sequence <= first) return 53;
     }
 
     // The payload the session avatar announcement and the motion event share.

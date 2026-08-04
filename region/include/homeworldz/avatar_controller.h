@@ -8,6 +8,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <vector>
 #include <string_view>
 
 namespace homeworldz::viewer {
@@ -79,6 +80,22 @@ std::string_view movement_animation_name(MovementAnimation animation);
 // use. Checked against every state rather than the current one, so an entry left
 // behind by a state change is still recognised for what it is.
 bool is_movement_animation_id(std::string_view animation_id);
+
+// Make `playing` hold exactly the movement animation for `state`, dropping any
+// other movement animation and adding this one if absent. Returns whether the
+// list changed, which is what decides if viewers need a resend.
+//
+// It takes no previous state on purpose. The version this replaces erased "the
+// previously recorded state's id", which meant the list's correctness depended on
+// a separate map staying in step with it - and on 2026-08-04 it stopped: the map
+// was assigned before the erase read it, so the erase removed the *new* id and
+// left the old one behind. Every state an avatar passed through accumulated, so a
+// viewer played them all at once and an avatar that had ever fallen flailed for
+// the rest of the session. Removing every movement animation but the wanted one
+// makes the invariant hold by construction, with nothing to keep in step.
+bool apply_movement_animation(std::vector<AvatarAnimationEntry>& playing,
+                              MovementAnimation state, const Uuid& agent_id,
+                              std::int32_t& next_sequence);
 
 // The `motion` and `clips` members of a session payload, for the avatar
 // announcement and the motion event alike.

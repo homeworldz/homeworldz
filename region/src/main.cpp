@@ -10068,29 +10068,20 @@ int main(int argc, char* argv[]) {
                     avatar.physics_character, controller_state.flying);
             }
             const auto desired_animation = avatar.controller.movement_animation();
-            const auto desired_id = homeworldz::viewer::parse_uuid(
-                homeworldz::viewer::movement_animation_id(desired_animation));
             const auto movement_agent_id = homeworldz::viewer::parse_uuid(avatar.user_id);
             auto& animations = avatar_animations[endpoint];
+            // Read by value, not held as an iterator: the map is written below,
+            // and an iterator read afterwards yields the new value. That is the
+            // bug that made avatars flail (2026-08-04).
             const auto previous = movement_animations.find(endpoint);
-            // Two different questions, deliberately separated. The state
-            // changed: what a session client is told about. The viewer needs a
-            // resend: also true when the id has fallen out of its list, which is
-            // a legacy bookkeeping fact and not a change in what the avatar is
-            // doing.
-            const bool state_changed = previous == movement_animations.end() ||
-                                       previous->second != desired_animation;
-            bool animation_changed = state_changed;
-            if (desired_id) {
-                const auto present = std::find_if(animations.begin(), animations.end(),
-                    [&](const auto& entry) { return entry.animation_id == *desired_id; });
-                animation_changed = animation_changed || present == animations.end();
-            }
+            const bool had_previous = previous != movement_animations.end();
+            const auto previous_animation =
+                had_previous ? previous->second : desired_animation;
+            const bool state_changed = !had_previous || previous_animation != desired_animation;
             if (state_changed) {
-                // Recorded here rather than inside the viewer branch below: that
-                // branch also requires the legacy UUID to parse, so a state
-                // without one would never be recorded and would re-announce
-                // itself on every tick forever.
+                // Recorded outside the viewer branch below: that branch needs the
+                // legacy UUID to parse, so a state without one would never be
+                // recorded and would re-announce itself on every tick forever.
                 movement_animations.insert_or_assign(endpoint, desired_animation);
                 if (session_server) {
                     // The state's portable name, not its Linden asset id. Sent
@@ -10109,24 +10100,22 @@ int main(int argc, char* argv[]) {
                     }
                 }
             }
-            if (animation_changed && desired_id && movement_agent_id) {
-                if (previous != movement_animations.end()) {
-                    if (const auto old_id = homeworldz::viewer::parse_uuid(
-                            homeworldz::viewer::movement_animation_id(previous->second)))
-                        std::erase_if(animations, [&](const auto& entry) {
-                            return entry.animation_id == *old_id;
-                        });
-                }
+            // The list owns its own correctness: exactly one movement animation,
+            // whichever the state now is. It needs no previous value and so cannot
+            // drift from one. Viewers are told only when the list actually changed.
+            if (movement_agent_id) {
                 auto& sequence = next_animation_sequences[endpoint];
-                if (sequence < 2) sequence = 2;
-                animations.push_back({*desired_id, sequence++, *movement_agent_id});
-                const homeworldz::viewer::AvatarAnimation update{*movement_agent_id, animations};
-                const auto payload = homeworldz::viewer::encode_avatar_animation(update);
-                for (const auto& [recipient_endpoint, recipient] : avatars) {
-                    static_cast<void>(recipient);
-                    if (const auto outgoing = circuits.send(
-                            recipient_endpoint, payload, false, now, true))
-                        static_cast<void>(send_udp(viewer_server, recipient_endpoint, *outgoing));
+                if (homeworldz::viewer::apply_movement_animation(
+                        animations, desired_animation, *movement_agent_id, sequence)) {
+                    const homeworldz::viewer::AvatarAnimation update{
+                        *movement_agent_id, animations};
+                    const auto payload = homeworldz::viewer::encode_avatar_animation(update);
+                    for (const auto& [recipient_endpoint, recipient] : avatars) {
+                        static_cast<void>(recipient);
+                        if (const auto outgoing = circuits.send(
+                                recipient_endpoint, payload, false, now, true))
+                            static_cast<void>(send_udp(viewer_server, recipient_endpoint, *outgoing));
+                    }
                 }
             }
             if (auto* entity = scene.find(avatar.entity_id)) {

@@ -50,6 +50,29 @@ bool is_movement_animation_id(std::string_view animation_id) {
     return false;
 }
 
+bool apply_movement_animation(std::vector<AvatarAnimationEntry>& playing,
+                              MovementAnimation state, const Uuid& agent_id,
+                              std::int32_t& next_sequence) {
+    const auto wanted = parse_uuid(movement_animation_id(state));
+    if (!wanted) return false;
+    const auto before = playing.size();
+    std::erase_if(playing, [&](const AvatarAnimationEntry& entry) {
+        return entry.animation_id != *wanted &&
+               is_movement_animation_id(format_uuid(entry.animation_id));
+    });
+    bool changed = playing.size() != before;
+    const bool present = std::any_of(playing.begin(), playing.end(),
+        [&](const AvatarAnimationEntry& entry) { return entry.animation_id == *wanted; });
+    if (!present) {
+        // Sequence numbers below 2 are reserved by the legacy path's own
+        // bookkeeping, so a fresh counter starts above them.
+        if (next_sequence < 2) next_sequence = 2;
+        playing.push_back({*wanted, next_sequence++, agent_id});
+        changed = true;
+    }
+    return changed;
+}
+
 std::string motion_fields_json(MovementAnimation state,
                                std::span<const std::string> playing) {
     std::string clips;
