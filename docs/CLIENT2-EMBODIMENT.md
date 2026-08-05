@@ -274,6 +274,14 @@ seam above encoding.
    the real arithmetic it contradicts the rule beside it — it said 2 m on a region
    whose rule gives 15 — and a client applying both draws to neither. The client
    core found it within minutes of the corrected rule shipping.
+   **Which strings in this block are a contract and which are prose.** `selection`
+   is a contract: its wording changes only when the meaning changes, *including on
+   a pure rename*, so a client comparing it whole refuses rather than silently
+   drawing to a superseded rule. That is a commitment this side keeps — it is what
+   made the 2026-08-05 correction cost minutes instead of another screenshot, and
+   it is why the client core compares it rather than parsing it. `boundaryNoise` is
+   prose and may be reworded freely; it is informational, and a client that refused
+   over its exact text would stop painting the ground over a sentence.
    The viewer's **noise term** is published, as `boundaryNoise` in the same block.
    `llvlcomposition.cpp` adds a two-octave turbulence sum to the height before
    computing `t`, so a viewer perturbs every boundary by a few metres in a pattern
