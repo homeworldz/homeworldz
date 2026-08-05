@@ -77,6 +77,23 @@ and it means describing behaviour that already exists — which is the risky kin
 
 The reset endpoints were safe to specify now because they are being *defined* here
 rather than described from code that already runs.
+
+## Reset is independent of login
+
+A successful reset issues **no session and no token** (operator, 2026-08-05). The
+person is told the password changed and sent to the login page to sign in with it,
+like anyone else.
+
+This differs from verification, which does log the new account in, and the
+difference is the point: verification proves someone controls an address *and* is
+setting up this browser to be theirs, while a reset proves only that they could
+read the email. Those are not the same claim, and signing in the browser that
+happened to open the link infers the second from the first.
+
+Recorded because the opposite looks like a courtesy. "They just proved it is their
+account, so log them in" is a plausible improvement someone will propose, and it
+would couple recovery to session creation for a saved click.
+
 ## Rate limiting and lockout are in scope from the start
 
 A public endpoint that sends mail on request is an abuse vector even when its
