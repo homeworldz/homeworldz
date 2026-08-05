@@ -25,6 +25,15 @@ solvers will still differ on contacts, restitution, character support and slope
 handling — divergence is *acceptable* rather than desirable, and worth narrowing
 when narrowing it is cheap.
 
+A worked example, since the rule is easier to apply against one (operator,
+2026-08-05). Steep ground is to make avatars **slide** rather than rest, which is
+pending work. If the PhysX adapter can be made to slide too, that is the better
+outcome and the engines agree. If instead an avatar **stops** on a slope under
+PhysX, that is acceptable and not a defect — the slide is implemented where it can
+be, the difference is noted rather than chased, and no test is loosened to make
+both pass. What would *not* be acceptable is declining to implement sliding in Jolt
+because PhysX cannot follow.
+
 Three consequences worth stating, because each was got wrong before this was
 written down:
 
