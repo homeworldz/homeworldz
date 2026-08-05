@@ -260,6 +260,24 @@ but stays unchecked until its complete wording is satisfied.
   made an operator reopen the form to stale values. Live Firestorm acceptance on the Sandbox Region
   (2026-07-25): the Region tab, Estate tab (My Estate / owner Jim Tarber), and
   Covenant tab populate correctly.
+- [ ] Pin the walkable slope limit with a test. It is published to clients, feeds
+  Jolt's `CharacterVirtual` max slope angle, and **nothing on this side asserts
+  what it does** - which is why three documents here and a header in the client
+  repository could all state the opposite of the code ("steeper ground holds but
+  never grounds, so avatars slide") with nothing to contradict them. The client
+  core measured it in-world on purpose-built faces at 57.5, 65 and 70 degrees:
+  an avatar rests on 70 repeatably and cannot walk up 65, so the limit governs
+  traversal and grounding is a contact test.
+  **An attempt on 2026-08-05 was withdrawn rather than tuned.** A scenario using a
+  tilted static box reported "not supported on steep ground" on both backends -
+  the opposite of the in-world result - and the model is the likely reason: a box
+  is not a heightfield, its contacts on a near-vertical face fall outside the
+  character's supporting volume, and the scenario added no floor, so "not
+  supported" may only mean it fell past the slab. Adjusting a test until it agrees
+  with the answer already believed is the one thing that must not happen here, so
+  it was reverted. A faithful version needs a heightfield ramp, and it is worth
+  more than the effort suggests: the behaviour is currently verified only by
+  somebody walking on it.
 - [ ] Apply permissions recursively and consistently to linksets, object
   contents, attachments, and inventory transfers.
 
