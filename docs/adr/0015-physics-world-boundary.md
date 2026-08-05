@@ -11,21 +11,25 @@ Adapters own engine handles behind project-level numeric IDs. Physics state is
 a simulation mirror: capture and restore support evaluation and region handoff,
 but identity, persistence, ownership, and asset references remain in the scene.
 
-## Behavioural parity between engines is a non-goal
+## Behavioural parity is a goal, not a guarantee
 
-The boundary exists so that nothing in the **design** is locked to one engine.
-It does not exist to make two engines behave alike, and they are not held to a
-lowest common denominator between them (operator, 2026-08-05).
+Two engines behaving alike **is** worth aiming for: where there is a choice, prefer
+the option that makes them agree. It is not a promise, not a hard requirement, and
+never a reason to weaken a test or cripple an adapter to reach a lowest common
+denominator (operator, 2026-08-05).
 
-Jolt is possibly the only engine Homeworldz will ever use. Supporting a second is
-a stretch goal, and its value is in keeping the architecture honest rather than in
-any promise of identical results. Two different solvers will differ on contacts,
-restitution, character support and slope handling; that is what they are.
+The boundary's purpose is that nothing in the **design** is locked to one engine.
+Jolt is possibly the only engine Homeworldz will ever use; supporting a second is a
+stretch goal whose value is in keeping the architecture honest. Two different
+solvers will still differ on contacts, restitution, character support and slope
+handling — divergence is *acceptable* rather than desirable, and worth narrowing
+when narrowing it is cheap.
 
 Three consequences worth stating, because each was got wrong before this was
 written down:
 
-- **A scenario may target one engine.** `run_common_scenarios` runs every backend,
+- **A scenario may target one engine** where a capability is genuinely absent, not
+  merely inconvenient. `run_common_scenarios` runs every backend,
   so a test needing a capability only one adapter has does not belong there — it
   belongs in an engine-specific test. PhysX has no `create_heightfield` (the base
   returns 0), which makes a heightfield scenario Jolt-only. That is an ordinary

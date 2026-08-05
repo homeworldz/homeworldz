@@ -281,7 +281,7 @@ but stays unchecked until its complete wording is satisfied.
   heightfield support**: the base `create_heightfield` returns 0, so a heightfield
   scenario belongs in a Jolt-only test rather than in `run_common_scenarios`, which
   runs every backend. That is not a compromise and needs no third verdict from the
-  harness - cross-engine behavioural parity is an explicit **non-goal**
+  harness - engines matching is a **goal but not a guarantee**
   ([ADR 0015](adr/0015-physics-world-boundary.md)), so an engine-specific scenario
   is the ordinary answer and an adapter declining a capability is a legitimate
   state. I had treated the difference as a problem to work around, which is the
