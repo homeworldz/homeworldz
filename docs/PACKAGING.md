@@ -56,3 +56,23 @@ system libraries. Release automation should build the C++ region in Release
 mode with `-DHOMEWORLDZ_VERSION=<version>` before packaging; the local Windows
 fallback to a Debug executable exists only so developers can validate package
 composition before a formal release build.
+
+## Where the version comes from, in precedence order
+
+The root `VERSION` file is the single source. Three things can override it, and
+because each is silent about the others, a deployment can report a version that
+exists nowhere in the repository — which is exactly what happened on the OVH box
+until 2026-08-05, where the answer was `0.1.0-ovh-preview`:
+
+1. **A `VERSION` file in the region's working directory**, read at startup by
+   `runtime_version()` in `region/src/main.cpp`. It wins over the compiled value,
+   so a stale one survives every rebuild and redeploy. Delete it unless you mean
+   to pin a version without recompiling.
+2. **`-DHOMEWORLDZ_VERSION` in `CMakeCache.txt`.** CMake reads the `VERSION`
+   file only when the variable is undefined, and a `-D` from any earlier
+   configure persists — so editing `VERSION` in an existing build directory does
+   nothing. `scripts/build-region.sh` now always passes the file's value to
+   overwrite it.
+3. **`build-region.sh --version`**, for a deliberate one-off.
+
+The Go binaries read none of these yet and report `unstamped`.
