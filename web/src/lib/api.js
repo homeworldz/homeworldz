@@ -74,6 +74,28 @@ export function resendVerification(userid) {
   });
 }
 
+// Asks for a reset link. The reply is 202 whatever happened - unknown account,
+// unverified, no address on file, mail failure, success - because any difference
+// would let this endpoint reveal which accounts exist (ADR 0034). Callers must
+// therefore show one message regardless, and must not infer anything from a
+// resolved promise beyond "the request was accepted".
+export function requestPasswordReset(identifier) {
+  return request("/password-resets", {
+    method: "POST",
+    body: { identifier },
+  });
+}
+
+// Spends a reset token and sets the password. Unknown, already-used and expired
+// tokens all arrive as 400 invalid_token, deliberately indistinguishable, so a
+// caller should surface one message rather than guessing which applied.
+export function consumePasswordReset(token, password) {
+  return request(`/password-resets/${encodeURIComponent(token)}`, {
+    method: "POST",
+    body: { password },
+  });
+}
+
 export function createToken(userid, password) {
   return request("/tokens", {
     method: "POST",

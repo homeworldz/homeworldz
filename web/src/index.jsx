@@ -10,6 +10,8 @@ import { AccountPage } from "./pages/AccountPage";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { VerifyPage } from "./pages/VerifyPage";
+import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
+import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { AdminPage } from "./pages/AdminPage";
 import { AdminUsersPage } from "./pages/AdminUsersPage";
 import { AdminUserPage } from "./pages/AdminUserPage";
@@ -55,6 +57,10 @@ render(
       <Route path="/register" component={RegisterPage} />
       <Route path="/verify" component={VerifyPage} />
       <Route path="/login" component={LoginPage} />
+      <Route path="/forgot" component={ForgotPasswordPage} />
+      {/* The emailed link is {reset_url}/{token}, so the token is a path
+          segment rather than a query parameter. */}
+      <Route path="/reset/:token" component={ResetPasswordPage} />
       <Route
         path="/account"
         component={() => (

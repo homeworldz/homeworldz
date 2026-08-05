@@ -77,6 +77,9 @@ export function LoginPage() {
         </div>
 
         <p class="auth-alt">
+          <A href="/forgot">Forgot your password?</A>
+        </p>
+        <p class="auth-alt">
           Need an avatar? <A href="/register">Register</A>.
         </p>
       </form>

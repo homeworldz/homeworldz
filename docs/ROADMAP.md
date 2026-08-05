@@ -311,8 +311,7 @@ but stays unchecked until its complete wording is satisfied.
 - [ ] Document the rest of the browser-facing API in `api/openapi-public.yaml`,
   which currently covers only the password-reset endpoints.
 - [x] Password recovery, grid side — done 2026-08-05 ([ADR 0034](adr/0034-password-recovery.md)): reset token, both endpoints, mail, and `reset_url`.
-- [ ] Password recovery, management site — the forgot and reset screens plus a
-  login-page link, against `api/openapi-public.yaml`.
+- [x] Password recovery, management site — done 2026-08-05: the forgot and reset screens plus the login-page link.
 - [ ] Trim this roadmap back to point form: one sentence per entry, milestones and
   remaining work only, with narrative moved to ADRs, a content-licensing record, or
   deleted where git history already holds it.
