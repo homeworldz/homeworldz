@@ -54,6 +54,11 @@ const (
 
 const defaultVerificationTTL = 24 * time.Hour
 
+// Shorter than verification deliberately: a reset token opens an account, while
+// a verification code only confirms an address. An hour costs a resend at worst
+// and narrows the window in which a later-read mailbox is enough to take over.
+const defaultPasswordResetTTL = time.Hour
+
 // Account is the website identity of an avatar.
 type Account struct {
 	ID          string
@@ -93,14 +98,16 @@ type InventoryProvisioner interface {
 
 // PostgresStore implements the website account operations against Postgres.
 type PostgresStore struct {
-	db              *sql.DB
-	verificationTTL time.Duration
-	provisioner     InventoryProvisioner
+	db               *sql.DB
+	verificationTTL  time.Duration
+	passwordResetTTL time.Duration
+	provisioner      InventoryProvisioner
 }
 
 // NewPostgresStore returns a store using the default verification lifetime.
 func NewPostgresStore(db *sql.DB) *PostgresStore {
-	return &PostgresStore{db: db, verificationTTL: defaultVerificationTTL}
+	return &PostgresStore{db: db, verificationTTL: defaultVerificationTTL,
+		passwordResetTTL: defaultPasswordResetTTL}
 }
 
 // WithInventoryProvisioner sets the optional initial-inventory seam.
@@ -297,6 +304,123 @@ func (s *PostgresStore) ResendVerification(ctx context.Context, userid string) (
 		return "", "", fmt.Errorf("commit resend: %w", err)
 	}
 	return code, email.String, nil
+}
+
+// RequestPasswordReset issues a single-use reset token for the account matching
+// ident, which may be a username or the email address on file.
+//
+// The token is returned with the address to send it to, and the caller mails it.
+// A missing account, an unverified one, or one with no address on file all yield
+// ErrNotFound — and the handler must answer the caller identically in every case
+// including success, or this endpoint becomes a way to discover which accounts
+// exist (ADR 0034).
+//
+// Any pending reset for the same account is replaced rather than added to, so a
+// person clicking "forgot password" twice has one live token rather than two.
+func (s *PostgresStore) RequestPasswordReset(ctx context.Context, ident string) (string, string, error) {
+	if strings.TrimSpace(ident) == "" {
+		return "", "", ErrNotFound
+	}
+	token, err := newConfirmationCode()
+	if err != nil {
+		return "", "", err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return "", "", fmt.Errorf("begin password reset: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	var (
+		userID     string
+		email      sql.NullString
+		verifiedAt sql.NullTime
+	)
+	// Either identifier, matched case-insensitively as login does. An account
+	// that has never been verified has no password to reset and no confirmed
+	// address to send to, so it is not eligible.
+	err = tx.QueryRowContext(ctx, `
+		SELECT id, email, verified_at FROM users
+		WHERE lower(username) = lower($1) OR lower(email) = lower($1)
+		FOR UPDATE`, ident).Scan(&userID, &email, &verifiedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", "", ErrNotFound
+	}
+	if err != nil {
+		return "", "", fmt.Errorf("find account for reset: %w", err)
+	}
+	if !verifiedAt.Valid || !email.Valid || email.String == "" {
+		return "", "", ErrNotFound
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO account_password_resets (user_id, token_hash, email, expires_at)
+		VALUES ($1, $2, $3, now() + $4 * interval '1 second')
+		ON CONFLICT (user_id) DO UPDATE
+		SET token_hash = EXCLUDED.token_hash, email = EXCLUDED.email,
+		    expires_at = EXCLUDED.expires_at, used_at = NULL, created_at = now()`,
+		userID, hashCode(token), email.String,
+		int64(s.passwordResetTTL/time.Second)); err != nil {
+		return "", "", fmt.Errorf("store reset token: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return "", "", fmt.Errorf("commit password reset: %w", err)
+	}
+	return token, email.String, nil
+}
+
+// ConsumePasswordReset sets a new password for the account holding token.
+//
+// This is a password change with a different proof of identity: the token stands
+// in for knowing the current password, and after it is accepted the operation is
+// the same one — write the digests, touch nothing else. Sessions are deliberately
+// left alone (ADR 0034).
+//
+// Unknown, already-used and expired tokens are one error, ErrInvalidCode,
+// because telling them apart would say whether a token had ever existed.
+func (s *PostgresStore) ConsumePasswordReset(ctx context.Context, token, newPassword string) error {
+	// Length is validated by the handler, as it is for ChangePassword.
+	if strings.TrimSpace(token) == "" {
+		return ErrInvalidCode
+	}
+	bcryptHash, viewerHash, err := hashPassword(newPassword)
+	if err != nil {
+		return err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin consume reset: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	var userID string
+	// Unused and unexpired, decided in the query so a stale token cannot be
+	// spent by a race between the check and the write.
+	err = tx.QueryRowContext(ctx, `
+		SELECT user_id FROM account_password_resets
+		WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()
+		FOR UPDATE`, hashCode(token)).Scan(&userID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrInvalidCode
+	}
+	if err != nil {
+		return fmt.Errorf("find reset token: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE users SET password_hash = $2, viewer_password_hash = $3
+		WHERE id = $1`, userID, bcryptHash, viewerHash); err != nil {
+		return fmt.Errorf("write reset password: %w", err)
+	}
+	// Marked rather than deleted, so a second click on the same link is refused
+	// for the right reason instead of looking like an unknown token.
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE account_password_resets SET used_at = now() WHERE user_id = $1`,
+		userID); err != nil {
+		return fmt.Errorf("mark reset used: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit consume reset: %w", err)
+	}
+	return nil
 }
 
 // Authenticate verifies a password for a verified account and returns it. An
