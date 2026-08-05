@@ -948,6 +948,16 @@ int main(int argc, char* argv[]) {
     const auto region_data_path = std::filesystem::path(
         configured_value("region.data_path", "var/region"));
     const auto terrain_state_path = region_data_path / "terrain.f32";
+    // The baseline the terrain edit limits are measured from, and what the revert
+    // brush returns to. Persisted separately from the current heightmap because it
+    // is a different fact with a different lifetime: the ground changes constantly
+    // and the baseline changes only when an operator bakes it.
+    //
+    // Before this file existed the baseline was rebuilt from the packaged RAW on
+    // every start, so the limits were anchored to the shipped shape forever and a
+    // region sculpted away from it had a window nowhere near its own ground
+    // (found while the operator tested the limits, 2026-08-04).
+    const auto revert_state_path = region_data_path / "revert.f32";
     // The terrain revision (client core request, 2026-07-30): monotonic per
     // region, incremented on every applied edit, persisted beside the terrain
     // it describes. Its value is that change notification can then be *lossy*
@@ -1241,10 +1251,14 @@ int main(int argc, char* argv[]) {
     const auto terrain_width = static_cast<std::size_t>(region_size_x);
     const auto default_heightmap = load_raw_heightmap(configured_value(
         "region.terrain_path", "assets/region/terrain/plateau-square.raw"), terrain_width);
-    auto revert_heightmap = default_heightmap ?
-        std::make_unique<homeworldz::terrain::Heightmap>(*default_heightmap) :
-        std::make_unique<homeworldz::terrain::Heightmap>(terrain_width);
-    if (!default_heightmap) revert_heightmap->fill(25.0F);
+    auto revert_heightmap = homeworldz::terrain::load_state(revert_state_path, terrain_width);
+    const bool loaded_baked_baseline = static_cast<bool>(revert_heightmap);
+    if (!revert_heightmap) {
+        revert_heightmap = default_heightmap ?
+            std::make_unique<homeworldz::terrain::Heightmap>(*default_heightmap) :
+            std::make_unique<homeworldz::terrain::Heightmap>(terrain_width);
+        if (!default_heightmap) revert_heightmap->fill(25.0F);
+    }
     auto terrain_heightmap = homeworldz::terrain::load_state(terrain_state_path, terrain_width);
     const bool loaded_region_state = static_cast<bool>(terrain_heightmap);
     if (!terrain_heightmap)
@@ -1253,6 +1267,10 @@ int main(int argc, char* argv[]) {
               << (loaded_region_state ? "region-state" :
                   (default_heightmap ? "packaged-default" : "flat-fallback"))
               << "\",\"width\":" << terrain_width << "}" << std::endl;
+    std::cout << "{\"level\":\"info\",\"message\":\"terrain baseline loaded\",\"source\":\""
+              << (loaded_baked_baseline ? "baked" :
+                  (default_heightmap ? "packaged-default" : "flat-fallback"))
+              << "\"}" << std::endl;
     const auto initial_spawn = default_spawn(*terrain_heightmap);
 
     homeworldz::scene::Scene scene;
@@ -5542,6 +5560,45 @@ int main(int argc, char* argv[]) {
                                               << ",\"viewersReHandshaked\":" << viewers_told
                                               << "}" << std::endl;
                                 }
+                              }
+                            } else if (method == "terrain") {
+                              // Firestorm's Terrain tab sends three commands under
+                              // this method: "download filename", "upload filename"
+                              // and "bake". Only bake is handled; the RAW transfers
+                              // need the xfer path and are refused by name rather
+                              // than dropped, so an operator learns which of the
+                              // three buttons works.
+                              const auto command = estate_message->params.empty()
+                                  ? std::string{} : estate_message->params[0];
+                              if (!manager) {
+                                std::cout << "{\"level\":\"warning\",\"message\":"
+                                             "\"terrain command refused\",\"command\":"
+                                          << homeworldz::api::json_string(command)
+                                          << ",\"by\":" << homeworldz::api::json_string(agent)
+                                          << ",\"reason\":\"not an estate manager or owner\"}"
+                                          << std::endl;
+                              } else if (command == "bake") {
+                                // Re-baseline: the current ground becomes what the
+                                // edit limits are measured from and what the revert
+                                // brush returns to. This is the control that makes
+                                // the limits usable at all - without it a raise
+                                // limit is a one-time budget against the shipped
+                                // terrain and an operator who spends it can never
+                                // raise again.
+                                *revert_heightmap = *terrain_heightmap;
+                                const auto saved = homeworldz::terrain::save_state(
+                                    revert_state_path, *revert_heightmap);
+                                std::cout << "{\"level\":" << (saved ? "\"info\"" : "\"error\"")
+                                          << ",\"message\":\"terrain baseline baked\",\"by\":"
+                                          << homeworldz::api::json_string(agent)
+                                          << ",\"persisted\":" << (saved ? "true" : "false")
+                                          << "}" << std::endl;
+                              } else {
+                                std::cout << "{\"level\":\"warning\",\"message\":"
+                                             "\"terrain command not implemented\",\"command\":"
+                                          << homeworldz::api::json_string(command)
+                                          << ",\"note\":\"RAW terrain download and upload need the"
+                                             " xfer path; bake is implemented\"}" << std::endl;
                               }
                             } else if (method == "setregionterrain") {
                               if (!manager) {

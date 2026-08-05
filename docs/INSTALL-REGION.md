@@ -76,6 +76,14 @@ var/region/
   scene/
 ```
 
+`terrain.f32` holds the current ground. `revert.f32`, when present, holds the
+**baseline** the terrain edit limits are measured from and the revert brush
+returns to — written when an estate manager presses *Bake Terrain* on the
+viewer's Region/Estate → Terrain tab. Absent, the baseline comes from the
+packaged RAW, which means the edit limits are measured against the shipped shape
+rather than against ground the region has been sculpted into. Back both up with
+the rest of the data directory.
+
 Every region process requires a different data directory. `region.db`, the
 content-addressed `assets` tree, and `scene/snapshot.json` together constitute
 the local persistent state; back them up as one consistent set while the
