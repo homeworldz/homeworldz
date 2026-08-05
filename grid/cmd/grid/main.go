@@ -39,7 +39,10 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-var version = "dev"
+// version is stamped at build time from the repository VERSION file by
+// scripts/build-grid.sh or grid/cmd/package-release. An unstamped binary says
+// so rather than naming a plausible version.
+var version = "unstamped"
 
 func main() {
 	configDirectory := flag.String("config", "config", "directory containing grid.ini and db.ini")

@@ -567,6 +567,9 @@ role machinery that shared ownership rests on.
   regions, retaining PostgreSQL-backed viewer sessions — which holds only while
   grid services return inside a region's lease-renewal window.
 
+- [x] Report one version everywhere, dated and traceable: the root `VERSION`
+  file (`0.1.260805-alpha`) is the single source, the Go binaries are stamped
+  from it by `scripts/build-grid.sh`, and an unstamped build says so.
 - [x] Refuse to start a grid service against a database older than the build
   requires, naming both versions and the fix, so a pending migration cannot go
   unnoticed; each migration stamps its own version and a test enforces that.
