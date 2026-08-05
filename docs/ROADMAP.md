@@ -279,10 +279,13 @@ but stays unchecked until its complete wording is satisfied.
   **A second attempt, with a real heightfield ramp, was also withdrawn - and it
   established two constraints the next attempt needs.** First, **PhysX has no
   heightfield support**: the base `create_heightfield` returns 0, so a heightfield
-  scenario cannot live in `run_common_scenarios`, which runs every backend and has
-  only pass or fail - no "could not run" verdict for a scenario a backend cannot
-  host. It needs a Jolt-only home, or the harness needs the third verdict the
-  client core added to their own suite for exactly this. Second, dropping the
+  scenario belongs in a Jolt-only test rather than in `run_common_scenarios`, which
+  runs every backend. That is not a compromise and needs no third verdict from the
+  harness - cross-engine behavioural parity is an explicit **non-goal**
+  ([ADR 0015](adr/0015-physics-world-boundary.md)), so an engine-specific scenario
+  is the ordinary answer and an adapter declining a capability is a legitimate
+  state. I had treated the difference as a problem to work around, which is the
+  wrong frame. Second, dropping the
   character on flat ground and walking it *to* the ramp makes the approach
   dominate the distance measured, so the discriminator reads walking rather than
   climbing; it has to start on the face.
