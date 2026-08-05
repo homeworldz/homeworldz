@@ -1137,6 +1137,18 @@ it builds against.
   only in a commit message**: a glTF file can be valid, conformant, and carry a
   shape nobody will see, because the shape is in morph targets rather than in
   POSITION. Any ingestion path that judges a mesh by POSITION alone will accept it.
+  **One more defect from the preview, and it was mine rather than the content's.**
+  The bodies rezzed short and wide. Mesh geometry is normalized to a unit domain
+  and a viewer scales it by the prim, so a wrapper's `scale` *is* the object's size
+  - `declared_world_bounds`, "the ONE bounds definition", and the upload path
+  honours it. My hand-authored wrapper set 1,1,1. The operator stretched one back
+  by eye and landed on 0.4365 and 1.7266 against true extents of 0.476 and 1.729,
+  which is what confirmed the cause over a wrong-axis one: an axis error would have
+  needed a factor of 4.4 and would have read as lying down.
+  So the answer to "who carries a body's real dimensions" was already decided and
+  documented; it was simply not applied by the one path that bypassed the code.
+  Recorded at the importer's extension list, where the next person bundling mesh
+  content will be standing.
   Still not adopted, and still the operator's decision. Accepting a canonical body
   commits the grid to a licensing position, and publishing appearance is the
   prerequisite before any client can be told to wear one — a body only one client

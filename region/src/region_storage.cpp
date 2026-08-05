@@ -1032,6 +1032,17 @@ std::size_t RegionStorage::import_asset_directory(const std::filesystem::path& d
         // glTF mesh, and the `homeworldz-object-v1` wrapper that gives it a place
         // in inventory. Bundling a mesh needs both, because a viewer rezzes an
         // object and never a bare mesh.
+        //
+        // **A bundled wrapper's `scale` must be the mesh's real extents**, not
+        // 1,1,1. Mesh geometry is normalized to a unit domain and a viewer scales
+        // it by the prim, so the scale *is* the size - see `declared_world_bounds`
+        // in mesh_convert.h, "the ONE bounds definition". The upload path does
+        // this (main.cpp sets wrapper.scale from bounds.extent); the first
+        // hand-authored wrapper here did not, and the body rendered short and wide
+        // until an operator stretched it back by eye to within centimetres of its
+        // true extents (2026-08-05). Nothing checks this, because there is
+        // currently no bundled mesh content to check - the check belongs with the
+        // next such asset rather than standing empty until then.
         const auto extension = entry.path().extension();
         if (!entry.is_regular_file() ||
             (extension != ".j2c" && extension != ".png" && extension != ".jpg" &&
