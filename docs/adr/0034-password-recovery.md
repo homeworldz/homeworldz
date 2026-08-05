@@ -75,6 +75,23 @@ meantime.
 Not negotiable. The request endpoint also answers identically whether or not an
 address is known, so it cannot be used to enumerate accounts.
 
+## The reset URL defaults to the management origin, in the code as well as the file
+
+`reset_url` must default to `https://my.homeworldz.com/reset` in `config.go`, not
+only in a deployed `grid.ini`. The website session raised this and the precedent is
+theirs (2026-08-05, verified here).
+
+`verification_url` was once repointed on the live grid while `config.go` still
+defaulted to `https://homeworldz.com/verify`. A fresh deployment without the
+setting would have fallen back to the website origin and **kept working**, because
+`public/_redirects` on homeworldz.com 302s `/verify` to the management site. A
+silent dependency on a redirect in another repository, invisible because nothing
+failed. Fixed in `baadf82`; the default is now the `my.` origin.
+
+So the reset default starts there. The website can add a `/reset` redirect rule on
+request, but that is a safety net for mail already in flight — never the intended
+path, and not a substitute for the default being right.
+
 ## Shape of the work
 
 A single-use reset token with a short expiry, compared in constant time; a public
