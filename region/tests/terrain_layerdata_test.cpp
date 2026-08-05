@@ -236,6 +236,32 @@ float height_at(const Shape& shape, std::size_t x, std::size_t y) {
 }  // namespace
 
 int main() {
+    // The viewer's composition arithmetic, which decides which layer a height
+    // shows. Asserted because the semantics were published wrong twice: first as a
+    // start and a span (right), then retracted to two absolute bounds on the
+    // strength of the viewer's dialog text (wrong), then restored when an operator
+    // photographed sand at 22 m under start 20 / range 60. t there is 0.13 - layer
+    // 1 almost pure - so the numbers were behaving exactly as the renderer says.
+    {
+        using homeworldz::terrain::layer_composition_value;
+        // The case from the screenshot: layer 1 still dominant well above 20.
+        if (std::abs(layer_composition_value(22.0F, 20.0F, 60.0F) - 0.13333F) > 1e-4F) return 60;
+        // Boundaries sit at half-integer t. With start 10 and range 80 they land on
+        // 20 / 40 / 60, which is what an operator asking for those wants.
+        if (std::abs(layer_composition_value(20.0F, 10.0F, 80.0F) - 0.5F) > 1e-5F) return 61;
+        if (std::abs(layer_composition_value(40.0F, 10.0F, 80.0F) - 1.5F) > 1e-5F) return 62;
+        if (std::abs(layer_composition_value(60.0F, 10.0F, 80.0F) - 2.5F) > 1e-5F) return 63;
+        // Clamped at both ends, so ground below the start or above the top of the
+        // span is the first or last layer rather than an extrapolation.
+        if (layer_composition_value(-100.0F, 10.0F, 80.0F) != 0.0F) return 64;
+        if (layer_composition_value(1000.0F, 10.0F, 80.0F) != 3.0F) return 65;
+        // Layer 4 becomes pure at start + 0.75 * range, not at the second number.
+        if (layer_composition_value(70.0F, 10.0F, 80.0F) != 3.0F) return 66;
+        // A zero range would divide by zero in a viewer; guarded rather than
+        // propagated as an infinity.
+        if (layer_composition_value(50.0F, 10.0F, 0.0F) != 0.0F) return 67;
+    }
+
     const std::array<Shape, 4> shapes{{
         // Measured worst deviations, 2026-07-31: 0.00006 m, 0.011 m, 0.116 m,
         // 0.359 m. Bounds are those with headroom, so a real regression trips

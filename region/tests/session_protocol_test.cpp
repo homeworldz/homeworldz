@@ -70,8 +70,8 @@ int main() {
     // any fixture that happened to match the defaults.
     const auto test_layers = [] {
         homeworldz::terrain::Settings settings;
-        settings.low = {20.0F, 20.0F, 20.0F, 20.0F};
-        settings.high = {60.0F, 60.0F, 60.0F, 60.0F};
+        settings.start = {20.0F, 20.0F, 20.0F, 20.0F};
+        settings.range = {60.0F, 60.0F, 60.0F, 60.0F};
         return settings;
     };
 
@@ -168,13 +168,20 @@ int main() {
                     // This fixture's region, not the shipped defaults: the
                     // hello reads per-region settings, so asserting the default
                     // numbers here would pass even if it ignored them.
-                    ",\"lowHeight\":[20,20,20,20]"
-                    ",\"highHeight\":[60,60,60,60]"
+                    //
+                    // A start and a span, not two bounds. Renamed from
+                    // lowHeight/highHeight on 2026-08-04 when an operator's
+                    // screenshot showed the viewer's renderer disagreeing with
+                    // the viewer's own dialog text, which is where the previous
+                    // names came from.
+                    ",\"startHeight\":[20,20,20,20]"
+                    ",\"heightRange\":[60,60,60,60]"
                     ",\"corners\":\"sw,nw,se,ne\""
                     // The two bounds do not imply where layer 2 becomes layer 3,
                     // so the rule is published rather than left to be guessed.
-                    ",\"selection\":\"1 below low; 2 low..mid; 3 mid..high;"
-                    " 4 above high; mid=(low+high)/2\""
+                    ",\"selection\":\"t=clamp((h-startHeight)*4/heightRange,0,3);"
+                    " layer n (1-based) peaks at t=n-1 with linear blend between"
+                    " neighbours; boundaries at t=0.5,1.5,2.5\""
                     // The transition width, advisory: only a client that shades
                     // its own terrain can honour it. No legacy message carries a
                     // blend width, so a viewer computes its own regardless.

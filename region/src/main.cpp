@@ -1299,12 +1299,12 @@ int main(int argc, char* argv[]) {
         // Terrain layers an operator set previously. Absent means untouched, which
         // is deliberately distinct from "set to the defaults": only the second is
         // a decision, and only the first should follow a change of defaults.
-        if (storage->load_terrain_settings(terrain_layers.assets, terrain_layers.low,
-                                          terrain_layers.high)) {
+        if (storage->load_terrain_settings(terrain_layers.assets, terrain_layers.start,
+                                          terrain_layers.range)) {
             pending_terrain_layers = terrain_layers;
             std::cout << "{\"level\":\"info\",\"message\":\"terrain layers loaded\""
-                      << ",\"low\":" << terrain_layers.low[0]
-                      << ",\"high\":" << terrain_layers.high[0] << "}" << std::endl;
+                      << ",\"startHeight\":" << terrain_layers.start[0]
+                      << ",\"heightRange\":" << terrain_layers.range[0] << "}" << std::endl;
         }
         if (!render_material_cache.empty())
             std::cout << "{\"level\":\"info\",\"message\":\"render materials loaded\",\"count\":"
@@ -2696,8 +2696,8 @@ int main(int argc, char* argv[]) {
             if (const auto texture =
                     homeworldz::viewer::parse_uuid(terrain_layers.assets[index]))
                 handshake.terrain_textures[index] = *texture;
-        handshake.terrain_low = terrain_layers.low;
-        handshake.terrain_high = terrain_layers.high;
+        handshake.terrain_start = terrain_layers.start;
+        handshake.terrain_range = terrain_layers.range;
         const auto response = circuits.send(endpoint,
             homeworldz::viewer::encode_region_handshake(handshake), true, std::chrono::steady_clock::now(), true);
         if (!response) {
@@ -5455,7 +5455,8 @@ int main(int argc, char* argv[]) {
                                     }
                                 } else if (method == "textureheights") {
                                     for (const auto& parameter : estate_message->params) {
-                                        // "<corner> <low> <high>", both absolute metres.
+                                        // "<corner> <startHeight> <heightRange>" - a
+                                        // start and a span, not two bounds.
                                         std::uint32_t corner = 0;
                                         float low = 0.0F;
                                         float high = 0.0F;
@@ -5474,11 +5475,14 @@ int main(int argc, char* argv[]) {
                                         // The viewer's own spinner range. A value outside
                                         // it is a decode error, not an operator choice, so
                                         // it is dropped rather than stored.
+                                        // A range of zero would divide by zero in the
+                                        // viewer's own composition arithmetic, so it is
+                                        // refused rather than stored.
                                         if (corner >= 4 || low < -500.0F || low > 4000.0F ||
-                                            high < -500.0F || high > 4000.0F)
+                                            high <= 0.0F || high > 4000.0F)
                                             continue;
-                                        pending_terrain_layers.low[corner] = low;
-                                        pending_terrain_layers.high[corner] = high;
+                                        pending_terrain_layers.start[corner] = low;
+                                        pending_terrain_layers.range[corner] = high;
                                     }
                                 } else {
                                     // A commit that changes nothing means the
@@ -5490,8 +5494,8 @@ int main(int argc, char* argv[]) {
                                     // looking like a successful no-change.
                                     const bool changed =
                                         terrain_layers.assets != pending_terrain_layers.assets ||
-                                        terrain_layers.low != pending_terrain_layers.low ||
-                                        terrain_layers.high != pending_terrain_layers.high;
+                                        terrain_layers.start != pending_terrain_layers.start ||
+                                        terrain_layers.range != pending_terrain_layers.range;
                                     if (!changed)
                                         std::cout << "{\"level\":\"warning\",\"message\":"
                                                      "\"terrain commit changed nothing\",\"note\":"
@@ -5502,8 +5506,8 @@ int main(int argc, char* argv[]) {
                                     if (storage) {
                                         try {
                                             storage->save_terrain_settings(terrain_layers.assets,
-                                                                           terrain_layers.low,
-                                                                           terrain_layers.high);
+                                                                           terrain_layers.start,
+                                                                           terrain_layers.range);
                                         } catch (const std::exception& error) {
                                             std::cout << "{\"level\":\"error\",\"message\":"
                                                          "\"terrain layers not saved\",\"error\":"
@@ -5552,8 +5556,8 @@ int main(int argc, char* argv[]) {
                                     std::cout << "{\"level\":\"info\",\"message\":\"terrain"
                                                  " layers committed\",\"by\":"
                                               << homeworldz::api::json_string(agent)
-                                              << ",\"low\":" << terrain_layers.low[0]
-                                              << ",\"high\":" << terrain_layers.high[0]
+                                              << ",\"startHeight\":" << terrain_layers.start[0]
+                                              << ",\"heightRange\":" << terrain_layers.range[0]
                                               << ",\"defaults\":"
                                               << (terrain_layers.matches_defaults() ? "true" : "false")
                                               << ",\"sessionClientsTold\":" << told

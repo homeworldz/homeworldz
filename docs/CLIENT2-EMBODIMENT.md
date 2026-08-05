@@ -183,39 +183,49 @@ seam above encoding.
    **The ground's surface (2026-07-31).** `terrain.layers` names the four
    textures and the elevation band that selects between them: `assets` lowest
    to highest, and `lowHeight` and `highHeight` per corner in the order
-   south-west, north-west, south-east, north-east, interpolated across the
-   region. **Both are absolute metres, not a start and a span:** low is layer
-   1's ceiling, high is layer 4's floor, and the two bounds do not by themselves
-   say where layer 2 becomes layer 3 — the midpoint does, and the `selection`
-   string states the whole rule. The viewer's own Region/Estate → Terrain tab
-   labels these Low and High and displays exactly what the region sends, which
-   is how the earlier reading was caught: with 10 and 60 on the wire it shows
-   60, where a span would have shown 70. An earlier revision of this document
-   published `startHeight`/`heightRange` and described a band divided in four.
-   That was wrong, and is retracted here rather than quietly edited away,
-   because a client may have built against it (corrected 2026-08-04).
-   **If you are porting from the old names, the rename is not the change — the
-   meaning is.** `[start, start + range]` became `[low, high]`. A reader that
-   renamed the two fields and touched nothing else computes a window sixty metres
-   too tall on the defaults, is wrong at every elevation, and fails nothing,
-   because every value it produces is a plausible height. Rename the fields
-   *and* delete the addition.
-   The rename was load-bearing for exactly that reason and is worth keeping in
-   mind for future contract changes here: a client core reader hit it and refused
-   the whole block rather than silently computing the wrong window (2026-08-04),
-   which is the outcome the rename was for. Changing a field's meaning without
-   changing its name would have produced the silent version.
-   The same applies to `selection`, and there is a measurement for it. With no
-   rule published, the client core had guessed four equal quarters of the window.
-   On 10 to 60 that puts boundaries at 22.5, 35 and 47.5 against the real 10, 35
-   and 60 — **the middle one agrees by coincidence and the outer two do not**,
-   which is the worst arrangement for noticing by eye, since the bands change in
-   roughly the right part of a hill and are wrong about where. Withholding an
-   approximate rule was right, and publishing the exact one was right; the
-   interval between them is the argument for the second.
-   A consequence worth stating: the default low of 10 m sits below the default
-   water height of 20 m, so layer 1 has no dry ground to appear on and a region
-   shows three layers rather than four until an operator raises it.
+   south-west, north-west, south-east, north-east, interpolated bilinearly
+   across the region.
+   **They are `startHeight` and `heightRange` — a start and a span, not two
+   absolute bounds — and this section said otherwise for a day.** The viewer
+   computes a composition value and blends the four layers by it
+   (`llvlcomposition.cpp`):
+
+   ```
+   t = clamp((height + noise − startHeight) * 4 / heightRange, 0, 3)
+   ```
+
+   Layer 1 is pure at `t = 0`, layer 4 at `t = 3`, linear between neighbours, so
+   the boundaries sit at half-integer `t`:
+
+   | boundary | height |
+   | --- | --- |
+   | 1 │ 2 | `start + 0.125 × range` |
+   | 2 │ 3 | `start + 0.375 × range` |
+   | 3 │ 4 | `start + 0.625 × range` |
+   | layer 4 pure | `start + 0.75 × range` and above |
+
+   **Retraction of a retraction, with the reason, because a reader deserves to
+   know which way to trust this file.** An earlier revision published
+   `startHeight`/`heightRange` with a four-way split — correct. On 2026-08-04 that
+   was retracted in favour of `lowHeight`/`highHeight` as absolute ends, on the
+   strength of the viewer's Region/Estate dialog, which labels the two spinners Low
+   and High and states that "the LOW value is the MAXIMUM height of Texture #1, and
+   the HIGH value is the MINIMUM height of Texture #4". That text describes a model
+   the viewer's own renderer does not implement. The widgets are named
+   `height_start_spin_N` and `height_range_spin_N`, are filled from
+   `getStartHeight()`/`getHeightRange()`, and the arithmetic above is what an
+   operator sees. It was believed over the source, which was vendored in the server
+   repository the whole time.
+   An operator's screenshot caught it: sand at 22 m on a region set to 20 and 60.
+   `t` there is 0.13 — layer 1 almost pure — so the numbers were behaving exactly
+   as documented above and the published rule was wrong. **A client that implemented
+   the retracted rule renders boundaries a viewer does not**, which is the
+   divergence both sides have been working to avoid.
+   To place boundaries at 20 / 40 / 60 an operator sets start 10 and range 80, not
+   20 and 60. Worth knowing when comparing a render against a viewer's.
+   A consequence worth stating: with the default start of 10 m and range of 60 m,
+   the 1│2 boundary sits at 17.5 m — below the default water height of 20 m — so
+   layer 1 has little dry ground to appear on until an operator raises the start.
    They are ordinary assets, fetched from `assets.base`, canonical PNG since
    the layers were re-sourced — so a client that refuses JPEG2000 can read the
    ground it stands on, and a cache can hold them for the life of the id.
@@ -226,7 +236,7 @@ seam above encoding.
    *this* region still holds the shipped defaults — so a client that read the
    fact rather than assuming grid uniformity needs no change, which is the whole
    reason it was published while it was still trivially true.
-   Read `assets`, `lowHeight`, and `highHeight` from the hello per region and
+   Read `assets`, `startHeight`, and `heightRange` from the hello per region and
    per connect. A client that cached them once for the grid will now be wrong on
    any region an operator has changed.
    **A connected client is told:** `changedEvent: "terrainLayersChanged"` names

@@ -585,13 +585,21 @@ input formats.
   login, since `RegionHandshake` is the only message carrying these and
   re-sending it mid-session restarts more viewer region state than a texture
   change warrants.
-  Also settled: the elevation semantics were wrong here and in the client
-  contract. The protocol's field names say start height and height range; the
-  meaning is **absolute low and high** — layer 1's ceiling and layer 4's floor,
-  with the 2/3 boundary at their midpoint. The viewer's Terrain tab states it
-  outright and displays exactly what the region sends. A consequence: the
-  default low of 10 m sits below the default water height of 20 m, so layer 1
-  has no dry ground and a region shows three layers until an operator raises it.
+  **The elevation semantics flipped twice in one day and the second flip was the
+  correction.** The protocol's field names say start height and height range, and
+  that is what they mean: the viewer computes
+  `t = clamp((h + noise − start) * 4 / range, 0, 3)` and blends the four layers by
+  `t`, so boundaries sit at `start + 0.125/0.375/0.625 × range`. That was published
+  first, then retracted in favour of absolute low/high on the strength of the
+  viewer's *dialog text* — which claims the low value is the maximum height of
+  texture 1 and describes a model the viewer's own renderer does not implement.
+  An operator's screenshot settled it: sand at 22 m on a region set to 20 and 60,
+  where `t` is 0.13 and layer 1 is almost pure. The wrong reading survived a day
+  because the vendored viewer source was in this repository the whole time and the
+  UI copy was believed over `llvlcomposition.cpp`. Names restored to
+  `startHeight`/`heightRange`, the published `selection` rule now states the
+  arithmetic, and `layer_composition_value` is asserted against the screenshot's
+  own numbers so the boundaries cannot drift again.
   Verified from both ends, 2026-08-04. The client core probed the grass layer it
   had fetched and rendered: 1024x1024, **97522 distinct colours**, mean r101 g132
   b44. Probing the source PNG on the operator's disk gives 1024x1024, **97522**,

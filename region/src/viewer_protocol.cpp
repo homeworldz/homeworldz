@@ -803,11 +803,12 @@ std::vector<std::byte> encode_region_handshake(const RegionHandshake& message) {
     append_uuid(output, zero); // cache ID
     for (const auto& texture : message.terrain_textures) append_uuid(output, texture); // terrain base
     for (const auto& texture : message.terrain_textures) append_uuid(output, texture); // terrain detail
-    // Per-corner low then high: the maximum height of layer 1 and the minimum
-    // height of layer 4, both absolute. Shared with the session hello so a
-    // viewer and a client are told the same numbers (terrain_layers.h).
-    for (const float value : message.terrain_low) append_f32(output, value);
-    for (const float value : message.terrain_high) append_f32(output, value);
+    // Per-corner start height then height range. The field names in the message
+    // template are TerrainStartHeightNN and TerrainHeightRangeNN, and that is what
+    // they mean - the viewer's dialog calls them Low and High and its renderer does
+    // not (terrain_layers.h).
+    for (const float value : message.terrain_start) append_f32(output, value);
+    for (const float value : message.terrain_range) append_f32(output, value);
     append_uuid(output, message.region_id);
     append_le_u32(output, 0); // CPU class
     append_le_u32(output, 1); // CPU ratio

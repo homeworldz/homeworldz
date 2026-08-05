@@ -605,8 +605,8 @@ struct RegionHandshake {
     // height of layer 4, both absolute metres. Per region, because an operator
     // sets them from the viewer's own Terrain tab; the defaults live in
     // terrain_layers.h and the caller supplies this region's live values.
-    std::array<float, 4> terrain_low{terrain::layer_low_height};
-    std::array<float, 4> terrain_high{terrain::layer_high_height};
+    std::array<float, 4> terrain_start{terrain::layer_start_height};
+    std::array<float, 4> terrain_range{terrain::layer_height_range};
     bool is_estate_owner{};
     // indra RegionFlags. Default advertises region-wide landmark creation and
     // "Set Home to Here" so those viewer menu items activate everywhere.

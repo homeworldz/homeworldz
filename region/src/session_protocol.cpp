@@ -354,17 +354,18 @@ std::string water_json(double height) {
 std::string terrain_layers_json(const terrain::Settings& layers, double blend_metres) {
     return "{\"assets\":[" + layer_asset_list(layers.assets) +
            "],\"selectedBy\":\"elevation\""
-           ",\"lowHeight\":" + corner_list(layers.low) +
-           ",\"highHeight\":" + corner_list(layers.high) +
+           ",\"startHeight\":" + corner_list(layers.start) +
+           ",\"heightRange\":" + corner_list(layers.range) +
            ",\"corners\":\"sw,nw,se,ne\""
-           // Which layer applies at a height, stated because the two bounds do
-           // not imply it: they fix layer 1's ceiling and layer 4's floor, and
-           // the division between 2 and 3 is the midpoint. Absolute metres,
-           // both of them - the protocol's historical names say start height
-           // and height range, and the viewer's own Region/Estate dialog says
-           // low and high, which is what they are.
-           ",\"selection\":\"1 below low; 2 low..mid; 3 mid..high;"
-           " 4 above high; mid=(low+high)/2\""
+           // How a height picks a layer, as the viewer actually computes it.
+           // **Corrected 2026-08-04**: a previous revision published "1 below
+           // low; 2 low..mid; 3 mid..high; 4 above high", taken from the
+           // viewer's dialog text rather than its renderer. The renderer blends
+           // by a composition value, so layer 1 persists well above the first
+           // number and layer 4 is pure below the second.
+           ",\"selection\":\"t=clamp((h-startHeight)*4/heightRange,0,3);"
+           " layer n (1-based) peaks at t=n-1 with linear blend between"
+           " neighbours; boundaries at t=0.5,1.5,2.5\""
            // The transition width, in metres, straddling each boundary
            // symmetrically. Advisory and honoured only by a client that shades
            // its own terrain: no legacy message carries a blend width, so a

@@ -261,14 +261,14 @@ bool message_codecs() {
     RegionHandshake handshake{"Test Region", expected.agent_id, expected.session_id, 21.5F};
     const auto encoded_handshake = encode_region_handshake(handshake);
     if (encoded_handshake.size() < 250 || encoded_handshake[3] != std::byte{0x94}) return false;
-    // The four terrain elevations are per region, so the handshake must carry
-    // what the caller set rather than the shipped defaults. Asserted by finding
+    // The four terrain numbers are per region, so the handshake must carry what
+    // the caller set rather than the shipped defaults. Start heights then ranges. Asserted by finding
     // the eight floats as one contiguous block, low corners then high corners,
     // which is offset-independent and still catches a swap or a stride error.
     // Deliberately asymmetric: uniform values pass a codec that writes one
     // number four times.
-    handshake.terrain_low = {20.0F, 21.5F, 22.0F, 23.25F};
-    handshake.terrain_high = {60.0F, 61.5F, 62.0F, 63.25F};
+    handshake.terrain_start = {20.0F, 21.5F, 22.0F, 23.25F};
+    handshake.terrain_range = {60.0F, 61.5F, 62.0F, 63.25F};
     const auto encoded_elevations = encode_region_handshake(handshake);
     std::vector<std::byte> expected_block;
     for (const float value : {20.0F, 21.5F, 22.0F, 23.25F, 60.0F, 61.5F, 62.0F, 63.25F}) {
