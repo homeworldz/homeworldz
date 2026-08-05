@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/homeworldz/server/grid/internal/identifier"
@@ -168,6 +169,42 @@ func (s *PostgresStore) ConfigureSystemUser(ctx context.Context, id, username, p
 	}
 	if err != nil {
 		return User{}, fmt.Errorf("configure system user: %w", err)
+	}
+	return user, nil
+}
+
+// SetPassword replaces a user's password, found by username. It exists because
+// the account API's ChangePassword deliberately requires the current password,
+// which is the right rule for a user and leaves an operator with no way to
+// recover an account whose password is lost. Both digests are written: bcrypt
+// for the web account and the viewer's MD5 for legacy login, because an account
+// that can sign in to one and not the other is worse than one that cannot sign
+// in at all.
+//
+// The username is matched case-insensitively, as login does.
+func (s *PostgresStore) SetPassword(ctx context.Context, username, password string) (User, error) {
+	if strings.TrimSpace(username) == "" {
+		return User{}, errors.New("username is required")
+	}
+	if password == "" {
+		return User{}, errors.New("password is required")
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return User{}, fmt.Errorf("hash password: %w", err)
+	}
+	viewerDigest := md5.Sum([]byte(password))
+	var user User
+	err = s.db.QueryRowContext(ctx, `
+		UPDATE users SET password_hash = $2, viewer_password_hash = $3
+		WHERE lower(username) = lower($1) RETURNING id, username, created_at`,
+		username, string(hash), hex.EncodeToString(viewerDigest[:]),
+	).Scan(&user.ID, &user.Username, &user.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return User{}, fmt.Errorf("no account named %q", username)
+	}
+	if err != nil {
+		return User{}, fmt.Errorf("set password: %w", err)
 	}
 	return user, nil
 }

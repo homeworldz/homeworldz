@@ -359,3 +359,27 @@ to curate Library content can assign it a local password with
 
 Building development snapshots from source is documented in the repository
 README and is intentionally outside this operator installation guide.
+
+## Recover an account whose password is lost
+
+The account API's password change requires the current password, which is the
+right rule for a user and leaves an operator with no way back into an account
+whose password is gone. `set-password` is that way back:
+
+```sh
+cd /opt/homeworldz/grid
+./set-password -config /etc/homeworldz/grid -username "Jim Tarber"
+```
+
+It prompts twice and writes both digests — bcrypt for the web account and the
+viewer's MD5 for legacy login — because an account that can sign in to one and
+not the other is worse than one that cannot sign in at all.
+
+**The password is only ever read from a prompt.** There is deliberately no flag
+and no environment variable for it: a password on a command line sits in the
+shell history and in every process listing on the machine for as long as the
+command runs, which turns a recovery into a disclosure. The tool prints the
+account name and id when it succeeds, and never the password.
+
+`-username` is required rather than defaulted, so the wrong account cannot be
+reset by running the command with no arguments.
