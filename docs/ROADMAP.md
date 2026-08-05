@@ -310,9 +310,9 @@ but stays unchecked until its complete wording is satisfied.
   should fail and be updated as the record of a chosen change.
 - [ ] Document the rest of the browser-facing API in `api/openapi-public.yaml`,
   which currently covers only the password-reset endpoints.
-- [ ] Build self-service password recovery ([ADR 0034](adr/0034-password-recovery.md)): a single-use expiring reset token, a
-  request endpoint whose reply never reveals whether an address exists, a consume
-  endpoint, the mail send, and the two screens plus a login-page link.
+- [x] Password recovery, grid side — done 2026-08-05 ([ADR 0034](adr/0034-password-recovery.md)): reset token, both endpoints, mail, and `reset_url`.
+- [ ] Password recovery, management site — the forgot and reset screens plus a
+  login-page link, against `api/openapi-public.yaml`.
 - [ ] Trim this roadmap back to point form: one sentence per entry, milestones and
   remaining work only, with narrative moved to ADRs, a content-licensing record, or
   deleted where git history already holds it.
