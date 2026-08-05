@@ -10068,7 +10068,47 @@ int main(int argc, char* argv[]) {
         // standing on ground being smoothed needs it within a few frames, and
         // rebuilding a million-sample heightfield is not a per-packet cost.
         if (terrain_dirty && now >= next_terrain_physics) {
-            static_cast<void>(synchronize_physics_terrain());
+            if (synchronize_physics_terrain() && physics_world) {
+                // Ground that rose into an avatar has to lift it. Jolt owns
+                // grounding for characters (AvatarController::synchronize_physics
+                // sets physics_grounding_, which disables the controller's own
+                // snap), so a capsule left inside the new heightfield is reported
+                // unsupported and falls - through ground it cannot leave.
+                //
+                // The operator found it while terraforming (2026-08-05): raising
+                // land into yourself gave a screen alternating between the world
+                // and black at this rebuild's own 500 ms cadence, with a falling
+                // animation. Flying stopped the fall and left the camera inside
+                // the hill, which is the same fault holding still.
+                //
+                // Only ever upward. Terrain lowered away from an avatar should
+                // drop it, and that already works.
+                for (auto& [lift_key, lift_avatar] : avatars) {
+                    static_cast<void>(lift_key);
+                    if (lift_avatar.physics_character == 0) continue;
+                    const auto state = lift_avatar.controller.state();
+                    const auto ground = collision_ground_height(state.position);
+                    // The capsule's centre sits half its height above the ground,
+                    // the same support rule published to session clients.
+                    const auto support = ground + state.height * 0.5;
+                    if (state.position.z >= support) continue;
+                    auto placed = physics_world->character_state(lift_avatar.physics_character);
+                    if (!placed) continue;
+                    placed->position.z = support;
+                    // Any downward velocity is the fall this is correcting; keep
+                    // horizontal motion so someone walking is not stopped dead.
+                    if (placed->linear_velocity.z < 0.0) placed->linear_velocity.z = 0.0;
+                    placed->grounded = true;
+                    physics_world->set_character_state(lift_avatar.physics_character, *placed);
+                    lift_avatar.controller.synchronize_physics(
+                        placed->position, placed->linear_velocity, true);
+                    std::cout << "{\"level\":\"info\",\"message\":\"avatar lifted by rising"
+                                 " terrain\",\"user\":"
+                              << homeworldz::api::json_string(lift_avatar.user_id)
+                              << ",\"from\":" << state.position.z
+                              << ",\"to\":" << support << "}" << std::endl;
+                }
+            }
             next_terrain_physics = now + std::chrono::milliseconds(500);
         }
 
