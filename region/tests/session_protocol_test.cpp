@@ -185,6 +185,14 @@ int main() {
                     // False because this region has been changed from the
                     // defaults. A client reads the fact instead of assuming the
                     // grid is uniform.
+                    // Published because it is the only part of the ground the
+                    // two client families cannot be made to agree on. A client
+                    // printing this beside its own render explains a difference
+                    // that would otherwise read as a rendering fault on one side.
+                    ",\"boundaryNoise\":\"viewer only: a two-octave turbulence sum"
+                    " is added to height before t, wobbling each boundary by a few"
+                    " metres in a pattern never reproduced outside Linden; this"
+                    " region adds none\""
                     ",\"gridWide\":false"
                     // The layers' own change event, so a client discovers it
                     // rather than reading a document. Layers are per region and

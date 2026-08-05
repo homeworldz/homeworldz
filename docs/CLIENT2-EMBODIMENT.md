@@ -274,11 +274,18 @@ seam above encoding.
    the real arithmetic it contradicts the rule beside it — it said 2 m on a region
    whose rule gives 15 — and a client applying both draws to neither. The client
    core found it within minutes of the corrected rule shipping.
-   What remains unpublished is the viewer's **noise term**: `llvlcomposition.cpp`
-   adds a two-octave turbulence sum to the height before computing `t`, so a viewer
-   perturbs every boundary by a few metres in a pattern no one has reproduced
-   outside Linden. A client matching `selection` exactly still differs from a viewer
-   that way, and that is a fact about the ground rather than a gap in this document.
+   The viewer's **noise term** is published, as `boundaryNoise` in the same block.
+   `llvlcomposition.cpp` adds a two-octave turbulence sum to the height before
+   computing `t`, so a viewer perturbs every boundary by a few metres in a pattern
+   no one has reproduced outside Linden. **This region adds none**, and the field
+   says so, so it cannot be read as something to reproduce.
+   It is on the wire rather than only here because of where it gets used: a client
+   that reads it can print it on the run that produced a render, which is where
+   somebody comparing a screenshot against Firestorm is actually looking (client
+   core's argument, 2026-08-05). It converts "the two will differ and nobody knows
+   why" into a bounded, explained difference — the boundaries agree exactly and
+   only the wobble along them does not — and it pre-empts a side-by-side being read
+   as a rendering fault on one side.
 5. **Departure splits into what the avatar owns and what the viewer owns.**
    `retire_avatar(key)` (kill broadcast, physics removal, avatar-keyed maps)
    serves both transports; `clear_viewer_transport(endpoint)` (texture

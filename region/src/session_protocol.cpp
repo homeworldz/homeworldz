@@ -366,6 +366,15 @@ std::string terrain_layers_json(const terrain::Settings& layers) {
            ",\"selection\":\"t=clamp((h-startHeight)*4/heightRange,0,3);"
            " layer n (1-based) peaks at t=n-1 with linear blend between"
            " neighbours; boundaries at t=0.5,1.5,2.5\""
+           // The one part of the ground the two client families cannot agree on,
+           // stated on the wire rather than only in a document. A client that
+           // reads it can print it on the run that drew the picture, which is
+           // where somebody comparing a render against a viewer is looking
+           // (client core, 2026-08-05). Named so it cannot be mistaken for
+           // something this region applies: it does not.
+           ",\"boundaryNoise\":\"viewer only: a two-octave turbulence sum is added"
+           " to height before t, wobbling each boundary by a few metres in a"
+           " pattern never reproduced outside Linden; this region adds none\""
            // No blend width is published, and there is nothing missing.
            // `selection` determines the crossfade: neighbouring layers blend
            // linearly between their peaks, so the transition is heightRange/4
