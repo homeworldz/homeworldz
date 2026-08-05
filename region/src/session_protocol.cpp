@@ -467,14 +467,29 @@ SessionCore::Result SessionCore::handle_text(std::string_view text) {
             ",\"supportOffsetFactor\":0.5" +
             ",\"groundedTolerance\":" +
             json_number_text(homeworldz::viewer::avatar_grounded_tolerance) +
-            // Ground steeper than this never grounds the capsule: the avatar
-            // is contact-held and sliding. This is strictly the grounded/
-            // sliding boundary — NOT an exactness threshold for the support
-            // rule, which is measured exact only on effectively flat ground
-            // (≲3°) and deviates below flat arithmetic on real slopes even
-            // while standing (docs/CLIENT2-EMBODIMENT.md, decision 4).
+            // **A traversal limit, not a resting one. Corrected 2026-08-05.**
+            // This is Jolt's CharacterVirtual mMaxSlopeAngle
+            // (jolt_world.cpp:287), which decides what an avatar can walk up
+            // or along. It does not decide what an avatar can stand on:
+            // `grounded` is `IsSupported()` (jolt_world.cpp:376), true on any
+            // contact whatever the slope, and no slide is implemented.
+            //
+            // The comment here previously claimed "ground steeper than this
+            // never grounds the capsule: the avatar is contact-held and
+            // sliding". Both halves were false, and the client core built a
+            // resting prediction on them. Their three fixture faces settled
+            // it: an avatar rests motionless on 70 deg repeatably and cannot
+            // walk up 65 deg. Note what the old note said had been verified -
+            // "walked and confirmed in-world" - which is exactly the half that
+            // was true.
             ",\"walkableSlopeDegrees\":" +
-            json_number_text(walkable_slope_degrees_) + "}" +
+            json_number_text(walkable_slope_degrees_) +
+            // So a client is told outright what the number does not cover,
+            // rather than inferring a resting rule from a traversal one. There
+            // is no published bound on resting because the region implements
+            // none: an avatar rests on any ground it touches.
+            ",\"slopeLimitGoverns\":\"traversal\""
+            ",\"restingBoundedBySlope\":false" + "}" +
             // The ground itself: a heightmap fetched over HTTP with the same
             // region ticket this socket authenticated with. Heights are
             // float32 little-endian meters, row-major from y=0, one vertex
