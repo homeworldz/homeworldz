@@ -31,6 +31,7 @@ import (
 	"github.com/homeworldz/server/grid/internal/provisioning"
 	"github.com/homeworldz/server/grid/internal/regions"
 	"github.com/homeworldz/server/grid/internal/renditions"
+	"github.com/homeworldz/server/grid/internal/schema"
 	"github.com/homeworldz/server/grid/internal/tasktransfer"
 	"github.com/homeworldz/server/grid/internal/transit"
 	"github.com/homeworldz/server/grid/internal/vault"
@@ -83,6 +84,14 @@ func main() {
 			os.Exit(1)
 		}
 		defer db.Close()
+
+		// Before the server or any admin mode runs: this build's queries reference
+		// the schema it was written against, and running without it fails one
+		// request at a time in handlers rather than here (see the schema package).
+		if err := schema.Verify(context.Background(), db, logger); err != nil {
+			logger.Error("database schema check", "error", err)
+			os.Exit(1)
+		}
 	}
 
 	// User administration: create or update one user, then exit without starting

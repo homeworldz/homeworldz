@@ -23,3 +23,5 @@ CREATE TABLE account_password_resets (
 -- so the hash needs its own index rather than relying on the user_id key.
 CREATE UNIQUE INDEX account_password_resets_token_hash_idx
     ON account_password_resets (token_hash);
+
+INSERT INTO schema_metadata (version) VALUES (31);

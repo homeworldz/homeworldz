@@ -20,3 +20,5 @@ ALTER TABLE asset_renditions ADD CONSTRAINT asset_renditions_kind_check
 ALTER TABLE rendition_jobs DROP CONSTRAINT rendition_jobs_kind_check;
 ALTER TABLE rendition_jobs ADD CONSTRAINT rendition_jobs_kind_check
     CHECK (kind IN ('gltf', 'sl-mesh', 'sl-material', 'j2c-texture', 'png-texture'));
+
+INSERT INTO schema_metadata (version) VALUES (30);

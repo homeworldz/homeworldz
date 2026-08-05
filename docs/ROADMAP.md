@@ -567,6 +567,9 @@ role machinery that shared ownership rests on.
   regions, retaining PostgreSQL-backed viewer sessions — which holds only while
   grid services return inside a region's lease-renewal window.
 
+- [x] Refuse to start a grid service against a database older than the build
+  requires, naming both versions and the fix, so a pending migration cannot go
+  unnoticed; each migration stamps its own version and a test enforces that.
 - [ ] Back up and restore PostgreSQL grid state, region SQLite state, assets,
   terrain, configuration, and compatible runtime state.
 - [ ] Export and import OpenSim-compatible region archives (OAR) and user
