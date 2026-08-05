@@ -134,7 +134,6 @@ int Server::State::callback(lws* wsi, lws_callback_reasons reason, void* user, v
                                     state->options.terrain_width,
                                     state->options.walkable_slope_degrees,
                                     state->options.water_height,
-                                    state->options.terrain_blend_metres,
                                     state->options.terrain_layers,
                                     state->options.terrain_revision));
         state->connections.insert(wsi);

@@ -351,7 +351,7 @@ std::string water_json(double height) {
            ",\"changedEvent\":\"waterChanged\"}";
 }
 
-std::string terrain_layers_json(const terrain::Settings& layers, double blend_metres) {
+std::string terrain_layers_json(const terrain::Settings& layers) {
     return "{\"assets\":[" + layer_asset_list(layers.assets) +
            "],\"selectedBy\":\"elevation\""
            ",\"startHeight\":" + corner_list(layers.start) +
@@ -366,14 +366,14 @@ std::string terrain_layers_json(const terrain::Settings& layers, double blend_me
            ",\"selection\":\"t=clamp((h-startHeight)*4/heightRange,0,3);"
            " layer n (1-based) peaks at t=n-1 with linear blend between"
            " neighbours; boundaries at t=0.5,1.5,2.5\""
-           // The transition width, in metres, straddling each boundary
-           // symmetrically. Advisory and honoured only by a client that shades
-           // its own terrain: no legacy message carries a blend width, so a
-           // viewer computes its own and this cannot change it. The mixing
-           // curve stays unpublished - the region implements none, and an
-           // approximate one is authoritative for this client while merely
-           // approximate against a viewer on the same hill.
-           ",\"blendMetres\":" + json_number_text(blend_metres) +
+           // No blend width is published, and there is nothing missing.
+           // `selection` determines the crossfade: neighbouring layers blend
+           // linearly between their peaks, so the transition is heightRange/4
+           // wide and follows from the rule rather than needing a number beside
+           // it. A `blendMetres` field existed here until 2026-08-05 and was
+           // retired for contradicting that arithmetic - it said 2 m on a region
+           // whose rule gives 15, and a client applying both draws to neither
+           // (client core caught it within minutes of the rule shipping).
            // Whether this region still holds the shipped defaults. Was a
            // compile-time true; layers became per-region operator state on
            // 2026-08-04 and the field kept its meaning, which is why it was
@@ -392,12 +392,12 @@ std::string terrain_layers_json(const terrain::Settings& layers, double blend_me
 
 SessionCore::SessionCore(std::string region_name, TicketValidator validator,
                          std::size_t terrain_width, double walkable_slope_degrees,
-                         double water_height, double terrain_blend_metres,
+                         double water_height,
                          std::function<terrain::Settings()> terrain_layers,
                          std::function<std::uint64_t()> terrain_revision)
     : region_name_(std::move(region_name)), validator_(std::move(validator)),
       terrain_width_(terrain_width), walkable_slope_degrees_(walkable_slope_degrees),
-      water_height_(water_height), terrain_blend_metres_(terrain_blend_metres),
+      water_height_(water_height),
       terrain_layers_(std::move(terrain_layers)),
       terrain_revision_(std::move(terrain_revision)) {}
 
@@ -509,7 +509,7 @@ SessionCore::Result SessionCore::handle_text(std::string_view text) {
             // Per region since 2026-08-04: an operator sets them from the
             // viewer's Region/Estate -> Terrain tab, so a client must read them
             // per region and per connect rather than once for the grid.
-            ",\"layers\":" + terrain_layers_json(layers, terrain_blend_metres_) + "}" +
+            ",\"layers\":" + terrain_layers_json(layers) + "}" +
             // The region's water: a height, not a surface. The plane is flat
             // and region-wide, in the same vertical datum as terrain heights,
             // and everything about how it is drawn is the client's business

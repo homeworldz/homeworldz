@@ -118,13 +118,13 @@ std::string water_json(double height);
 // because the greeting and the terrainLayersChanged event both carry it, and two
 // hand-assembled copies of the same JSON is how this repo has repeatedly come to
 // state one thing in one place and another elsewhere.
-std::string terrain_layers_json(const terrain::Settings& layers, double blend_metres);
+std::string terrain_layers_json(const terrain::Settings& layers);
 
 class SessionCore {
 public:
     SessionCore(std::string region_name, TicketValidator validator,
                 std::size_t terrain_width, double walkable_slope_degrees,
-                double water_height, double terrain_blend_metres,
+                double water_height,
                 std::function<terrain::Settings()> terrain_layers,
                 std::function<std::uint64_t()> terrain_revision);
 
@@ -155,7 +155,6 @@ private:
     std::size_t terrain_width_;
     double walkable_slope_degrees_;
     double water_height_;
-    double terrain_blend_metres_;
     // Read per greeting, not captured: an operator's Terrain tab change reaches
     // the next client to connect rather than waiting for a restart.
     std::function<terrain::Settings()> terrain_layers_;

@@ -265,20 +265,20 @@ seam above encoding.
    Region/Estate form can now set it per region, so the block carries
    `changedEvent: "waterChanged"` and that event carries the same `water` block from
    the same function. The note that said water needed no event is superseded.
-   **The blend width is published; the blend curve is not.** `blendMetres` is
-   how wide the transition between two layers should be, straddling each
-   boundary symmetrically — `region.terrain_blend_tenths`, 2 m by default. It is
-   advisory, and only a client that shades its own terrain can honour it: no
-   legacy message carries a blend width, so a viewer computes its own transition
-   including a noise term never reproduced outside Linden, and nothing the region
-   sends can narrow it.
-   What stays unpublished is the curve — how the two layers mix across that
-   width. The region implements none, so any function stated here would be
-   authoritative for the first-party client and approximate against a viewer on
-   the same hill; the two families will differ subtly on the same ground no
-   matter what is written, and an approximate rule is worse than none, the same
-   reasoning that kept the contact model unpublished. A test asserts the `blend`
-   key stays absent, so inventing one has to be a deliberate act.
+   **No blend width is published, and nothing is missing.** `selection`
+   determines the crossfade: neighbouring layers blend linearly between their
+   peaks, so a transition is `heightRange / 4` wide and follows from the rule.
+   A `blendMetres` field was published here until 2026-08-05 and is **retired**.
+   It came from a region setting invented when the layer model was believed to be
+   two absolute bounds, where a crossfade genuinely was a separate quantity. Under
+   the real arithmetic it contradicts the rule beside it — it said 2 m on a region
+   whose rule gives 15 — and a client applying both draws to neither. The client
+   core found it within minutes of the corrected rule shipping.
+   What remains unpublished is the viewer's **noise term**: `llvlcomposition.cpp`
+   adds a two-octave turbulence sum to the height before computing `t`, so a viewer
+   perturbs every boundary by a few metres in a pattern no one has reproduced
+   outside Linden. A client matching `selection` exactly still differs from a viewer
+   that way, and that is a fact about the ground rather than a gap in this document.
 5. **Departure splits into what the avatar owns and what the viewer owns.**
    `retire_avatar(key)` (kill broadcast, physics removal, avatar-keyed maps)
    serves both transports; `clear_viewer_transport(endpoint)` (texture

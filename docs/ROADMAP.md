@@ -610,16 +610,20 @@ input formats.
   canonical PNG path is lossless in fact and not merely by intent. It also
   settles a flat-looking render as distance and mipmapping at a grazing angle
   rather than a flat image.
-  Remaining: the blend contract. The **width** is now published
-  (`blendMetres`, from `region.terrain_blend_tenths`) and is advisory — only a
-  client shading its own terrain can honour it, because no legacy message
-  carries one and a viewer computes its own regardless. The **curve** stays
-  unpublished: a viewer's blend is not ours to specify, SL's noise term was
-  never reproduced outside Linden, so a published mixing function is
-  authoritative for first-party clients only and the two families will differ
-  subtly on the same ground. Publishing an approximate rule early is worse than
-  publishing none (the client core's own preference, and the reason the contact
-  model stayed unpublished).
+  **The blend contract closed itself, and a published field had to be retired for
+  it (2026-08-05).** Once the layer rule was stated correctly the crossfade stopped
+  being a separate quantity: neighbouring layers blend linearly between their
+  peaks, so a transition is `heightRange / 4` wide and follows from `selection`.
+  `blendMetres` and `region.terrain_blend_tenths` were invented while the model was
+  believed to be two absolute bounds, where a width genuinely was independent —
+  under the real arithmetic the field contradicted the rule published beside it,
+  saying 2 m on a region whose rule gives 15. Both are gone, and the greeting
+  asserts no blend key of any kind so neither returns without a thought.
+  What stays unpublished is the viewer's **noise term** — a two-octave turbulence
+  sum added to the height before `t` is computed, perturbing every boundary by a
+  few metres in a pattern never reproduced outside Linden. That is a fact about the
+  ground rather than a gap in the contract: a client matching `selection` exactly
+  still differs from a viewer, and knowing why is the useful part.
 - [x] Close the texture pipeline's asymmetry — live 2026-07-31. Mesh converted
   both directions but textures only converted modern to legacy, so every texture
   created in Firestorm was canonically JPEG2000 and invisible to the first-party
