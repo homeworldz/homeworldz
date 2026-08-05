@@ -121,10 +121,10 @@ func (k *Keeper) EnsureDurable(ctx context.Context, assetID string, assetType in
 		return ErrVaultUnavailable
 	}
 	type node struct {
-		id      string
-		typ     int
-		root    bool
-		bearer  string // the asset whose bytes named this one, for reporting
+		id     string
+		typ    int
+		root   bool
+		bearer string // the asset whose bytes named this one, for reporting
 	}
 	queue := []node{{id: assetID, typ: assetType, root: true}}
 	seen := map[string]bool{assetID: true}
