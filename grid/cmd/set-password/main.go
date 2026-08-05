@@ -77,6 +77,9 @@ func run(ctx context.Context, configDirectory, username string) error {
 	return nil
 }
 
+// Shared so consecutive prompts read consecutive lines; see readPassword.
+var pipedInput = bufio.NewReader(os.Stdin)
+
 func readPassword(prompt string) (string, error) {
 	fmt.Print(prompt)
 	if term.IsTerminal(int(syscall.Stdin)) {
@@ -87,9 +90,12 @@ func readPassword(prompt string) (string, error) {
 		}
 		return string(value), nil
 	}
-	// Piped input stays supported for an operator scripting a first-run setup,
-	// as bootstrap-grid and configure-library already allow.
-	value, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	// One reader for the whole process, not one per prompt. A fresh bufio.Reader
+	// buffers everything available, so a second one created for the confirmation
+	// prompt finds the stream already drained and returns EOF — which made the
+	// piped path fail on every two-prompt run while the comment here claimed the
+	// path was supported. Found by testing the claim rather than by reading it.
+	value, err := pipedInput.ReadString('\n')
 	if err != nil {
 		return "", fmt.Errorf("read password: %w", err)
 	}
