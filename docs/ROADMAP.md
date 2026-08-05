@@ -308,6 +308,9 @@ but stays unchecked until its complete wording is satisfied.
   It asserts resting on both sides of the limit, which is today's behaviour and not
   the intended one — sliding on steep ground is next. When that lands this test
   should fail and be updated as the record of a chosen change.
+- [ ] Trim this roadmap back to point form: one sentence per entry, milestones and
+  remaining work only, with narrative moved to ADRs, a content-licensing record, or
+  deleted where git history already holds it.
 - [ ] Apply permissions recursively and consistently to linksets, object
   contents, attachments, and inventory transfers.
 
