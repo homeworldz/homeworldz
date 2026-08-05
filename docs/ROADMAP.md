@@ -1112,6 +1112,31 @@ it builds against.
   acceptance policy as `skeleton` and `skeletonJoints` - listed under
   `forwardLooking` while `rigged` is false. It is the one fact a re-rig has to
   target and no amount of server work recovers from getting it wrong.
+  **The static previews were bundled as Library objects and then withdrawn the
+  same night (2026-08-05), because they did not contain bodies.** MakeHuman's base
+  mesh carries helper geometry - a skirt-shaped shell from waist to ankles, hair
+  planes, a face mask - plus a locator cube per joint, all hidden behind a MASK
+  modifier that Blender's glTF exporter does not apply unless told to. So it was
+  invisible in Blender and present in the file: hundreds of disconnected shells,
+  and the skirt hid every difference between the two bodies while the base mesh's
+  crotch showed beneath it. The operator looked at them and reported both as
+  identical clothed female figures with male genitalia. All three observations were
+  right.
+  **What makes this worth recording is how thoroughly it was verified first.**
+  Between the two of us: triangle count, joint count, height from the POSITION
+  accessor bounds, node transforms, licence chain at each upstream source, both
+  files read through a real glTF reader, and an explicit check that they were not
+  the same file twice - distinct digests, 87 per cent of overlapping bytes
+  differing. Every one measured a property the fault did not disturb, and the last
+  one was aimed at exactly the right suspicion and landed one layer away from it,
+  which retired the suspicion. Measured as geometry rather than as bytes, the two
+  bodies differ by **0.4 mm at every vertex** - a uniform rigid offset, identical
+  extents - so they were one body twice, with gender sitting in morph targets that
+  a default-state renderer ignores.
+  **The trap generalises to the vault and is the reason this is here rather than
+  only in a commit message**: a glTF file can be valid, conformant, and carry a
+  shape nobody will see, because the shape is in morph targets rather than in
+  POSITION. Any ingestion path that judges a mesh by POSITION alone will accept it.
   Still not adopted, and still the operator's decision. Accepting a canonical body
   commits the grid to a licensing position, and publishing appearance is the
   prerequisite before any client can be told to wear one — a body only one client
