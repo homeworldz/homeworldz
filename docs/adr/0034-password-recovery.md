@@ -55,14 +55,28 @@ This is a judgement about *this* product rather than a general security position
 If the threat model changes — paid balances, higher-value accounts, evidence of
 account theft — revisit it, and expect the answer to flip.
 
-## The contract is written before the code
+## The browser-facing API gets its own document, written before the code
 
-`api/openapi.yaml` is the only artefact both the website and the grid read, so it
-is updated first and the implementation follows it. Writing it first is what stops
-the two ends diverging, and this repository spent 2026-08-05 correcting four
-documents that had drifted from behaviour — an agreed contract is cheaper than a
-reconciliation.
+The contract goes first, and it goes in **`api/openapi-public.yaml`** — a new
+document for the browser-facing API, distinct from `openapi.yaml`, which describes
+the internal grid API used by regions and tools (operator, 2026-08-05).
 
+This corrects a false premise. Contract-first was agreed on the understanding that
+`openapi.yaml` was the browser-facing contract. It is not: it is titled *Homeworldz
+Internal API* and covers only the internal routes. The 14 routes the management
+site depends on — `/v1/account`, `/v1/registrations`, `/v1/tokens`, `/v1/client/*`,
+`/v1/admin/*` and the rest — were **documented nowhere**. The premise came from
+another session and was passed on here without being checked, which is the same
+fault this repository spent the day correcting.
+
+The new document describes the two reset endpoints only, and **says so in its own
+description**: a route missing from it is undocumented rather than unimplemented.
+An incomplete spec that admits its incompleteness is honest; one that reads as a
+full surface is worse than none. Documenting the remaining routes is separate work,
+and it means describing behaviour that already exists — which is the risky kind.
+
+The reset endpoints were safe to specify now because they are being *defined* here
+rather than described from code that already runs.
 ## Rate limiting and lockout are in scope from the start
 
 A public endpoint that sends mail on request is an abuse vector even when its

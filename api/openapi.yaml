@@ -2,8 +2,16 @@ openapi: 3.0.3
 info:
   title: Homeworldz Internal API
   version: 0.1.0
+  description: |
+    The internal grid API, used by regions and tools rather than by browsers.
+    The browser-facing API is described separately in `openapi-public.yaml`.
 servers:
-  - url: http://localhost:42000
+  - url: http://127.0.0.1:42000
+    description: |
+      A local deployment on the grid's default port. Nothing is served from
+      localhost in a real deployment: the address is configured
+      (`[server] address`) and reached through a reverse proxy, so treat this
+      as the default port rather than as where the API lives.
 paths:
   /ping:
     parameters:
