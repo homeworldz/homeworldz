@@ -260,7 +260,7 @@ but stays unchecked until its complete wording is satisfied.
   made an operator reopen the form to stale values. Live Firestorm acceptance on the Sandbox Region
   (2026-07-25): the Region tab, Estate tab (My Estate / owner Jim Tarber), and
   Covenant tab populate correctly.
-- [ ] Pin the walkable slope limit with a test. It is published to clients, feeds
+- [x] Pin the walkable slope limit with a test — done 2026-08-05, `jolt_walkable_slope_test`. It is published to clients, feeds
   Jolt's `CharacterVirtual` max slope angle, and **nothing on this side asserts
   what it does** - which is why three documents here and a header in the client
   repository could all state the opposite of the code ("steeper ground holds but
@@ -289,10 +289,25 @@ but stays unchecked until its complete wording is satisfied.
   character on flat ground and walking it *to* the ramp makes the approach
   dominate the distance measured, so the discriminator reads walking rather than
   climbing; it has to start on the face.
-  So the shape of a working version is known: a Jolt-only scenario, character
-  placed on the face, asserting support on both sides of the limit and traversal
-  only below it. Until it exists the behaviour is verified only by somebody
-  walking on it, which is the state that let four documents be wrong at once.
+  **Third attempt landed, and the sensitivity check is what made it worth having.**
+  `jolt_walkable_slope_test` in `physics_adapters_test.cpp`, beside the other
+  `jolt_*` tests: a ramp at a chosen angle, the character placed *on* the face, and
+  the same geometry run against two different limits. It asserts support on both
+  sides of the limit — grounding is a contact test — and traversal only below it.
+  **It first passed while measuring nothing.** With an 80 degree ramp the traversal
+  assertion held for the wrong reason: 80 degrees is unclimbable whatever the limit
+  says, so raising the limit to 89 changed nothing and the test would have kept
+  passing had the limit stopped being consulted at all. The sensitivity check —
+  same ramp, permissive limit, traversal must differ — caught it on its first run.
+  Re-aimed at 70 degrees, which is both climbable-in-principle and the angle of the
+  in-world fixture, it discriminates and is now self-falsifying: if the limit is
+  ever ignored, the two steep runs coincide and the check trips.
+  The 80 degree finding generalises, and is the same shape as a fixture sitting
+  exactly on a threshold: **a stimulus outside the range where the rule can act
+  cannot test the rule**, and will report success for the wrong reason.
+  It asserts resting on both sides of the limit, which is today's behaviour and not
+  the intended one — sliding on steep ground is next. When that lands this test
+  should fail and be updated as the record of a chosen change.
 - [ ] Apply permissions recursively and consistently to linksets, object
   contents, attachments, and inventory transfers.
 

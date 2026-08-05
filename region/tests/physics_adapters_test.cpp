@@ -73,6 +73,90 @@ bool jolt_heightfield_test() {
            hit->body == body && std::abs(hit->point.z - 6.0) < 0.1;
 }
 
+// What the walkable slope limit governs, on heightfield ground.
+//
+// Nothing asserted this until now, which is how three documents here and a
+// header in the client repository came to claim the opposite of the code —
+// "steeper ground holds but never grounds, so avatars slide" — with nothing to
+// contradict them. The client core measured it in-world on purpose-built faces
+// at 57.5, 65 and 70 degrees: an avatar rests on 70 and cannot walk up 65. So
+// the limit is Jolt's mMaxSlopeAngle and governs *traversal*, while grounding is
+// IsSupported() and is a contact test at any angle.
+//
+// Jolt-only on purpose. PhysX has no create_heightfield (the base returns 0), and
+// engine parity is a goal rather than a guarantee (ADR 0015), so this belongs
+// beside the other jolt_* tests rather than in run_common_scenarios.
+//
+// Two earlier attempts were withdrawn. One used a tilted box, whose contacts on a
+// near-vertical face fall outside the character's supporting volume. The other put
+// the character on flat ground and walked it *to* the ramp, so the approach
+// dominated the distance and a walkable slope scored the same as an unwalkable
+// one. This one places the character on the face.
+//
+// **It asserts resting on both sides of the limit, which is today's behaviour and
+// not the desired one**: sliding on steep ground is pending. When that lands this
+// test should fail and be updated deliberately, as the record of a chosen change.
+bool jolt_walkable_slope_test() {
+    using namespace homeworldz;
+    // A ramp climbing along +x at a chosen angle, uniform in y. spacing is 1 m,
+    // so a per-column rise of tan(angle) is that angle exactly.
+    const auto ramp = [](double degrees) {
+        physics::HeightFieldDefinition terrain;
+        terrain.entity_id = 700;
+        terrain.sample_count = 32;
+        terrain.samples.resize(static_cast<std::size_t>(32) * 32);
+        const auto rise = std::tan(degrees * 3.14159265358979323846 / 180.0);
+        for (std::uint32_t y = 0; y < 32; ++y)
+            for (std::uint32_t x = 0; x < 32; ++x)
+                terrain.samples[y * 32u + x] = static_cast<float>(x * rise);
+        return terrain;
+    };
+    // Placed on the face itself, at the height the ramp has there, then given a
+    // moment to settle before anything is measured.
+    const auto on_face = [&](double degrees, double push, double limit) {
+        auto world = physics::make_jolt_world();
+        if (world->create_heightfield(ramp(degrees)) == 0) return std::pair{false, 0.0};
+        const auto rise = std::tan(degrees * 3.14159265358979323846 / 180.0);
+        const double x0 = 12.0;
+        physics::CharacterDefinition avatar;
+        avatar.entity_id = 701;
+        avatar.position = {x0, 16.0, x0 * rise + 1.2};
+        avatar.walkable_slope_degrees = limit;
+        const auto character = world->create_character(avatar);
+        for (int step = 0; step < 90; ++step) world->step(1.0 / 60.0);
+        const auto settled = world->character_state(character);
+        if (!settled) return std::pair{false, 0.0};
+        const auto from = settled->position.x;
+        // Push uphill for a second and a half.
+        for (int step = 0; step < 90; ++step) {
+            world->set_character_velocity(character, {push, 0.0, 0.0});
+            world->step(1.0 / 60.0);
+        }
+        const auto after = world->character_state(character);
+        if (!after) return std::pair{false, 0.0};
+        return std::pair{after->grounded, after->position.x - from};
+    };
+
+    constexpr double limit = physics::character_walkable_slope_degrees;  // 65
+    const auto gentle = on_face(30.0, 4.0, limit);
+    const auto steep = on_face(70.0, 4.0, limit);
+    // The same 70 degree ramp against a limit that permits it. If traversal does
+    // not change, this test is measuring how hard steep ground is to climb rather
+    // than what the limit governs, and would keep passing if the limit stopped
+    // being consulted at all.
+    const auto steep_permitted = on_face(70.0, 4.0, 89.0);
+    // Supported on both: grounding is a contact test, not a slope test.
+    if (!gentle.first || !steep.first) return false;
+    // Traversable only below the limit, which is the limit's actual job. The
+    // gentle climb is generous and the steep one close to nothing; the gap is
+    // wide enough that a small change in Jolt's solver will not flip it.
+    if (gentle.second < 1.5) return false;
+    if (steep.second > 0.5) return false;
+    // Sensitive to the limit, not just to the geometry.
+    if (steep_permitted.second <= steep.second + 0.5) return false;
+    return true;
+}
+
 bool jolt_terrain_bounce_test() {
     using namespace homeworldz;
     auto world = physics::make_jolt_world();
@@ -368,6 +452,7 @@ bool jolt_character_spawn_depenetration_test() {
 
 int main() {
     if (!jolt_heightfield_test()) return 1;
+    if (!jolt_walkable_slope_test()) return 1;
     if (!jolt_terrain_bounce_test()) return 1;
     if (!jolt_fast_fall_penetration_test()) return 1;
     if (!jolt_restitution_combine_test()) return 1;
