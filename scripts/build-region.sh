@@ -47,6 +47,15 @@ if [[ -n "${VCPKG_ROOT:-}" ]]; then
     -DVCPKG_MANIFEST_MODE=OFF
   )
 fi
+# Always pass a version, defaulting to the VERSION file. CMakeLists only reads
+# that file when HOMEWORLDZ_VERSION is undefined, and a -D from any earlier
+# configure persists in CMakeCache.txt — so leaving this off makes VERSION inert
+# in an existing build directory. That is how the OVH box kept reporting a
+# version string that no longer existed anywhere: editing VERSION changed
+# nothing and the rebuild reported "no work to do".
+if [[ -z "$version" && -f "$root/VERSION" ]]; then
+  version=$(tr -d '[:space:]' < "$root/VERSION")
+fi
 if [[ -n "$version" ]]; then
   configure+=(-DHOMEWORLDZ_VERSION="$version")
 fi
