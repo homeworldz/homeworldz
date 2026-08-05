@@ -306,7 +306,41 @@ seam above encoding.
    object in the region. The session's spawn message carries an optional
    `drawDistance`; absent, the server applies a conservative default
    (128 m) rather than infinity.
-7. **Appearance first cut: the server bake.** A session avatar seeds the
+7. **Appearance names one body asset per avatar. Decided 2026-08-05, not yet
+   implemented.** The client core asked which shape to build toward — a body asset
+   per avatar, a set of wearables to compose, or both — because it decides whether
+   they fetch one mesh or assemble several. The operator's answer: **one body asset
+   per avatar, and wearing a body replaces any body already worn.**
+   So a client fetches **one** mesh and composes nothing. There is no wearable list
+   to resolve, no layering of bodies, and no client-side assembly order to get
+   wrong. Replacement rather than addition also means there is no state where an
+   avatar has two bodies, which is a state worth not being able to represent.
+   **Why this shape rather than a wearable set**, since the alternative is what the
+   legacy family does. This project publishes the resolved fact rather than the
+   parts, and has done so consistently enough that the exceptions are the notable
+   ones: `motion` is a state and not a clip, water is a height and not a surface,
+   the walkable limit is a number and not a slope field. Appearance as a wearable
+   list would be publishing an implementation of an avatar's look and asking every
+   client to arrive at the same answer from it — which is the class of thing that
+   diverges silently, as the terrain layer rule did twice in a day. The pieces
+   already lean this way too: `spawned` carries a per-avatar height and
+   `hipOffset`, and the bake path already composes textures server-side rather
+   than shipping wearables for a client to combine.
+   **What is decided is the shape, not the wire.** Still open, and deliberately not
+   guessed at here: the envelope and field names, whether the resolved baked
+   textures ride in the same block as the body reference or a neighbouring one,
+   attachment points, and how a body is *chosen* at all — there is no inventory,
+   library, wear or attach surface in the session protocol yet, which is the client
+   core's second blocker and remains open. A body asset that nothing can be told to
+   wear is not yet useful, so the two land together or not at all.
+   **A consequence for the bodies already in the Library.** "Male" and "Female" are
+   static bind-pose previews rigged to MakeHuman's skeleton, so they are not
+   candidates for this: a body worn by an avatar has to be weighted to the viewer's
+   own 71 named joints to serve both client families from one asset, and rigged
+   upload is refused until M4. The first body this contract can name is one that
+   has been re-rigged.
+
+8. **Appearance first cut: the server bake.** A session avatar seeds the
    default-outfit server bake exactly as an appearance-less viewer does, so
    viewers see something sane. Sessions do not receive `AvatarAppearance`
    blobs in the first cut (texture-entry byte blobs are a legacy shape);
@@ -362,7 +396,7 @@ seam above encoding.
    same wall the terrain layers hit) and appearance is still unpublished. The
    capsule is still the honest amount. What changes is that a capsule can now
    report what it is doing, and the state will be there when a body arrives.
-8. **Crossings cost one new message.** The transit machinery needs no
+9. **Crossings cost one new message.** The transit machinery needs no
    change; the session equivalent of `EnableSimulator`/`CrossedRegion` is a
    single `crossing` envelope carrying `{regionHandle, sessionURL of the
    neighbor, position, lookAt}` — and the neighbor's session URL is already
