@@ -81,37 +81,15 @@ but stays unchecked until its complete wording is satisfied.
   content.
 - [x] Synchronize nearby avatar presence, movement, appearance rebakes, and
   animation changes between concurrently connected viewers.
-- [x] Bake avatar appearance **server-side** — the region composites the bake
-  layers (skin, colour-tinted and alpha-masked clothing, hair colour) from worn
-  wearables with OpenJPEG and serves the baked textures, so thin or headless
-  clients (e.g. LibreMetaverse) rez correctly with no client-side baking
-  (ADR 0029). A LibreMetaverse bot — whose own client baker fails — rezzes as a
-  correct default avatar (textured head, hair colour, tinted shirt/pants,
-  skin hands and feet) entirely from the server bake. Per-user COF-driven baking
-  for arbitrary custom outfits and server-side-appearance (SSB) delivery to full
-  viewers remain future work; full clients still bake locally and are relayed
-  untouched.
-- [x] Broadcast `KillObject` for a departing avatar so it no longer lingers
-  rezzed in other viewers' views. All avatar-removal paths (clean logout,
-  session-invalidation/disconnect via the 5-second session revalidation,
-  duplicate-login replacement, and teleport/region-crossing source-retirement)
-  funnel through one teardown point that broadcasts a `KillObject` for the
-  avatar's local id to the remaining in-region viewers; in-region moves keep the
-  avatar in the region set, so it does not misfire. Presence/People-list is
-  cleared on explicit logout and deliberately preserved on teleport/crossing
-  (the avatar stays online in the destination region). Live Firestorm
-  acceptance: a departing bot vanished immediately on clean logout and was
-  removed from the observer's view, People radar, and minimap. Lost connections
-  (crash / force-kill / sustained packet loss) are detected by **missed ping
-  replies**: the region pings every 5s and retires a viewer that has not answered
-  a `CompletePingCheck` within `region.connection_timeout_seconds` (default 60s),
-  broadcasting its kill rather than waiting on the grid session TTL (verified by
-  force-killing a bot → retired ~62s later). An idle-but-connected viewer still
-  answers pings, so it is never affected, and the timeout stays well above
-  transient outages. On region shutdown (SIGINT/SIGTERM) the region sends each
-  connected viewer a `KickUser` with a reason string — so it shows a clear
-  "region is restarting" message instead of a generic disconnect — then waits
-  briefly for delivery before exiting.
+- [x] Bake avatar appearance **server-side**, so thin and headless clients rez
+  correctly with no client-side baking (ADR 0029); per-user COF baking for
+  arbitrary outfits and SSB delivery to full viewers remain.
+- [x] Broadcast `KillObject` for a departing avatar through the one teardown
+  point every removal path funnels into, so it stops lingering in other
+  viewers' views. A lost connection is detected by missed `CompletePingCheck`
+  replies (`region.connection_timeout_seconds`, default 60s) rather than the
+  grid session TTL, and region shutdown sends each viewer a `KickUser` naming
+  the reason.
 
 ### Authoritative avatar movement
 
@@ -123,11 +101,9 @@ but stays unchecked until its complete wording is satisfied.
   toggling, ascent, and descent without requiring a relog.
 - [x] Add animation-state selection and synchronization for standing, walking,
   running, jumping, falling, flying, hovering, and landing.
-- [x] Reconcile viewer prediction with the authoritative region position without
-  visible snapping or drift, confirmed by live Firestorm observation. The region
-  streams authoritative position and velocity and the viewer dead-reckons between
-  updates; reconciliation is a viewer-side, live-verified outcome rather than
-  region-side code.
+- [x] Reconcile viewer prediction with the authoritative region position
+  without visible snapping or drift — a viewer-side outcome of streaming
+  position and velocity, confirmed live in Firestorm rather than in code.
 
 ### Basic avatar physics
 
@@ -162,15 +138,11 @@ but stays unchecked until its complete wording is satisfied.
 - [x] Implement task inventory (object contents) and complete its permissions,
   mutation, copy, derez, return, and inventory round-trip lifecycle.
 - [x] Implement creator-attributed sound and animation uploads; personal
-  notecard, gesture, and LSL-source creation and updates; and task notecard and
-  script updates. Phase 5 now compiles and executes the supported Falcon
-  language subset when a script enters or is saved in object contents.
-  (Menu-based personal landmark creation needs land data and moves to Phase 2;
-  existing landmark assets remain usable via teleport routing.)
-- [x] Complete Firestorm creation, editing, playback, object-contents,
-  restart, and relog acceptance for those fundamental content types. (Landmark
-  creation via the viewer and About Land ownership are deferred to Phase 2 land
-  operations.)
+  notecard, gesture, and LSL-source creation; and task notecard and script
+  updates, compiling and running the supported Falcon subset on save.
+- [x] Complete Firestorm creation, editing, playback, object-contents, restart,
+  and relog acceptance for those content types (viewer landmark creation and
+  About Land ownership deferred to the Phase 2 land operations).
 
 ## Phase 2: Connected Multi-region World
 
@@ -206,30 +178,16 @@ but stays unchecked until its complete wording is satisfied.
 
 ### Parcels and local authority
 
-- [x] Implement parcel geometry, ownership, access, landing points, media,
-  and object accounting. Parcels carry the full ParcelFlags/Category/LandingType
-  set and a 4 m-resolution coverage bitmap generalized to 256/512/1024 m regions;
-  a fresh region gets one region-wide parcel owned by the authoritative grid
-  region owner. Viewers see About Land through `ParcelProperties` (delivered over
-  the Event Queue), edit land options via `ParcelPropertiesUpdate`, subdivide and
-  join with `ParcelDivide`/`ParcelJoin`, and manage access/ban lists via
-  `ParcelAccessListRequest`/`Update`, all persisted in region SQLite. Per-parcel
-  WindLight environment is deferred to the estate/region settings work below.
-  Live Firestorm acceptance on the Sandbox Region (2026-07-25): About Land shows
-  the owner, area, and resolved Parcel ID (`RemoteParcelRequest`); "Landmark This
-  Place", Set Landing Point (with snapshot and teleport), subdivide/join with the
-  boundary overlay, the Objects tab with live object return, and Set Home to Here
-  (with confirmation) all work.
-- [x] Enforce build, rez, entry, script, and object-return policy at authoritative
-  boundaries. Build/rez (CreateObjects), script execution (AllowOtherScripts),
-  teleport entry and continuous walk-in ejection (ban/access lists plus
-  landing-point routing), viewer-initiated object return (`ParcelReturnObjects` to
-  each owner's Lost and Found, with the About Land Objects tab backed by
-  `ParcelObjectOwnersReply`/`ForceObjectSelect`), and periodic `OtherCleanTime`
-  auto-return of non-owner objects are enforced authoritatively. The damage
-  (`AllowDamage`) and push (`RestrictPushObject`) flags are carried and surfaced
-  but their enforcement is inert until the combat/health and `llPushObject`
-  systems exist (Phase 5).
+- [x] Implement parcel geometry, ownership, access, landing points, media, and
+  object accounting — the full ParcelFlags/Category/LandingType set and a 4 m
+  coverage bitmap at all three region sizes, with About Land, subdivide/join,
+  and access/ban lists persisted in region SQLite. Per-parcel WindLight is
+  deferred to the estate and region settings below.
+- [x] Enforce build, rez, entry, script, and object-return policy at
+  authoritative boundaries, including walk-in ejection, viewer-initiated return
+  to Lost and Found, and periodic `OtherCleanTime` auto-return. The damage and
+  push flags are carried but inert until the combat and `llPushObject` systems
+  exist (Phase 5).
 - [x] Implement estate and region settings needed for terrain, access, maturity,
   and covenant, including the Region/Estate Terrain tab in full — region restart
   and estate kick/teleport-home remain.
@@ -276,11 +234,9 @@ but stays unchecked until its complete wording is satisfied.
 
 ### Object and vehicle crossings
 
-- [ ] Define an off-region disposition for every moving entity: cross an
-  eligible avatar, attachment, vehicle, or object to an accepting neighbor;
-  otherwise bounce/contain it within the source region or return an owned
-  object to inventory. No entity may continue silently outside all region
-  authority.
+- [ ] Define an off-region disposition for every moving entity — cross it to an
+  accepting neighbor, or bounce, contain, or return it — so nothing continues
+  outside all region authority.
 - [x] At a border with no eligible online neighbor, constrain avatar and
   physical-object origins to the configured Region extent and cancel outward
   velocity at the crossed edge.
@@ -319,61 +275,32 @@ but stays unchecked until its complete wording is satisfied.
 
 ### Inventory asset durability
 
-**Landed 2026-07-28.** A region that dies no longer takes its users'
-inventory with it: the vault holds verified bytes for every
-inventory-referenced asset — the item's whole reference closure, since
-inventory-to-asset is 1:N — and the grid refuses any inventory commit it
-cannot make durable first. The adoption backfill named 19 pre-vault assets
-as already lost; everything else is safe, and everything created from now
-on is safe by construction. Regions mirror the rule for scene content: a
-rezzed object's closure is materialized region-locally so region backups
-are self-contained, and a hidden retained record preserves no-copy items
-that leave inventory into the scene.
-
-Sequencing, decided on one fact: **the vault is empty, so re-keying it costs
-nothing now and means moving every stored blob later.** The layer separation
-below therefore lands before the write-through and backfill that fill the
-vault, and the enforcement is written once against the final shape rather
-than twice.
+**Landed 2026-07-28.** A region that dies no longer takes its users' inventory
+with it: the vault holds verified bytes for every inventory-referenced asset's
+whole closure, and the grid refuses any commit it cannot make durable first.
+The layer separation below lands before the write-through that fills the vault,
+because re-keying an empty vault is free
+([ADR 0026](adr/0026-vault-authoritative-inventory-assets.md),
+[ADR 0027](adr/0027-asset-blob-instance-separation.md)).
 
 - [x] Separate the blob, asset, and instance layers of
   [ADR 0027](adr/0027-asset-blob-instance-separation.md): a grid-assigned
-  `blob_id` naming bytes, with the digest demoted to an integrity checksum;
-  `asset_id` carrying creator, provenance, and the exportable option;
-  locations attached to blobs rather than assets; and reference counts from
-  back-links deciding retention. Instances (inventory items, rezzed objects)
-  already hold owner and permissions and do not move. `blob_id` stays
-  grid-internal — regions keep naming assets and verifying with the
-  checksum — so this re-keys the vault and the registry without changing
-  what a region speaks.
+  `blob_id` names bytes, the digest demotes to an integrity checksum, locations
+  attach to blobs rather than assets, and back-link reference counts decide
+  retention. `blob_id` stays grid-internal, so what a region speaks is
+  unchanged.
 
-- [x] Implement the grid asset vault: a durable, replica-only blob store that
-  never originates assets, never hosts agents, and is never in the viewer data
-  path (ADR 0026). Blob bytes live on a sharded filesystem tree under the
-  `[vault] path` setting and are indexed in PostgreSQL; regions reach them at
-  `/api/v1/vault/assets/{assetId}` behind the internal service-token boundary,
-  which is what keeps the vault out of the viewer fetch path. Ingest verifies the
-  registry's recorded checksum and length on a temporary file before an atomic rename, so
-  bytes that fail verification are never reachable, and it is idempotent. A
-  presence check confirms the stored file as well as the index row, so the vault
-  never claims a blob it cannot serve. This is the store only — the enforcement,
-  ingest, fallback, and backfill items below are what make inventory durability
-  real, and until they land the vault holds nothing.
-- [x] Enforce the vault invariant grid-side: commit an inventory item only
-  after the vault holds verified bytes for its referenced asset — the whole
-  reference closure, gathered by parsing the vault's own copy of the bytes
-  (objects' face textures and task inventory, nested objects recursively,
-  wearable textures, gesture animations and sounds, notecard embeds).
-  Enforcement wraps the inventory store, so every committing path — and any
-  written later — passes through it; the grid *fetches* bytes from recorded
-  locations at commit, so durability never depends on region cooperation and
-  a region write-through stays an optimization.
+- [x] Implement the grid asset vault — a durable, replica-only blob store that
+  never originates assets, never hosts agents, and is never in the viewer fetch
+  path (ADR 0026), with idempotent ingest that verifies checksum and length
+  before an atomic rename.
+- [x] Enforce the vault invariant grid-side: commit an inventory item only once
+  the vault holds verified bytes for its whole reference closure, gathered by
+  parsing the vault's own copy, so durability never depends on a region.
 - [x] Treat region copies of vault-held assets as an evictable cache and
-  scene-only assets as region-owned; demote region-to-region fetch to an
-  optimization with the vault as the always-available fallback location. A
-  region also materializes the reference closure of scene content locally —
-  at rez, at contents-add, and in a whole-scene sweep at startup — so a
-  backup of the region's own storage is self-contained.
+  scene-only assets as region-owned, demoting region-to-region fetch to an
+  optimization; a region also materializes its scene's closure locally, so a
+  backup of its own storage is self-contained.
 - [x] Backfill existing inventory-referenced assets into the vault from live
   registered locations and report assets that are already unfetchable
   (`cmd/vaultbackfill`, idempotent, closure-aware; the first live run
@@ -424,74 +351,35 @@ operates on this content, which is why it now follows rather than precedes it.
 
 ### Mesh pipeline
 
-Decided in [ADR 0033](adr/0033-mesh-pipeline-gltf-canonical.md): glTF (GLB)
-is the canonical stored format, the creator's original upload is never
-rewritten, and each client family is served a derived rendition — SL mesh
-(type 49) for viewers, GLB for the Homeworldz client — generated by a
-grid-side conversion worker. FBX/OBJ/DAE and Daz exports convert in the
-Homeworldz client at import, keeping the server pipeline to two verifiable
-input formats.
+Decided in [ADR 0033](adr/0033-mesh-pipeline-gltf-canonical.md): glTF (GLB) is
+the canonical stored format, the creator's upload is never rewritten, and each
+client family is served a derived rendition by a grid-side conversion worker.
 
-- [x] M1 static mesh — complete 2026-07-29, finish line crossed in
-  Firestorm: a GLB uploaded through the session path stands in-world as a
-  solid textured mesh. The last mile was serving (GetMesh capabilities and
-  ranged 206 responses), the mesh ExtraParams block, mesh rez through the
-  object wrapper, synthesized normals and texture coordinates for sources
-  that carry none — and one pre-mesh-era SimulatorFeatures flag
-  (MeshRezEnabled=0) that gates viewer mesh *rendering* and silently ate
-  every proof until the viewer's own log named it. Originally shipped as: the GLB upload
-  capability (`POST /session/uploads/mesh`, authorized by the region ticket
-  as a bearer token — one credential, both transports), the validation gate
-  with its policy published in the session hello (read, never encode), the
-  `asset_renditions` table and lease-based conversion queue behind a
-  dedicated worker credential, and vault write-through so an uploaded GLB
-  is durable at commit. The conversion worker
-  (`homeworldz-meshsmith`) is live too: it claims queued jobs on the worker
-  credential, derives the type-49 payload (round-trip-tested serializer,
-  meshoptimizer LOD chain, bounding-box convex physics pending V-HACD), and
-  stores the rendition — the first uploaded GLB converted on the worker's
-  first claim. Remaining: region mesh serving to viewers and mesh rez on
-  the Jolt collision source.
-- [x] M2 Firestorm mesh uploads — complete 2026-07-29, confirmed in
-  Firestorm: a Utah teapot uploaded through Upload Model stands rezzed and
-  smooth-shaded in-world. The mesh branch of NewFileAgentInventory: fee
-  request answered with a one-shot uploader URL and a real zero price,
-  viewer-written type-49 payloads stored verbatim as canonical vault
-  assets (read, never encode — no rendition exists or is needed; serving
-  falls back to canonical bytes), textures stored with inventory items,
-  the linkset built from instance transforms with per-face TextureEntry,
-  MeshUploadEnabled on, and the MeshUploadFlag permission capability the
-  uploader queries. The `gltf` rendition closed the loop 2026-07-30: a
-  stored type-49 asset derives a GLB (queued at upload and on first demand,
-  so content predating it heals itself), and the session asset route serves
-  it - the Firestorm-uploaded teapot fetches as 24880 bytes of glTF, 558
-  vertices and 1024 triangles with normals and texture coordinates, and the
-  first-party client renders viewer-authored content with no client change.
-  Each family fetches one asset id and receives the form it can read.
+- [x] M1 static mesh — complete 2026-07-29: a GLB uploaded through the session
+  path stands in-world in Firestorm as a solid textured mesh, served over the
+  GetMesh capabilities and rezzed on Jolt, with `homeworldz-meshsmith` deriving
+  the type-49 rendition. Viewers render mesh only when the SimulatorFeatures
+  `MeshRezEnabled` flag is set.
+- [x] M2 Firestorm mesh uploads — complete 2026-07-29: the mesh branch of
+  `NewFileAgentInventory` stores viewer-written type-49 payloads verbatim as
+  canonical assets, and the `gltf` rendition derived from them (2026-07-30)
+  lets each client family fetch one asset id and receive the form it can read.
 - [ ] M3 material and texture renditions: glTF material JSON (type 57) for
   PBR-capable viewers, needing the `ModifyMaterialParams`,
   `UpdateMaterialAgentInventory` and `UpdateMaterialTaskInventory` capabilities.
 - [ ] Terrain surface for session clients — remaining: decide the blend *curve*,
   the width and layer selection already being published.
-- [x] Close the texture pipeline's asymmetry — live 2026-07-31. Mesh converted
-  both directions but textures only converted modern to legacy, so every texture
-  created in Firestorm was canonically JPEG2000 and invisible to the first-party
-  client, which refuses that format by rule. `png-texture` is the reverse
-  rendition: decode the canonical JPEG2000, re-encode as lossless PNG, and serve
-  it from the session asset route as a derived representation. Verified against
-  the operator's own normal and specular maps, uploaded through Firestorm that
-  evening: both served as `image/png` where the canonical is `ff4f`. It recovers
-  the stored pixels, not the detail the viewer's uploader discarded — it
-  downsizes anything over 1024 and encodes lossily — so uploading through the
-  client remains the better path for new art.
+- [x] Close the texture pipeline's asymmetry — live 2026-07-31: the
+  `png-texture` rendition decodes canonical JPEG2000 and re-encodes lossless
+  PNG, so textures created in Firestorm are readable by the first-party client.
+  It recovers the stored pixels, not the detail the viewer's uploader
+  discarded, so uploading through the client remains better for new art.
 - [ ] V-HACD convex decomposition for mesh physics; the shipped physics
   block is the conservative bounding-box hull.
-- [x] Regenerate stale renditions — live 2026-07-29: the generator column
-  records which converter produced each rendition; the grid re-queues
-  everything a different generator produced (worker-token endpoint), and
-  meshsmith sweeps at startup, so a deployed converter upgrade reconverts
-  existing content automatically (its first sweep reconverted the pre-UV
-  probe meshes).
+- [x] Regenerate stale renditions — live 2026-07-29: a generator column records
+  which converter produced each rendition and the grid re-queues everything an
+  older one produced, so deploying an upgraded converter reconverts existing
+  content.
 - [ ] M4 rigged mesh: glTF skins mapped onto the Bento skeleton (refusing
   rigs that do not map), attachments and body wearables.
 - [ ] M5 import breadth: client-side FBX/OBJ/DAE import, documented Daz
@@ -570,12 +458,10 @@ lives with the operator's other settings in Phase 7.
   the live VM when its task inventory item is deleted.
 - [x] Route the initial `llSay` and `llOwnerSay` host calls to Firestorm object
   chat with owner-only and distance behavior, confirmed in the live cloud Grid.
-- [x] Advertise the `SCRIPTED` and `HANDLE_TOUCH` object-update flags for prims
-  carrying enabled scripts so Firestorm enables the Touch action, then decode the
-  `ObjectGrab` touch packet distinctly from the physical `ObjectGrabUpdate` drag
-  path, authorize the touching avatar, resolve the clicked child and linkset
-  root, and dispatch `touch_start(1)` to each enabled compiled script through a
-  bounded per-script event queue that never clobbers an in-flight handler.
+- [x] Advertise the `SCRIPTED` and `HANDLE_TOUCH` object-update flags so
+  Firestorm enables Touch, then dispatch `touch_start` from `ObjectGrab` —
+  resolving the clicked child and linkset root — through a bounded per-script
+  event queue, distinct from the physical `ObjectGrabUpdate` drag path.
 - [ ] Implement the remaining object lifecycle, sustained/ended touch, timer,
   listen, sensor, control, permission, inventory, changed, link-message,
   collision, land-collision, attachment, and moving events.
@@ -656,20 +542,12 @@ role machinery that shared ownership rests on.
 
 ### Known hazards on the current deployment
 
-- [ ] **Nothing watches free disk space, on a host that is the only home for
-  everything.** The OVH box runs the grid, the API, the conversion worker and
-  all four regions; measured 2026-07-31 at 96 GB total, 9.9 GB used, 86 GB free,
-  11 GiB RAM, 6 cores. Headroom is comfortable today, so this is not urgent —
-  but a process that fills the disk takes the whole grid with it, and the first
-  sign would be regions failing rather than a warning. Recorded on its own
-  merits rather than as a footnote to any particular build-tooling question:
-  the gap exists whether or not another toolchain is ever installed there.
-  A free-space threshold in the region's health reporting is the obvious cheap
-  answer; it is the operator's call whether to spend the change on it.
-  Related: CPU is emphatically *not* the constraint — a full cold build of a
-  sibling project pinned to one job cost the regions a mean 1.9 ms/s of
-  scheduling delay with an 11 ms/s peak, and its link steps were cheaper than
-  its compile phase.
+- [ ] **Nothing watches free disk space, on a host that is the only home for the
+  grid, the API, the conversion worker, and all four regions.** Measured
+  2026-07-31 at 86 GB free of 96 GB, so not urgent — but a process that fills
+  the disk takes the whole grid with it, and regions would fail before any
+  warning. A free-space threshold in region health reporting is the cheap
+  answer.
 
 ### Grid and region packages
 
@@ -686,11 +564,8 @@ role machinery that shared ownership rests on.
 ### Backups, upgrades, and reconciliation
 
 - [x] Restart or replace the central grid service without restarting connected
-  regions; retain PostgreSQL-backed viewer sessions so region simulation and
-  active viewer circuits continue while grid-backed operations resume. This holds
-  as long as grid services return before a region's lease renewal window elapses;
-  a grid outage that persists for an extended period past that window stops the
-  affected regions.
+  regions, retaining PostgreSQL-backed viewer sessions — which holds only while
+  grid services return inside a region's lease-renewal window.
 
 - [ ] Back up and restore PostgreSQL grid state, region SQLite state, assets,
   terrain, configuration, and compatible runtime state.
@@ -752,14 +627,10 @@ role machinery that shared ownership rests on.
   and evaluate newer releases deliberately.
 - [ ] Add read-only legacy inventory access only if its older-viewer benefit
   justifies the maintenance cost; AIS v3 remains authoritative.
-- [x] Support thin/headless clients such as LibreMetaverse: advertise the
-  per-region `FetchInventoryDescendents2` / `FetchLibDescendents2` capabilities
-  and make the HTTP asset-fetch capabilities LMV-compatible
-  (see `tools/testclient/README.md`). Server-side baking largely removes the
-  appearance dependency on these. Live acceptance 2026-07-26: an LMV v3.1.3
-  bot on the cloud grid enumerated its Current Outfit through the descendents
-  capabilities, fetched wearables and textures over the asset caps, completed
-  a client-side bake, and rendered fully baked in Firestorm.
+- [x] Support thin and headless clients such as LibreMetaverse: advertise the
+  per-region `FetchInventoryDescendents2`/`FetchLibDescendents2` capabilities
+  and keep the HTTP asset-fetch capabilities LMV-compatible
+  (see `tools/testclient/README.md`).
 - [ ] Validate Halcyon/InWorldz LSL extensions without admitting OpenSimulator
   scripting extensions accidentally.
 - [ ] Document import and migration tools separately from live legacy service or
@@ -837,10 +708,9 @@ sequence this summarizes.
   ([CLIENT2-EMBODIMENT.md](CLIENT2-EMBODIMENT.md) milestone E1; crossings
   and appearance are its later milestones).
 - [x] Carry a session avatar across a region border
-  ([CLIENT2-EMBODIMENT.md](CLIENT2-EMBODIMENT.md) milestone E2): the region
-  hands the client its continuation and the client re-enters next door,
-  landing on the arrival point the grid resolved. Not atomic the way a
-  viewer's handoff is, deliberately — the reasoning is in the design.
+  ([CLIENT2-EMBODIMENT.md](CLIENT2-EMBODIMENT.md) milestone E2), landing on the
+  arrival point the grid resolved — deliberately not atomic the way a viewer's
+  handoff is.
 - [x] Narrow avatar traffic by interest for sessions: transforms flow only
   within draw distance, with arrival and departure emitted by a sweep that
   evaluates both parties' motion
@@ -865,47 +735,31 @@ frontends — is developed and tracked in its own repository, with its own
 roadmap, status, and progress; phases 9 and 10 here are the server-side surface
 it builds against.
 
-- [ ] A canonical avatar body — blocked on content licensing rather than code,
-  since the legacy body and skeleton are viewer-licensed and a wearable body must
-  be re-rigged to the viewer's own 71 named joints
-  ([ADR 0015](adr/0015-physics-world-boundary.md) is unrelated; see the MakeHuman
-  and Ruth2 examinations in git history for the licence findings).
+- [ ] A canonical avatar body — blocked on content licensing rather than code:
+  the legacy body and skeleton are viewer-licensed, and a wearable body must be
+  re-rigged to the viewer's own 71 named joints.
 - [x] Dress a session avatar for viewers: spawn seeds the server-side
   default-outfit bake and derives body geometry from it, so a viewer rezzes
   a properly shaped, clothed avatar rather than a default one
   ([CLIENT2-EMBODIMENT.md](CLIENT2-EMBODIMENT.md) milestone E3, viewer half).
-- [x] Publish the region's water to session clients — live 2026-07-31. A
-  viewer had always been told a height in `RegionHandshake`; the region never
-  set one, so every region silently used the built-in 20 m, and a session
-  client was told nothing at all and drew water wherever it guessed. Both
-  paths now read `region.water_height` (default the same 20), and the hello
-  states `water: {height}`: a height, not a surface, because the plane is
-  flat and region-wide and the drawing is the client's business.
-- [x] Bound the terrain alignment invariant by what Jolt quantizes, after the
-  operator's carved 24 m walls made it fail on Gamma (2026-07-31) against a
-  flat 1 cm tolerance while the ground was fine. Jolt stores each sample as 8
-  bits within its own 2×2 block's range, measured over a 3×3 span, so a block
-  beside a cliff inherits the cliff's range. The bound is now each sample's own
-  quantization step — tighter almost everywhere (flat ground 1 cm → 2 mm, where
-  a real displacement could previously hide) and roomy only where the storage
-  needs it. All four regions run at 33–39% of allowance; Beta, entirely flat,
-  deviates by exactly zero, which is the measurement that rules out any cause
-  other than quantization.
-- [x] Measure what LayerData loses, after the client core saw rougher ground
-  in Firestorm than in its own render of the same region and offered
-  compression noise as a candidate. Ruled out by decoding the wire bytes with
-  an independent decoder: 50 m of rise inside one 16×16 patch returns within
-  0.12 m, a ±4 m one-metre-pitch checkerboard within 0.36 m, flat ground
-  within a tenth of a millimetre. Both families are drawing the same heights,
-  so the difference is in the drawing — which the terrain-surface item above
-  is already about.
+- [x] Publish the region's water to session clients — live 2026-07-31: both the
+  viewer and session paths now read `region.water_height` (default 20 m), and
+  the hello states `water: {height}`.
+- [x] Bound the terrain alignment invariant by each sample's own quantization
+  step instead of a flat 1 cm tolerance, since Jolt stores every height in 8
+  bits scaled to its 2×2 block's range measured over a 3×3 span — tighter on
+  flat ground, roomy only beside a cliff.
+- [x] Rule out LayerData compression as the reason ground looks rougher in
+  Firestorm than in the client's own render: an independent decode returns 50 m
+  of rise inside one patch within 0.12 m, so both families draw the same
+  heights and the difference is in the drawing.
 - [ ] Serve appearance *to* session clients, so they can render each other —
   the remaining half of E3, waiting on the asset formats below rather than
   on legacy texture-entry blobs.
 - [ ] Store modern asset formats at rest — KTX2 textures, glTF meshes — with
-  down-conversion serving legacy viewers the formats they expect; the mesh
-  half is decided and scheduled as the Phase 4 pipeline of
-  [ADR 0033](adr/0033-mesh-pipeline-gltf-canonical.md), and KTX2 becomes one
+  down-conversion serving legacy viewers what they expect; the mesh half is the
+  Phase 4 pipeline of
+  [ADR 0033](adr/0033-mesh-pipeline-gltf-canonical.md) and KTX2 becomes one
   more rendition kind on it.
 - [ ] Mesh prims server-side, so the client renders one geometry pipeline and
   prim meshing logic is written once.
