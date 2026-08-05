@@ -11,6 +11,30 @@ week a second person joins.
 Four decisions were taken before implementation so the token design has something
 to satisfy.
 
+## A reset is a password change with a different proof of identity
+
+This is the framing the rest follows from (operator, 2026-08-05). A reset and a
+user-initiated change are **the same operation**. They differ only in how the
+requester is shown to be the account holder:
+
+| | proof of identity |
+| --- | --- |
+| change | the current password, plus an authenticated session |
+| reset | a single-use token sent to the address on file |
+
+After that proof, both do exactly one thing: write the password hashes so the new
+password works. Nothing else — no session changes, no side effects, no extra
+state. **All the security work is in the proof**, which is why the token design
+gets the care and the password-setting does not need any beyond writing both
+digests.
+
+That primitive already exists. `identity.SetPassword` was added on 2026-08-05 for
+the `set-password` console tool: it writes the bcrypt and viewer MD5 digests for a
+named account and touches nothing else. Both flows should sit on it rather than
+growing their own write paths — an account that can sign in to the website but not
+a viewer is worse than one that cannot sign in at all, and one write path is how
+that stays impossible.
+
 ## A reset does not end existing sessions
 
 The common default is to invalidate every session on reset, on the theory that a
@@ -23,6 +47,9 @@ case on 2026-08-05 by deleting Firestorm's stored credentials: the password was
 gone from where it was kept, the account was never at risk, and a live viewer
 session had every right to continue. Ending sessions would have punished the
 ordinary case to guard against a rarer one.
+
+This also follows from the framing above: a user changing their own password does
+not expect to be logged out of anything, and a reset is the same operation.
 
 This is a judgement about *this* product rather than a general security position.
 If the threat model changes — paid balances, higher-value accounts, evidence of
