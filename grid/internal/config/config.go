@@ -63,6 +63,7 @@ type Grid struct {
 	MailTransport        string
 	MailFrom             string
 	MailVerificationURL  string
+	MailResetURL         string
 	SMTPHost             string
 	SMTPPort             int
 	SMTPUsername         string
@@ -129,6 +130,12 @@ func LoadGrid(directory string) (Grid, error) {
 	result.MailTransport = strings.ToLower(strings.TrimSpace(mail.Key("transport").MustString("log")))
 	result.MailFrom = mail.Key("from").MustString("no-reply@homeworldz.com")
 	result.MailVerificationURL = mail.Key("verification_url").MustString("https://my.homeworldz.com/verify")
+
+	// The management origin in code, not only in a deployed grid.ini. verification_url
+	// once defaulted to the website origin, where public/_redirects 302s it onward, so
+	// a deployment missing the setting kept working on a redirect in another
+	// repository - invisible because nothing failed (fixed in baadf82; ADR 0034).
+	result.MailResetURL = mail.Key("reset_url").MustString("https://my.homeworldz.com/reset")
 	result.SMTPHost = mail.Key("smtp_host").String()
 	result.SMTPPort = mail.Key("smtp_port").MustInt(587)
 	result.SMTPUsername = mail.Key("smtp_username").String()

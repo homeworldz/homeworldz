@@ -42,6 +42,8 @@ type AccountStore interface {
 	GetManaged(ctx context.Context, id string) (webaccount.ManagedAccount, error)
 	UpdateProfile(ctx context.Context, id, displayName string) (webaccount.Account, error)
 	ChangePassword(ctx context.Context, id, currentPassword, newPassword string) error
+	RequestPasswordReset(ctx context.Context, ident string) (token, email string, err error)
+	ConsumePasswordReset(ctx context.Context, token, newPassword string) error
 	List(ctx context.Context, search, cursor string, limit int) ([]webaccount.ManagedAccount, string, error)
 	ReplacePrivileges(ctx context.Context, id, privs string) (webaccount.ManagedAccount, error)
 	Ban(ctx context.Context, id, reason string, expiresAt *time.Time, bannedBy string) (webaccount.ManagedAccount, error)
@@ -99,6 +101,7 @@ type Options struct {
 	Logger          *slog.Logger
 	AllowedOrigins  []string
 	VerificationURL string
+	ResetURL        string
 	RatePerMinute   int
 	RateBurst       int
 	// Version is the build version reported by GET /v1/version.
@@ -139,6 +142,7 @@ type API struct {
 	logger          *slog.Logger
 	allowedOrigins  map[string]bool
 	verificationURL string
+	resetURL        string
 	limiter         *rateLimiter
 	version         string
 	gridName        string
@@ -185,6 +189,7 @@ func New(options Options) (http.Handler, error) {
 		logger:          options.Logger,
 		allowedOrigins:  origins,
 		verificationURL: strings.TrimRight(options.VerificationURL, "/"),
+		resetURL:        strings.TrimRight(options.ResetURL, "/"),
 		limiter:         newRateLimiter(float64(perMinute)/60.0, burst),
 		version:         options.Version,
 		gridName:        options.GridName,
@@ -209,6 +214,8 @@ func New(options Options) (http.Handler, error) {
 	mux.HandleFunc("/v1/registrations", a.registrations)
 	mux.HandleFunc("/v1/verifications", a.verifications)
 	mux.HandleFunc("/v1/verifications/resend", a.resendVerification)
+	mux.HandleFunc("/v1/password-resets", a.passwordResets)
+	mux.HandleFunc("/v1/password-resets/", a.consumePasswordReset)
 	mux.HandleFunc("/v1/tokens", a.tokens)
 	mux.HandleFunc("/v1/account", a.account)
 	mux.HandleFunc("/v1/account/profile", a.accountProfile)

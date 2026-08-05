@@ -360,6 +360,16 @@ to curate Library content can assign it a local password with
 Building development snapshots from source is documented in the repository
 README and is intentionally outside this operator installation guide.
 
+## Password reset settings
+
+`[mail] reset_url` is where the emailed reset link points, defaulting to
+`https://my.homeworldz.com/reset` in code as well as in a deployed `grid.ini`.
+Both matter: a deployment missing the setting must not fall back to an origin
+that only works because another repository redirects it.
+
+A reset token expires in one hour and can be used once. It is stored as a SHA-256
+digest, so a lost link cannot be recovered from the database — request another.
+
 ## Recover an account whose password is lost
 
 The account API's password change requires the current password, which is the

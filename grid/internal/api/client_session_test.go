@@ -21,7 +21,15 @@ import (
 
 // memoryAccountStore satisfies AccountStore for requireAuth: only Get is
 // exercised by these tests.
-type memoryAccountStore struct{ accounts map[string]webaccount.Account }
+type memoryAccountStore struct {
+	accounts map[string]webaccount.Account
+	// Password-reset scaffolding. resetToken empty means "no such account", so a
+	// test can drive both the matched and unmatched paths and assert the handler
+	// cannot be told them apart.
+	resetToken    string
+	resetRequests []string
+	resetConsumed string
+}
 
 var errUnimplemented = errors.New("not implemented in test store")
 
@@ -59,6 +67,25 @@ func (s *memoryAccountStore) UpdateProfile(context.Context, string, string) (web
 
 func (s *memoryAccountStore) ChangePassword(context.Context, string, string, string) error {
 	return errUnimplemented
+}
+
+// Recorded rather than stubbed, so a test can assert the request handler answers
+// identically whether or not an account matched - which is the property that
+// stops the endpoint enumerating accounts.
+func (s *memoryAccountStore) RequestPasswordReset(_ context.Context, ident string) (string, string, error) {
+	s.resetRequests = append(s.resetRequests, ident)
+	if s.resetToken == "" {
+		return "", "", webaccount.ErrNotFound
+	}
+	return s.resetToken, "someone@example.test", nil
+}
+
+func (s *memoryAccountStore) ConsumePasswordReset(_ context.Context, token, password string) error {
+	if s.resetToken == "" || token != s.resetToken {
+		return webaccount.ErrInvalidCode
+	}
+	s.resetConsumed = password
+	return nil
 }
 
 func (s *memoryAccountStore) List(context.Context, string, string, int) ([]webaccount.ManagedAccount, string, error) {

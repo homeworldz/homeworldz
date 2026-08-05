@@ -96,6 +96,7 @@ func main() {
 		Logger:          logger,
 		AllowedOrigins:  settings.WebsiteAllowedOrigins,
 		VerificationURL: settings.MailVerificationURL,
+		ResetURL:        settings.MailResetURL,
 		RatePerMinute:   settings.WebsiteRatePerMinute,
 		RateBurst:       settings.WebsiteRateBurst,
 		Version:         version,

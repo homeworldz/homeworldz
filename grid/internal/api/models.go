@@ -183,3 +183,15 @@ type mapPositionRequest struct {
 	GridX *int `json:"gridX"`
 	GridY *int `json:"gridY"`
 }
+
+// passwordResetRequest is the body of POST /v1/password-resets. The identifier
+// may be an account name or the email address on file; either is accepted so
+// somebody who has forgotten one can use the other.
+type passwordResetRequest struct {
+	Identifier string `json:"identifier"`
+}
+
+// passwordResetConsumeRequest is the body of POST /v1/password-resets/{token}.
+type passwordResetConsumeRequest struct {
+	Password string `json:"password"`
+}
