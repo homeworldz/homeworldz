@@ -201,7 +201,12 @@ func (s *PostgresStore) SetPassword(ctx context.Context, username, password stri
 		username, string(hash), hex.EncodeToString(viewerDigest[:]),
 	).Scan(&user.ID, &user.Username, &user.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
-		return User{}, fmt.Errorf("no account named %q", username)
+		// Naming the format in the failure, because a viewer shows a display
+		// name ("Jim Tarber") while the account is first.last ("jim.tarber"),
+		// and the operator lost a round to exactly that.
+		return User{}, fmt.Errorf(
+			"no account named %q; usernames are first.last as at login, not the display name",
+			username)
 	}
 	if err != nil {
 		return User{}, fmt.Errorf("set password: %w", err)

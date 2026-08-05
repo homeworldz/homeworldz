@@ -368,7 +368,7 @@ whose password is gone. `set-password` is that way back:
 
 ```sh
 cd /opt/homeworldz/grid
-./set-password -config /etc/homeworldz/grid -username "Jim Tarber"
+./set-password -config /etc/homeworldz/grid -username jim.tarber
 ```
 
 It prompts twice and writes both digests — bcrypt for the web account and the
@@ -382,4 +382,7 @@ command runs, which turns a recovery into a disclosure. The tool prints the
 account name and id when it succeeds, and never the password.
 
 `-username` is required rather than defaulted, so the wrong account cannot be
-reset by running the command with no arguments.
+reset by running the command with no arguments. It is the **account name** in
+`first.last` form, matched case-insensitively as login does — not the display
+name a viewer shows. `jim.tarber`, not `Jim Tarber`; the failure message says so,
+because that distinction cost a round the first time the tool was used.

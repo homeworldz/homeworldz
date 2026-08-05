@@ -33,7 +33,7 @@ func main() {
 	root, _ := os.Getwd()
 	configDirectory := flag.String("config", filepath.Join(root, "config"),
 		"directory containing grid.ini and db.ini")
-	username := flag.String("username", "", "account to set the password for, for example \"Jim Tarber\"")
+	username := flag.String("username", "", "account to set the password for, in first.last form, for example jim.tarber")
 	flag.Parse()
 	if err := run(context.Background(), *configDirectory, *username); err != nil {
 		fmt.Fprintln(os.Stderr, "set password failed:", err)
