@@ -47,6 +47,26 @@ inline constexpr std::string_view rigged_skeleton = "second-life-avatar";
 inline constexpr std::uint32_t rigged_skeleton_joints = 71;
 // Draco-compressed GLBs are refused in v1 rather than half supported.
 inline constexpr bool draco_accepted = false;
+// Morph targets (glTF blend shapes) are accepted only while every default weight
+// is zero.
+//
+// At zero the base geometry *is* the intended default appearance, which is
+// exactly what the converter emits, so nothing is lost but the ability to
+// animate it. With a non-zero default weight the author's intended shape is the
+// morphed one and we would serve the base - a different body, silently, at a
+// different size.
+//
+// Two findings behind this, both from the client core (2026-08-05). A glTF can
+// be valid, conformant, and carry a shape nobody sees because the shape is in
+// morph targets rather than POSITION - which is how two Library "bodies" turned
+// out to be one neutral mesh with the gender in a morph weight. And separately:
+// an engine's bounds for a mesh with blend shapes are inflated by the full
+// displacement a morph could reach *while it sits at zero*, proven on three
+// one-metre cubes where the morphed one measured 3 m tall and its vertices
+// measured 1 m. Skinning does not do this; morphs do. `declared_world_bounds`
+// is safe because it reads accessor min/max rather than asking an engine, and
+// that is now a property worth keeping deliberately rather than by luck.
+inline constexpr bool nonzero_morph_weights_accepted = false;
 // Rigged mesh (skins) is refused until M4; refusing is honest, guessing at a
 // skeleton mapping is not.
 inline constexpr bool rigged_accepted = false;

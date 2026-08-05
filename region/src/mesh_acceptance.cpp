@@ -106,6 +106,30 @@ Acceptance validate_glb(std::span<const std::byte> content) {
     if (!rigged_accepted && data->skins_count != 0)
         return refuse("rigged mesh is not accepted yet (ADR 0033 M4); upload the static mesh");
 
+    // A morph target at zero costs nothing: the base geometry is the intended
+    // default and is what the converter emits. A non-zero default weight means
+    // the intended shape is the morphed one, and serving the base would be
+    // serving a different mesh without saying so.
+    if (!nonzero_morph_weights_accepted) {
+        const auto declared_nonzero = [](const float* weights, std::size_t count) {
+            for (std::size_t index = 0; index < count; ++index)
+                if (weights[index] < -1e-6F || weights[index] > 1e-6F) return true;
+            return false;
+        };
+        for (std::size_t index = 0; index < data->meshes_count; ++index)
+            if (declared_nonzero(data->meshes[index].weights,
+                                 data->meshes[index].weights_count))
+                return refuse("a mesh declares a non-zero morph target weight; the"
+                              " shape served would be the unmorphed base. Bake the"
+                              " morphs into the vertices and export again");
+        for (std::size_t index = 0; index < data->nodes_count; ++index)
+            if (declared_nonzero(data->nodes[index].weights,
+                                 data->nodes[index].weights_count))
+                return refuse("a node declares a non-zero morph target weight; the"
+                              " shape served would be the unmorphed base. Bake the"
+                              " morphs into the vertices and export again");
+    }
+
     Acceptance result;
     result.materials = static_cast<std::uint32_t>(data->materials_count);
     result.textures = static_cast<std::uint32_t>(data->textures_count);

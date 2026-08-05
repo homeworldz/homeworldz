@@ -83,6 +83,35 @@ int main() {
         R"("extensionsRequired":["KHR_draco_mesh_compression"]})", triangle_bin());
     if (validate_glb(draco).accepted) return 4;
 
+    // A morph target sitting at zero is harmless: the base geometry is the
+    // intended default and is exactly what the converter emits. A non-zero
+    // default weight is not, because the shape served would be the unmorphed
+    // base - a different mesh, silently. Two Library "bodies" turned out to be
+    // one neutral mesh with the gender in a morph weight (2026-08-05), which is
+    // what this refuses.
+    {
+        const char* const head =
+            R"({"asset":{"version":"2.0"},"buffers":[{"byteLength":36}],)"
+            R"("bufferViews":[{"buffer":0,"byteOffset":0,"byteLength":36}],)"
+            R"("accessors":[{"bufferView":0,"componentType":5126,"count":3,"type":"VEC3",)"
+            R"("min":[0,0,0],"max":[1,1,0]}],)";
+        const char* const tail =
+            R"("nodes":[{"mesh":0}],"scenes":[{"nodes":[0]}],"scene":0})";
+        const auto morphed = glb(std::string(head) +
+            R"("meshes":[{"weights":[0.5],"primitives":[{"attributes":{"POSITION":0},)"
+            R"("targets":[{"POSITION":0}]}]}],)" + tail, triangle_bin());
+        const auto refused_morph = validate_glb(morphed);
+        if (refused_morph.accepted ||
+            refused_morph.reason.find("morph") == std::string::npos)
+            return 20;
+        // And zero weights pass, so the gate is a rule about intent rather than
+        // a ban on blend shapes.
+        const auto at_zero = glb(std::string(head) +
+            R"("meshes":[{"weights":[0.0],"primitives":[{"attributes":{"POSITION":0},)"
+            R"("targets":[{"POSITION":0}]}]}],)" + tail, triangle_bin());
+        if (!validate_glb(at_zero).accepted) return 21;
+    }
+
     // An allowlisted extension passes.
     const auto allowed = glb(std::string(triangle_json_head) +
         R"(,"extensionsUsed":["KHR_materials_unlit"]})", triangle_bin());
