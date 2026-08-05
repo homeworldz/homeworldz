@@ -275,9 +275,21 @@ but stays unchecked until its complete wording is satisfied.
   character's supporting volume, and the scenario added no floor, so "not
   supported" may only mean it fell past the slab. Adjusting a test until it agrees
   with the answer already believed is the one thing that must not happen here, so
-  it was reverted. A faithful version needs a heightfield ramp, and it is worth
-  more than the effort suggests: the behaviour is currently verified only by
-  somebody walking on it.
+  it was reverted.
+  **A second attempt, with a real heightfield ramp, was also withdrawn - and it
+  established two constraints the next attempt needs.** First, **PhysX has no
+  heightfield support**: the base `create_heightfield` returns 0, so a heightfield
+  scenario cannot live in `run_common_scenarios`, which runs every backend and has
+  only pass or fail - no "could not run" verdict for a scenario a backend cannot
+  host. It needs a Jolt-only home, or the harness needs the third verdict the
+  client core added to their own suite for exactly this. Second, dropping the
+  character on flat ground and walking it *to* the ramp makes the approach
+  dominate the distance measured, so the discriminator reads walking rather than
+  climbing; it has to start on the face.
+  So the shape of a working version is known: a Jolt-only scenario, character
+  placed on the face, asserting support on both sides of the limit and traversal
+  only below it. Until it exists the behaviour is verified only by somebody
+  walking on it, which is the state that let four documents be wrong at once.
 - [ ] Apply permissions recursively and consistently to linksets, object
   contents, attachments, and inventory transfers.
 
