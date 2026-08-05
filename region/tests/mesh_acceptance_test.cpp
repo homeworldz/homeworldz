@@ -118,7 +118,14 @@ int main() {
         // unless the payload says which limits are not yet in force. It is named
         // rather than removed, because an importer should read the number instead
         // of encoding its own (client core, 2026-08-04).
-        policy.find("\"forwardLooking\":[\"maxRigInfluences\"]") == std::string::npos ||
+        // The skeleton a re-rig must target, named because glTF binds joints by
+        // node index rather than by name: a client drawing arbitrary skeletons is
+        // unconstrained, a viewer uses its own and no other, so one body rigged to
+        // these names serves both families (client core, 2026-08-04).
+        policy.find("\"skeleton\":\"second-life-avatar\"") == std::string::npos ||
+        policy.find("\"skeletonJoints\":71") == std::string::npos ||
+        policy.find("\"forwardLooking\":[\"maxRigInfluences\",\"skeleton\","
+                    "\"skeletonJoints\"]") == std::string::npos ||
         policy.find("\"draco\":false") == std::string::npos ||
         policy.find("\"rigged\":false") == std::string::npos ||
         policy.find("KHR_texture_transform") == std::string::npos)

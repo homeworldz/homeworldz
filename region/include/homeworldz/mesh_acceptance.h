@@ -9,6 +9,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string_view>
 #include <span>
 #include <string>
 
@@ -29,6 +30,21 @@ inline constexpr std::uint64_t max_image_bytes = 8ull << 20;
 // now even though rigged mesh lands with M4 (ADR 0033), so importing clients
 // already read it rather than encode it.
 inline constexpr std::uint32_t max_rig_influences = 4;
+// The skeleton rigged mesh must be weighted to, and how many joints it has.
+//
+// Published ahead of M4 because it is the one fact a re-rig has to target, and
+// getting it wrong is not recoverable by any amount of server work: a viewer uses
+// its own skeleton and no other. Read from the viewer's own
+// `character/avatar_skeleton.xml` - 71 `m`-prefixed joints, `mPelvis`, `mChest`,
+// `mAnkleLeft` and the rest.
+//
+// glTF binds skin joints by node *index* and never by name, so a client that
+// draws arbitrary skeletons is unconstrained while a viewer is not (client core,
+// 2026-08-04). The constraint is therefore one-sided, and one body rigged to these
+// names serves both families - which is why naming the skeleton is worth more than
+// naming a joint budget.
+inline constexpr std::string_view rigged_skeleton = "second-life-avatar";
+inline constexpr std::uint32_t rigged_skeleton_joints = 71;
 // Draco-compressed GLBs are refused in v1 rather than half supported.
 inline constexpr bool draco_accepted = false;
 // Rigged mesh (skins) is refused until M4; refusing is honest, guessing at a

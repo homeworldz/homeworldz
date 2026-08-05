@@ -47,8 +47,11 @@ std::string acceptance_policy_json() {
         // beside "rigged": false reasonably calls that a contradiction - the
         // client core did, 2026-08-04. Saying so in the payload costs one key and
         // removes the guess.
+        ",\"skeleton\":\"" + std::string(rigged_skeleton) + "\"" +
+        ",\"skeletonJoints\":" + std::to_string(rigged_skeleton_joints) +
         ",\"forwardLooking\":[" +
-        std::string(rigged_accepted ? "" : "\"maxRigInfluences\"") + "]" +
+        std::string(rigged_accepted ? ""
+            : "\"maxRigInfluences\",\"skeleton\",\"skeletonJoints\"") + "]" +
         ",\"draco\":" + (draco_accepted ? "true" : "false") +
         ",\"rigged\":" + (rigged_accepted ? "true" : "false") +
         ",\"allowedExtensions\":[" + extensions + "]}";

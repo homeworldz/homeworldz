@@ -1086,6 +1086,20 @@ it builds against.
   −0.0263, max Y 1.6679 / 1.6683), so placing the origin exactly on the ground
   sinks the soles by that much — which is the number anything positioning feet
   precisely needs, and the resolution to the client core's open question.
+  **The skeleton is the one choice that matters, and it is one choice rather than
+  two (client core correction, 2026-08-04).** An earlier reading here was that a
+  viewer's fixed skeleton and a client's free one meant the two families need
+  different bodies. That inverts: glTF binds skin joints by node *index*, never by
+  name - verified in these files, where `skins[0].joints` is a list of node indices
+  and `JOINTS_0` indexes into it, with names carried only on the nodes. So a client
+  that draws arbitrary skeletons is unconstrained while a viewer uses its own and
+  no other. The constraint is one-sided, and **a body re-rigged to the viewer's 71
+  named joints serves both families from one asset**; re-rigged to anything else it
+  serves only the first-party client.
+  The expected skeleton is therefore published now, ahead of M4, in the mesh
+  acceptance policy as `skeleton` and `skeletonJoints` - listed under
+  `forwardLooking` while `rigged` is false. It is the one fact a re-rig has to
+  target and no amount of server work recovers from getting it wrong.
   Still not adopted, and still the operator's decision. Accepting a canonical body
   commits the grid to a licensing position, and publishing appearance is the
   prerequisite before any client can be told to wear one — a body only one client
