@@ -308,6 +308,9 @@ but stays unchecked until its complete wording is satisfied.
   It asserts resting on both sides of the limit, which is today's behaviour and not
   the intended one — sliding on steep ground is next. When that lands this test
   should fail and be updated as the record of a chosen change.
+- [ ] Build self-service password recovery: a single-use expiring reset token, a
+  request endpoint whose reply never reveals whether an address exists, a consume
+  endpoint, the mail send, and the two screens plus a login-page link.
 - [ ] Trim this roadmap back to point form: one sentence per entry, milestones and
   remaining work only, with narrative moved to ADRs, a content-licensing record, or
   deleted where git history already holds it.
