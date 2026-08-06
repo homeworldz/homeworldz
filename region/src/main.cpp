@@ -10203,7 +10203,18 @@ int main(int argc, char* argv[]) {
                 avatar.next_ping = now + std::chrono::seconds(5);
             }
             if (now >= avatar.next_presence && viewer_grid && registration) {
-                static_cast<void>(viewer_grid->update_presence(avatar.user_id, registration->region_id()));
+                // The result was discarded here and at every other presence call
+                // site, so a failing heartbeat looked exactly like a working one.
+                // The grid's own rows are how this surfaced: an avatar logged in
+                // and out of Gamma on 2026-08-06 while its presence row still read
+                // 2026-08-05, and nothing anywhere had said a word. Logged at most
+                // once per 30s per avatar, which is the heartbeat's own rate.
+                if (!viewer_grid->update_presence(avatar.user_id, registration->region_id())) {
+                    std::cout << "{\"level\":\"warn\",\"message\":\"presence update refused by grid\""
+                              << ",\"userId\":\"" << avatar.user_id << "\""
+                              << ",\"regionId\":\"" << registration->region_id() << "\"}"
+                              << std::endl;
+                }
                 avatar.next_presence = now + std::chrono::seconds(30);
             }
             avatar.controller.set_ground_height(
