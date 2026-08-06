@@ -36,19 +36,34 @@ Set `region.terrain_path` in `region.ini` to another raw 65,536-byte heightmap
 to override the development default. A missing or invalid file falls back to
 the former flat 25-metre terrain.
 
-## Exact heightfields (`.f32`)
+## Exact heightfields (`.r32`)
 
 `region.terrain_path` also accepts a file of `width * width` little-endian
 32-bit floats — metres, one per sample, row-major — which is byte-for-byte what
 a running region serves at `GET /map/terrain.raw`. Download from one region and
 point another at the file to reproduce its ground exactly.
 
+This is the same layout OpenSimulator calls **RAW32** and reads and writes with
+`terrain load`/`terrain save` on a `.r32` file, hence the extension. The one
+thing not yet checked against a real OpenSimulator export is **row order** —
+whether it writes rows south-to-north or the reverse. A mismatch would load
+mirrored rather than fail, so verify against an actual OpenSim `.r32` before
+relying on the interoperability. Within Homeworldz the format round-trips
+exactly, since the same code writes and reads it.
+
+Two other formats are worth knowing about and are not implemented here. The
+viewer's own Region/Estate **Download/Upload RAW terrain** buttons use Linden
+RAW, thirteen bytes per sample and 256x256 only — supporting it is what would
+make those buttons work, and it needs the Xfer transfer path. Terragen `.ter` is
+the other format OpenSimulator interchanges, compact and widely supported by
+terrain editors, but sixteen-bit and therefore quantised.
+
 The eight-bit `.raw` form cannot do this. It stores whole metres, so a graded
 slope becomes a staircase: the 65-degree face below rises 2.145 m per metre, and
 rounding that to integers alternates between 2 m and 3 m steps — 63.4 and 71.6
 degrees, one constant angle replaced by two wrong ones.
 
-`gamma-slope-fixtures.f32` is the Gamma region (1024 m) captured 2026-08-06,
+`gamma-slope-fixtures.r32` is the Gamma region (1024 m) captured 2026-08-06,
 carrying the three slope test faces that make the walkable-slope limit
 falsifiable. Each is a 10-metre ramp from a 25-metre base, 51 m wide, constant
 to within 0.1 degrees across every step:

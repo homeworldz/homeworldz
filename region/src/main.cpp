@@ -308,8 +308,9 @@ std::unique_ptr<homeworldz::terrain::Heightmap> load_raw_heightmap(
     const auto byte_count = static_cast<std::size_t>(input.tellg());
 
     // A four-byte-per-sample file is the exact heightfield /map/terrain.raw
-    // emits, so terrain can be downloaded from a live region and loaded back
-    // without loss. The one-byte form below stores whole metres only, which
+    // emits, and the same layout OpenSimulator calls RAW32 and reads from a
+    // .r32 file, so ground can move between the two.
+    // The one-byte form below stores whole metres only, which
     // cannot express a graded slope: the 65-degree test face on Gamma rises
     // 2.145 m per metre, and rounding that to integers turns one constant angle
     // into an alternating staircase of two wrong ones.
