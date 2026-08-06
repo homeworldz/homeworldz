@@ -549,6 +549,13 @@ role machinery that shared ownership rests on.
   warning. A free-space threshold in region health reporting is the cheap
   answer.
 
+- [ ] **A session that dies without logging out stays "present" forever.** Clean
+  login, heartbeat and logout are verified working (2026-08-06); nothing expires
+  a row whose `last_seen_at` has stopped advancing, so a crash or dropped link
+  strands it — one bot row sat present for a day and a half. The region already
+  retires an unresponsive viewer after 60s of missed pings, and the grid can
+  apply the same reasoning to a row nobody refreshes.
+
 ### Grid and region packages
 
 - [x] Produce separate versioned grid-owner and region-owner packages containing
