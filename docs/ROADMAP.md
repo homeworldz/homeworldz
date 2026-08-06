@@ -549,12 +549,11 @@ role machinery that shared ownership rests on.
   warning. A free-space threshold in region health reporting is the cheap
   answer.
 
-- [ ] **A session that dies without logging out stays "present" forever.** Clean
-  login, heartbeat and logout are verified working (2026-08-06); nothing expires
-  a row whose `last_seen_at` has stopped advancing, so a crash or dropped link
-  strands it — one bot row sat present for a day and a half. The region already
-  retires an unresponsive viewer after 60s of missed pings, and the grid can
-  apply the same reasoning to a row nobody refreshes.
+- [x] Treat presence as a lease rather than durable state, so a session that
+  dies without logging out cannot stay "present" — verified 2026-08-06 against
+  the live grid: a row planted ten minutes stale is answered 404 by the per-user
+  route and swept by the list route (`presence.StaleAfter`, 90s). A stale row
+  left in the table is inert, not a claim.
 
 ### Grid and region packages
 
