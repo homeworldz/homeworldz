@@ -306,6 +306,26 @@ std::unique_ptr<homeworldz::terrain::Heightmap> load_raw_heightmap(
     std::ifstream input(path, std::ios::binary | std::ios::ate);
     if (!input) return {};
     const auto byte_count = static_cast<std::size_t>(input.tellg());
+
+    // A four-byte-per-sample file is the exact heightfield /map/terrain.raw
+    // emits, so terrain can be downloaded from a live region and loaded back
+    // without loss. The one-byte form below stores whole metres only, which
+    // cannot express a graded slope: the 65-degree test face on Gamma rises
+    // 2.145 m per metre, and rounding that to integers turns one constant angle
+    // into an alternating staircase of two wrong ones.
+    if (byte_count == width * width * sizeof(float)) {
+        input.seekg(0);
+        auto result = std::make_unique<homeworldz::terrain::Heightmap>(width);
+        std::vector<float> samples(width * width);
+        input.read(reinterpret_cast<char*>(samples.data()),
+                   static_cast<std::streamsize>(byte_count));
+        if (!input) return {};
+        for (std::size_t index = 0; index < samples.size(); ++index) {
+            (*result)[index] = samples[index];
+        }
+        return result;
+    }
+
     const auto source_width = byte_count == width * width ? width :
         (byte_count == 256 * 256 ? std::size_t{256} : std::size_t{});
     if (source_width == 0) return {};

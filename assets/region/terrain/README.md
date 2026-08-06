@@ -35,3 +35,31 @@ than inventing an author attribution. The source PNG has SHA-256
 Set `region.terrain_path` in `region.ini` to another raw 65,536-byte heightmap
 to override the development default. A missing or invalid file falls back to
 the former flat 25-metre terrain.
+
+## Exact heightfields (`.f32`)
+
+`region.terrain_path` also accepts a file of `width * width` little-endian
+32-bit floats — metres, one per sample, row-major — which is byte-for-byte what
+a running region serves at `GET /map/terrain.raw`. Download from one region and
+point another at the file to reproduce its ground exactly.
+
+The eight-bit `.raw` form cannot do this. It stores whole metres, so a graded
+slope becomes a staircase: the 65-degree face below rises 2.145 m per metre, and
+rounding that to integers alternates between 2 m and 3 m steps — 63.4 and 71.6
+degrees, one constant angle replaced by two wrong ones.
+
+`gamma-slope-fixtures.f32` is the Gamma region (1024 m) captured 2026-08-06,
+carrying the three slope test faces that make the walkable-slope limit
+falsifiable. Each is a 10-metre ramp from a 25-metre base, 51 m wide, constant
+to within 0.1 degrees across every step:
+
+| face | x | y band | base to top |
+| --- | --- | --- | --- |
+| 70.0 deg | 300-310 | 180-230 | 25.0 to 52.5 m |
+| 65.0 deg | 300-310 | 275-325 | 25.0 to 46.4 m |
+| 57.5 deg | 300-310 | 380-430 | 25.0 to 40.7 m |
+
+The published traversal limit is 65 degrees, so the three faces sit either side
+of it and on it. Note the ordering: the shallowest face is the *last* band, not
+the first — an earlier note in this project had the outer two reversed, which
+would have put a test obstruction on the wrong slope.
