@@ -3839,7 +3839,7 @@ int main(int argc, char* argv[]) {
                     // fall-through warning further down exists because this list
                     // cannot be checked from outside main.cpp.
                     if (seed || event_queue || texture || viewer_asset || simulator_features || environment_settings ||
-                        remote_parcel ||
+                        remote_parcel || server_release_notes ||
                         baked_upload || baked_upload_data || file_upload || file_upload_data ||
                         model_upload_data || mesh_upload_flag || render_materials ||
                         notecard_update || script_update || gesture_update ||
@@ -3849,7 +3849,7 @@ int main(int argc, char* argv[]) {
                         std::optional<homeworldz::grid::ViewerSession> authorized_session;
                         const auto expected_method =
                             texture || viewer_asset || simulator_features || environment_settings ||
-                            mesh_upload_flag ? "GET" : "POST";
+                            mesh_upload_flag || server_release_notes ? "GET" : "POST";
                         // RenderMaterials is read with GET and written with PUT —
                         // Firestorm uses PUT, observed on the wire — so one
                         // expected method cannot express it. POST is accepted too
