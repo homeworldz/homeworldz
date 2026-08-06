@@ -167,6 +167,19 @@ int main() {
     passed &= contains(seed, "<key>ViewerAsset</key><uri>http://region.example:42001/caps/assets/session-id</uri>");
     passed &= contains(seed, "<key>SimulatorFeatures</key><uri>http://region.example:42001/caps/simulator-features/session-id</uri>");
     passed &= contains(seed, "<key>EnvironmentSettings</key><uri>http://region.example:42001/caps/environment/session-id</uri>");
+    passed &= contains(seed, "<key>ServerReleaseNotes</key><uri>http://region.example:42001/caps/server-release-notes/session-id</uri>");
+    // The About box takes the URL from Location and reads no body, so the
+    // status line and that header are the entire contract.
+    const auto redirect = homeworldz::http::response_for_redirect(
+        "GET /caps/server-release-notes/session-id HTTP/1.1
+
+",
+        "https://homeworldz.com/roadmaps/server");
+    passed &= redirect.status_code == 302;
+    passed &= contains(redirect.content, "HTTP/1.1 302 Found
+");
+    passed &= contains(redirect.content, "Location: https://homeworldz.com/roadmaps/server
+");
     passed &= contains(seed, "<key>UploadBakedTexture</key><uri>http://region.example:42001/caps/upload-baked/session-id</uri>");
     passed &= contains(seed, "<key>NewFileAgentInventory</key><uri>http://region.example:42001/caps/upload-file/session-id</uri>");
     passed &= contains(seed, "<key>UpdateNotecardAgentInventory</key><uri>http://region.example:42001/caps/update-notecard/session-id</uri>");

@@ -153,6 +153,8 @@ std::string seed_capability_xml(std::string_view public_endpoint, std::string_vi
         xml_escape(base + "/caps/simulator-features/" + std::string(session_id));
     const auto environment_url = xml_escape(base + "/caps/environment/" + std::string(session_id));
     const auto remote_parcel_url = xml_escape(base + "/caps/remote-parcel/" + std::string(session_id));
+    const auto release_notes_url =
+        xml_escape(base + "/caps/server-release-notes/" + std::string(session_id));
     const auto baked_upload_url = xml_escape(base + "/caps/upload-baked/" + std::string(session_id));
     const auto file_upload_url = xml_escape(base + "/caps/upload-file/" + std::string(session_id));
     const auto mesh_upload_flag_url =
@@ -198,6 +200,10 @@ std::string seed_capability_xml(std::string_view public_endpoint, std::string_vi
            "</uri><key>SimulatorFeatures</key><uri>" + simulator_features_url +
            "</uri><key>EnvironmentSettings</key><uri>" + environment_url +
            "</uri><key>RemoteParcelRequest</key><uri>" + remote_parcel_url +
+           // The About box fetches this and follows the 302 it answers with;
+           // without the capability it shows "Error fetching server release
+           // notes URL" instead.
+           "</uri><key>ServerReleaseNotes</key><uri>" + release_notes_url +
            "</uri><key>UploadBakedTexture</key><uri>" + baked_upload_url +
            "</uri><key>NewFileAgentInventory</key><uri>" + file_upload_url +
            // The per-agent upload-permission query the model uploader makes

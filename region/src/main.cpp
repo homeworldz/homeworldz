@@ -1004,6 +1004,11 @@ int main(int argc, char* argv[]) {
     // water by being upgraded.
     const auto water_height = static_cast<double>(
         configured_int("region.water_height", 20, 0, 4096));
+    // Where the viewer's About box sends someone who clicks through to the
+    // server's release notes. Configurable because a grid that is not this one
+    // should not be advertising this one's pages.
+    const auto release_notes_url = configured_value(
+        "region.release_notes_url", "https://homeworldz.com/roadmaps/server");
     // This region's live terrain layers: the shipped defaults until an operator
     // changes them from the viewer's Region/Estate -> Terrain tab, then whatever
     // was persisted. Read by both publish paths, so a viewer and a session
@@ -3774,6 +3779,11 @@ int main(int argc, char* argv[]) {
                             homeworldz::caps::capability_session(response.path, "/caps/remote-parcel/");
                     const bool remote_parcel = !remote_parcel_session.empty();
                     if (remote_parcel) session_id = remote_parcel_session;
+                    const auto release_notes_session =
+                        homeworldz::caps::capability_session(response.path,
+                                                             "/caps/server-release-notes/");
+                    const bool server_release_notes = !release_notes_session.empty();
+                    if (server_release_notes) session_id = release_notes_session;
                     const auto baked_upload_session =
                         homeworldz::caps::capability_session(response.path, "/caps/upload-baked/");
                     const bool baked_upload = !baked_upload_session.empty();
@@ -4029,6 +4039,12 @@ int main(int argc, char* argv[]) {
                                         .map_server_url = grid_public_endpoint + "/map/",
                                         .extensions =
                                             homeworldz::viewer::available_region_extensions()}));
+                        } else if (authorized && server_release_notes) {
+                            // Firestorm's About box reports "Error fetching server
+                            // release notes URL" when this capability is absent,
+                            // which it was until 2026-08-05.
+                            response = homeworldz::http::response_for_redirect(
+                                request, release_notes_url);
                         } else if (authorized && mesh_upload_flag) {
                             // The model uploader's per-agent permission
                             // query: every resident may upload mesh on this

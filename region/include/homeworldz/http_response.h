@@ -23,6 +23,9 @@ Response response_for(std::string_view request);
 Response response_for(std::string_view request, std::string_view version);
 Response response_for_content(std::string_view request, int status_code,
                               std::string_view content_type, std::string body);
+// A 302 carrying only a Location, which is the whole protocol for the viewer's
+// ServerReleaseNotes capability.
+Response response_for_redirect(std::string_view request, std::string_view location);
 // A 206 slice of full_body with Content-Range, for the ranged fetches viewer
 // mesh loading performs (header first, then per-LOD extents).
 Response response_for_range(std::string_view request, std::string_view content_type,

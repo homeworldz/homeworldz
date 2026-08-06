@@ -103,6 +103,24 @@ std::string request_header_value(std::string_view request, std::string_view name
     return parse_request_header(request, name);
 }
 
+Response response_for_redirect(std::string_view request, std::string_view location) {
+    // Firestorm's About box does not read a body here: LLServerReleaseNotesURLFetcher
+    // GETs the ServerReleaseNotes capability and takes the URL from the Location
+    // header of a 302, reporting "Error fetching server release notes URL" when it
+    // gets anything else. The body exists only for something that is not a viewer.
+    std::string method;
+    std::string path;
+    parse_request_line(request, method, path);
+    auto request_id = parse_request_header(request, request_id_header);
+    if (!valid_request_id(request_id)) request_id = new_request_id();
+    const std::string body = "See " + std::string(location) + "\n";
+    auto content = std::string("HTTP/1.1 302 Found\r\nLocation: ") + std::string(location) +
+                   "\r\nContent-Type: text/plain\r\nConnection: close\r\n" +
+                   std::string(request_id_header) + ": " + request_id +
+                   "\r\nContent-Length: " + std::to_string(body.size()) + "\r\n\r\n" + body;
+    return {302, std::move(request_id), std::move(method), std::move(path), std::move(content)};
+}
+
 Response response_for_content(std::string_view request, int status_code,
                               std::string_view content_type, std::string body) {
     std::string method;
