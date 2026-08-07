@@ -86,6 +86,11 @@ missing:
 | 65.0 deg | 300-310 | 275-325 | 25.0 to 46.4 m |
 | 57.5 deg | 300-310 | 380-430 | 25.0 to 40.7 m |
 
+`welcome.r32` is the Welcome region (256 m) captured 2026-08-07, immediately
+after its terrain was baked as its own revert baseline. Heights run 7.19 to
+36.05 m over an 18 m seabed, so it is the shipped plateau plus the operator's
+terraforming rather than a synthetic surface. 262,144 bytes.
+
 The published traversal limit is 65 degrees, so the three faces sit either side
 of it and on it. Note the ordering: the shallowest face is the *last* band, not
 the first. A working note in this project had the outer two reversed; the table
