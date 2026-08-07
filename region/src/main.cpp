@@ -7176,6 +7176,14 @@ int main(int argc, char* argv[]) {
                                 pending_inventory_asset_uploads.find(endpoint + '|' + transaction_id);
                             const bool wearable = create_item->inventory_type == 18 &&
                                 (create_item->asset_type == 5 || create_item->asset_type == 13);
+                            // Captured before the branches below consume it:
+                            // whether an upload was already staged for this
+                            // transaction, and for what type. A refusal that
+                            // does not say which of these was wrong costs a
+                            // deploy to diagnose.
+                            const int staged_asset_type =
+                                pending == pending_inventory_asset_uploads.end() ?
+                                    -1 : pending->second.asset_type;
                             bool created = false;
                             bool consumed_pending_upload = false;
                             homeworldz::grid::InventoryItem item;
@@ -7318,7 +7326,14 @@ int main(int argc, char* argv[]) {
                                       << (created && sent ? "created" : "rejected") << "\",\"name\":"
                                       << homeworldz::api::json_string(create_item->name)
                                       << ",\"wearableType\":"
-                                      << static_cast<unsigned int>(create_item->wearable_type) << "}"
+                                      << static_cast<unsigned int>(create_item->wearable_type)
+                                      << ",\"assetType\":" << create_item->asset_type
+                                      << ",\"inventoryType\":" << create_item->inventory_type
+                                      << ",\"wearable\":" << (wearable ? "true" : "false")
+                                      << ",\"stagedAssetType\":" << staged_asset_type
+                                      << ",\"assetIdResolved\":" << (asset_id.empty() ? "false" : "true")
+                                      << ",\"created\":" << (created ? "true" : "false")
+                                      << ",\"sent\":" << (sent ? "true" : "false") << "}"
                                       << std::endl;
                         }
                         const auto handshake_reply = homeworldz::viewer::decode_region_handshake_reply(packet->payload);
