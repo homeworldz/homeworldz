@@ -7327,8 +7327,13 @@ int main(int argc, char* argv[]) {
                                       << homeworldz::api::json_string(create_item->name)
                                       << ",\"wearableType\":"
                                       << static_cast<unsigned int>(create_item->wearable_type)
-                                      << ",\"assetType\":" << create_item->asset_type
-                                      << ",\"inventoryType\":" << create_item->inventory_type
+                                      // Cast: these are int8_t, and streaming
+                                      // one writes the character with that code
+                                      // rather than the number. Type 2 logged
+                                      // as a raw 0x02 and journalctl then hid
+                                      // the whole line as binary.
+                                      << ",\"assetType\":" << static_cast<int>(create_item->asset_type)
+                                      << ",\"inventoryType\":" << static_cast<int>(create_item->inventory_type)
                                       << ",\"wearable\":" << (wearable ? "true" : "false")
                                       << ",\"stagedAssetType\":" << staged_asset_type
                                       << ",\"assetIdResolved\":" << (asset_id.empty() ? "false" : "true")

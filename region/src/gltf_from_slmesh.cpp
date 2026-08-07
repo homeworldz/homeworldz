@@ -171,7 +171,7 @@ GltfConversion gltf_from_sl_mesh(std::span<const std::byte> asset) {
 
         if (!primitives.empty()) primitives += ',';
         primitives += "{\"attributes\":{" + attributes + "},\"indices\":" +
-                      std::to_string(index_accessor) + ",\"mode\":4}";
+                      std::to_string(index_accessor) + ",\"mode\":4,\"material\":0}";
 
         result.primitives += 1;
         result.vertices += submesh.positions.size();
@@ -179,10 +179,26 @@ GltfConversion gltf_from_sl_mesh(std::span<const std::byte> asset) {
     }
     pad_to_four(binary);
 
+    // State the material rather than inheriting glTF's default one. A primitive
+    // with no material takes the specification's default, and that default is
+    // metallicFactor 1.0 — a fully rough metal, which has no diffuse response
+    // and draws as a reflection of the sky rather than as its own surface. Every
+    // rendition this converter produced before 0.8 said that, and said it
+    // conformantly, so every correct renderer drew metal. The content here is a
+    // mesh a person uploaded through a viewer; it is not metal, and the
+    // converter is the right place to say so, since the alternative is each
+    // client guessing and disagreeing.
+    //
+    // No baseColorTexture: a type-49 mesh carries geometry, and its faces are
+    // textured by the region's own texture entry rather than by anything in the
+    // asset. Naming an image here would invent one.
+    constexpr const char* default_material =
+        "{\"pbrMetallicRoughness\":{\"metallicFactor\":0,\"roughnessFactor\":1}}";
     std::string document =
         "{\"asset\":{\"version\":\"2.0\",\"generator\":\"" + std::string(generator) +
         "\"},\"buffers\":[{\"byteLength\":" + std::to_string(binary.size()) +
         "}],\"bufferViews\":[" + views + "],\"accessors\":[" + accessors +
+        "],\"materials\":[" + std::string(default_material) +
         "],\"meshes\":[{\"primitives\":[" + primitives +
         "]}],\"nodes\":[{\"mesh\":0}],\"scenes\":[{\"nodes\":[0]}],\"scene\":0}";
     while (document.size() % 4 != 0) document.push_back(' ');

@@ -103,7 +103,11 @@ TextureExtraction extract_textures(std::span<const std::byte> glb);
 // when output changes so regeneration can find what it supersedes.
 // 0.7: derived JPEG2000 is compressed at 20:1 rather than lossless, so every
 // j2c-texture a previous generator produced is superseded and reconverts.
-inline constexpr const char* generator = "meshsmith/0.7";
+// Bumped to 0.8 for the material a derived glTF now states rather than leaves
+// to the specification's default. Rendition regeneration re-queues whatever a
+// predecessor produced, so raising this is what reissues the earlier renditions
+// that drew as metal.
+inline constexpr const char* generator = "meshsmith/0.8";
 
 } // namespace homeworldz::mesh
 
