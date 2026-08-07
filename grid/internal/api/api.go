@@ -289,6 +289,9 @@ func identityOf(account webaccount.Account) Identity {
 		ID:          account.ID,
 		Userid:      account.Userid,
 		DisplayName: account.DisplayName,
+		// Every route that returns an Identity is either the account's own
+		// session or an administrator's listing; none serves it to a third party.
+		Email:       account.Email,
 		RezDate:     account.RezDate.UTC(),
 		Privs:       account.Privileges,
 	}

@@ -64,6 +64,10 @@ type Account struct {
 	ID          string
 	Userid      string
 	DisplayName string
+	// Email is the address on file. It reaches a browser only through the
+	// account's own session or an administrator's listing; nothing serves it to
+	// a third party.
+	Email       string
 	RezDate     time.Time
 	Privileges  string
 	AuthVersion int
@@ -116,7 +120,7 @@ func (s *PostgresStore) WithInventoryProvisioner(p InventoryProvisioner) *Postgr
 	return s
 }
 
-const accountColumns = "id, username, display_name, created_at, privileges, auth_version, verified_at, kind, tags"
+const accountColumns = "id, username, display_name, email, created_at, privileges, auth_version, verified_at, kind, tags"
 
 type rowScanner interface {
 	Scan(dest ...any) error
@@ -126,12 +130,14 @@ func scanAccount(row rowScanner) (Account, error) {
 	var (
 		account     Account
 		displayName sql.NullString
+		email       sql.NullString
 		verifiedAt  sql.NullTime
 	)
-	if err := row.Scan(&account.ID, &account.Userid, &displayName, &account.RezDate,
+	if err := row.Scan(&account.ID, &account.Userid, &displayName, &email, &account.RezDate,
 		&account.Privileges, &account.AuthVersion, &verifiedAt, &account.Kind, &account.Tags); err != nil {
 		return Account{}, err
 	}
+	account.Email = email.String
 	account.DisplayName = displayName.String
 	if account.DisplayName == "" {
 		account.DisplayName = account.Userid
@@ -775,17 +781,19 @@ func scanManagedRow(row rowScanner) (Account, *Ban, error) {
 	var (
 		account     Account
 		displayName sql.NullString
+		email       sql.NullString
 		verifiedAt  sql.NullTime
 		reason      sql.NullString
 		expiresAt   sql.NullTime
 		bannedAt    sql.NullTime
 		bannedBy    sql.NullString
 	)
-	if err := row.Scan(&account.ID, &account.Userid, &displayName, &account.RezDate,
+	if err := row.Scan(&account.ID, &account.Userid, &displayName, &email, &account.RezDate,
 		&account.Privileges, &account.AuthVersion, &verifiedAt, &account.Kind, &account.Tags,
 		&reason, &expiresAt, &bannedAt, &bannedBy); err != nil {
 		return Account{}, nil, fmt.Errorf("scan managed account: %w", err)
 	}
+	account.Email = email.String
 	account.DisplayName = displayName.String
 	if account.DisplayName == "" {
 		account.DisplayName = account.Userid

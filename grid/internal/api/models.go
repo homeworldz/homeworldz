@@ -9,11 +9,14 @@ type Error struct {
 	Field   string `json:"field,omitempty"`
 }
 
-// Identity is the public avatar identity.
+// Identity is the avatar identity returned to the account's own session and to
+// administrators. It is not a third-party profile: Email is on it, and no route
+// serves an Identity to anyone but its owner or an admin.
 type Identity struct {
 	ID          string    `json:"id"`
 	Userid      string    `json:"userid"`
 	DisplayName string    `json:"displayName"`
+	Email       string    `json:"email,omitempty"`
 	RezDate     time.Time `json:"rezDate"`
 	Privs       string    `json:"privs"`
 }

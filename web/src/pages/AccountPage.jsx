@@ -117,6 +117,14 @@ export function AccountPage() {
               <dd>{identity().displayName}</dd>
             </div>
             <div>
+              <dt>Email</dt>
+              <dd>
+                <Show when={identity().email} fallback={<em>none on file</em>}>
+                  {identity().email}
+                </Show>
+              </dd>
+            </div>
+            <div>
               <dt>Registered</dt>
               <dd>{new Date(identity().rezDate).toLocaleDateString()}</dd>
             </div>
