@@ -7575,13 +7575,24 @@ int main(int argc, char* argv[]) {
                             // IMG_DEFAULT_AVATAR (c228d1cf) in a bake slot means
                             // unbaked rather than missing, so it is counted apart
                             // from ids that are simply absent.
-                            std::size_t present = 0, absent = 0, unbaked = 0;
+                            //
+                            // 46697265-7374-6f72-6d00-... is the ASCII bytes of
+                            // "Firestorm": the viewer's own client tag, which it
+                            // parks in a texture slot to identify itself to other
+                            // viewers (its client_list_v2.xml carries the same
+                            // id). It names no asset and never will, so counting
+                            // it absent reports a defect that cannot be fixed.
+                            std::size_t present = 0, absent = 0, unbaked = 0, tags = 0;
                             std::string named;
                             for (const auto& texture : appearance->texture_ids) {
                                 const auto id = homeworldz::viewer::format_uuid(texture);
                                 if (id == "00000000-0000-0000-0000-000000000000") continue;
                                 if (id.starts_with("c228d1cf")) {
                                     ++unbaked;
+                                    continue;
+                                }
+                                if (id.starts_with("46697265-7374-6f72-6d00")) {
+                                    ++tags;
                                     continue;
                                 }
                                 const bool have = storage->find_asset(id).has_value();
@@ -7601,7 +7612,8 @@ int main(int argc, char* argv[]) {
                             std::cout << "{\"level\":" << (absent == 0 ? "\"info\"" : "\"warn\"")
                                       << ",\"message\":\"wearer appearance textures\",\"present\":"
                                       << present << ",\"absent\":" << absent << ",\"unbaked\":"
-                                      << unbaked << ",\"textureEntryBytes\":"
+                                      << unbaked << ",\"clientTags\":" << tags
+                                      << ",\"textureEntryBytes\":"
                                       << appearance->texture_entry.size() << ",\"textureSlots\":"
                                       << appearance->texture_ids.size() << ",\"appearanceVersion\":"
                                       << static_cast<int>(appearance->appearance_version)

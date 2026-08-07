@@ -103,10 +103,37 @@ func (s *durableStore) CreateItems(ctx context.Context, items []Item) ([]Item, e
 	return s.Store.CreateItems(ctx, items)
 }
 
+// repointsAsset reports whether an update changes which bytes an item names.
+// A lookup that fails answers true: an unknown state keeps the obligation
+// rather than quietly dropping it.
+func (s *durableStore) repointsAsset(ctx context.Context, item Item) bool {
+	items, err := s.Store.ListItems(ctx, item.OwnerUserID)
+	if err != nil {
+		return true
+	}
+	for _, existing := range items {
+		if existing.ID == item.ID {
+			return existing.AssetID != item.AssetID
+		}
+	}
+	return true
+}
+
 func (s *durableStore) UpdateItem(ctx context.Context, item Item) (Item, error) {
 	// An update that re-points an item at different bytes is a new inventory
-	// reference and carries the same obligation as creating one.
-	if referencesBytes(item) {
+	// reference and carries the same obligation as creating one. An update that
+	// leaves the asset alone — a move, a rename, a permission change — creates
+	// no new reference and must not be gated.
+	//
+	// Gating it made an item whose bytes were lost impossible to get rid of:
+	// moving it to Trash is an update, the update demanded the asset be made
+	// durable, and bytes that no longer exist anywhere cannot be. The operator
+	// hit this on a gesture from before the vault, whose asset row survives and
+	// whose content does not — deleting it was refused 409 asset_not_durable,
+	// leaving an item that fails to load at every login and cannot be removed.
+	// The invariant is meant to stop dead references being created, not to trap
+	// the ones that already went dead.
+	if referencesBytes(item) && s.repointsAsset(ctx, item) {
 		if err := s.ensure(ctx, item.AssetID, item.AssetType); err != nil {
 			return Item{}, err
 		}
