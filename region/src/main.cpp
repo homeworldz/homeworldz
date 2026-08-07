@@ -7427,6 +7427,41 @@ int main(int argc, char* argv[]) {
                             if (stored != 0)
                                 std::cout << "{\"level\":\"info\",\"message\":\"wearable cache updated\","
                                              "\"count\":" << stored << "}" << std::endl;
+                            // What the wearer says it is wearing, and whether we
+                            // hold it. A cloud is decided by the textures named
+                            // here: the avatar renders from these and from
+                            // nothing else, so an id we cannot serve is the
+                            // difference between a body and a cloud — and until
+                            // now nothing recorded them, which left the wearer's
+                            // own view the only instrument.
+                            //
+                            // IMG_DEFAULT_AVATAR (c228d1cf) in a bake slot means
+                            // unbaked rather than missing, so it is counted apart
+                            // from ids that are simply absent.
+                            std::size_t present = 0, absent = 0, unbaked = 0;
+                            std::string named;
+                            for (const auto& texture : appearance->texture_ids) {
+                                const auto id = homeworldz::viewer::format_uuid(texture);
+                                if (id == "00000000-0000-0000-0000-000000000000") continue;
+                                if (id.starts_with("c228d1cf")) {
+                                    ++unbaked;
+                                    continue;
+                                }
+                                const bool have = storage->find_asset(id).has_value();
+                                have ? ++present : ++absent;
+                                if (!have) {
+                                    if (!named.empty()) named += ',';
+                                    named += "\"" + id + "\"";
+                                }
+                            }
+                            std::cout << "{\"level\":" << (absent == 0 ? "\"info\"" : "\"warn\"")
+                                      << ",\"message\":\"wearer appearance textures\",\"present\":"
+                                      << present << ",\"absent\":" << absent << ",\"unbaked\":"
+                                      << unbaked << ",\"appearanceVersion\":"
+                                      << static_cast<int>(appearance->appearance_version)
+                                      << ",\"visualParams\":" << appearance->visual_params.size()
+                                      << ",\"cacheEntries\":" << appearance->cache_entries.size()
+                                      << ",\"missing\":[" << named << "]}" << std::endl;
                             // Relay the client's own appearance. But a headless
                             // client echoes back the server-bake UUIDs we seeded it,
                             // in a legacy (v0) message; relayed as-is, viewers would
