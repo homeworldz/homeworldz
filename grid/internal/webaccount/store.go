@@ -614,7 +614,7 @@ func (s *PostgresStore) List(ctx context.Context, search, cursor string, limit i
 	}
 	pattern := "%" + strings.ReplaceAll(strings.ReplaceAll(search, "%", `\%`), "_", `\_`) + "%"
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT u.id, u.username, u.display_name, u.created_at, u.privileges, u.auth_version, u.verified_at, u.kind, u.tags,
+		SELECT u.id, u.username, u.display_name, u.email, u.created_at, u.privileges, u.auth_version, u.verified_at, u.kind, u.tags,
 		       b.reason, b.expires_at, b.banned_at, b.banned_by
 		FROM users u
 		LEFT JOIN account_bans b ON b.user_id = u.id
