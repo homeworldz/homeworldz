@@ -451,6 +451,13 @@ func (a *API) inventoryItemsByUser(w http.ResponseWriter, r *http.Request, userI
 	validType := (request.AssetType == 0 && request.InventoryType == 0) ||
 		(request.AssetType == 0 && request.InventoryType == 15) ||
 		(request.AssetType == 1 && request.InventoryType == 1) ||
+		// Calling card. Its asset_id is the avatar it names rather than an
+		// asset, so nothing backs it in the vault — see referencesBytes in
+		// inventory/durability.go, which excludes it for the same reason.
+		// Firestorm creates the agent's own card on any login where
+		// Friends/All does not already hold one, so refusing the pair refused
+		// every first login.
+		(request.AssetType == 2 && request.InventoryType == 2) ||
 		(request.AssetType == 3 && request.InventoryType == 3) ||
 		(request.AssetType == 7 && request.InventoryType == 7) ||
 		(request.AssetType == 10 && request.InventoryType == 10) ||
