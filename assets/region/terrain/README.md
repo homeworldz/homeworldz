@@ -88,5 +88,5 @@ missing:
 
 The published traversal limit is 65 degrees, so the three faces sit either side
 of it and on it. Note the ordering: the shallowest face is the *last* band, not
-the first — an earlier note in this project had the outer two reversed, which
-would have put a test obstruction on the wrong slope.
+the first. A working note in this project had the outer two reversed; the table
+above is what the bytes say, and is the one to trust.
