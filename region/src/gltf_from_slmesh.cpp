@@ -179,15 +179,24 @@ GltfConversion gltf_from_sl_mesh(std::span<const std::byte> asset) {
     }
     pad_to_four(binary);
 
-    // State the material rather than inheriting glTF's default one. A primitive
-    // with no material takes the specification's default, and that default is
-    // metallicFactor 1.0 — a fully rough metal, which has no diffuse response
-    // and draws as a reflection of the sky rather than as its own surface. Every
-    // rendition this converter produced before 0.8 said that, and said it
-    // conformantly, so every correct renderer drew metal. The content here is a
-    // mesh a person uploaded through a viewer; it is not metal, and the
-    // converter is the right place to say so, since the alternative is each
-    // client guessing and disagreeing.
+    // State the material rather than leaving the primitive without one, because
+    // what a renderer does with a material-less primitive is not settled in
+    // practice. glTF says such a primitive takes the specification's default
+    // material, which is metallicFactor 1.0 — a fully rough metal with no
+    // diffuse response. Godot does not do that: it honours per-field defaults
+    // inside a material that is declared, but substitutes its own non-metallic
+    // StandardMaterial3D when none is declared at all, so absence of a material
+    // is not equivalent there to a material of defaults. Both readings are
+    // defensible and they disagree, which is the whole argument for saying it.
+    //
+    // Measured 2026-08-07 in the Homeworldz client (Godot): renditions carrying
+    // no material imported at metallic 0.00. The spec-derived prediction of
+    // metal was wrong for that renderer and right for others; relying on either
+    // is the bug.
+    //
+    // The content is a mesh a person uploaded through a viewer, which is not
+    // metal. Saying so explicitly makes the result the same everywhere instead
+    // of resting on whose default wins.
     //
     // No baseColorTexture: a type-49 mesh carries geometry, and its faces are
     // textured by the region's own texture entry rather than by anything in the
