@@ -24,9 +24,16 @@ type DurabilityKeeper interface {
 // Asset types whose asset_id is not an asset at all. A link's asset_id names
 // the inventory item it points at, so there are no bytes to make durable, and
 // asking the registry about one would fail every time.
+//
+// A calling card's asset_id is the avatar it names, which is a user id rather
+// than an asset id and has no bytes anywhere. Firestorm creates the agent's own
+// card at login when Friends/All does not already hold one
+// (llfriendcard.cpp, create_agent_calling_card_name_cb), so every first login
+// reaches this path.
 const (
-	assetTypeLink       = 24
-	assetTypeLinkFolder = 25
+	assetTypeCallingCard = 2
+	assetTypeLink        = 24
+	assetTypeLinkFolder  = 25
 )
 
 // WithDurability wraps a store so that every path creating or re-pointing an
@@ -53,7 +60,8 @@ type durableStore struct {
 // durable before the row may exist.
 func referencesBytes(item Item) bool {
 	return item.AssetID != "" && item.AssetID != zeroUUID &&
-		item.AssetType != assetTypeLink && item.AssetType != assetTypeLinkFolder
+		item.AssetType != assetTypeLink && item.AssetType != assetTypeLinkFolder &&
+		item.AssetType != assetTypeCallingCard
 }
 
 func (s *durableStore) ensure(ctx context.Context, assetID string, assetType int) error {

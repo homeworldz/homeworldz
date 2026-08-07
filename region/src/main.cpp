@@ -7196,6 +7196,22 @@ int main(int argc, char* argv[]) {
                                 pending->second.asset_type == create_item->asset_type) {
                                 asset_id = pending->second.asset_id;
                                 consumed_pending_upload = true;
+                            } else if (create_item->asset_type == 2 &&
+                                       create_item->inventory_type == 2) {
+                                // A calling card has no asset body. Its asset_id
+                                // is the avatar it names, which the viewer sends
+                                // in the description as a bare UUID string
+                                // (llfriendcard.cpp,
+                                // create_agent_calling_card_name_cb, with a null
+                                // transaction id because there is nothing to
+                                // upload). Firestorm creates the agent's own card
+                                // on any login where Friends/All does not hold
+                                // one, so refusing this refused every first
+                                // login, with an alert naming the avatar.
+                                const auto named =
+                                    homeworldz::viewer::parse_uuid(create_item->description);
+                                asset_id = named ? homeworldz::viewer::format_uuid(*named) :
+                                                   homeworldz::viewer::format_uuid(identity->agent_id);
                             } else if (pending == pending_inventory_asset_uploads.end()) {
                                 const auto avatar = avatars.find(endpoint);
                                 const auto position = avatar == avatars.end() ?
