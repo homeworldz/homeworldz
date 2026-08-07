@@ -342,8 +342,7 @@ func (s *PostgresStore) RequestPasswordReset(ctx context.Context, ident string) 
 		email      sql.NullString
 		verifiedAt sql.NullTime
 	)
-	// The same two identifiers login accepts, resolved the same way: the userid
-	// or the display name, both of which carry unique indexes.
+	// The same identifier login accepts, resolved the same way: the userid.
 	//
 	// Email is deliberately not among them. Nothing constrains it to one account
 	// — two avatars may legitimately share an address — and this query took the
@@ -360,7 +359,7 @@ func (s *PostgresStore) RequestPasswordReset(ctx context.Context, ident string) 
 	// confirmed address to send to, so it is not eligible.
 	err = tx.QueryRowContext(ctx, `
 		SELECT id, email, verified_at FROM users
-		WHERE username = $1 OR display_name_key = $1
+		WHERE username = $1
 		FOR UPDATE`, key).Scan(&userID, &email, &verifiedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", "", ErrNotFound
@@ -445,10 +444,11 @@ func (s *PostgresStore) ConsumePasswordReset(ctx context.Context, token, newPass
 // Authenticate verifies a password for a verified account and returns it. An
 // unverified account or a wrong password both yield ErrInvalidCredentials.
 func (s *PostgresStore) Authenticate(ctx context.Context, ident, password string) (Account, error) {
-	// Accept either the userid or the display name: normalize the supplied
-	// identifier and match it against the userid or the normalized display name.
-	// Uniqueness (username unique + display_name_key unique, and the cross-check
-	// in registration/UpdateProfile) guarantees at most one match.
+	// The userid, and only the userid. DeriveUserid still normalizes, so "Jim
+	// Tarber" resolves to jim.tarber — that is a lenient spelling of the userid,
+	// not a second identifier. A display name that has since been changed no
+	// longer logs in, which is the point: the userid is permanent and the display
+	// name is not.
 	key := DeriveUserid(ident)
 	if key == "" {
 		return Account{}, ErrInvalidCredentials
@@ -457,7 +457,7 @@ func (s *PostgresStore) Authenticate(ctx context.Context, ident, password string
 	var id string
 	err := s.db.QueryRowContext(ctx,
 		`SELECT id, password_hash FROM users
-		   WHERE (username = $1 OR display_name_key = $1) AND verified_at IS NOT NULL
+		   WHERE username = $1 AND verified_at IS NOT NULL
 		   LIMIT 1`,
 		key).Scan(&id, &passwordHash)
 	if errors.Is(err, sql.ErrNoRows) {

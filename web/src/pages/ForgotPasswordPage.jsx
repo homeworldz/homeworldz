@@ -12,7 +12,7 @@ export function ForgotPasswordPage() {
     event.preventDefault();
     setError(null);
     if (identifier().trim() === "") {
-      setError("Enter your avatar name, for example first.last or First Last.");
+      setError("Enter your login ID, for example first.last.");
       return;
     }
 
@@ -29,7 +29,7 @@ export function ForgotPasswordPage() {
       // here would re-create the account oracle it exists to prevent
       // (ADR 0034).
       if (err instanceof ApiError && err.status === 400) {
-        setError("Enter your avatar name, for example first.last or First Last.");
+        setError("Enter your login ID, for example first.last.");
       } else if (err instanceof ApiError && err.status === 429) {
         setError("Too many requests. Please wait a moment and try again.");
       } else {
@@ -67,12 +67,12 @@ export function ForgotPasswordPage() {
         <form class="auth-card" onSubmit={submit} novalidate>
           <h1 id="forgot-title">Reset your password</h1>
           <p class="lede">
-            Enter your avatar name and we will email you a link to choose a new
+            Enter your login ID and we will email you a link to choose a new
             password, at the address on that account.
           </p>
 
           <div class="field">
-            <label for="identifier">Avatar name</label>
+            <label for="identifier">Login ID</label>
             <input
               id="identifier"
               name="identifier"
@@ -85,7 +85,7 @@ export function ForgotPasswordPage() {
               onInput={(event) => setIdentifier(event.currentTarget.value)}
               required
             />
-            <p class="field-hint">For example first.last, or First Last.</p>
+            <p class="field-hint">For example first.last.</p>
           </div>
 
           <Show when={error()}>

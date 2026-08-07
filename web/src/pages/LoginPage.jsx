@@ -40,7 +40,7 @@ export function LoginPage() {
         <h1 id="login-title">Login</h1>
 
         <div class="field">
-          <label for="userid">Avatar name or login ID</label>
+          <label for="userid">Login ID</label>
           <input
             id="userid"
             name="userid"

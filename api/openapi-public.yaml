@@ -49,9 +49,14 @@ paths:
                   minLength: 1
                   maxLength: 254
                   description: |
-                    The account name in `first.last` form, or the email address
-                    on file. Either is accepted so a person who has forgotten
-                    one can use the other.
+                    The login ID, in `first.last` form. This is the only accepted
+                    identifier, and it is the same one login takes.
+
+                    An email address is not accepted: nothing constrains it to a
+                    single account, so it cannot name which password to change.
+                    A display name is not accepted either — it can be changed,
+                    while the login ID cannot. Case and spacing are normalized,
+                    so `First Last` resolves to `first.last`.
       responses:
         "202":
           description: |
