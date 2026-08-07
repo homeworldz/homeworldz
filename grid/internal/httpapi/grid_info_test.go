@@ -11,7 +11,11 @@ import (
 )
 
 func TestViewerGridInfo(t *testing.T) {
-	handler := New(nil, "test", Options{GridPublicURL: "http://grid.example:8002/", GridName: "Homeworldz Local"})
+	handler := New(nil, "test", Options{GridPublicURL: "http://grid.example:8002/", GridName: "Homeworldz Local",
+		AboutURL:    "https://example.com/",
+		SupportURL:  "https://example.com/faq",
+		RegisterURL: "https://accounts.example.com/register",
+		PasswordURL: "https://accounts.example.com/forgot"})
 	request := httptest.NewRequest(http.MethodGet, "/get_grid_info", nil)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
@@ -26,6 +30,40 @@ func TestViewerGridInfo(t *testing.T) {
 		info.Login != "http://grid.example:8002/login" || info.Welcome != "http://grid.example:8002/welcome" ||
 		info.Helper != "http://grid.example:8002/" {
 		t.Fatalf("unexpected grid info: %#v", info)
+	}
+	// The human-facing pages come from configuration, not from the grid's own
+	// public URL: the site and the account site are separate deployments, and
+	// deriving them here would have published grid.example links for both.
+	if info.About != "https://example.com/" || info.Help != "https://example.com/faq" ||
+		info.Register != "https://accounts.example.com/register" ||
+		info.Password != "https://accounts.example.com/forgot" {
+		t.Fatalf("unexpected grid info pages: %#v", info)
+	}
+	// login is the XML-RPC endpoint, never the website's sign-in page.
+	if strings.Contains(info.Login, "accounts.example.com") {
+		t.Fatalf("login must stay the grid's own endpoint: %q", info.Login)
+	}
+}
+
+// An unconfigured grid publishes no human-facing pages at all. Emitting empty
+// elements would leave a viewer's grid manager showing links that go nowhere,
+// which reads as configured-and-broken rather than not configured.
+func TestViewerGridInfoOmitsUnconfiguredPages(t *testing.T) {
+	handler := New(nil, "test", Options{GridPublicURL: "http://grid.example:8002/", GridName: "Homeworldz Local"})
+	request := httptest.NewRequest(http.MethodGet, "/get_grid_info", nil)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	body := response.Body.String()
+	for _, element := range []string{"<about>", "<help>", "<register>", "<password>"} {
+		if strings.Contains(body, element) {
+			t.Fatalf("unconfigured grid published %s: %s", element, body)
+		}
+	}
+	// Search and message are never published, configured or not.
+	for _, element := range []string{"<search>", "<message>"} {
+		if strings.Contains(body, element) {
+			t.Fatalf("published unserved %s: %s", element, body)
+		}
 	}
 }
 

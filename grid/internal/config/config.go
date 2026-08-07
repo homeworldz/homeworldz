@@ -38,6 +38,18 @@ type Grid struct {
 	// empty to disable. Region-specific greetings are the region's own
 	// region.welcome_message.
 	WelcomeMessage string
+	// AboutURL, SupportURL, RegisterURL and PasswordURL are the human-facing
+	// destinations published in get_grid_info ([grid] about_url, support_url,
+	// register_url, password_url). A viewer's grid manager offers them as Grid
+	// Website, Grid Support, Grid Registration and Grid Password URI, so each
+	// must be a page a person can open — not a service endpoint. Set one empty
+	// to omit it from the document rather than publish a link that goes
+	// nowhere. Grid Search and Grid Message URI stay unpublished: nothing
+	// serves them, and advertising them makes a viewer fail rather than skip.
+	AboutURL    string
+	SupportURL  string
+	RegisterURL string
+	PasswordURL string
 	// VaultPath is the filesystem root of the asset vault (ADR 0026), holding the
 	// durable bytes behind inventory-referenced assets. A relative value resolves
 	// against the process working directory, as the region's data_path does.
@@ -99,6 +111,18 @@ func LoadGrid(directory string) (Grid, error) {
 		WelcomeLocations: splitList(parsed.Section("grid").Key("welcome_locations").String()),
 		WelcomeMessage: parsed.Section("grid").Key("welcome_message").
 			MustString("Welcome to {grid}, {user}!"),
+		// The four human-facing destinations a viewer's grid manager offers.
+		// They are not derived from the grid's own public URL: the grid serves
+		// the protocol, while these are pages on the public site and the
+		// account site, which are separate deployments.
+		AboutURL: strings.TrimSpace(parsed.Section("grid").Key("about_url").
+			MustString("https://homeworldz.com/")),
+		SupportURL: strings.TrimSpace(parsed.Section("grid").Key("support_url").
+			MustString("https://homeworldz.com/faq")),
+		RegisterURL: strings.TrimSpace(parsed.Section("grid").Key("register_url").
+			MustString("https://my.homeworldz.com/register")),
+		PasswordURL: strings.TrimSpace(parsed.Section("grid").Key("password_url").
+			MustString("https://my.homeworldz.com/forgot")),
 	}
 	if result.VaultPath == "" {
 		return Grid{}, fmt.Errorf("invalid asset vault path %q", result.VaultPath)

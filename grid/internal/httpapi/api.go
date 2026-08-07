@@ -40,6 +40,10 @@ type API struct {
 	version        string
 	publicURL      string
 	gridName       string
+	aboutURL       string
+	supportURL     string
+	registerURL    string
+	passwordURL    string
 	welcomeText    string
 	logger         *slog.Logger
 	regions        regions.Store
@@ -77,6 +81,13 @@ type Options struct {
 	ServiceToken  string
 	GridPublicURL string
 	GridName      string
+	// AboutURL, SupportURL, RegisterURL and PasswordURL are the human-facing
+	// pages published in get_grid_info. Each is omitted from the document when
+	// empty, so an unconfigured grid advertises nothing rather than a dead link.
+	AboutURL    string
+	SupportURL  string
+	RegisterURL string
+	PasswordURL string
 	// WelcomeMessage is the grid-wide login greeting template ([grid]
 	// welcome_message; {grid} and {user} placeholders); empty disables the
 	// login reply's message.
@@ -114,7 +125,12 @@ type Options struct {
 
 func New(ready ReadinessChecker, version string, options Options) http.Handler {
 	a := &API{ready: ready, version: version, publicURL: strings.TrimRight(options.GridPublicURL, "/"),
-		gridName: strings.TrimSpace(options.GridName), logger: options.Logger,
+		gridName:    strings.TrimSpace(options.GridName),
+		aboutURL:    strings.TrimSpace(options.AboutURL),
+		supportURL:  strings.TrimSpace(options.SupportURL),
+		registerURL: strings.TrimSpace(options.RegisterURL),
+		passwordURL: strings.TrimSpace(options.PasswordURL),
+		logger:      options.Logger,
 		regions: options.Regions, identity: options.Identity, presence: options.Presence,
 		inventory: options.Inventory, assets: options.Assets, vault: options.Vault,
 		renditions: options.Renditions, workerToken: options.WorkerToken,

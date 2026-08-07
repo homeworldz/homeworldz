@@ -14,6 +14,22 @@ var homeworldzLogo []byte
 var homeworldzLogoDataURL = "data:image/svg+xml;base64," +
 	base64.StdEncoding.EncodeToString(homeworldzLogo)
 
+// viewerGridInfo is the get_grid_info document. The first six fields are
+// protocol endpoints served by this grid; the last four are pages a person
+// opens, which is why they come from configuration rather than the grid's own
+// public URL — the public site and the account site are separate deployments.
+//
+// Firestorm's grid manager shows them as Grid URI (login), Login Page
+// (welcome), Helper URI (helperuri), Grid Website (about), Grid Support
+// (help), Grid Registration (register) and Grid Password URI (password).
+//
+// login is the XML-RPC login_to_simulator endpoint, not a sign-in page. Its
+// resemblance to the website's own login page is a trap: pointing it at the
+// site would break viewer login entirely.
+//
+// Grid Search and Grid Message URI have no fields here on purpose. Nothing
+// serves them, and a viewer told where to search fails against a dead URL
+// instead of quietly doing without.
 type viewerGridInfo struct {
 	XMLName  xml.Name `xml:"gridinfo"`
 	GridNick string   `xml:"gridnick"`
@@ -22,6 +38,10 @@ type viewerGridInfo struct {
 	Login    string   `xml:"login"`
 	Welcome  string   `xml:"welcome"`
 	Helper   string   `xml:"helperuri"`
+	About    string   `xml:"about,omitempty"`
+	Help     string   `xml:"help,omitempty"`
+	Register string   `xml:"register,omitempty"`
+	Password string   `xml:"password,omitempty"`
 }
 
 func (a *API) gridInfo(w http.ResponseWriter, _ *http.Request) {
@@ -32,6 +52,10 @@ func (a *API) gridInfo(w http.ResponseWriter, _ *http.Request) {
 		Login:    a.publicURL + "/login",
 		Welcome:  a.publicURL + "/welcome",
 		Helper:   a.publicURL + "/",
+		About:    a.aboutURL,
+		Help:     a.supportURL,
+		Register: a.registerURL,
+		Password: a.passwordURL,
 	})
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, Error{Code: "grid_info_error", Message: "grid information is unavailable"})
