@@ -78,11 +78,18 @@ static void set_socket_deadline(socket_handle socket, int milliseconds) {
     setsockopt(socket, SOL_SOCKET, SO_SNDTIMEO,
                reinterpret_cast<const char*>(&timeout), sizeof(timeout));
 }
+static void set_socket_blocking_mode(socket_handle socket, bool blocking) {
+    u_long mode = blocking ? 0u : 1u;
+    ioctlsocket(socket, FIONBIO, &mode);
+}
+static bool socket_would_block() { return WSAGetLastError() == WSAEWOULDBLOCK; }
 #else
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <cerrno>
+#include <fcntl.h>
 #include <unistd.h>
 using socket_handle = int;
 using socket_length = socklen_t;
@@ -93,6 +100,14 @@ static void set_socket_deadline(socket_handle socket, int milliseconds) {
     setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
     setsockopt(socket, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
 }
+static void set_socket_blocking_mode(socket_handle socket, bool blocking) {
+    const int flags = fcntl(socket, F_GETFL, 0);
+    if (flags < 0) return;
+    fcntl(socket, F_SETFL, blocking ? (flags & ~O_NONBLOCK) : (flags | O_NONBLOCK));
+}
+static bool socket_would_block() {
+    return errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR;
+}
 #endif
 
 namespace {
@@ -101,6 +116,11 @@ std::atomic_bool running{true};
 // or send, not a whole transfer, so a live mesh upload keeps its time while a
 // silent peer is dropped rather than stalling the region's only loop.
 constexpr int http_client_timeout_ms = 15000;
+// A ceiling on connections held mid-request. Reached only by a peer opening
+// sockets faster than they time out; past it the listen queue does the refusing,
+// which is the right place for it — unlike the old behaviour, where the queue
+// filled because nothing was draining it.
+constexpr std::size_t maximum_incoming_http = 256;
 constexpr std::string_view system_creator_id = "00000000-0000-0000-0000-000000000002";
 constexpr std::string_view default_map_tile_asset_id = "00000000-0000-1111-9999-000000000100";
 homeworldz::config::RegionSettings configured_values;
@@ -479,6 +499,40 @@ bool send_udp(socket_handle socket, std::string_view endpoint, std::span<const s
     if (inet_pton(AF_INET, ip.c_str(), &destination.sin_addr) != 1) return false;
     return sendto(socket, reinterpret_cast<const char*>(bytes.data()), static_cast<int>(bytes.size()), 0,
                   reinterpret_cast<const sockaddr*>(&destination), sizeof(destination)) == static_cast<int>(bytes.size());
+}
+
+// How far an accumulated request has got. Reading is incremental because the
+// region has exactly one loop: it renews the lease, services viewer UDP, and
+// serves HTTP, so any blocking read here is a stall in all three. Deciding
+// completeness from the buffer alone is what lets the read be spread across
+// loop iterations instead of held open on the socket.
+enum class HttpRequestState { need_more, complete, invalid };
+
+// Consumes a request buffer, truncating it to exactly one request when whole.
+// Same limits and same mesh-route exceptions the blocking reader applied; the
+// difference is only that this returns rather than waits.
+HttpRequestState http_request_state(std::string& request) {
+    constexpr std::size_t maximum_header_size = 64 * 1024;
+    constexpr std::size_t maximum_body_size = 1024 * 1024;
+    const std::size_t maximum_mesh_body = homeworldz::mesh::max_glb_bytes + 64 * 1024;
+    const auto header_end = request.find("\r\n\r\n");
+    if (header_end == std::string::npos) {
+        return request.size() > maximum_header_size ? HttpRequestState::invalid
+                                                    : HttpRequestState::need_more;
+    }
+    const std::string_view head(request.data(), header_end + 4);
+    std::size_t body_limit = maximum_body_size;
+    if (head.starts_with("POST " + std::string(homeworldz::mesh::upload_path)))
+        body_limit = maximum_mesh_body;
+    if (head.starts_with("POST /caps/upload-file/") ||
+        head.starts_with("POST /caps/upload-model-data/"))
+        body_limit = (maximum_mesh_body * 4) / 3 + 64 * 1024;
+    const auto content_length = homeworldz::http::request_content_length(head);
+    if (!content_length || *content_length > body_limit) return HttpRequestState::invalid;
+    const auto expected = header_end + 4 + *content_length;
+    if (request.size() < expected) return HttpRequestState::need_more;
+    request.resize(expected);
+    return HttpRequestState::complete;
 }
 
 std::optional<std::string> receive_http_request(socket_handle client) {
@@ -2189,6 +2243,11 @@ int main(int argc, char* argv[]) {
         close_socket(server);
         return 1;
     }
+    // The listening socket is non-blocking because the loop drains the whole
+    // accept backlog each pass: a blocking accept returns nothing to take once
+    // the queue empties and waits there forever, which stops the region on its
+    // first connection. Caught by the stall test, not by the compiler.
+    set_socket_blocking_mode(server, false);
 
     const auto viewer_server = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (viewer_server == invalid_socket) {
@@ -3077,6 +3136,20 @@ int main(int argc, char* argv[]) {
         }
     };
 
+    // HTTP connections whose request has not fully arrived. They are read a
+    // little at a time across loop iterations rather than waited on, because
+    // this loop also renews the region lease and services viewer UDP: a read
+    // that blocks here stops the region, and on 2026-08-07 one did for twenty
+    // minutes, dropping Welcome's lease and taking chat and asset transfer down
+    // with it. A per-recv deadline bounded that but did not fix it — the loop
+    // accepted one connection per iteration, so a queue of stalled peers still
+    // stalled everything behind them for as long as the sum of their deadlines.
+    struct IncomingHttp {
+        socket_handle client;
+        std::string buffer;
+        std::chrono::steady_clock::time_point deadline;
+    };
+    std::vector<IncomingHttp> incoming_http;
     std::cout << "{\"level\":\"info\",\"message\":\"region service listening\",\"httpPort\":"
               << configured_port() << ",\"viewerPort\":" << region_viewer_port << "}" << std::endl;
     while (running) {
@@ -3117,22 +3190,86 @@ int main(int argc, char* argv[]) {
         FD_ZERO(&readable);
         FD_SET(server, &readable);
         FD_SET(viewer_server, &readable);
+        auto highest = server > viewer_server ? server : viewer_server;
+        for (const auto& pending : incoming_http) {
+            FD_SET(pending.client, &readable);
+            if (pending.client > highest) highest = pending.client;
+        }
         timeval timeout{0, 10000};
-        const auto highest = server > viewer_server ? server : viewer_server;
         const auto ready = select(static_cast<int>(highest) + 1, &readable, nullptr, nullptr, &timeout);
+        // Drain the whole accept backlog, not one per iteration. A queue that is
+        // only ever shortened by one connection per pass is how seventeen
+        // stalled peers held the listen queue full while the lease expired.
         if (ready > 0 && FD_ISSET(server, &readable)) {
-            const auto client = accept(server, nullptr, nullptr);
-            if (client != invalid_socket) {
-                // receive_http_request blocks on recv, and it runs on the one
-                // loop that also renews the region lease and services viewer
-                // UDP. Without a deadline a peer that connects and then says
-                // nothing stops the whole region: the lease lapses, the grid
-                // drops the region, and the accept backlog fills behind it.
-                // Observed 2026-08-07 on Welcome. No viewer bug is needed to
-                // trigger it — an idle open socket is enough.
-                set_socket_deadline(client, http_client_timeout_ms);
+            for (;;) {
+                const auto accepted = accept(server, nullptr, nullptr);
+                if (accepted == invalid_socket) break;
+                set_socket_deadline(accepted, http_client_timeout_ms);
+                set_socket_blocking_mode(accepted, false);
+                incoming_http.push_back({accepted, std::string{},
+                    http_now + std::chrono::milliseconds(http_client_timeout_ms)});
+                if (incoming_http.size() >= maximum_incoming_http) break;
+            }
+        }
+        // One non-blocking read per waiting connection, then hand on whichever
+        // completed. A peer that says nothing simply never completes and is
+        // dropped at its deadline, costing the loop nothing meanwhile.
+        socket_handle ready_client = invalid_socket;
+        std::optional<std::string> ready_request;
+        for (auto entry = incoming_http.begin(); entry != incoming_http.end();) {
+            bool finished = false;
+            if (FD_ISSET(entry->client, &readable)) {
+                std::array<char, 4096> chunk{};
+                for (;;) {
+                    const auto received =
+                        recv(entry->client, chunk.data(), static_cast<int>(chunk.size()), 0);
+                    if (received > 0) {
+                        entry->buffer.append(chunk.data(), static_cast<std::size_t>(received));
+                        const auto state = http_request_state(entry->buffer);
+                        if (state == HttpRequestState::complete) {
+                            ready_client = entry->client;
+                            ready_request = std::move(entry->buffer);
+                            finished = true;
+                            break;
+                        }
+                        if (state == HttpRequestState::invalid) {
+                            close_socket(entry->client);
+                            finished = true;
+                            break;
+                        }
+                        continue;
+                    }
+                    if (received == 0 || !socket_would_block()) {
+                        // Peer closed, or the read failed outright. Closing here
+                        // is what keeps these off the CLOSE-WAIT pile that made
+                        // the wedge look like a socket leak.
+                        close_socket(entry->client);
+                        finished = true;
+                    }
+                    break;
+                }
+            }
+            if (!finished && http_now >= entry->deadline) {
+                close_socket(entry->client);
+                finished = true;
+            }
+            if (finished) {
+                const bool dispatching = ready_client == entry->client;
+                entry = incoming_http.erase(entry);
+                if (dispatching) break;
+            } else {
+                ++entry;
+            }
+        }
+        if (ready_client != invalid_socket) {
+            const auto client = ready_client;
+            // Reads are done; the response goes to a peer already waiting for
+            // it, so the socket returns to blocking and send_all keeps its
+            // existing behaviour, bounded by the send deadline set above.
+            set_socket_blocking_mode(client, true);
+            {
                 bool response_deferred = false;
-                const auto received_request = receive_http_request(client);
+                const auto received_request = std::move(ready_request);
                 if (received_request) {
                     const std::string_view request(*received_request);
                     auto response = homeworldz::http::response_for(request, region_version);
