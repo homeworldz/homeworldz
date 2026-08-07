@@ -71,6 +71,13 @@ using socket_handle = SOCKET;
 using socket_length = int;
 constexpr socket_handle invalid_socket = INVALID_SOCKET;
 static void close_socket(socket_handle socket) { closesocket(socket); }
+static void set_socket_deadline(socket_handle socket, int milliseconds) {
+    const DWORD timeout = static_cast<DWORD>(milliseconds);
+    setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO,
+               reinterpret_cast<const char*>(&timeout), sizeof(timeout));
+    setsockopt(socket, SOL_SOCKET, SO_SNDTIMEO,
+               reinterpret_cast<const char*>(&timeout), sizeof(timeout));
+}
 #else
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -81,10 +88,19 @@ using socket_handle = int;
 using socket_length = socklen_t;
 constexpr socket_handle invalid_socket = -1;
 static void close_socket(socket_handle socket) { close(socket); }
+static void set_socket_deadline(socket_handle socket, int milliseconds) {
+    timeval timeout{milliseconds / 1000, (milliseconds % 1000) * 1000};
+    setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    setsockopt(socket, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
+}
 #endif
 
 namespace {
 std::atomic_bool running{true};
+// Applied to every accepted HTTP connection. It bounds a single blocking recv
+// or send, not a whole transfer, so a live mesh upload keeps its time while a
+// silent peer is dropped rather than stalling the region's only loop.
+constexpr int http_client_timeout_ms = 15000;
 constexpr std::string_view system_creator_id = "00000000-0000-0000-0000-000000000002";
 constexpr std::string_view default_map_tile_asset_id = "00000000-0000-1111-9999-000000000100";
 homeworldz::config::RegionSettings configured_values;
@@ -605,6 +621,12 @@ std::string_view http_request_body(std::string_view request) {
     return separator == std::string_view::npos ? std::string_view{} : request.substr(separator + 4);
 }
 
+// EstablishAgentCommunication's sim-ip-and-port is parsed by the viewer with
+// inet_addr, which does not resolve names. The field only ever held a literal
+// address while region endpoints were loopback; once a region is configured by
+// hostname, passing the authority through unresolved emits a value the viewer
+// silently rejects. Resolve it here, the way simulator_event_endpoint below
+// already does for the same reason.
 std::string simulator_endpoint(std::string_view public_endpoint, int viewer_port) {
     auto authority = public_endpoint;
     const auto scheme = authority.find("://");
@@ -613,7 +635,45 @@ std::string simulator_endpoint(std::string_view public_endpoint, int viewer_port
     if (slash != std::string_view::npos) authority = authority.substr(0, slash);
     const auto colon = authority.rfind(':');
     if (colon != std::string_view::npos) authority = authority.substr(0, colon);
-    return std::string(authority) + ':' + std::to_string(viewer_port);
+    const auto host = std::string(authority);
+    if (host.empty()) return {};
+    in_addr literal{};
+    if (inet_pton(AF_INET, host.c_str(), &literal) == 1)
+        return host + ':' + std::to_string(viewer_port);
+    addrinfo hints{};
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_DGRAM;
+    addrinfo* addresses{};
+    if (getaddrinfo(host.c_str(), nullptr, &hints, &addresses) != 0) return {};
+    std::string resolved;
+    for (auto* address = addresses; address; address = address->ai_next) {
+        if (address->ai_family != AF_INET || address->ai_addrlen < sizeof(sockaddr_in)) continue;
+        const auto* ipv4 = reinterpret_cast<const sockaddr_in*>(address->ai_addr);
+        std::array<char, INET_ADDRSTRLEN> text{};
+        if (inet_ntop(AF_INET, &ipv4->sin_addr, text.data(), text.size()))
+            resolved = std::string(text.data()) + ':' + std::to_string(viewer_port);
+        break;
+    }
+    freeaddrinfo(addresses);
+    return resolved;
+}
+
+// The wearable assets this region ships, in wearable-type order. A viewer that
+// asks to create a wearable sends no body with the request, and a wearable body
+// is an LLWearable document that cannot be generated from nothing the way a
+// notecard or script stub can. These are the same six the default-outfit bake
+// uses; seeding a new item from the matching one gives the viewer something
+// valid to edit and upload over. Types beyond these have no shipped default.
+std::string_view shipped_default_wearable_asset(std::uint32_t wearable_type) {
+    switch (wearable_type) {
+        case 0: return "66c41e39-38f9-f75a-024e-585989bfab73";  // Shape
+        case 1: return "77c41e39-38f9-f75a-024e-585989bbabbb";  // Skin
+        case 2: return "d342e6c0-b9d2-11dc-95ff-0800200c9a66";  // Hair
+        case 3: return "4bb6fa4d-1cd2-498a-a84c-95c1a0e745a7";  // Eyes
+        case 4: return "00000000-38f9-1111-024e-222222111110";  // Shirt
+        case 5: return "00000000-38f9-1111-024e-222222111120";  // Pants
+        default: return {};
+    }
 }
 
 std::optional<homeworldz::viewer::SimulatorEventEndpoint> simulator_event_endpoint(
@@ -3063,6 +3123,14 @@ int main(int argc, char* argv[]) {
         if (ready > 0 && FD_ISSET(server, &readable)) {
             const auto client = accept(server, nullptr, nullptr);
             if (client != invalid_socket) {
+                // receive_http_request blocks on recv, and it runs on the one
+                // loop that also renews the region lease and services viewer
+                // UDP. Without a deadline a peer that connects and then says
+                // nothing stops the whole region: the lease lapses, the grid
+                // drops the region, and the accept backlog fills behind it.
+                // Observed 2026-08-07 on Welcome. No viewer bug is needed to
+                // trigger it — an idle open socket is enough.
+                set_socket_deadline(client, http_client_timeout_ms);
                 bool response_deferred = false;
                 const auto received_request = receive_http_request(client);
                 if (received_request) {
@@ -3913,14 +3981,25 @@ int main(int argc, char* argv[]) {
                                     session_id, capability_visit_id));
                         } else if (authorized && event_queue) {
                             if (established_events.insert(session_id).second) {
-                                if (authorized_session) {
+                                const auto sim_ip_and_port =
+                                    simulator_endpoint(region_public_endpoint, region_viewer_port);
+                                if (authorized_session && !sim_ip_and_port.empty()) {
                                     enqueue_viewer_event(session_id,
                                         homeworldz::viewer::establish_agent_communication_event_xml({
-                                            authorized_session->agent_id,
-                                            simulator_endpoint(region_public_endpoint, region_viewer_port),
+                                            authorized_session->agent_id, sim_ip_and_port,
                                             region_public_endpoint + "/caps/seed/" + session_id +
                                                 (capability_visit_id.empty() ? std::string{} :
                                                     "/" + capability_visit_id)}));
+                                } else if (authorized_session) {
+                                    // Emitting the event with an unresolved
+                                    // address is worse than omitting it: the
+                                    // viewer would accept it and then fail
+                                    // silently. Say so instead.
+                                    established_events.erase(session_id);
+                                    std::cerr << "{\"level\":\"error\",\"message\":\"region endpoint did not "
+                                                 "resolve to an address\",\"endpoint\":"
+                                              << homeworldz::api::json_string(region_public_endpoint)
+                                              << "}" << std::endl;
                                 }
                             }
                             const auto events = take_viewer_events(session_id);
@@ -7114,9 +7193,35 @@ int main(int argc, char* argv[]) {
                                 const auto position = avatar == avatars.end() ?
                                     homeworldz::scene::Vector3{128.0, 128.0, 25.0} :
                                     avatar->second.controller.state().position;
-                                const auto initial_content = homeworldz::inventory::default_asset_content(
+                                auto initial_content = homeworldz::inventory::default_asset_content(
                                     create_item->asset_type, create_item->inventory_type,
                                     registration->region_id(), position);
+                                // Wearables have no generated stub, so before
+                                // 2026-08-07 this branch produced nothing for
+                                // them and the request was dropped in silence
+                                // — the viewer waited forever for an item it
+                                // had asked to create. Seed from the shipped
+                                // default for the type instead.
+                                if (!initial_content && wearable) {
+                                    const auto shipped =
+                                        shipped_default_wearable_asset(create_item->wearable_type);
+                                    if (!shipped.empty()) {
+                                        try {
+                                            const auto bytes = read_federated_asset(shipped);
+                                            if (!bytes.empty())
+                                                initial_content = std::string(
+                                                    reinterpret_cast<const char*>(bytes.data()),
+                                                    bytes.size());
+                                        } catch (const std::exception& error) {
+                                            std::cout << "{\"level\":\"error\",\"message\":\"shipped default "
+                                                         "wearable unreadable\",\"wearableType\":"
+                                                      << static_cast<unsigned int>(create_item->wearable_type)
+                                                      << ",\"error\":"
+                                                      << homeworldz::api::json_string(error.what())
+                                                      << "}" << std::endl;
+                                        }
+                                    }
+                                }
                                 if (initial_content && viewer_grid) {
                                     try {
                                         asset_id = homeworldz::viewer::random_uuid();
@@ -7193,6 +7298,20 @@ int main(int argc, char* argv[]) {
                                 }
                                 if (consumed_pending_upload)
                                     pending_inventory_asset_uploads.erase(pending);
+                            }
+                            // A creation the region cannot honour must still
+                            // answer. There is no failure form of
+                            // UpdateCreateInventoryItem, so the viewer is left
+                            // waiting on a callback that will never fire; an
+                            // alert at least reaches the person, instead of the
+                            // request vanishing with only a server log line.
+                            if (!(created && sent)) {
+                                const auto alert = homeworldz::viewer::encode_agent_alert_message(
+                                    identity->agent_id, false,
+                                    "Could not create \"" + create_item->name +
+                                        "\". The region could not store its contents.");
+                                if (const auto outgoing = circuits.send(endpoint, alert, true, now, true))
+                                    static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
                             }
                             std::cout << "{\"level\":" << (created && sent ? "\"info\"" : "\"warn\"")
                                       << ",\"message\":\"inventory asset item "
