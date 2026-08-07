@@ -15,6 +15,13 @@
 using grid_socket = SOCKET;
 constexpr grid_socket invalid_grid_socket = INVALID_SOCKET;
 static void close_grid_socket(grid_socket socket) { closesocket(socket); }
+static void set_grid_socket_deadline(grid_socket socket, int milliseconds) {
+    const DWORD timeout = static_cast<DWORD>(milliseconds);
+    setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO,
+               reinterpret_cast<const char*>(&timeout), sizeof(timeout));
+    setsockopt(socket, SOL_SOCKET, SO_SNDTIMEO,
+               reinterpret_cast<const char*>(&timeout), sizeof(timeout));
+}
 #else
 #include <netdb.h>
 #include <sys/socket.h>
@@ -22,6 +29,11 @@ static void close_grid_socket(grid_socket socket) { closesocket(socket); }
 using grid_socket = int;
 constexpr grid_socket invalid_grid_socket = -1;
 static void close_grid_socket(grid_socket socket) { close(socket); }
+static void set_grid_socket_deadline(grid_socket socket, int milliseconds) {
+    timeval timeout{milliseconds / 1000, (milliseconds % 1000) * 1000};
+    setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    setsockopt(socket, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
+}
 #endif
 
 namespace homeworldz::grid {
@@ -63,6 +75,12 @@ public:
         if (host_.empty()) throw std::invalid_argument("grid URL host is required");
     }
 
+    // Bounds one blocking send or recv against the grid, not a whole transfer,
+    // so a large asset body keeps its time while a silent peer is given up on.
+    // Generous because the grid is normally a millisecond away on loopback:
+    // reaching this means something is wrong, not merely busy.
+    static constexpr int grid_request_timeout_ms = 20000;
+
     HttpResponse send(std::string_view method, std::string_view path,
                       std::string_view body) override {
         addrinfo hints{};
@@ -82,6 +100,18 @@ public:
         }
         freeaddrinfo(addresses);
         if (connection == invalid_grid_socket) throw std::runtime_error("connect to grid failed");
+        // Every call here runs on the region's one loop — the same loop that
+        // renews the lease, services viewer UDP and serves HTTP. Without a
+        // deadline a grid response that never arrives stops the region
+        // permanently: the lease lapses, chat stops echoing, and viewers are
+        // dropped. Observed 2026-08-07 with the main thread parked in this recv
+        // on an outbound socket, which read as an inbound HTTP stall because
+        // both use a 4096-byte buffer and glibc implements recv as recvfrom.
+        //
+        // A timeout turns "the region dies" into "this one grid call fails",
+        // which the callers already handle: send throws and each site treats a
+        // failed grid call as a refusal rather than a crash.
+        set_grid_socket_deadline(connection, grid_request_timeout_ms);
 
         static std::atomic<unsigned long long> request_sequence{0};
         const auto request_id = "region-" + std::to_string(++request_sequence);
