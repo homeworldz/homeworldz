@@ -48,6 +48,16 @@ func TestPasswordResetRequestCannotEnumerateAccounts(t *testing.T) {
 	}
 }
 
+// Note on what is not tested here: that an email address cannot select an
+// account. The handler passes the identifier through unchanged — correctly, since
+// resolution is the store's job — so any assertion at this layer would be about
+// the mock rather than about the rule. The rule lives in
+// webaccount.PostgresStore.RequestPasswordReset, which resolves through
+// DeriveUserid against username and display_name_key exactly as Authenticate
+// does, and there is no test harness for that package. It is verified against the
+// live grid instead: an address must produce no reset row, and the userid must.
+// A mock test here would have passed either way.
+
 // A malformed body is the one thing the endpoint does report, since it says
 // nothing about any account and hiding it would conceal a client bug.
 func TestPasswordResetRequestRejectsEmptyIdentifier(t *testing.T) {

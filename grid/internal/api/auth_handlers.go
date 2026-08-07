@@ -200,7 +200,7 @@ func (a *API) passwordResets(w http.ResponseWriter, r *http.Request) {
 	// A malformed body is the one thing worth reporting: it says nothing about
 	// any account, and silently accepting it would hide a client bug.
 	if strings.TrimSpace(request.Identifier) == "" || len(request.Identifier) > 254 {
-		writeError(w, http.StatusBadRequest, Error{Code: "invalid_identifier", Message: "an account name or email address is required", Field: "identifier"})
+		writeError(w, http.StatusBadRequest, Error{Code: "invalid_identifier", Message: "an avatar name is required", Field: "identifier"})
 		return
 	}
 	token, email, err := a.accounts.RequestPasswordReset(r.Context(), request.Identifier)

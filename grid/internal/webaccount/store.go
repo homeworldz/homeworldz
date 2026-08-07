@@ -336,13 +336,26 @@ func (s *PostgresStore) RequestPasswordReset(ctx context.Context, ident string) 
 		email      sql.NullString
 		verifiedAt sql.NullTime
 	)
-	// Either identifier, matched case-insensitively as login does. An account
-	// that has never been verified has no password to reset and no confirmed
-	// address to send to, so it is not eligible.
+	// The same two identifiers login accepts, resolved the same way: the userid
+	// or the display name, both of which carry unique indexes.
+	//
+	// Email is deliberately not among them. Nothing constrains it to one account
+	// — two avatars may legitimately share an address — and this query took the
+	// first arbitrary row when more than one matched, with no ORDER BY to make
+	// even that repeatable. On 2026-08-06 an address supplied here reset a
+	// different account from the one intended, and the reply is identical for
+	// every outcome by design, so nothing said so. An address still receives the
+	// mail; it just cannot choose whose password changes.
+	key := DeriveUserid(ident)
+	if key == "" {
+		return "", "", ErrNotFound
+	}
+	// An account that has never been verified has no password to reset and no
+	// confirmed address to send to, so it is not eligible.
 	err = tx.QueryRowContext(ctx, `
 		SELECT id, email, verified_at FROM users
-		WHERE lower(username) = lower($1) OR lower(email) = lower($1)
-		FOR UPDATE`, ident).Scan(&userID, &email, &verifiedAt)
+		WHERE username = $1 OR display_name_key = $1
+		FOR UPDATE`, key).Scan(&userID, &email, &verifiedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", "", ErrNotFound
 	}
