@@ -7591,10 +7591,19 @@ int main(int argc, char* argv[]) {
                                     named += "\"" + id + "\"";
                                 }
                             }
+                            // textureEntryBytes and textureSlots are the check on
+                            // the three counts above. texture_ids is only filled
+                            // when the texture entry parses, so zero of
+                            // everything reads the same whether the wearer sent
+                            // no textures or sent something we could not read —
+                            // two different faults behind one number, which is
+                            // the defect this line exists to not have.
                             std::cout << "{\"level\":" << (absent == 0 ? "\"info\"" : "\"warn\"")
                                       << ",\"message\":\"wearer appearance textures\",\"present\":"
                                       << present << ",\"absent\":" << absent << ",\"unbaked\":"
-                                      << unbaked << ",\"appearanceVersion\":"
+                                      << unbaked << ",\"textureEntryBytes\":"
+                                      << appearance->texture_entry.size() << ",\"textureSlots\":"
+                                      << appearance->texture_ids.size() << ",\"appearanceVersion\":"
                                       << static_cast<int>(appearance->appearance_version)
                                       << ",\"visualParams\":" << appearance->visual_params.size()
                                       << ",\"cacheEntries\":" << appearance->cache_entries.size()
