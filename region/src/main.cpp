@@ -5625,11 +5625,28 @@ int main(int argc, char* argv[]) {
                                           << ",\"persisted\":" << (saved ? "true" : "false")
                                           << "}" << std::endl;
                               } else {
+                                // Say so in the viewer, not only in a log the
+                                // operator will never read. Firestorm shows nothing
+                                // when this message goes unanswered, so on
+                                // 2026-08-06 an operator pressed Download RAW,
+                                // saw no error, and spent the next few minutes
+                                // looking for a file that was never written. An
+                                // absent capability reporting as success is worse
+                                // than an error, because the next thing they do
+                                // depends on the file existing.
+                                const auto alert = homeworldz::viewer::encode_agent_alert_message(
+                                    identity->agent_id, false,
+                                    "RAW terrain download and upload are not implemented on this "
+                                    "region yet. Bake Terrain works. No file was saved.");
+                                if (const auto outgoing = circuits.send(endpoint, alert, true, now, true))
+                                    static_cast<void>(send_udp(viewer_server, endpoint, *outgoing));
                                 std::cout << "{\"level\":\"warning\",\"message\":"
                                              "\"terrain command not implemented\",\"command\":"
                                           << homeworldz::api::json_string(command)
+                                          << ",\"by\":" << homeworldz::api::json_string(agent)
                                           << ",\"note\":\"RAW terrain download and upload need the"
-                                             " xfer path; bake is implemented\"}" << std::endl;
+                                             " xfer path; bake is implemented; viewer told\"}"
+                                          << std::endl;
                               }
                             } else if (method == "setregionterrain") {
                               if (!manager) {

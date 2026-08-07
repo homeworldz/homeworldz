@@ -70,8 +70,15 @@ degrees, one constant angle replaced by two wrong ones.
 
 `gamma-slope-fixtures.r32` is the Gamma region (1024 m) captured 2026-08-06,
 carrying the three slope test faces that make the walkable-slope limit
-falsifiable. Each is a 10-metre ramp from a 25-metre base, 51 m wide, constant
-to within 0.1 degrees across every step:
+falsifiable. Each is a 10-metre ramp from a 25-metre base, 51 m wide, and
+**exactly** constant: every step across a ramp is identical to the last bit, so
+the angles are 0.000 degrees apart, not 0.1. Verified by an independent decoder
+reading the committed file rather than by the code that wrote it.
+
+Index as `y * width + x`, x varying fastest. A transposed read does not fail —
+it returns flat ground at every band, 22.00 or 25.00 m with zero rise, which
+looks like a plausible region and would be reported as the fixtures having gone
+missing:
 
 | face | x | y band | base to top |
 | --- | --- | --- | --- |
