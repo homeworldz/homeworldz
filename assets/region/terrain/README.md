@@ -44,12 +44,17 @@ a running region serves at `GET /map/terrain.raw`. Download from one region and
 point another at the file to reproduce its ground exactly.
 
 This is the same layout OpenSimulator calls **RAW32** and reads and writes with
-`terrain load`/`terrain save` on a `.r32` file, hence the extension. The one
-thing not yet checked against a real OpenSimulator export is **row order** —
-whether it writes rows south-to-north or the reverse. A mismatch would load
-mirrored rather than fail, so verify against an actual OpenSim `.r32` before
-relying on the interoperability. Within Homeworldz the format round-trips
-exactly, since the same code writes and reads it.
+`terrain load`/`terrain save` on a `.r32` file, hence the extension. Row order
+was the one thing that could have differed silently — a mismatch loads mirrored
+rather than failing — and it agrees. `RAW32.cs` iterates `y` outer, ascending
+from 0, `x` inner, in both `LoadStream` and `SaveStream`, indexing `map[x, y]`;
+that is `y * width + x`, the same as here, with `y` counting north from the
+south edge on both sides. .NET's `BinaryWriter` emits little-endian floats, so
+the byte order agrees as well.
+
+Checked against OpenSimulator's source rather than against an exported file, so
+a first real exchange is still worth eyeballing — but the layout is not in
+doubt.
 
 Two other formats are worth knowing about and are not implemented here. The
 viewer's own Region/Estate **Download/Upload RAW terrain** buttons use Linden
