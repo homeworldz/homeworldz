@@ -25,8 +25,17 @@ type PostgresStore struct{ db *sql.DB }
 func NewPostgresStore(db *sql.DB) *PostgresStore { return &PostgresStore{db: db} }
 
 func (s *PostgresStore) ListActive(ctx context.Context, userID string) ([]Gesture, error) {
+	// Joined to inventory rather than read alone: active_gestures has no
+	// foreign key to inventory_items, so deleting a gesture leaves its
+	// activation behind. The login reply would keep naming an item the user no
+	// longer has, and the viewer reports "Unable to load gesture <name>" at
+	// every login with nothing left to delete to stop it. Filtering here fixes
+	// the rows already orphaned as well as the ones deletion will orphan next,
+	// which a cascade added now would not.
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT item_id, asset_id FROM active_gestures WHERE user_id = $1 ORDER BY activated_at`, userID)
+		`SELECT g.item_id, g.asset_id FROM active_gestures AS g
+		   JOIN inventory_items AS i ON i.id = g.item_id AND i.owner_user_id = g.user_id
+		  WHERE g.user_id = $1 ORDER BY g.activated_at`, userID)
 	if err != nil {
 		return nil, fmt.Errorf("list active gestures: %w", err)
 	}
