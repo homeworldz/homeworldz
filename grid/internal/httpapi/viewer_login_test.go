@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/xml"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -231,14 +232,14 @@ func TestViewerLoginUsesDurableLastRegion(t *testing.T) {
 	}
 	regionStore := newMemoryRegionStore()
 	_, _ = regionStore.Register(context.Background(), regions.Registration{Name: "Welcome", GridX: 1000, GridY: 1000,
-		PublicEndpoint: "http://welcome.example:42011", ViewerPort: 42012, LeaseDuration: time.Minute})
+		PublicEndpoint: "http://127.0.0.11:42011", ViewerPort: 42012, LeaseDuration: time.Minute})
 	sandbox, _ := regionStore.Register(context.Background(), regions.Registration{Name: "Sandbox", GridX: 1001, GridY: 1000,
-		PublicEndpoint: "http://sandbox.example:42001", ViewerPort: 42002, LeaseDuration: time.Minute})
+		PublicEndpoint: "http://127.0.0.12:42001", ViewerPort: 42002, LeaseDuration: time.Minute})
 	handler := New(checker{}, "test", Options{Identity: identities, Regions: regionStore,
 		Inventory: &memoryInventoryStore{folders: make(map[string][]inventory.Folder)},
 		Locations: memoryLocationStore{value: locations.Location{UserID: user.ID, RegionID: sandbox.ID}}})
 	fields := viewerResponse(t, handler, viewerRequest("Last", "User", "development-password", "last"))
-	if fields["login"].text() != "true" || fields["sim_ip"].text() != "sandbox.example" ||
+	if fields["login"].text() != "true" || fields["sim_ip"].text() != "127.0.0.12" ||
 		fields["region_x"].text() != "256256" {
 		t.Fatalf("last-location destination = %#v", fields)
 	}
@@ -255,15 +256,15 @@ func TestViewerLoginLandsOnWelcomeList(t *testing.T) {
 	regionStore := newMemoryRegionStore()
 	// Registered first, so the legacy fallback would have chosen it.
 	_, _ = regionStore.Register(context.Background(), regions.Registration{Name: "Elsewhere", GridX: 999, GridY: 999,
-		PublicEndpoint: "http://elsewhere.example:42021", ViewerPort: 42022, LeaseDuration: time.Minute})
+		PublicEndpoint: "http://127.0.0.13:42021", ViewerPort: 42022, LeaseDuration: time.Minute})
 	_, _ = regionStore.Register(context.Background(), regions.Registration{Name: "Welcome", GridX: 1000, GridY: 1000,
-		PublicEndpoint: "http://welcome.example:42011", ViewerPort: 42012, LeaseDuration: time.Minute})
+		PublicEndpoint: "http://127.0.0.11:42011", ViewerPort: 42012, LeaseDuration: time.Minute})
 
 	handler := New(checker{}, "test", Options{Identity: identities, Regions: regionStore,
 		Inventory: &memoryInventoryStore{folders: make(map[string][]inventory.Folder)},
 		Welcome:   []arrival.Point{{Region: "Welcome", X: 127, Y: 127, Z: 23}}})
 	fields := viewerResponse(t, handler, viewerRequest("New", "User", "development-password", "last"))
-	if fields["login"].text() != "true" || fields["sim_ip"].text() != "welcome.example" {
+	if fields["login"].text() != "true" || fields["sim_ip"].text() != "127.0.0.11" {
 		t.Fatalf("welcome-list destination = %#v", fields)
 	}
 
@@ -273,6 +274,43 @@ func TestViewerLoginLandsOnWelcomeList(t *testing.T) {
 	fields = viewerResponse(t, offlineOnly, viewerRequest("New", "User", "development-password", "last"))
 	if fields["login"].text() != "false" || fields["reason"].text() != "destination" {
 		t.Fatalf("exhausted welcome list = %#v", fields)
+	}
+}
+
+// sim_ip is a 32-bit address the viewer parses with inet_addr, so a region
+// endpoint named by hostname must reach the viewer resolved. Passing the
+// hostname through produces a login the viewer accepts and then cannot build a
+// circuit from, which is what configuring real grid URLs did. A host that
+// cannot be resolved fails the login rather than shipping a name the viewer
+// will reject with nothing naming the cause.
+func TestViewerLoginResolvesRegionHostnameToAddress(t *testing.T) {
+	identities := newMemoryIdentityStore()
+	_, _ = identities.CreateUser(context.Background(), "host.user", "development-password")
+	regionStore := newMemoryRegionStore()
+	_, _ = regionStore.Register(context.Background(), regions.Registration{Name: "Welcome", GridX: 1000, GridY: 1000,
+		PublicEndpoint: "http://localhost:42011", ViewerPort: 42012, LeaseDuration: time.Minute})
+	handler := New(checker{}, "test", Options{Identity: identities, Regions: regionStore,
+		Inventory: &memoryInventoryStore{folders: make(map[string][]inventory.Folder)},
+		Welcome:   []arrival.Point{{Region: "Welcome", X: 127, Y: 127, Z: 23}}})
+	fields := viewerResponse(t, handler, viewerRequest("Host", "User", "development-password", "last"))
+	if fields["login"].text() != "true" || net.ParseIP(fields["sim_ip"].text()).To4() == nil {
+		t.Fatalf("hostname endpoint = %#v", fields)
+	}
+	// The seed capability keeps the hostname: it is an HTTP URL the viewer
+	// resolves normally, and rewriting it would break TLS certificate matching.
+	if !strings.Contains(fields["seed_capability"].text(), "localhost:42011") {
+		t.Fatalf("seed capability lost the hostname = %q", fields["seed_capability"].text())
+	}
+
+	unresolvable := newMemoryRegionStore()
+	_, _ = unresolvable.Register(context.Background(), regions.Registration{Name: "Welcome", GridX: 1000, GridY: 1000,
+		PublicEndpoint: "http://welcome.invalid:42011", ViewerPort: 42012, LeaseDuration: time.Minute})
+	refusing := New(checker{}, "test", Options{Identity: identities, Regions: unresolvable,
+		Inventory: &memoryInventoryStore{folders: make(map[string][]inventory.Folder)},
+		Welcome:   []arrival.Point{{Region: "Welcome", X: 127, Y: 127, Z: 23}}})
+	fields = viewerResponse(t, refusing, viewerRequest("Host", "User", "development-password", "last"))
+	if fields["login"].text() != "false" || fields["reason"].text() != "unavailable" {
+		t.Fatalf("unresolvable endpoint = %#v", fields)
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -247,6 +248,11 @@ func (a *API) resolveViewerLogin(r *http.Request, firstRaw, lastRaw, passwd, sta
 		_ = a.identity.RevokeSession(r.Context(), session.ID)
 		return nil, "unavailable", "The destination region endpoint is invalid."
 	}
+	simIP, err := simulatorIPv4(r.Context(), endpoint.Hostname())
+	if err != nil {
+		_ = a.identity.RevokeSession(r.Context(), session.ID)
+		return nil, "unavailable", "The destination region address could not be resolved."
+	}
 	circuit, err := newCircuitCode()
 	if err != nil {
 		_ = a.identity.RevokeSession(r.Context(), session.ID)
@@ -310,7 +316,7 @@ func (a *API) resolveViewerLogin(r *http.Request, firstRaw, lastRaw, passwd, sta
 	return &loginFields{
 		agentID: session.UserID, sessionID: session.ID, secureID: session.SecureID,
 		first: first, last: last, circuit: circuit,
-		simIP: endpoint.Hostname(), simPort: region.ViewerPort,
+		simIP: simIP, simPort: region.ViewerPort,
 		regionX: region.GridX * 256, regionY: region.GridY * 256,
 		regionSizeX: regionSizeX, regionSizeY: regionSizeY,
 		startLocation: normalizeStart(start), lookAt: lookAt,
@@ -351,6 +357,37 @@ func (a *API) xmlrpcLoginResponse(f *loginFields) rpcOutputValue {
 		rpcField("inventory-skel-lib", rpcArrayValue(librarySkeleton...)), rpcField("login-flags", rpcArrayValue()),
 		rpcField("gestures", rpcArrayValue(gestureValues...)), rpcField("buddy-list", rpcArrayValue()),
 	)
+}
+
+// simulatorIPv4 resolves a region's endpoint host to a dotted-quad IPv4
+// address for sim_ip. That field is a 32-bit address in the viewer login
+// protocol: viewers parse it with inet_addr and never resolve it, so a
+// hostname there yields a login the viewer accepts and then cannot build a
+// circuit from — reported as a bare "Login failed." with nothing in it naming
+// the address. Only a literal IP had ever been in that field while region
+// endpoints were loopback, which is why configuring real grid URLs broke it.
+//
+// A resolution failure is returned rather than falling back to the hostname:
+// the fallback is precisely the value the viewer rejects, so it would hide the
+// failure behind a login that looks well-formed.
+func simulatorIPv4(ctx context.Context, host string) (string, error) {
+	if ip := net.ParseIP(host); ip != nil {
+		v4 := ip.To4()
+		if v4 == nil {
+			return "", fmt.Errorf("region endpoint %q is IPv6; the viewer circuit is IPv4 only", host)
+		}
+		return v4.String(), nil
+	}
+	lookup, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	addresses, err := net.DefaultResolver.LookupIP(lookup, "ip4", host)
+	if err != nil {
+		return "", err
+	}
+	if len(addresses) == 0 {
+		return "", fmt.Errorf("region endpoint %q has no IPv4 address", host)
+	}
+	return addresses[0].String(), nil
 }
 
 type regionStartState struct {
