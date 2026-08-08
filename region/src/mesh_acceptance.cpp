@@ -4,7 +4,9 @@
 #define CGLTF_IMPLEMENTATION
 #include <cgltf.h>
 
+#include <algorithm>
 #include <cstring>
+#include <vector>
 #include <string_view>
 
 namespace homeworldz::mesh {
@@ -106,6 +108,14 @@ Acceptance validate_glb(std::span<const std::byte> content) {
                           " bytes; the limit is " + std::to_string(max_image_bytes));
     }
 
+    // Buffer data, needed from here on. Everything above inspects structure
+    // only, which is why this gate never loaded it before: the per-mesh joint
+    // budget is the first rule that has to read vertices. Safe to do after the
+    // self-containment checks above and not before — those refuse external
+    // URIs, so nothing here can reach outside the file.
+    if (cgltf_load_buffers(&options, data, nullptr) != cgltf_result_success)
+        return refuse("the GLB's buffer data could not be read");
+
     // Rig validation runs before the not-yet-accepted refusal, so a creator
     // preparing content against the published policy learns what is actually
     // wrong with their rig rather than only that rigs are not accepted. Same
@@ -141,8 +151,50 @@ Acceptance validate_glb(std::span<const std::byte> content) {
                               "\", which is not a joint of the " +
                               std::string(rigged_skeleton) + " skeleton");
         }
-        if (skin.joints_count > max_joints_per_mesh)
-            return refuse("a skin binds " + std::to_string(skin.joints_count) +
+    }
+    // The per-mesh budget counts joints a mesh *uses*, not what its skin
+    // declares, and the difference is not academic: Blender writes every
+    // armature bone into the shared skin whatever each mesh touches, so the
+    // Second Life reference body exported through the standard pipeline
+    // declares 133 joints and uses 21 — 12 in its largest mesh. Counting the
+    // declaration refused the official body, and with it every rig produced the
+    // ordinary way.
+    //
+    // This is also what the viewer counts: enforceRigJointLimit takes
+    // recognized_joint_count rather than the declared list.
+    for (cgltf_size mesh_index = 0; mesh_index < data->meshes_count; ++mesh_index) {
+        const auto& mesh_value = data->meshes[mesh_index];
+        std::vector<cgltf_uint> used;
+        for (cgltf_size primitive_index = 0; primitive_index < mesh_value.primitives_count;
+             ++primitive_index) {
+            const auto& primitive = mesh_value.primitives[primitive_index];
+            const cgltf_accessor* joints = nullptr;
+            const cgltf_accessor* weights = nullptr;
+            for (cgltf_size attribute = 0; attribute < primitive.attributes_count; ++attribute) {
+                const auto& value = primitive.attributes[attribute];
+                if (value.type == cgltf_attribute_type_joints && value.index == 0)
+                    joints = value.data;
+                if (value.type == cgltf_attribute_type_weights && value.index == 0)
+                    weights = value.data;
+            }
+            if (joints == nullptr || weights == nullptr) continue;
+            for (cgltf_size vertex = 0; vertex < joints->count; ++vertex) {
+                cgltf_uint slots[4] = {};
+                float amounts[4] = {};
+                if (!cgltf_accessor_read_uint(joints, vertex, slots, 4) ||
+                    !cgltf_accessor_read_float(weights, vertex, amounts, 4))
+                    return refuse("a joint or weight accessor is unreadable");
+                for (int slot = 0; slot < 4; ++slot) {
+                    // A zero weight is padding, not a binding. Counting it
+                    // would charge a mesh for joints it does not move.
+                    if (amounts[slot] <= 0.0F) continue;
+                    if (std::find(used.begin(), used.end(), slots[slot]) == used.end())
+                        used.push_back(slots[slot]);
+                }
+            }
+        }
+        if (used.size() > max_joints_per_mesh)
+            return refuse("a mesh binds " + std::to_string(used.size()) +
                           " joints; the limit is " + std::to_string(max_joints_per_mesh));
     }
     // More than four influences per vertex arrives as a second joint/weight

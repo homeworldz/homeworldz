@@ -31,9 +31,15 @@ struct Face {
     std::vector<std::array<float, 3>> normals;
     std::vector<std::array<float, 2>> texcoords;
     std::vector<std::uint32_t> indices;
-    // Per vertex, at most four, indexing the asset-wide joint table. Empty on
-    // an unrigged face.
-    std::vector<std::vector<slmesh::Influence>> influences;
+    // Per vertex, at most four. These hold the *source* skin's joint index,
+    // which is rewritten to the compacted table once the used set is known —
+    // the format's index is one byte and a source skin may declare more joints
+    // than one byte can name.
+    struct SourceInfluence {
+        std::uint32_t joint{};
+        float weight{};
+    };
+    std::vector<std::vector<SourceInfluence>> influences;
     bool any_missing_normals{};
     bool any_missing_texcoords{};
 };
@@ -88,7 +94,8 @@ std::vector<std::uint32_t> simplify(const Face& face, double ratio) {
 // to_submesh compacts a face + index list into the u16-indexed submesh the
 // wire format takes, dropping vertices the level no longer references.
 std::optional<slmesh::Submesh> to_submesh(const Face& face,
-                                          const std::vector<std::uint32_t>& indices) {
+                                          const std::vector<std::uint32_t>& indices,
+                                          const std::vector<std::uint32_t>& joint_slot) {
     slmesh::Submesh submesh;
     std::vector<std::uint32_t> remap(face.positions.size(),
                                      std::numeric_limits<std::uint32_t>::max());
@@ -97,7 +104,15 @@ std::optional<slmesh::Submesh> to_submesh(const Face& face,
         if (remap[index] == std::numeric_limits<std::uint32_t>::max()) {
             remap[index] = static_cast<std::uint32_t>(submesh.positions.size());
             submesh.positions.push_back(face.positions[index]);
-            if (!face.influences.empty()) submesh.influences.push_back(face.influences[index]);
+            if (!face.influences.empty()) {
+                std::vector<slmesh::Influence> bound;
+                for (const auto& influence : face.influences[index]) {
+                    if (influence.joint >= joint_slot.size()) return std::nullopt;
+                    bound.push_back({static_cast<std::uint8_t>(joint_slot[influence.joint]),
+                                     influence.weight});
+                }
+                submesh.influences.push_back(std::move(bound));
+            }
             if (!face.any_missing_normals) submesh.normals.push_back(face.normals[index]);
             if (!face.any_missing_texcoords) submesh.texcoords.push_back(face.texcoords[index]);
         }
@@ -401,7 +416,7 @@ Conversion convert_glb(std::span<const std::byte> glb) {
                     // it uses them or not; a zero weight is padding rather than
                     // a binding, and carrying it would spend one of the four
                     // the format allows on nothing.
-                    std::vector<slmesh::Influence> bound;
+                    std::vector<Face::SourceInfluence> bound;
                     if (joints_accessor != nullptr && weights_accessor != nullptr) {
                         cgltf_uint slots[4] = {};
                         std::array<float, 4> amounts{};
@@ -415,7 +430,7 @@ Conversion convert_glb(std::span<const std::byte> glb) {
                                 return fail("a vertex binds joint index " +
                                             std::to_string(joint) + "; the skin declares " +
                                             std::to_string(joint_names.size()));
-                            bound.push_back({static_cast<std::uint8_t>(joint), amounts[slot]});
+                            bound.push_back({joint, amounts[slot]});
                         }
                     }
                     face.influences.push_back(std::move(bound));
@@ -493,6 +508,42 @@ Conversion convert_glb(std::span<const std::byte> glb) {
             for (int axis = 0; axis < 3; ++axis)
                 position[axis] = (position[axis] - bounds.center[axis]) / bounds.extent[axis];
 
+    // Compact the joint table to what the mesh actually moves.
+    //
+    // Blender writes every armature bone into the shared skin whatever each
+    // mesh touches: the Second Life reference body exported through the
+    // standard pipeline declares 133 joints and uses 21. Carrying the
+    // declaration would put 133 names and 133 matrices in every asset, and —
+    // since the format's joint index is one byte with 255 reserved as the
+    // end-of-list marker — would make any skin declaring more than 254 joints
+    // unrepresentable even when it moves three of them.
+    //
+    // joint_slot maps a source index to its place in the compacted table, in
+    // first-use order.
+    std::vector<std::uint32_t> joint_slot;
+    if (skin) {
+        joint_slot.assign(skin->joints.size(), std::numeric_limits<std::uint32_t>::max());
+        slmesh::Skin compacted;
+        for (const auto& face : faces)
+            for (const auto& vertex : face.influences)
+                for (const auto& influence : vertex) {
+                    if (influence.joint >= joint_slot.size())
+                        return fail("a vertex binds a joint the skin does not declare");
+                    if (joint_slot[influence.joint] != std::numeric_limits<std::uint32_t>::max())
+                        continue;
+                    if (compacted.joints.size() >= 255)
+                        return fail("a mesh binds more than 254 joints, which the asset "
+                                    "format cannot index");
+                    joint_slot[influence.joint] =
+                        static_cast<std::uint32_t>(compacted.joints.size());
+                    compacted.joints.push_back(skin->joints[influence.joint]);
+                    compacted.inverse_bind.push_back(skin->inverse_bind[influence.joint]);
+                }
+        if (compacted.joints.empty()) return fail("a rigged mesh binds no joints");
+        compacted.bind_shape = skin->bind_shape;
+        skin = std::move(compacted);
+    }
+
     // The LOD chain. Ratios follow the viewer's expectations of scale steps;
     // whatever the simplifier genuinely achieves is what ships.
     slmesh::Mesh mesh;
@@ -500,7 +551,7 @@ Conversion convert_glb(std::span<const std::byte> glb) {
     result.faces = faces.size();
     for (const auto& face : faces) {
         if (face.indices.size() % 3 != 0) return fail("a face's triangle list is ragged");
-        const auto high = to_submesh(face, face.indices);
+        const auto high = to_submesh(face, face.indices, joint_slot);
         if (!high) return fail("a material face exceeds 65535 vertices");
         result.high_triangles += high->indices.size() / 3;
         mesh.high.push_back(*high);
@@ -508,7 +559,7 @@ Conversion convert_glb(std::span<const std::byte> glb) {
             {{&mesh.medium, 0.5}, {&mesh.low, 0.25}, {&mesh.lowest, 0.1}}};
         for (const auto& [level, ratio] : levels) {
             const auto simplified = simplify(face, ratio);
-            const auto submesh = to_submesh(face, simplified);
+            const auto submesh = to_submesh(face, simplified, joint_slot);
             if (!submesh) return fail("simplification produced an invalid level");
             if (level == &mesh.lowest) result.lowest_triangles += submesh->indices.size() / 3;
             level->push_back(*submesh);

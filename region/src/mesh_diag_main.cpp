@@ -6,6 +6,7 @@
 // with the identical code path — not a reimplementation of the rules, which
 // would be a second copy able to disagree with the first.
 #include "homeworldz/mesh_acceptance.h"
+#include "homeworldz/mesh_convert.h"
 
 #include <cstddef>
 #include <fstream>
@@ -39,6 +40,20 @@ int main(int argc, char** argv) {
         } else {
             std::cout << " (" << result.triangles << " triangles, " << result.materials
                       << " materials, " << result.textures << " textures)";
+        }
+        std::cout << '\n';
+        // Acceptance and conversion are different claims and a creator wants
+        // both. A file can satisfy every published limit and still fail to
+        // convert: the gate reads structure, the converter reads every vertex.
+        const auto converted = homeworldz::mesh::convert_glb(bytes);
+        std::cout << "  convert: " << (converted.ok ? "ok" : "FAILED");
+        if (!converted.ok) {
+            std::cout << " - " << converted.error;
+            refused = 1;
+        } else {
+            std::cout << " (" << converted.faces << " face(s), "
+                      << converted.high_triangles << " triangles, "
+                      << converted.sl_mesh.size() << " bytes)";
         }
         std::cout << '\n';
     }
