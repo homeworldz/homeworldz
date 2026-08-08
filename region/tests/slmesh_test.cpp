@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <cstdlib>
+#include <string_view>
 
 namespace {
 
@@ -75,5 +76,49 @@ int main() {
     // Garbage does not parse.
     const char* noise = "certainly not a mesh asset";
     if (parse(std::span(reinterpret_cast<const std::byte*>(noise), 26))) return 13;
+
+    // A rigged mesh carries a skin block and per-vertex weights. The reader
+    // here does not parse skin yet, so this asserts what the writer emits:
+    // the block is named in the header, the joint table is in it, and the
+    // geometry blocks are unchanged by its presence.
+    Mesh rigged = mesh;
+    Skin skin;
+    skin.joints = {"mPelvis", "mTorso"};
+    skin.inverse_bind = {
+        {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1},
+        {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, -1, 1}};
+    rigged.skin = skin;
+    for (auto& submesh : rigged.high) {
+        submesh.influences.assign(submesh.positions.size(), {});
+        for (auto& list : submesh.influences) {
+            list.push_back({0, 0.75f});
+            list.push_back({1, 0.25f});
+        }
+    }
+    const auto rigged_bytes = serialize(rigged);
+    if (rigged_bytes.empty()) return 8;
+    const std::string_view blob(reinterpret_cast<const char*>(rigged_bytes.data()),
+                                rigged_bytes.size());
+    if (blob.find("skin") == std::string_view::npos ||
+        blob.find("joint_names") == std::string_view::npos ||
+        blob.find("inverse_bind_matrix") == std::string_view::npos ||
+        blob.find("bind_shape_matrix") == std::string_view::npos ||
+        blob.find("mPelvis") == std::string_view::npos ||
+        blob.find("Weights") == std::string_view::npos)
+        return 9;
+    // No alt_inverse_bind_matrix unless one was given: an empty override array
+    // would claim this body overrides the skeleton's joint positions with
+    // nothing, which is a different statement from not overriding them.
+    if (blob.find("alt_inverse_bind_matrix") != std::string_view::npos) return 10;
+    // The geometry still parses with the extra block present.
+    const auto rigged_parsed = parse(rigged_bytes);
+    if (!rigged_parsed || rigged_parsed->high.size() != 2) return 11;
+
+    // A joint table and matrix list of different lengths describes nothing
+    // coherent, so it is refused rather than written.
+    Mesh mismatched = rigged;
+    mismatched.skin->inverse_bind.pop_back();
+    if (!serialize(mismatched).empty()) return 12;
+
     return 0;
 }

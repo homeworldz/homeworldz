@@ -44,6 +44,20 @@ void put_key(std::vector<std::byte>& out, std::string_view key) {
     for (const auto character : key) out.push_back(static_cast<std::byte>(character));
 }
 
+// 's' then a length then the bytes, the same shape as a key. Distinct from a
+// key because LLSD's binary form distinguishes the two, and the viewer's reader
+// switches on the tag.
+void put_string(std::vector<std::byte>& out, std::string_view value) {
+    out.push_back(static_cast<std::byte>('s'));
+    put_u32(out, static_cast<std::uint32_t>(value.size()));
+    for (const auto character : value) out.push_back(static_cast<std::byte>(character));
+}
+
+// A bare tag byte and no payload: '1' is true and '0' is false.
+void put_boolean(std::vector<std::byte>& out, bool value) {
+    out.push_back(static_cast<std::byte>(value ? '1' : '0'));
+}
+
 void put_binary(std::vector<std::byte>& out, std::span<const std::byte> payload) {
     out.push_back(static_cast<std::byte>('b'));
     put_u32(out, static_cast<std::uint32_t>(payload.size()));
@@ -244,9 +258,11 @@ std::vector<std::byte> encode_level(const Level& level) {
                 if (!(texcoord_high[axis] > texcoord_low[axis]))
                     texcoord_high[axis] = texcoord_low[axis] + 0.001f;
         }
+        const bool has_influences = !submesh.influences.empty();
         std::uint32_t entries = 3; // PositionDomain, Position, TriangleList
         if (has_normals) ++entries;
         if (has_texcoords) entries += 2;
+        if (has_influences) ++entries; // Weights
         open_map(out, entries);
 
         put_key(out, "PositionDomain");
@@ -268,6 +284,33 @@ std::vector<std::byte> encode_level(const Level& level) {
                 put_u16_le(packed, quantize(position[axis], bounds.low[axis], bounds.high[axis]));
         put_key(out, "Position");
         put_binary(out, packed);
+
+        if (has_influences) {
+            // One vertex at a time: a byte of joint index and a 16-bit weight
+            // per influence, then 0xFF to end the list when fewer than four
+            // were written. The terminator is omitted at exactly four because
+            // the reader stops counting there, which is the format's own rule
+            // and not a saving worth making.
+            std::vector<std::byte> weights;
+            for (std::size_t vertex = 0; vertex < submesh.positions.size(); ++vertex) {
+                const auto& list = vertex < submesh.influences.size() ?
+                    submesh.influences[vertex] : std::vector<Influence>{};
+                std::size_t written = 0;
+                for (const auto& influence : list) {
+                    if (written == 4) break;
+                    if (influence.joint >= 255) continue;
+                    weights.push_back(static_cast<std::byte>(influence.joint));
+                    const auto scaled = static_cast<std::uint16_t>(
+                        (std::max)(0.0F, (std::min)(1.0F, influence.weight)) * 65535.0F);
+                    weights.push_back(static_cast<std::byte>(scaled & 0xff));
+                    weights.push_back(static_cast<std::byte>(scaled >> 8));
+                    ++written;
+                }
+                if (written < 4) weights.push_back(static_cast<std::byte>(0xff));
+            }
+            put_key(out, "Weights");
+            put_binary(out, weights);
+        }
 
         if (has_normals) {
             packed.clear();
@@ -512,6 +555,56 @@ std::optional<std::vector<std::array<float, 3>>> decode_physics(std::span<const 
 
 } // namespace
 
+// The `skin` block: the joint table every submesh's influences index into, and
+// how this mesh's bind pose relates to the skeleton's. Keys and their exact
+// spellings come from the viewer's own reader (llmodel.cpp) rather than from a
+// specification, since that reader is what has to accept the result.
+std::vector<std::byte> encode_skin(const Skin& skin) {
+    if (skin.joints.empty() || skin.joints.size() != skin.inverse_bind.size()) return {};
+    // alt_inverse_bind_matrix is optional, but a partial one would silently
+    // override some joints and not others.
+    if (!skin.alternate_inverse_bind.empty() &&
+        skin.alternate_inverse_bind.size() != skin.joints.size())
+        return {};
+    std::vector<std::byte> out;
+    std::uint32_t entries = 5; // joint_names, inverse_bind, bind_shape, pelvis, lock
+    if (!skin.alternate_inverse_bind.empty()) ++entries;
+    open_map(out, entries);
+
+    put_key(out, "joint_names");
+    open_array(out, static_cast<std::uint32_t>(skin.joints.size()));
+    for (const auto& joint : skin.joints) put_string(out, joint);
+    close_array(out);
+
+    const auto put_matrices = [&](std::string_view key,
+                                  const std::vector<std::array<float, 16>>& matrices) {
+        put_key(out, key);
+        open_array(out, static_cast<std::uint32_t>(matrices.size()));
+        for (const auto& matrix : matrices) {
+            open_array(out, 16);
+            for (const auto value : matrix) put_real(out, value);
+            close_array(out);
+        }
+        close_array(out);
+    };
+    put_matrices("inverse_bind_matrix", skin.inverse_bind);
+
+    put_key(out, "bind_shape_matrix");
+    open_array(out, 16);
+    for (const auto value : skin.bind_shape) put_real(out, value);
+    close_array(out);
+
+    if (!skin.alternate_inverse_bind.empty())
+        put_matrices("alt_inverse_bind_matrix", skin.alternate_inverse_bind);
+
+    put_key(out, "pelvis_offset");
+    put_real(out, skin.pelvis_offset);
+    put_key(out, "lock_scale_if_joint_position");
+    put_boolean(out, skin.lock_scale_if_joint_position);
+    close_map(out);
+    return out;
+}
+
 std::vector<std::byte> serialize(const Mesh& mesh) {
     if (!valid_level(mesh.high) || !valid_level(mesh.medium) || !valid_level(mesh.low) ||
         !valid_level(mesh.lowest) || mesh.physics_hull.empty())
@@ -526,6 +619,11 @@ std::vector<std::byte> serialize(const Mesh& mesh) {
     blocks.push_back({"low_lod", encode_level(mesh.low)});
     blocks.push_back({"lowest_lod", encode_level(mesh.lowest)});
     blocks.push_back({"physics_convex", encode_physics(mesh.physics_hull)});
+    if (mesh.skin) {
+        auto encoded = encode_skin(*mesh.skin);
+        if (encoded.empty()) return {};
+        blocks.push_back({"skin", std::move(encoded)});
+    }
     for (const auto& block : blocks)
         if (block.bytes.empty()) return {};
 

@@ -24,6 +24,14 @@
 
 namespace homeworldz::slmesh {
 
+// One vertex's binding to one joint. The wire form is a byte index into the
+// asset's joint table and a 16-bit fixed-point weight, so a joint index above
+// 254 cannot be expressed at all — 255 is the end-of-list marker.
+struct Influence {
+    std::uint8_t joint{};
+    float weight{};
+};
+
 struct Submesh {
     std::vector<std::array<float, 3>> positions;
     // Empty means "not carried"; when present, sized like positions.
@@ -31,6 +39,30 @@ struct Submesh {
     std::vector<std::array<float, 2>> texcoords;
     // Triangle list, three indices per triangle, into this submesh's vertices.
     std::vector<std::uint16_t> indices;
+    // Empty means unrigged; when present, sized like positions. At most four
+    // per vertex, which is what the format and the viewer both allow.
+    std::vector<std::vector<Influence>> influences;
+};
+
+// The `skin` block of a rigged mesh: which joints it binds and how its bind
+// pose relates to the skeleton's.
+//
+// `joints` names them — the same names a viewer resolves, so aliases and
+// attachment points are legal here as well as canonical bones. Each entry has
+// one inverse bind matrix, row-major, sixteen values in the order the format
+// writes them (row * 4 + column).
+//
+// `alternate_inverse_bind` is the joint position override: a body whose
+// proportions differ from the default skeleton ships its own joint positions
+// here rather than deforming wrongly. Empty means "use the skeleton's", which
+// is what a body rigged to the standard proportions wants.
+struct Skin {
+    std::vector<std::string> joints;
+    std::vector<std::array<float, 16>> inverse_bind;
+    std::array<float, 16> bind_shape{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+    std::vector<std::array<float, 16>> alternate_inverse_bind;
+    float pelvis_offset{};
+    bool lock_scale_if_joint_position{};
 };
 
 // One level of detail: a submesh per material face, in material order. The
@@ -48,6 +80,9 @@ struct Mesh {
     // The convex physics hull's vertices (a single hull, the format's
     // "BoundingVerts" shape).
     std::vector<std::array<float, 3>> physics_hull;
+    // Present only for a rigged mesh, and then it is the asset-wide joint
+    // table every submesh's influences index into.
+    std::optional<Skin> skin;
 };
 
 // serialize renders the asset bytes: binary-LLSD header, then the compressed
