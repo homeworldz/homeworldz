@@ -27,8 +27,8 @@ its own repository with its own roadmap and progress.
 <p>
 <label class="roadmap-overall-progress">
   <span>Legacy (Firestorm-compatible) services:</span>
-  <progress data-color="primary" max="100" value="35">35%</progress>
-  <strong>35%</strong>
+  <progress data-color="primary" max="100" value="36">36%</progress>
+  <strong>36%</strong>
 </label>
 </p>
 
@@ -45,7 +45,7 @@ its own repository with its own roadmap and progress.
 | 1. Functional Single-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="100" aria-label="Phase 1 progress: 100%">100%</progress> | 100% |
 | 2. Connected Multi-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="86" aria-label="Phase 2 progress: 86%">86%</progress> | 86% |
 | 3. Interactive Physical World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="50" aria-label="Phase 3 progress: 50%">50%</progress> | 50% |
-| 4. Mesh and Creator Platform | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="23" aria-label="Phase 4 progress: 23%">23%</progress> | 23% |
+| 4. Mesh and Creator Platform | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="30" aria-label="Phase 4 progress: 30%">30%</progress> | 30% |
 | 5. LSL Scripting | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="15" aria-label="Phase 5 progress: 15%">15%</progress> | 15% |
 | 6. Social Communications | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="6" aria-label="Phase 6 progress: 6%">6%</progress> | 6% |
 | 7. Reliable Operations and Distribution | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="23" aria-label="Phase 7 progress: 23%">23%</progress> | 23% |
