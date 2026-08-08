@@ -21,6 +21,7 @@ import (
 
 	"github.com/homeworldz/server/grid/internal/arrival"
 	"github.com/homeworldz/server/grid/internal/identity"
+	"github.com/homeworldz/server/grid/internal/inventory"
 	"github.com/homeworldz/server/grid/internal/locations"
 	"github.com/homeworldz/server/grid/internal/mailer"
 	"github.com/homeworldz/server/grid/internal/messages"
@@ -84,6 +85,14 @@ type LocationStore interface {
 	GetHome(ctx context.Context, userID string) (locations.Location, error)
 }
 
+// InventoryStore exposes a user's own folders and items. Both methods are
+// scoped by user id, which is what lets the read-side helpers in the inventory
+// package enforce ownership structurally. Satisfied by *inventory.PostgresStore.
+type InventoryStore interface {
+	ListFolders(ctx context.Context, userID string) ([]inventory.Folder, error)
+	ListItems(ctx context.Context, userID string) ([]inventory.Item, error)
+}
+
 // PresenceStore exposes active viewer presences for system status. It is
 // satisfied by *presence.PostgresStore.
 type PresenceStore interface {
@@ -119,8 +128,11 @@ type Options struct {
 	// Sessions and Locations serve client world entry; TicketSigner mints the
 	// region-scoped ticket and must carry the region-ticket audience and a
 	// short TTL, never the account-token audience.
-	Sessions     SessionStore
-	Locations    LocationStore
+	Sessions  SessionStore
+	Locations LocationStore
+	// Inventory serves the client's read-only view of its own inventory. The
+	// same rows the AIS capability serves a viewer; see client_inventory.go.
+	Inventory    InventoryStore
 	TicketSigner *webtoken.Signer
 	// ChannelURL is the absolute wss:// URL of the grid channel, reported in
 	// the probe when the deployment knows its public URL; a client that
@@ -150,6 +162,7 @@ type API struct {
 	welcome         []arrival.Point
 	sessions        SessionStore
 	locations       LocationStore
+	inventory       InventoryStore
 	ticketSigner    *webtoken.Signer
 	channelURL      string
 	channels        *channelHub
@@ -197,6 +210,7 @@ func New(options Options) (http.Handler, error) {
 		welcome:         options.Welcome,
 		sessions:        options.Sessions,
 		locations:       options.Locations,
+		inventory:       options.Inventory,
 		ticketSigner:    options.TicketSigner,
 		channelURL:      options.ChannelURL,
 		channels:        newChannelHub(),
@@ -211,6 +225,8 @@ func New(options Options) (http.Handler, error) {
 	mux.HandleFunc("/v1/client/session", a.clientSession)
 	mux.HandleFunc("/v1/client/channel", a.clientChannel)
 	mux.HandleFunc("/v1/client/messages", a.clientMessages)
+	mux.HandleFunc("/v1/client/inventory", a.clientInventoryRoot)
+	mux.HandleFunc("/v1/client/inventory/", a.clientInventoryByID)
 	mux.HandleFunc("/v1/registrations", a.registrations)
 	mux.HandleFunc("/v1/verifications", a.verifications)
 	mux.HandleFunc("/v1/verifications/resend", a.resendVerification)
@@ -291,9 +307,9 @@ func identityOf(account webaccount.Account) Identity {
 		DisplayName: account.DisplayName,
 		// Every route that returns an Identity is either the account's own
 		// session or an administrator's listing; none serves it to a third party.
-		Email:       account.Email,
-		RezDate:     account.RezDate.UTC(),
-		Privs:       account.Privileges,
+		Email:   account.Email,
+		RezDate: account.RezDate.UTC(),
+		Privs:   account.Privileges,
 	}
 }
 

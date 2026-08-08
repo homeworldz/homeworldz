@@ -23,6 +23,7 @@ import (
 	"github.com/homeworldz/server/grid/internal/arrival"
 	"github.com/homeworldz/server/grid/internal/config"
 	"github.com/homeworldz/server/grid/internal/identity"
+	"github.com/homeworldz/server/grid/internal/inventory"
 	"github.com/homeworldz/server/grid/internal/locations"
 	"github.com/homeworldz/server/grid/internal/mailer"
 	"github.com/homeworldz/server/grid/internal/messages"
@@ -118,6 +119,7 @@ func main() {
 		Sessions:        identity.NewPostgresStore(db),
 		Messages:        messages.NewPostgresStore(db),
 		Locations:       locations.NewPostgresStore(db),
+		Inventory:       inventory.NewPostgresStore(db),
 		TicketSigner:    ticketSigner,
 		ChannelURL:      channelURL(settings.WebsitePublicURL),
 	})

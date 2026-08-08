@@ -464,7 +464,10 @@ tier is a **separate binary** from the internal tier — `cmd/homeworldz-api` ov
 accounts, provisioned regions, a narrowed lease store, and presence
 ([grid/internal/api/api.go:50](../grid/internal/api/api.go:50)).
 
-Missing for world entry:
+Missing for world entry (**resolved since; kept for the shape of the argument**
+— `locations`, `identity`, `messages` and `inventory` are all constructed in
+`cmd/homeworldz-api/main.go` now, each a single `NewPostgresStore(db)` beside the
+others):
 
 - **`locations`** — last position and home, which is what a session opens at.
 - **`identity`** — session records, if the client's session reuses that table
