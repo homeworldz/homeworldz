@@ -1,5 +1,6 @@
 #include "homeworldz/session_protocol.h"
 
+#include "homeworldz/api_models.h"
 #include "homeworldz/avatar_controller.h"
 #include "homeworldz/terrain_layers.h"
 #include "homeworldz/physics.h"
@@ -192,31 +193,13 @@ std::string base64(std::span<const std::byte> bytes) {
     return out;
 }
 
-std::string json_string(std::string_view value) {
-    std::string rendered;
-    rendered.reserve(value.size() + 2);
-    rendered.push_back('"');
-    for (const auto character : value) {
-        switch (character) {
-        case '"': rendered += "\\\""; break;
-        case '\\': rendered += "\\\\"; break;
-        case '\n': rendered += "\\n"; break;
-        case '\r': rendered += "\\r"; break;
-        case '\t': rendered += "\\t"; break;
-        default:
-            if (static_cast<unsigned char>(character) < 0x20) {
-                constexpr char hexadecimal[] = "0123456789abcdef";
-                rendered += "\\u00";
-                rendered.push_back(hexadecimal[(character >> 4) & 0x0f]);
-                rendered.push_back(hexadecimal[character & 0x0f]);
-            } else {
-                rendered.push_back(character);
-            }
-        }
-    }
-    rendered.push_back('"');
-    return rendered;
-}
+// Delegated rather than duplicated. This encoder had the same defect as the
+// HTTP one - bytes above ASCII passed through whether or not they formed valid
+// UTF-8 - and the session channel carries more author-supplied text than HTTP
+// does: chat, object names, every string a viewer typed. Two copies of an
+// escaping rule are two places to fix it, and this one would have been the
+// easier of the two to forget.
+std::string json_string(std::string_view value) { return api::json_string(value); }
 
 std::string json_field(std::string_view object, std::string_view name) {
     const auto position = find_field(object, name);

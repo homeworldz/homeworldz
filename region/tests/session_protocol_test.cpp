@@ -37,6 +37,37 @@ int main() {
 
     // Escapes render and parse both ways.
     if (homeworldz::session::json_string("a\nb\t\"c\"\\") != R"("a\nb\t\"c\"\\")") return 5;
+
+    // Text above ASCII survives intact when it is well-formed UTF-8, and is
+    // replaced when it is not. Both matter to a client displaying our strings:
+    // the region interpolates names read straight out of an uploaded file into
+    // refusal reasons, and nothing obliges an untrusted GLB to hold valid UTF-8.
+    // Emitting those bytes raw made the whole response un-parseable, so a
+    // creator got a parse error instead of the sentence naming the problem.
+    if (homeworldz::session::json_string("caf\xc3\xa9") != "\"caf\xc3\xa9\"") return 39;
+    if (homeworldz::session::json_string("\xe6\x97\xa5\xe6\x9c\xac") !=
+        "\"\xe6\x97\xa5\xe6\x9c\xac\"")
+        return 40;
+    // A lone continuation byte, and a truncated sequence: one replacement each,
+    // and the valid text around them is untouched.
+    // The replacement is written as the � escape rather than as raw
+    // U+FFFD bytes, so a response carrying mangled input is still pure ASCII on
+    // the wire and cannot compound one encoding problem with another.
+    // Written with doubled backslashes rather than a raw literal: MSVC treats
+    // \u inside R"(...)" as a universal character name, so the raw form silently
+    // became the very U+FFFD byte sequence the test meant to prove absent.
+    if (homeworldz::session::json_string("a\x80z") != "\"a\\ufffdz\"") return 41;
+    if (homeworldz::session::json_string("a\xc3") != "\"a\\ufffd\"") return 42;
+    // Overlong encoding of '/', a UTF-16 surrogate half, and a code point past
+    // U+10FFFF are all well-formed to a validator that only counts continuation
+    // bytes, and all invalid UTF-8.
+    if (homeworldz::session::json_string("\xc0\xaf") != "\"\\ufffd\\ufffd\"") return 43;
+    if (homeworldz::session::json_string("\xed\xa0\x80") !=
+        "\"\\ufffd\\ufffd\\ufffd\"")
+        return 44;
+    if (homeworldz::session::json_string("\xf5\x80\x80\x80") !=
+        "\"\\ufffd\\ufffd\\ufffd\\ufffd\"")
+        return 45;
     const auto tricky = homeworldz::session::parse_envelope(
         R"({"type":"auth","version":1,"payload":{"token":"with \"quotes\" and {braces}"}})", error);
     if (!tricky || homeworldz::session::json_field(tricky->payload, "token") !=
