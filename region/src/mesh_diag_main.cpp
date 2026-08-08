@@ -1,12 +1,14 @@
-// What the upload gate says about a GLB, without uploading it.
+// What the upload gate says about a GLB, and what conversion makes of it,
+// without uploading anything.
 //
 // The acceptance policy is published so creators can check their own content
 // (ADR 0033), but a published document still leaves them running the file
-// against a real region to find out. This answers the same question offline,
-// with the identical code path — not a reimplementation of the rules, which
-// would be a second copy able to disagree with the first.
+// against a real region to find out. This answers the same questions offline
+// through the identical code paths — not a reimplementation of the rules,
+// which would be a second copy able to disagree with the first.
 #include "homeworldz/mesh_acceptance.h"
 #include "homeworldz/mesh_convert.h"
+#include "homeworldz/slmesh.h"
 
 #include <cstddef>
 #include <fstream>
@@ -32,6 +34,7 @@ int main(int argc, char** argv) {
         std::vector<std::byte> bytes(raw.size());
         for (std::size_t at = 0; at < raw.size(); ++at)
             bytes[at] = static_cast<std::byte>(raw[at]);
+
         const auto result = homeworldz::mesh::validate_glb(bytes);
         std::cout << argv[index] << ": " << (result.accepted ? "accepted" : "REFUSED");
         if (!result.accepted) {
@@ -42,6 +45,7 @@ int main(int argc, char** argv) {
                       << " materials, " << result.textures << " textures)";
         }
         std::cout << '\n';
+
         // Acceptance and conversion are different claims and a creator wants
         // both. A file can satisfy every published limit and still fail to
         // convert: the gate reads structure, the converter reads every vertex.
@@ -50,10 +54,30 @@ int main(int argc, char** argv) {
         if (!converted.ok) {
             std::cout << " - " << converted.error;
             refused = 1;
-        } else {
-            std::cout << " (" << converted.faces << " face(s), "
-                      << converted.high_triangles << " triangles, "
-                      << converted.sl_mesh.size() << " bytes)";
+            std::cout << '\n';
+            continue;
+        }
+        std::cout << " (" << converted.faces << " face(s), " << converted.high_triangles
+                  << " triangles, " << converted.sl_mesh.size() << " bytes)\n";
+
+        // Read the asset back rather than trust what was written. The joint
+        // table is the one part of a rig nothing downstream can check: a wrong
+        // mapping given its target's inverse bind matrix produces a correct
+        // bind pose, so no render disagrees with it.
+        const auto parsed = homeworldz::slmesh::parse(converted.sl_mesh);
+        if (!parsed) {
+            std::cout << "  skin: the converted asset does not parse back\n";
+            refused = 1;
+            continue;
+        }
+        if (!parsed->skin) continue;
+        std::cout << "  skin: " << parsed->skin->joints.size() << " joint(s):";
+        for (std::size_t at = 0; at < parsed->skin->joints.size(); ++at) {
+            if (at == 12) {
+                std::cout << " ...";
+                break;
+            }
+            std::cout << ' ' << parsed->skin->joints[at];
         }
         std::cout << '\n';
     }

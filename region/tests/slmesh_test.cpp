@@ -96,29 +96,68 @@ int main() {
         }
     }
     const auto rigged_bytes = serialize(rigged);
-    if (rigged_bytes.empty()) return 8;
+    if (rigged_bytes.empty()) return 30;
     const std::string_view blob(reinterpret_cast<const char*>(rigged_bytes.data()),
                                 rigged_bytes.size());
-    if (blob.find("skin") == std::string_view::npos ||
-        blob.find("joint_names") == std::string_view::npos ||
-        blob.find("inverse_bind_matrix") == std::string_view::npos ||
-        blob.find("bind_shape_matrix") == std::string_view::npos ||
-        blob.find("mPelvis") == std::string_view::npos ||
-        blob.find("Weights") == std::string_view::npos)
-        return 9;
-    // No alt_inverse_bind_matrix unless one was given: an empty override array
-    // would claim this body overrides the skeleton's joint positions with
-    // nothing, which is a different statement from not overriding them.
-    if (blob.find("alt_inverse_bind_matrix") != std::string_view::npos) return 10;
+    // Only the block *name* is searchable here: the header is uncompressed
+    // LLSD, while the block it points at is deflated. An earlier version of
+    // this test searched the same bytes for "joint_names" and "Weights" and
+    // passed, which it could only ever have done by luck — on a small,
+    // repetitive block zlib sometimes emits stored literals. The round trip
+    // below is the real check, and it did not exist when this was written.
+    if (blob.find("skin") == std::string_view::npos) return 31;
     // The geometry still parses with the extra block present.
     const auto rigged_parsed = parse(rigged_bytes);
-    if (!rigged_parsed || rigged_parsed->high.size() != 2) return 11;
+    if (!rigged_parsed || rigged_parsed->high.size() != 2) return 33;
+
+    // The skin now round-trips, which the earlier version of this test could
+    // not check because the reader did not parse it. Asserting emitted bytes
+    // was the honest thing to do then; it is the weaker thing to do now.
+    if (!rigged_parsed->skin) return 34;
+    const auto& back = *rigged_parsed->skin;
+    if (back.joints.size() != 2 || back.joints[0] != "mPelvis" || back.joints[1] != "mTorso")
+        return 35;
+    if (back.inverse_bind.size() != 2) return 36;
+    // The second matrix carried a distinguishing cell, so this checks the
+    // matrices survive in order rather than merely in count — two identities
+    // would round-trip indistinguishably whichever way they were shuffled.
+    if (std::fabs(back.inverse_bind[1][14] - -1.0f) > 1e-6f) return 37;
+    if (!back.alternate_inverse_bind.empty()) return 38;
+
+    // The shape a real body actually has, which the two-joint fixture above
+    // does not: a larger joint table, and weights on every level rather than
+    // only the highest. The Second Life reference body converted and then
+    // failed to parse back, and neither difference was covered.
+    {
+        Mesh many = mesh;
+        Skin wide;
+        for (int joint = 0; joint < 21; ++joint) {
+            wide.joints.push_back("mSpine" + std::to_string(joint % 4 + 1));
+            std::array<float, 16> matrix{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+            matrix[13] = static_cast<float>(joint);
+            wide.inverse_bind.push_back(matrix);
+        }
+        many.skin = wide;
+        for (auto* level : {&many.high, &many.medium, &many.low, &many.lowest})
+            for (auto& submesh : *level) {
+                submesh.influences.assign(submesh.positions.size(), {});
+                for (std::size_t vertex = 0; vertex < submesh.influences.size(); ++vertex)
+                    submesh.influences[vertex].push_back(
+                        {static_cast<std::uint8_t>(vertex % 21), 1.0f});
+            }
+        const auto many_bytes = serialize(many);
+        if (many_bytes.empty()) return 39;
+        const auto many_parsed = parse(many_bytes);
+        if (!many_parsed) return 40;
+        if (!many_parsed->skin || many_parsed->skin->joints.size() != 21) return 41;
+        if (many_parsed->high.size() != many.high.size()) return 42;
+    }
 
     // A joint table and matrix list of different lengths describes nothing
     // coherent, so it is refused rather than written.
     Mesh mismatched = rigged;
     mismatched.skin->inverse_bind.pop_back();
-    if (!serialize(mismatched).empty()) return 12;
+    if (!serialize(mismatched).empty()) return 43;
 
     return 0;
 }

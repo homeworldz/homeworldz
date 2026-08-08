@@ -692,7 +692,11 @@ std::vector<std::byte> encode_skin(const Skin& skin) {
     put_key(out, "lock_scale_if_joint_position");
     put_boolean(out, skin.lock_scale_if_joint_position);
     close_map(out);
-    return out;
+    // Deflated like every other block. The header's offsets name compressed
+    // extents, so a block written plain is unreadable by anything that trusts
+    // the format — including this file's own reader, which is how it was
+    // caught.
+    return compress(out);
 }
 
 std::vector<std::byte> serialize(const Mesh& mesh) {
