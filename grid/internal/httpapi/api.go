@@ -59,6 +59,7 @@ type API struct {
 	provisioned    provisioning.Store
 	terrainHTTP    *http.Client
 	terrainCache   terrainTileCache
+	layerCache     terrainLayerCache
 	transits       transit.Store
 	taskTransfers  tasktransfer.Store
 	locations      locations.Store
@@ -136,7 +137,7 @@ func New(ready ReadinessChecker, version string, options Options) http.Handler {
 		renditions: options.Renditions, workerToken: options.WorkerToken,
 		serviceToken: options.ServiceToken,
 		provisioned:  options.Provisioned, terrainHTTP: options.TerrainHTTPClient,
-		terrainCache: newTerrainTileCache(), transits: options.Transits,
+		terrainCache: newTerrainTileCache(), layerCache: newTerrainLayerCache(), transits: options.Transits,
 		taskTransfers: options.TaskTransfers, locations: options.Locations,
 		gestures: options.Gestures, estates: options.Estates,
 		welcomePoints: options.Welcome, ticketVerifier: options.TicketVerifier,

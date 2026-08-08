@@ -34,7 +34,7 @@ func encodedHeightmap(height float32) []byte { return encodedHeightmapSize(256, 
 func TestTerrainHeightmapUsesNorthAtTop(t *testing.T) {
 	data := encodedHeightmap(20)
 	binary.LittleEndian.PutUint32(data[(255*256+10)*4:], math.Float32bits(30))
-	tile := renderTerrainHeightmap(data, 256)
+	tile := renderTerrainHeightmap(data, 256, nil)
 	north := tile.At(10, 0)
 	south := tile.At(10, 255)
 	_, northGreen, _, _ := north.RGBA()
@@ -122,6 +122,13 @@ func TestMapTileFetchesAndCachesLiveRegionTerrain(t *testing.T) {
 	var requests atomic.Int32
 	heightmap := encodedHeightmap(90)
 	regionServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Only the heightmap is counted, and only it is served: a region that
+		// does not publish terrain layers is a supported case, and the tile
+		// falls back to the height palette these assertions describe.
+		if r.URL.Path != "/map/terrain.raw" {
+			http.NotFound(w, r)
+			return
+		}
 		requests.Add(1)
 		if r.Header.Get("Authorization") != "Bearer secret" {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
@@ -168,6 +175,13 @@ func TestMapTileFetchesAndCachesLiveRegionTerrain(t *testing.T) {
 func TestTerrainCacheSeparatesRegionWidths(t *testing.T) {
 	var requests atomic.Int32
 	regionServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Width is chosen by which heightmap request this is, so only heightmap
+		// requests may be counted; the layer endpoint would otherwise shift the
+		// widths this test is about.
+		if r.URL.Path != "/map/terrain.raw" {
+			http.NotFound(w, r)
+			return
+		}
 		request := requests.Add(1)
 		width := 256
 		if request == 2 {
@@ -177,7 +191,8 @@ func TestTerrainCacheSeparatesRegionWidths(t *testing.T) {
 	}))
 	defer regionServer.Close()
 
-	api := &API{terrainHTTP: regionServer.Client(), terrainCache: newTerrainTileCache()}
+	api := &API{terrainHTTP: regionServer.Client(), terrainCache: newTerrainTileCache(),
+		layerCache: newTerrainLayerCache()}
 	region := regions.Region{PublicEndpoint: regionServer.URL}
 	first, ok := api.regionTerrainTile(context.Background(), region, 256)
 	if !ok || first.Bounds().Dx() != 256 {
@@ -236,5 +251,64 @@ func TestMapTileFetchesLargeRegionTerrainSlice(t *testing.T) {
 	red, green, blue, _ := decoded.At(128, 128).RGBA()
 	if red < 40000 || green < 40000 || blue < 40000 {
 		t.Fatalf("large eastern terrain pixel = (%d, %d, %d), want light mountain", red, green, blue)
+	}
+}
+
+// The layer bands a region publishes, applied the way the viewer applies them.
+// Welcome's live settings are start 20, range 60, which puts the first boundary
+// at 27.5m — so its mostly-flat 22m ground is nearly pure layer 1. The fixed
+// height palette this replaced called anything above 22m grass, which is why a
+// region drew green where a viewer drew dirt.
+func TestTerrainLayerBandsFollowCompositionRule(t *testing.T) {
+	layers := &terrainLayers{
+		StartHeight: [4]float64{20, 20, 20, 20},
+		HeightRange: [4]float64{60, 60, 60, 60},
+		WaterHeight: 20,
+		palette: [4]color.RGBA{
+			{R: 10, A: 255}, {R: 20, A: 255}, {R: 30, A: 255}, {R: 40, A: 255}},
+	}
+	for _, testCase := range []struct {
+		name   string
+		height float64
+		want   uint8
+	}{
+		// t = 0: layer 1 pure, at the start height itself.
+		{"at start", 20, 10},
+		// Boundaries sit where t is a half integer: start + 0.125*range and so
+		// on. Exactly there the two neighbours are evenly mixed.
+		{"first boundary", 27.5, 15},
+		{"second boundary", 42.5, 25},
+		{"third boundary", 57.5, 35},
+		// Layer 4 is pure from start + 0.75*range upward and stays there.
+		{"fourth pure", 65, 40},
+		{"above everything", 400, 40},
+	} {
+		got := layerColorAt(layers, testCase.height, 0.5, 0.5)
+		if got.R != testCase.want {
+			t.Errorf("%s (%.1fm): R = %d, want %d", testCase.name, testCase.height, got.R, testCase.want)
+		}
+	}
+}
+
+// Corner values are interpolated bilinearly, in the order the RegionHandshake
+// writes them: south-west, north-west, south-east, north-east. Reading them in
+// another order tilts every region's bands the wrong way, which no single-corner
+// test would catch.
+func TestTerrainLayerCornersInterpolateBilinearly(t *testing.T) {
+	corners := [4]float64{0, 10, 20, 30} // SW, NW, SE, NE
+	for _, testCase := range []struct {
+		name, at string
+		u, v     float64
+		want     float64
+	}{
+		{"south-west", "0,0", 0, 0, 0},
+		{"north-west", "0,1", 0, 1, 10},
+		{"south-east", "1,0", 1, 0, 20},
+		{"north-east", "1,1", 1, 1, 30},
+		{"centre", "0.5,0.5", 0.5, 0.5, 15},
+	} {
+		if got := bilinear(corners, testCase.u, testCase.v); got != testCase.want {
+			t.Errorf("%s at %s: %v, want %v", testCase.name, testCase.at, got, testCase.want)
+		}
 	}
 }
