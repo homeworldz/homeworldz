@@ -1,4 +1,5 @@
 #include "homeworldz/mesh_acceptance.h"
+#include "homeworldz/avatar_joints.h"
 
 #define CGLTF_IMPLEMENTATION
 #include <cgltf.h>
@@ -105,6 +106,54 @@ Acceptance validate_glb(std::span<const std::byte> content) {
                           " bytes; the limit is " + std::to_string(max_image_bytes));
     }
 
+    // Rig validation runs before the not-yet-accepted refusal, so a creator
+    // preparing content against the published policy learns what is actually
+    // wrong with their rig rather than only that rigs are not accepted. Same
+    // reasoning that published the skeleton and the limits ahead of M4: a
+    // re-rig cannot recover from being aimed wrong, and finding out late costs
+    // whoever authored it.
+    for (cgltf_size skin_index = 0; skin_index < data->skins_count; ++skin_index) {
+        const auto& skin = data->skins[skin_index];
+        if (skin.joints_count > max_joints_per_mesh)
+            return refuse("a skin binds " + std::to_string(skin.joints_count) +
+                          " joints; the limit is " + std::to_string(max_joints_per_mesh));
+        for (cgltf_size joint_index = 0; joint_index < skin.joints_count; ++joint_index) {
+            const auto* node = skin.joints[joint_index];
+            const std::string_view name = node != nullptr && node->name != nullptr ? node->name : "";
+            if (name.empty())
+                return refuse("a skin binds an unnamed joint; every joint must name one of the " +
+                              std::to_string(rigged_skeleton_joints) + " " +
+                              std::string(rigged_skeleton) + " joints");
+            // The name is what a viewer resolves, and it resolves aliases and
+            // attachment points as well as canonical bones - so this accepts
+            // every spelling a viewer would, including the `hip` and `abdomen`
+            // that Blender and Avastar emit. Naming the offending joint matters
+            // because the creator hearing it may be several tools away from the
+            // file.
+            if (!is_riggable_joint(name))
+                return refuse("a skin binds joint \"" + std::string(name) +
+                              "\", which is not a joint of the " +
+                              std::string(rigged_skeleton) + " skeleton");
+        }
+    }
+    // More than four influences per vertex arrives as a second joint/weight
+    // set. glTF numbers them JOINTS_0, JOINTS_1 and so on, four to a set, so
+    // any index above zero is a fifth influence by definition.
+    for (cgltf_size mesh_index = 0; mesh_index < data->meshes_count; ++mesh_index) {
+        const auto& mesh_value = data->meshes[mesh_index];
+        for (cgltf_size primitive_index = 0; primitive_index < mesh_value.primitives_count;
+             ++primitive_index) {
+            const auto& primitive = mesh_value.primitives[primitive_index];
+            for (cgltf_size attribute = 0; attribute < primitive.attributes_count; ++attribute) {
+                const auto& value = primitive.attributes[attribute];
+                if ((value.type == cgltf_attribute_type_joints ||
+                     value.type == cgltf_attribute_type_weights) && value.index > 0)
+                    return refuse("a primitive declares more than " +
+                                  std::to_string(max_rig_influences) +
+                                  " influences per vertex");
+            }
+        }
+    }
     if (!rigged_accepted && data->skins_count != 0)
         return refuse("rigged mesh is not accepted yet (ADR 0033 M4); upload the static mesh");
 

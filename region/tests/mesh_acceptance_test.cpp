@@ -130,13 +130,74 @@ int main() {
         refused_external.reason.find("external") == std::string::npos)
         return 6;
 
-    // Rigged mesh is refused until M4, with the reason saying so.
-    const auto rigged = glb(std::string(triangle_json_head) +
-        R"(,"skins":[{"joints":[0]}]})", triangle_bin());
+    // A rig whose joints are all real is refused only because rigged mesh is
+    // not accepted yet. The joint node is named on purpose: an unnamed one is
+    // refused earlier now, so this case must carry a real joint to reach the
+    // M4 gate at all.
+    const char* const rig_head =
+        R"({"asset":{"version":"2.0"},"buffers":[{"byteLength":36}],)"
+        R"("bufferViews":[{"buffer":0,"byteOffset":0,"byteLength":36}],)"
+        R"("accessors":[{"bufferView":0,"componentType":5126,"count":3,"type":"VEC3",)"
+        R"("min":[0,0,0],"max":[1,1,0]}],)"
+        R"("meshes":[{"primitives":[{"attributes":{"POSITION":0}}]}],)"
+        R"("scenes":[{"nodes":[0]}],"scene":0)";
+    const auto rigged = glb(std::string(rig_head) +
+        R"(,"nodes":[{"mesh":0},{"name":"mPelvis"}],"skins":[{"joints":[1]}]})",
+        triangle_bin());
     const auto refused_rigged = validate_glb(rigged);
     if (refused_rigged.accepted ||
         refused_rigged.reason.find("rigged") == std::string::npos)
         return 7;
+
+    // A joint that is not on the skeleton is refused by name. Whoever hears
+    // this may be several tools away from the file, so the reason identifies
+    // which joint rather than only that one is wrong.
+    const auto bad_joint = glb(std::string(rig_head) +
+        R"(,"nodes":[{"mesh":0},{"name":"Bip01_Spine"}],"skins":[{"joints":[1]}]})",
+        triangle_bin());
+    const auto refused_joint = validate_glb(bad_joint);
+    if (refused_joint.accepted ||
+        refused_joint.reason.find("Bip01_Spine") == std::string::npos)
+        return 9;
+
+    // An alias reaches the M4 gate rather than the joint check. The viewer
+    // resolves `hip` onto mPelvis, and refusing it would reject what Blender
+    // and Avastar emit while the published policy claimed compatibility.
+    const auto aliased = glb(std::string(rig_head) +
+        R"(,"nodes":[{"mesh":0},{"name":"hip"}],"skins":[{"joints":[1]}]})",
+        triangle_bin());
+    const auto refused_alias = validate_glb(aliased);
+    if (refused_alias.accepted ||
+        refused_alias.reason.find("rigged") == std::string::npos)
+        return 10;
+
+    // An unnamed joint cannot be resolved at all, so it is refused before the
+    // name check has a name to report.
+    const auto unnamed = glb(std::string(triangle_json_head) +
+        R"(,"skins":[{"joints":[0]}]})", triangle_bin());
+    const auto refused_unnamed = validate_glb(unnamed);
+    if (refused_unnamed.accepted ||
+        refused_unnamed.reason.find("unnamed joint") == std::string::npos)
+        return 11;
+
+    // A fifth influence arrives as JOINTS_1: glTF numbers joint and weight sets
+    // four to a set, so any index above zero exceeds the limit by definition.
+    const auto five_influences = glb(
+        R"({"asset":{"version":"2.0"},"buffers":[{"byteLength":36}],)"
+        R"("bufferViews":[{"buffer":0,"byteOffset":0,"byteLength":36},)"
+        R"({"buffer":0,"byteOffset":0,"byteLength":24}],)"
+        R"("accessors":[{"bufferView":0,"componentType":5126,"count":3,"type":"VEC3",)"
+        R"("min":[0,0,0],"max":[1,1,0]},)"
+        R"({"bufferView":1,"componentType":5123,"count":3,"type":"VEC4"},)"
+        R"({"bufferView":0,"componentType":5126,"count":3,"type":"VEC4"}],)"
+        R"("meshes":[{"primitives":[{"attributes":{"POSITION":0,"JOINTS_0":1,)"
+        R"("WEIGHTS_0":2,"JOINTS_1":1,"WEIGHTS_1":2}}]}],)"
+        R"("nodes":[{"mesh":0},{"name":"mPelvis"}],"skins":[{"joints":[1]}],)"
+        R"("scenes":[{"nodes":[0]}],"scene":0})", triangle_bin());
+    const auto refused_influences = validate_glb(five_influences);
+    if (refused_influences.accepted ||
+        refused_influences.reason.find("influences") == std::string::npos)
+        return 12;
 
     // The published policy carries the same numbers the validator enforces.
     const auto policy = homeworldz::mesh::acceptance_policy_json();
