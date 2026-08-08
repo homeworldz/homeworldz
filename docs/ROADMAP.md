@@ -27,8 +27,8 @@ its own repository with its own roadmap and progress.
 <p>
 <label class="roadmap-overall-progress">
   <span>Legacy (Firestorm-compatible) services:</span>
-  <progress data-color="primary" max="100" value="36">36%</progress>
-  <strong>36%</strong>
+  <progress data-color="primary" max="100" value="37">37%</progress>
+  <strong>37%</strong>
 </label>
 </p>
 
@@ -45,7 +45,7 @@ its own repository with its own roadmap and progress.
 | 1. Functional Single-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="100" aria-label="Phase 1 progress: 100%">100%</progress> | 100% |
 | 2. Connected Multi-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="86" aria-label="Phase 2 progress: 86%">86%</progress> | 86% |
 | 3. Interactive Physical World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="50" aria-label="Phase 3 progress: 50%">50%</progress> | 50% |
-| 4. Mesh and Creator Platform | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="30" aria-label="Phase 4 progress: 30%">30%</progress> | 30% |
+| 4. Mesh and Creator Platform | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="38" aria-label="Phase 4 progress: 38%">38%</progress> | 38% |
 | 5. LSL Scripting | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="15" aria-label="Phase 5 progress: 15%">15%</progress> | 15% |
 | 6. Social Communications | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="6" aria-label="Phase 6 progress: 6%">6%</progress> | 6% |
 | 7. Reliable Operations and Distribution | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="23" aria-label="Phase 7 progress: 23%">23%</progress> | 23% |
@@ -381,19 +381,22 @@ client family is served a derived rendition by a grid-side conversion worker.
   older one produced, so deploying an upgraded converter reconverts existing
   content.
 - [ ] M4 rigged mesh: glTF skins mapped onto the Bento skeleton (refusing
-  rigs that do not map), attachments and body wearables. State at 2026-08-08:
-  a real Bento body converts, and the refusal half is built — names resolve
-  through the alias table, unused joints compact away, and the geometry is
-  checked against the skeleton's rest pose with a tolerance bracketed by the
-  skeleton itself. Two faults block acceptance, both found by measuring that
-  body rather than by reading code. The region's axis map fixes *up* and never
-  chose a yaw ([ADR 0033](adr/0033-mesh-assets.md) argues only that an asset
-  "stands upright", which two different right-handed maps both satisfy), and a
-  skeleton is the first asset with a canonical facing that can tell them apart.
-  Separately, the map is applied to positions, normals and bounds but not to
-  inverse bind matrices, which would draw a body correctly at rest and deform
-  it wrongly the moment a joint moved. Neither is a percentage of progress
-  lost: the work is the same size and better understood.
+  rigs that do not map), attachments and body wearables. **Uploads are accepted
+  as of 2026-08-08** and the reference Bento body converts and agrees with the
+  skeleton — 16 joints agreed, 0 disagreed, worst 0.75 mm, below the skeleton's
+  own 2 mm left/right asymmetry. Joint names resolve through the alias table or
+  the upload is refused naming the joint, unused joints compact away, and the
+  bind geometry is checked against the rest pose with a tolerance bracketed
+  between that 2 mm and the 7.81 mm closest distinguishable joint pair.
+  Turning acceptance on required two corrections, both found by measuring that
+  body rather than by reading code: the axis map had only ever chosen *which
+  axis is up* and left the lateral axis where it found it (a 90° yaw — see
+  [ADR 0033](adr/0033-mesh-assets.md)), and inverse bind matrices were not
+  mapped at all, which draws a body correctly at rest and deforms it wrongly on
+  the first animation. Remaining: **Firestorm verification of a worn body**,
+  attachments, body wearables, and two things deliberately unwitnessed —
+  `maxRigInfluences` (no file has yet bound five weights to a vertex) and
+  whether a rig whose joints are all positionally coincident may be accepted.
 - [ ] M5 import breadth: client-side FBX/OBJ/DAE import, documented Daz
   Studio export path, optional web import service on the management site.
 - [ ] Possible with M5: retarget a Character Creator rig onto the Bento
