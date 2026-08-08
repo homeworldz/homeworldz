@@ -123,6 +123,22 @@ struct Reader {
         at += *size;
         return value;
     }
+    // 's' then a length then the bytes. Same shape as a key, different tag,
+    // because LLSD's binary form distinguishes the two.
+    std::optional<std::string> string() {
+        if (!expect('s')) return std::nullopt;
+        const auto size = u32();
+        if (!size || at + *size > data.size()) return std::nullopt;
+        std::string value(reinterpret_cast<const char*>(data.data() + at), *size);
+        at += *size;
+        return value;
+    }
+    std::optional<bool> boolean() {
+        const auto next = peek();
+        if (!next || (*next != '1' && *next != '0')) return std::nullopt;
+        ++at;
+        return *next == '1';
+    }
     std::optional<std::span<const std::byte>> binary() {
         if (!expect('b')) return std::nullopt;
         const auto size = u32();
@@ -517,6 +533,80 @@ std::optional<Level> decode_level(std::span<const std::byte> packed) {
     return level;
 }
 
+// The inverse of encode_skin. Reads the keys in whatever order they appear,
+// since a map has no order and a reader that depended on one would break on any
+// writer but this file's.
+std::optional<Skin> decode_skin(std::span<const std::byte> packed) {
+    const auto raw = decompress(packed);
+    if (raw.empty()) return std::nullopt;
+    Reader reader{raw, 0};
+    if (!reader.expect('{')) return std::nullopt;
+    const auto entries = reader.u32();
+    if (!entries) return std::nullopt;
+    Skin skin;
+    const auto read_matrices = [&](std::vector<std::array<float, 16>>& target) {
+        if (!reader.expect('[')) return false;
+        const auto count = reader.u32();
+        if (!count) return false;
+        for (std::uint32_t index = 0; index < *count; ++index) {
+            if (!reader.expect('[')) return false;
+            const auto cells = reader.u32();
+            if (!cells || *cells != 16) return false;
+            std::array<float, 16> matrix{};
+            for (auto& cell : matrix) {
+                const auto value = reader.real();
+                if (!value) return false;
+                cell = static_cast<float>(*value);
+            }
+            if (!reader.expect(']')) return false;
+            target.push_back(matrix);
+        }
+        return reader.expect(']');
+    };
+    for (std::uint32_t entry = 0; entry < *entries; ++entry) {
+        const auto name = reader.key();
+        if (!name) return std::nullopt;
+        if (*name == "joint_names") {
+            if (!reader.expect('[')) return std::nullopt;
+            const auto count = reader.u32();
+            if (!count) return std::nullopt;
+            for (std::uint32_t index = 0; index < *count; ++index) {
+                auto joint = reader.string();
+                if (!joint) return std::nullopt;
+                skin.joints.push_back(std::move(*joint));
+            }
+            if (!reader.expect(']')) return std::nullopt;
+        } else if (*name == "inverse_bind_matrix") {
+            if (!read_matrices(skin.inverse_bind)) return std::nullopt;
+        } else if (*name == "alt_inverse_bind_matrix") {
+            if (!read_matrices(skin.alternate_inverse_bind)) return std::nullopt;
+        } else if (*name == "bind_shape_matrix") {
+            if (!reader.expect('[')) return std::nullopt;
+            const auto cells = reader.u32();
+            if (!cells || *cells != 16) return std::nullopt;
+            for (auto& cell : skin.bind_shape) {
+                const auto value = reader.real();
+                if (!value) return std::nullopt;
+                cell = static_cast<float>(*value);
+            }
+            if (!reader.expect(']')) return std::nullopt;
+        } else if (*name == "pelvis_offset") {
+            const auto value = reader.real();
+            if (!value) return std::nullopt;
+            skin.pelvis_offset = static_cast<float>(*value);
+        } else if (*name == "lock_scale_if_joint_position") {
+            const auto value = reader.boolean();
+            if (!value) return std::nullopt;
+            skin.lock_scale_if_joint_position = *value;
+        } else if (!reader.skip()) {
+            return std::nullopt;
+        }
+    }
+    if (skin.joints.empty() || skin.joints.size() != skin.inverse_bind.size())
+        return std::nullopt;
+    return skin;
+}
+
 std::optional<std::vector<std::array<float, 3>>> decode_physics(std::span<const std::byte> packed) {
     const auto raw = decompress(packed);
     if (raw.empty()) return std::nullopt;
@@ -715,6 +805,11 @@ std::optional<Mesh> parse(std::span<const std::byte> content) {
     if (!read_level("medium_lod", mesh.medium) || !read_level("low_lod", mesh.low) ||
         !read_level("lowest_lod", mesh.lowest))
         return std::nullopt;
+    if (const auto skin_bytes = block("skin")) {
+        const auto skin = decode_skin(*skin_bytes);
+        if (!skin) return std::nullopt;
+        mesh.skin = *skin;
+    }
     if (const auto physics = block("physics_convex")) {
         const auto hull = decode_physics(*physics);
         if (!hull) return std::nullopt;
