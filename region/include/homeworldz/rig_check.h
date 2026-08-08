@@ -64,10 +64,28 @@ struct JointFinding {
     std::vector<std::string> coincident_with;
 };
 
+// The whole-body result, which needs the same three outcomes the per-joint
+// verdict does.
+//
+// A first version reported a bool: "nothing disagreed". That is a fact about the
+// check, not a claim about the body, and the two come apart exactly where it
+// matters - a body weighted only to positionally-coincident joints produced
+// `true` with nothing having been decided, and that `true` was indistinguishable
+// from a body checked thoroughly. Unproven is not a weaker kind of pass; it is
+// the third outcome one level up (client core, 2026-08-08).
+//
+// Whether Unproven may be accepted is deliberately not answered here. It is a
+// policy question, it gates nothing while rigged_accepted is false, and encoding
+// a minimum-coverage rule as a side effect of naming the states would be the
+// same overreach in the other direction.
+enum class RigOutcome {
+    Agrees,     // at least one joint was decided, and none disagreed
+    Disagrees,  // at least one joint disagreed, or could not be read at all
+    Unproven,   // nothing disagreed, and nothing was actually decided
+};
+
 struct RigFinding {
-    // True only when every joint either agrees or is one the check honestly
-    // cannot discriminate. A single disagreement is a refusal.
-    bool agrees{};
+    RigOutcome outcome{RigOutcome::Unproven};
     std::uint32_t agreed{};
     std::uint32_t disagreed{};
     std::uint32_t indiscriminate{};

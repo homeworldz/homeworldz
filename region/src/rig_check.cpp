@@ -131,15 +131,26 @@ RigFinding check_rig(const std::vector<std::string>& joints,
         }
         finding.joints.push_back(std::move(entry));
     }
-    finding.agrees = finding.disagreed == 0 && finding.unknown == 0;
+    if (finding.disagreed > 0 || finding.unknown > 0)
+        finding.outcome = RigOutcome::Disagrees;
+    else if (finding.agreed > 0)
+        finding.outcome = RigOutcome::Agrees;
+    else
+        finding.outcome = RigOutcome::Unproven;
     return finding;
 }
 
 std::string describe(const RigFinding& finding) {
     std::ostringstream out;
-    out << (finding.agrees ? "rig agrees with the skeleton"
-                           : "rig does NOT agree with the skeleton")
-        << ": " << finding.agreed << " agreed, " << finding.disagreed << " disagreed, "
+    switch (finding.outcome) {
+    case RigOutcome::Agrees: out << "rig agrees with the skeleton"; break;
+    case RigOutcome::Disagrees: out << "rig does NOT agree with the skeleton"; break;
+    // Said at this length because the short form of it reads as a pass.
+    case RigOutcome::Unproven:
+        out << "rig is UNPROVEN: nothing disagreed, and nothing could be decided";
+        break;
+    }
+    out << ": " << finding.agreed << " agreed, " << finding.disagreed << " disagreed, "
         << finding.indiscriminate << " indiscriminate, " << finding.unknown << " unknown";
     if (!finding.worst_joint.empty())
         out << "; worst " << finding.worst_joint << " at " << finding.worst_distance_m * 1000.0f

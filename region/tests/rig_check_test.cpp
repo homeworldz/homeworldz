@@ -70,9 +70,10 @@ int main() {
         const auto finding = homeworldz::mesh::check_rig({"mPelvis"}, {bind_at(*pelvis)});
         // It must name the alternative rather than merely decline to judge.
         if (finding.joints.at(0).coincident_with.empty()) return 7;
-        // And an indiscriminate joint is not a failure: a body rigged only to
-        // coincident joints is unproven, not wrong.
-        if (!finding.agrees) return 8;
+        // A body rigged only to coincident joints is unproven, not wrong - and
+        // equally not right. An earlier version returned "nothing disagreed"
+        // here, which a caller could not tell from a body checked thoroughly.
+        if (finding.outcome != homeworldz::mesh::RigOutcome::Unproven) return 8;
     }
 
     // The regression this file exists for. A joint with a twin, sitting 21 mm
@@ -105,7 +106,7 @@ int main() {
         };
         const auto finding = homeworldz::mesh::check_rig(
             joints, {bind_at(rotate(*pelvis)), bind_at(rotate(*wrist_left))});
-        if (finding.agrees) return 15;
+        if (finding.outcome != homeworldz::mesh::RigOutcome::Disagrees) return 15;
         if (finding.disagreed != 1) return 16;
         // The pelvis is on the axis of rotation and lands on itself; the wrist
         // is what betrays the rotation.
@@ -118,7 +119,7 @@ int main() {
     {
         const auto finding = homeworldz::mesh::check_rig({"mNotAJoint"}, {bind_at(*head)});
         if (finding.joints.at(0).verdict != JointVerdict::Unknown) return 19;
-        if (finding.agrees) return 20;
+        if (finding.outcome != homeworldz::mesh::RigOutcome::Disagrees) return 20;
     }
 
     // A degenerate bind matrix has no recoverable position; saying so beats
@@ -134,7 +135,7 @@ int main() {
     {
         const auto finding = homeworldz::mesh::check_rig({"mHead", "mNeck"}, {bind_at(*head)});
         if (finding.joints.at(1).verdict != JointVerdict::Unknown) return 22;
-        if (finding.agrees) return 23;
+        if (finding.outcome != homeworldz::mesh::RigOutcome::Disagrees) return 23;
     }
 
     // The tolerance must stay inside the bracket the skeleton itself sets: above
@@ -144,6 +145,24 @@ int main() {
     // mFaceTongueBase.
     if (!(rig_match_tolerance_m > 0.002f)) return 24;
     if (!(rig_match_tolerance_m < 0.00781f)) return 25;
+
+    // Agreement requires something to have been decided. Asserted separately
+    // from the per-joint verdicts because the whole-body outcome is what a
+    // caller will gate on, and it is the value that used to conflate "nothing
+    // disagreed" with "this body is verified".
+    {
+        const auto finding = homeworldz::mesh::check_rig({"mHead"}, {bind_at(*head)});
+        if (finding.outcome != homeworldz::mesh::RigOutcome::Agrees) return 26;
+        if (finding.agreed != 1) return 27;
+    }
+    // A decided joint alongside an indiscriminate one still counts as agreement:
+    // the coincident joint adds no evidence, and must subtract none either.
+    {
+        const auto finding = homeworldz::mesh::check_rig({"mHead", "mPelvis"},
+                                                        {bind_at(*head), bind_at(*pelvis)});
+        if (finding.outcome != homeworldz::mesh::RigOutcome::Agrees) return 28;
+        if (finding.indiscriminate != 1) return 29;
+    }
 
     return 0;
 }
