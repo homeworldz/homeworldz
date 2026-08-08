@@ -55,7 +55,16 @@ inline constexpr std::uint32_t max_rig_influences = 4;
 // 2026-08-04). The constraint is therefore one-sided, and one body rigged to these
 // names serves both families - which is why naming the skeleton is worth more than
 // naming a joint budget.
-inline constexpr std::string_view rigged_skeleton = "second-life-avatar";
+//
+// The name is ours and matches nothing: no exporter writes a skeleton identifier
+// into a file, and "second-life-avatar", which this held until 2026-08-08, appears
+// nowhere in Firestorm. Renamed once it was established that nothing keyed on it,
+// while `rigged` is still false and no upload has been validated against it.
+// "bento" names the skeleton generation, which is the distinction a re-rig
+// actually has to get right; the joint count beside it says the same thing as a
+// number. Firestorm's own file calls itself `linden_skeleton` version 2.0 — not
+// adopted here, since that is a vendor's name for it rather than a description.
+inline constexpr std::string_view rigged_skeleton = "bento-avatar";
 inline constexpr std::uint32_t rigged_skeleton_joints = 159;
 inline constexpr std::uint32_t max_joints_per_mesh = 110;
 // Draco-compressed GLBs are refused in v1 rather than half supported.

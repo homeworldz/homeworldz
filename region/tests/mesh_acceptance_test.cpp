@@ -151,7 +151,7 @@ int main() {
         // node index rather than by name: a client drawing arbitrary skeletons is
         // unconstrained, a viewer uses its own and no other, so one body rigged to
         // these names serves both families (client core, 2026-08-04).
-        policy.find("\"skeleton\":\"second-life-avatar\"") == std::string::npos ||
+        policy.find("\"skeleton\":\"bento-avatar\"") == std::string::npos ||
         // 159, not 71: avatar_skeleton.xml defines 133 bones and 26 collision
         // volumes, and the viewer resolves a rig joint name against both. The
         // old figure described the pre-Bento skeleton and would have sent a
