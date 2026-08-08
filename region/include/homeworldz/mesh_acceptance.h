@@ -34,9 +34,21 @@ inline constexpr std::uint32_t max_rig_influences = 4;
 //
 // Published ahead of M4 because it is the one fact a re-rig has to target, and
 // getting it wrong is not recoverable by any amount of server work: a viewer uses
-// its own skeleton and no other. Read from the viewer's own
-// `character/avatar_skeleton.xml` - 71 `m`-prefixed joints, `mPelvis`, `mChest`,
-// `mAnkleLeft` and the rest.
+// its own skeleton and no other.
+//
+// **Corrected 2026-08-08, from 71.** The old figure counted the legacy
+// pre-Bento skeleton, which is not what any current viewer runs. Firestorm's
+// own `character/avatar_skeleton.xml` defines 133 bones and 26 collision
+// volumes, and `LLVOAvatar::getJoint(name)` resolves both — a collision volume
+// is a legal rig target, not merely a physics shape — so 159 names may appear
+// in a skin. Publishing 71 told re-riggers to target a skeleton half the size
+// of the real one, and the whole point of publishing it is that a re-rig cannot
+// recover from being told the wrong target.
+//
+// A single mesh may still bind at most `max_joints_per_mesh` of those; that is
+// the viewer's own `LL_MAX_JOINTS_PER_MESH_OBJECT`, a per-object budget rather
+// than a property of the skeleton, which is why it is a separate number from
+// the count above.
 //
 // glTF binds skin joints by node *index* and never by name, so a client that
 // draws arbitrary skeletons is unconstrained while a viewer is not (client core,
@@ -44,7 +56,8 @@ inline constexpr std::uint32_t max_rig_influences = 4;
 // names serves both families - which is why naming the skeleton is worth more than
 // naming a joint budget.
 inline constexpr std::string_view rigged_skeleton = "second-life-avatar";
-inline constexpr std::uint32_t rigged_skeleton_joints = 71;
+inline constexpr std::uint32_t rigged_skeleton_joints = 159;
+inline constexpr std::uint32_t max_joints_per_mesh = 110;
 // Draco-compressed GLBs are refused in v1 rather than half supported.
 inline constexpr bool draco_accepted = false;
 // Morph targets (glTF blend shapes) are accepted only while every default weight

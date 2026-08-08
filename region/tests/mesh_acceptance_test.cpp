@@ -152,9 +152,14 @@ int main() {
         // unconstrained, a viewer uses its own and no other, so one body rigged to
         // these names serves both families (client core, 2026-08-04).
         policy.find("\"skeleton\":\"second-life-avatar\"") == std::string::npos ||
-        policy.find("\"skeletonJoints\":71") == std::string::npos ||
+        // 159, not 71: avatar_skeleton.xml defines 133 bones and 26 collision
+        // volumes, and the viewer resolves a rig joint name against both. The
+        // old figure described the pre-Bento skeleton and would have sent a
+        // re-rig at a target half the real size.
+        policy.find("\"skeletonJoints\":159") == std::string::npos ||
+        policy.find("\"maxJointsPerMesh\":110") == std::string::npos ||
         policy.find("\"forwardLooking\":[\"maxRigInfluences\",\"skeleton\","
-                    "\"skeletonJoints\"]") == std::string::npos ||
+                    "\"skeletonJoints\",\"maxJointsPerMesh\"]") == std::string::npos ||
         policy.find("\"draco\":false") == std::string::npos ||
         policy.find("\"rigged\":false") == std::string::npos ||
         policy.find("KHR_texture_transform") == std::string::npos)

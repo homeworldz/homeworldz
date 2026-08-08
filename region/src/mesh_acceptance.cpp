@@ -49,9 +49,11 @@ std::string acceptance_policy_json() {
         // removes the guess.
         ",\"skeleton\":\"" + std::string(rigged_skeleton) + "\"" +
         ",\"skeletonJoints\":" + std::to_string(rigged_skeleton_joints) +
+        ",\"maxJointsPerMesh\":" + std::to_string(max_joints_per_mesh) +
         ",\"forwardLooking\":[" +
         std::string(rigged_accepted ? ""
-            : "\"maxRigInfluences\",\"skeleton\",\"skeletonJoints\"") + "]" +
+            : "\"maxRigInfluences\",\"skeleton\",\"skeletonJoints\","
+              "\"maxJointsPerMesh\"") + "]" +
         ",\"draco\":" + (draco_accepted ? "true" : "false") +
         ",\"rigged\":" + (rigged_accepted ? "true" : "false") +
         ",\"allowedExtensions\":[" + extensions + "]}";
