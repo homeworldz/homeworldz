@@ -399,12 +399,28 @@ client family is served a derived rendition by a grid-side conversion worker.
   whether a rig whose joints are all positionally coincident may be accepted.
 - [ ] M5 import breadth: client-side FBX/OBJ/DAE import, documented Daz
   Studio export path, optional web import service on the management site.
+- [ ] Rig retargeting, so a creator does not need Blender with Avastar or
+  Bento Buddy to bring a body in
+  ([AUTO-RIGGING.md](AUTO-RIGGING.md)). Design sketch only, nothing scheduled.
+  The ranking there is the useful part and is the reverse of how the three
+  cases sound: retargeting a body that is **already rigged** to some other
+  skeleton is both the most common case and the most tractable, because the
+  weights already exist and only the correspondence is missing. Transferring
+  weights to an unrigged humanoid comes second and now has its prerequisite —
+  a verified reference body. Fitting a skeleton to an arbitrary unrigged mesh
+  is an open problem, recorded as open. Whatever is built derives a
+  **rendition** rather than rewriting the upload, so a wrong early algorithm
+  costs nothing and improving it reconverts existing content instead of asking
+  creators to send their files again.
 - [ ] Possible with M5: retarget a Character Creator rig onto the Bento
-  skeleton. CC bodies name their joints `CC_Base_*` and are refused today, and
+  skeleton — the worked example of the case above. CC bodies name their joints
+  `CC_Base_*` and are refused today, and
   a rename is not enough — the skeletons differ in bind pose, so weights must
   be retargeted and CC's twist bones merged into their nearest mapped ancestor.
   The format can carry it: a skin's joint position overrides
-  (`mAlternateBindMatrix`) let a body ship its own proportions. Licensing is
+  (`mAlternateBindMatrix`) let a body ship its own proportions — which is why a
+  retarget must **write** those rather than flatten the skeleton to Bento's
+  rest pose, the one instruction most likely to be got backwards. Licensing is
   the gate rather than the code — Reallusion's grant is non-transferable, so
   this is a path for a licensee to upload their own creation, never for the
   project to ship a body.

@@ -196,11 +196,32 @@ than a caveat to live with:
 
 ## Coordinates
 
-glTF is **+Y up**; a Homeworldz region is **+Z up**. Both directions of the
-pipeline apply the axis map — `(x, y, z)_glTF` to `(x, -z, y)_region` on
-ingest and its inverse on emit — so an asset authored to the glTF convention
-stands upright in-world, and a derived glTF opens upright in Blender or any
-other tool.
+glTF is **+Y up** with X lateral; a Homeworldz region is **+Z up** with X
+forward and Y lateral. Both directions of the pipeline apply the axis map —
+`(x, y, z)_glTF` to `(z, x, y)_region` on ingest and its inverse on emit — so an
+asset authored to the glTF convention stands upright **and faces forward**
+in-world, and a derived glTF opens upright in Blender or any other tool.
+
+**Corrected 2026-08-08, from `(x, -z, y)`.** A Y-up to Z-up conversion has two
+degrees of freedom — which axis becomes up, and where the lateral axis goes — and
+the original map chose only the first. It stood a model upright and left the
+lateral axis where it found it, which is a 90° yaw about the new up axis. Both
+maps are right-handed, and both satisfy every word this ADR previously wrote,
+because the requirement recorded here was only ever "stands upright". The second
+degree of freedom was never stated, so it was never chosen.
+
+Inverse bind matrices are **conjugated** by the same map, `A · M · A⁻¹`, rather
+than having it applied to them. An inverse bind matrix maps world space into a
+joint's local space, so an axis change on the world it reads must be undone on
+the space it writes. Applying the map to the matrix's translation alone puts
+every joint in the right place with its local frame still in glTF orientation:
+correct at rest, rotating about the wrong axes on the first animation. Before
+this correction the matrices received no map at all while vertices received one,
+which is the same fault with a larger error.
+
+Both were found by measuring a real Bento body rather than by reading code
+(client core, 2026-08-08), and the correction is why rigged mesh could be
+accepted the same day.
 
 Until 2026-07-30 neither direction rotated. That was self-consistent and
 wrong: it silently redefined glTF as a Z-up format for this grid alone, which
@@ -217,6 +238,16 @@ flat triangle showed it in one reading. The corollary is recorded because it
 generalizes past this bug — **a fixture that cannot fail the check it is
 being used for is not evidence**, and a test suite needs a third outcome
 beside pass and fail for the case where the subject cannot corroborate.
+
+That corollary then caught its own author. The flat triangle chosen to cure the
+first fault can fail on *up* and cannot fail on *yaw* — rotate it about the
+vertical and it is still a flat triangle lying flat — so the identical blindness
+survived in the fixture picked to remove it, one degree of freedom later, for
+another nine days. It took the reference Bento body, the first asset ingested
+whose own skeleton defines a facing, to produce a fixture that could fail. The
+sharper form of the rule: **the sample that cannot vary under the fault is the
+sample that certifies it**, and upgrading a fixture exactly far enough to catch
+the fault in hand leaves it blind to the next one.
 
 The change costs one regeneration (the generator tag carries it) and the
 re-upload of eight probe assets, which are the only GLB-canonical assets in
@@ -257,6 +288,18 @@ blob is never rewritten.
 - **M3 — materials and textures.** `sl-material` and `j2c-texture`
   renditions, so PBR surfaces match across client families.
 - **M4 — rigged mesh.** Bento mapping for attachments and body wearables.
+  Acceptance shipped 2026-08-08: joint names resolve through the skeleton's
+  alias table or the upload is refused naming the joint, unused joints compact
+  away so a source declaring a whole armature is not refused for a budget it
+  does not use, and the bind geometry is checked against the skeleton's rest
+  pose with a tolerance bracketed by the skeleton itself — above its own 2 mm
+  left/right asymmetry, below the 7.81 mm closest pair of joints that are
+  distinguishable at all. That check reports three outcomes rather than two:
+  26 pairs of joints sit at *exactly* zero distance, covering 27 of the 159, so
+  for those a position proves nothing and saying "agrees" would claim more than
+  the measurement supports. Remaining: a worn body verified in a viewer,
+  attachments, wearables, and retargeting non-Bento rigs
+  ([AUTO-RIGGING.md](../AUTO-RIGGING.md), M5).
 - **M5 — import breadth.** Client-side FBX/OBJ/DAE import (client repo),
   documented Daz export path, optional web import service.
 
