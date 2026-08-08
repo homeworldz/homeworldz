@@ -8421,6 +8421,15 @@ int main(int argc, char* argv[]) {
                                             static_cast<void>(send_udp(viewer_server, recipient_endpoint, *sent));
                                     }
                                 }
+                                // And to session clients. Separate pass rather than a line inside
+                                // the loop above: that one is nested avatars-then-entities, so the
+                                // inner body runs once per recipient and would send each entity to
+                                // every session client as many times as there are viewers present.
+                                // See the note at multiple_object_update.
+                                for (const auto entity_id : updates)
+                                    if (const auto* entity = scene.find(entity_id);
+                                        entity && session_object_visible(*entity))
+                                        deliver_to_embodied(session_object_envelope(*entity));
                             }
                             std::cout << "{\"level\":" << (valid ? "\"info\"" : "\"warn\"")
                                       << ",\"message\":\"linkset creation "
@@ -8477,6 +8486,8 @@ int main(int argc, char* argv[]) {
                                                     region_handle, *object), true, now, true))
                                             static_cast<void>(send_udp(viewer_server, recipient_endpoint, *sent));
                                     }
+                                    if (session_object_visible(*entity))
+                                        deliver_to_embodied(session_object_envelope(*entity));
                                 }
                             }
                             std::cout << "{\"level\":" << (persisted ? "\"info\"" : "\"warn\"")
@@ -8830,6 +8841,17 @@ int main(int argc, char* argv[]) {
                                                 region_handle, *object), true, now, true))
                                         static_cast<void>(send_udp(viewer_server, recipient_endpoint, *sent));
                                 }
+                                // Session clients get the move as well. Until 2026-08-08 this
+                                // loop, and twelve like it, sent only over UDP: every
+                                // viewer-originated object change reached other viewers and no
+                                // session client. A session client therefore pinned each object
+                                // at the position it held when the scene arrived and never moved
+                                // it again, with no dropped frame or error to reveal it — the
+                                // world was simply, quietly wrong. Removal was the exception,
+                                // because all four kill paths deliver to both transports, which
+                                // is why this surfaced as "kills arrive, inserts never do".
+                                if (session_object_visible(*entity))
+                                    deliver_to_embodied(session_object_envelope(*entity));
                             }
                             if (persisted) {
                                 std::cout << "{\"level\":\"info\",\"message\":\"primitive transforms updated\",\"count\":"
@@ -9016,6 +9038,8 @@ int main(int argc, char* argv[]) {
                                             static_cast<void>(send_udp(
                                                 viewer_server, recipient_endpoint, *sent));
                                     }
+                                    if (session_object_visible(*entity))
+                                        deliver_to_embodied(session_object_envelope(*entity));
                                 }
                                 std::cout << "{\"level\":\"info\",\"message\":\"primitive permissions updated\",\"count\":"
                                           << originals.size() << "}" << std::endl;
@@ -9131,6 +9155,12 @@ int main(int argc, char* argv[]) {
                                             static_cast<void>(send_udp(
                                                 viewer_server, recipient_endpoint, *sent));
                                     }
+                                    // An insert, not an update: these local_ids are new to every
+                                    // session client. Same envelope kind as any other object
+                                    // change, so the receiving handler has to upsert rather than
+                                    // assume it has seen the id before.
+                                    if (session_object_visible(*entity))
+                                        deliver_to_embodied(session_object_envelope(*entity));
                                 }
                                 std::cout << "{\"level\":\"info\",\"message\":\"primitives duplicated\",\"count\":"
                                           << created_entities.size() << "}" << std::endl;
@@ -9196,6 +9226,9 @@ int main(int argc, char* argv[]) {
                                         static_cast<void>(send_udp(
                                             viewer_server, recipient_endpoint, *sent));
                                 }
+                                // And to session clients. See the note at multiple_object_update.
+                                if (session_object_visible(*entity))
+                                    deliver_to_embodied(session_object_envelope(*entity));
                             }
                             if (persisted) {
                                 for (const auto& [entity_id, original] : originals) {
@@ -9303,6 +9336,9 @@ int main(int argc, char* argv[]) {
                                         static_cast<void>(send_udp(
                                             viewer_server, recipient_endpoint, *sent));
                                 }
+                                // And to session clients. See the note at multiple_object_update.
+                                if (session_object_visible(*entity))
+                                    deliver_to_embodied(session_object_envelope(*entity));
                             }
                             if (persisted) {
                                 for (const auto& [entity_id, original] : originals) {
@@ -9363,6 +9399,9 @@ int main(int argc, char* argv[]) {
                                         static_cast<void>(send_udp(
                                             viewer_server, recipient_endpoint, *sent));
                                 }
+                                // And to session clients. See the note at multiple_object_update.
+                                if (session_object_visible(*entity))
+                                    deliver_to_embodied(session_object_envelope(*entity));
                             }
                             if (persisted)
                                 std::cout << "{\"level\":\"info\",\"message\":\"primitive textures updated\",\"count\":"
@@ -9438,6 +9477,10 @@ int main(int argc, char* argv[]) {
                                             static_cast<void>(send_udp(
                                                 viewer_server, recipient_endpoint, *sent));
                                     }
+                                    // And to session clients. See the note at
+                                    // multiple_object_update.
+                                    if (session_object_visible(*entity))
+                                        deliver_to_embodied(session_object_envelope(*entity));
                                     std::cout << "{\"level\":\"info\",\"message\":\"primitive flags updated\",\"entityId\":"
                                               << entity->id << ",\"physical\":"
                                               << (entity->physical ? "true" : "false")
@@ -9599,6 +9642,14 @@ int main(int argc, char* argv[]) {
                                                     region_handle, *object), true, now, true))
                                             static_cast<void>(send_udp(viewer_server, recipient_endpoint, *sent));
                                     }
+                                    // And to session clients: this is the insert. The loop above
+                                    // is a hand-inlined copy of broadcast_object_update's UDP
+                                    // half — inlined because only rez marks the new prim selected
+                                    // for its owner, which the shared helper cannot express — but
+                                    // the copy stopped one line short of the session delivery the
+                                    // helper ends with. See the note at multiple_object_update.
+                                    if (session_object_visible(*entity))
+                                        deliver_to_embodied(session_object_envelope(*entity));
                                 }
                             }
                             std::cout << "{\"level\":" << (created ? "\"info\"" : "\"warn\"")
@@ -9942,6 +9993,10 @@ int main(int argc, char* argv[]) {
                                                     region_handle, *object), true, now, true))
                                             static_cast<void>(send_udp(viewer_server, recipient_endpoint, *outgoing));
                                     }
+                                    // An insert, like duplicate: a local_id no session client has
+                                    // seen. See the note at multiple_object_update.
+                                    if (session_object_visible(*entity))
+                                        deliver_to_embodied(session_object_envelope(*entity));
                                 }
                             }
                             std::cout << "{\"level\":" << (created ? "\"info\"" : "\"warn\"")
