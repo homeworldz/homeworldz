@@ -17,16 +17,14 @@ std::optional<std::array<float, 3>> rest_of(std::string_view name) {
     return std::nullopt;
 }
 
-// The inverse bind matrix that places a joint at `p` in *region* axes, so the
-// tests can speak in the coordinates the skeleton is documented in.
+// The inverse bind matrix that places a joint at `p`. Region axes throughout:
+// check_rig now reads matrices as the converted asset holds them, which
+// mesh_convert has already mapped, so no frame change happens here.
 //
-// check_rig inverts the matrix and then applies (x, y, z) -> (x, -z, y), so the
-// glTF-frame translation must be (px, pz, -py) for the round trip to land on p.
-// Identity basis, translation only: the inverse of a pure translation by -t is a
-// translation by t. Column-major, as glTF stores it.
+// Identity basis, translation only: the inverse of a pure translation by -p is a
+// translation by p. Column-major, as the matrices are stored.
 std::array<float, 16> bind_at(const std::array<float, 3>& p) {
-    const float tx = p[0], ty = p[2], tz = -p[1];
-    return {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -tx, -ty, -tz, 1};
+    return {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -p[0], -p[1], -p[2], 1};
 }
 
 std::array<float, 3> offset(std::array<float, 3> p, float dx, float dy, float dz) {

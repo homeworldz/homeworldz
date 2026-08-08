@@ -89,9 +89,24 @@ inline constexpr bool draco_accepted = false;
 // is safe because it reads accessor min/max rather than asking an engine, and
 // that is now a property worth keeping deliberately rather than by luck.
 inline constexpr bool nonzero_morph_weights_accepted = false;
-// Rigged mesh (skins) is refused until M4; refusing is honest, guessing at a
-// skeleton mapping is not.
-inline constexpr bool rigged_accepted = false;
+// Rigged mesh (skins) is accepted as of 2026-08-08. Refusing was honest while
+// the mapping was a guess; it is now measured. A skin's joint names resolve
+// through the skeleton's own alias table or the upload is refused naming the
+// joint, unused joints compact away, and the bind geometry is checked against
+// the skeleton's rest pose with a tolerance bracketed by the skeleton itself
+// (rig_check.h).
+//
+// Turned on together with the two corrections that made it worth turning on:
+// the axis map's yaw, and the inverse bind matrices being conjugated rather than
+// ignored. Accepting before those would have taken uploads into a conversion
+// known to be wrong in two specific ways, which is not a test.
+//
+// What is still unwitnessed is recorded rather than assumed. No file has yet
+// exercised max_rig_influences - the reference body binds at most four per
+// vertex, so the fifth-influence path has never run - and whether a rig whose
+// joints are all positionally coincident (RigOutcome::Unproven) should be
+// accepted is a policy question this flag does not answer.
+inline constexpr bool rigged_accepted = true;
 
 // The glTF extensions this gate accepts. Anything else — used or required —
 // is refused, not ignored, so content never renders differently on the

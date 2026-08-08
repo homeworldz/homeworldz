@@ -37,17 +37,6 @@ bool invert_affine(const std::array<float, 16>& m, std::array<float, 3>& transla
     return true;
 }
 
-// The same map mesh_convert applies to positions and normals. Duplicated as a
-// deliberate three lines rather than shared, because the two must agree and a
-// shared helper that quietly changed would break the comparison silently in one
-// direction only.
-void to_region_axes(std::array<float, 3>& value) {
-    const float x = value[0], y = value[1], z = value[2];
-    value[0] = x;
-    value[1] = -z;
-    value[2] = y;
-}
-
 const JointRest* rest_of(std::string_view name) {
     for (const auto& rest : joint_rest_positions)
         if (rest.name == name) return &rest;
@@ -98,7 +87,6 @@ RigFinding check_rig(const std::vector<std::string>& joints,
             finding.joints.push_back(std::move(entry));
             continue;
         }
-        to_region_axes(observed);
         entry.observed = observed;
         entry.distance_m = distance_between(observed, entry.expected);
 

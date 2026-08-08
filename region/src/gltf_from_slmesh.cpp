@@ -33,9 +33,9 @@ std::string number(float value) {
 // (ADR 0033 "Coordinates").
 void to_gltf_axes(std::array<float, 3>& value) {
     const float x = value[0], y = value[1], z = value[2];
-    value[0] = x;
+    value[0] = y;
     value[1] = z;
-    value[2] = -y;
+    value[2] = x;
 }
 
 void append_u32(std::vector<std::byte>& out, std::uint32_t value) {

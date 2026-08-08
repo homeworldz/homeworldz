@@ -95,9 +95,14 @@ struct RigFinding {
     std::vector<JointFinding> joints;
 };
 
-// `inverse_bind` are the glTF inverse bind matrices, column-major and in the
-// glTF frame; this applies the same axis map the geometry gets, so the
-// comparison happens in region axes on both sides.
+// `inverse_bind` are the inverse bind matrices as the *converted asset* holds
+// them: column-major and already in region axes, because mesh_convert conjugates
+// them on ingest alongside the geometry.
+//
+// This deliberately checks what was written rather than what arrived. An earlier
+// version took glTF-frame matrices and applied the axis map itself, which meant
+// it measured the converter's intent instead of its output — and could not have
+// seen the converter failing to map the matrices at all, which it was.
 RigFinding check_rig(const std::vector<std::string>& joints,
                      const std::vector<std::array<float, 16>>& inverse_bind);
 

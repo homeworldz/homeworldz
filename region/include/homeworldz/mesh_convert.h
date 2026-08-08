@@ -107,7 +107,12 @@ TextureExtraction extract_textures(std::span<const std::byte> glb);
 // to the specification's default. Rendition regeneration re-queues whatever a
 // predecessor produced, so raising this is what reissues the earlier renditions
 // that drew as metal.
-inline constexpr const char* generator = "meshsmith/0.8";
+// Bumped to 0.9 for the corrected axis map. The old map stood a model upright
+// and left its lateral axis where it found it, a 90 degree yaw; every rendition
+// a predecessor produced is a model facing the wrong way and reconverts. This is
+// what makes the correction free: canonical assets are stored as uploaded and
+// never rewritten, so nothing a creator sent is lost or has to be re-sent.
+inline constexpr const char* generator = "meshsmith/0.9";
 
 } // namespace homeworldz::mesh
 
