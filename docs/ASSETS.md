@@ -355,6 +355,58 @@ connections are dropped as the avatar moves away). Physics stays strictly
 authoritative in one region per entity ([PHYSICS.md](PHYSICS.md)) — observation
 across a border never duplicates simulation.
 
+## 7. The object asset format — **Implemented, one question open**
+
+An object asset is the stored form of a rezzable thing: a single prim, or a
+linkset. It is what a mesh upload hands back as `objectAssetId`, because a bare
+mesh asset cannot be rezzed — as in Second Life, an upload yields an *object*
+that holds the mesh.
+
+Written here because a client reading one is otherwise inferring the format from
+whatever example it happens to have, and the first thing it would infer is
+wrong (client core, 2026-08-08).
+
+**A linkset carries an envelope. A single prim does not.**
+
+```json
+{"format":"homeworldz-linkset-v1","parts":[ {…root…}, {…child…} ]}
+```
+
+```json
+{…the prim…}
+```
+
+`serialize_linkset_asset` returns the prim's own JSON directly when there are no
+children and adds the envelope only when there are. Every mesh upload produces a
+one-prim object, so the common case is the **bare** form, with no `format` field
+to identify it and no version to check.
+
+That asymmetry is recorded, not endorsed. A format that identifies and versions
+itself for two prims and does neither for one is not a shape anyone chose; it is
+an early return that was never revisited. **Whether to make the envelope
+unconditional is open** — it costs a reader that accepts both forms, since assets
+already stored are bare. Until it is settled, a reader is safe with: *if the top
+level has `parts`, iterate it; otherwise the whole document is the single part.*
+That holds under either resolution.
+
+**Finding the mesh.** A prim shaped by a mesh or a sculpt names it on the prim
+itself:
+
+```json
+"sculptId":"1ade6a1c-03d1-42a8-9cf6-35fa529d58e7","sculptType":5
+```
+
+`sculptType` 5 is mesh ([ADR 0033](adr/0033-mesh-assets.md)). Both keys are
+**absent** on an ordinary parametric prim — not empty, not zero, absent — so a
+reader must distinguish missing from zero rather than defaulting.
+
+**Fetching one.** `GET /session/assets/{id}` with the region ticket, the same
+route and credential as any other asset. One caveat: that route sets
+`Content-Type` from the content's magic bytes, and an object asset is JSON with
+none, so it returns `application/octet-stream` rather than naming itself. A
+client knows it holds an object because it asked for an id that came from
+`objectAssetId`, not because the response said so.
+
 ## Halcyon/InWorldz lineage
 
 The stack-and-cache asset topology of InWorldz (per-region caches over central
