@@ -99,7 +99,17 @@ func DefaultWearables(userID string) []Item {
 		folderID      string
 	}{
 		{"Default Shape", 0, "66c41e39-38f9-f75a-024e-585989bfab73", 13, 18, bodyPartsID},
-		{"Default Skin", 1, "77c41e39-38f9-f75a-024e-585989bbabbb", 13, 18, bodyPartsID},
+		// The skin declares all 37 parameters avatar_lad.xml defines for its
+		// type. The asset it replaces declared 26, and Firestorm logged
+		// "Wearable parameter mismatch. Reading in 26 from file, but created 37
+		// from avatar parameters" on every login that loaded it. A new id
+		// rather than corrected bytes under the old one: assets are
+		// content-addressed, and the region re-stores bundled files by their
+		// filename UUID at every startup, so editing in place would rebind an
+		// id to a different checksum. Avatars already wearing the old skin keep
+		// it and look identical — every added parameter defaults to 0, which is
+		// what the viewer was filling in anyway.
+		{"Default Skin", 1, "00000000-0000-1111-9999-000000000201", 13, 18, bodyPartsID},
 		{"Default Hair", 2, "d342e6c0-b9d2-11dc-95ff-0800200c9a66", 13, 18, bodyPartsID},
 		{"Default Eyes", 3, "4bb6fa4d-1cd2-498a-a84c-95c1a0e745a7", 13, 18, bodyPartsID},
 		{"Default Shirt", 4, "00000000-38f9-1111-024e-222222111110", 5, 18, clothingID},
