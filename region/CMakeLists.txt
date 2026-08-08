@@ -122,6 +122,8 @@ add_executable(homeworldz-session-protocol-tests tests/session_protocol_test.cpp
 target_link_libraries(homeworldz-session-protocol-tests PRIVATE homeworldz-region-core)
 add_executable(homeworldz-mesh-acceptance-tests tests/mesh_acceptance_test.cpp)
 target_link_libraries(homeworldz-mesh-acceptance-tests PRIVATE homeworldz-region-core)
+add_executable(homeworldz-mesh-diag src/mesh_diag_main.cpp)
+target_link_libraries(homeworldz-mesh-diag PRIVATE homeworldz-region-core)
 add_executable(homeworldz-avatar-joints-tests tests/avatar_joints_test.cpp)
 target_link_libraries(homeworldz-avatar-joints-tests PRIVATE homeworldz-region-core)
 add_executable(homeworldz-slmesh-tests tests/slmesh_test.cpp)
