@@ -101,9 +101,11 @@ inline constexpr bool nonzero_morph_weights_accepted = false;
 // ignored. Accepting before those would have taken uploads into a conversion
 // known to be wrong in two specific ways, which is not a test.
 //
-// Whether a rig whose joints are all positionally coincident
-// (RigOutcome::Unproven) should be accepted is a policy question this flag does
-// not answer.
+// A rig whose joints are all positionally coincident (RigOutcome::Unproven) is
+// accepted, decided 2026-08-08 and provisional pending real-world use
+// (rig_check.h). It gates nothing yet regardless: the geometric check is not
+// wired into validate_glb, so this path still accepts on names, joint counts and
+// influence sets alone.
 //
 // max_rig_influences is enforced and unit-tested, and no natural file will ever
 // trip it - which is a property of the number rather than a gap in coverage.

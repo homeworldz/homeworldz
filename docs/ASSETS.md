@@ -381,13 +381,27 @@ children and adds the envelope only when there are. Every mesh upload produces a
 one-prim object, so the common case is the **bare** form, with no `format` field
 to identify it and no version to check.
 
-That asymmetry is recorded, not endorsed. A format that identifies and versions
-itself for two prims and does neither for one is not a shape anyone chose; it is
-an early return that was never revisited. **Whether to make the envelope
-unconditional is open** — it costs a reader that accepts both forms, since assets
-already stored are bare. Until it is settled, a reader is safe with: *if the top
-level has `parts`, iterate it; otherwise the whole document is the single part.*
-That holds under either resolution.
+That asymmetry began as an accident — an early return that was never revisited,
+in a format that identifies and versions itself for two prims and does neither
+for one. **Settled 2026-08-08: it stays.** Not because it is pretty, but because
+the obvious repair is worse.
+
+Object assets are canonical and content-addressed, so they are never rewritten
+([ADR 0026](adr/0026-vault-authoritative-inventory-assets.md)) — rewriting one
+would change its id and break the inventory item naming it. Every one-prim
+wrapper already stored is therefore bare *permanently*. Making the envelope
+unconditional going forward would not replace one form with another; it would
+add a second form, leaving readers to handle bare **and** enveloped single-prim
+documents forever, with nothing in either to say which era produced it.
+
+So the choice is between an asymmetry that is ugly and **deterministic** — the
+shape follows from the prim count, for every asset that will ever exist — and one
+that is tidier for new assets while being permanently ambiguous for old ones. The
+determinism is worth more than the symmetry.
+
+The reader is therefore not a temporary accommodation but the contract: *if the
+top level has `parts`, iterate it; otherwise the whole document is the single
+part.*
 
 **Finding the mesh.** A prim shaped by a mesh or a sculpt names it on the prim
 itself:

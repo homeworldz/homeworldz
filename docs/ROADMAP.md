@@ -394,9 +394,13 @@ client family is served a derived rendition by a grid-side conversion worker.
   [ADR 0033](adr/0033-mesh-assets.md)), and inverse bind matrices were not
   mapped at all, which draws a body correctly at rest and deforms it wrongly on
   the first animation. Remaining: **Firestorm verification of a worn body**,
-  attachments, body wearables, and two things deliberately unwitnessed —
-  `maxRigInfluences` (no file has yet bound five weights to a vertex) and
-  whether a rig whose joints are all positionally coincident may be accepted.
+  attachments, body wearables, and **wiring the geometric check into the upload
+  path** — it runs in the diagnostic tool today, so uploads are still accepted on
+  names, joint counts and influence sets alone. A rig it cannot discriminate is
+  accepted (decided 2026-08-08, provisional). `maxRigInfluences` is enforced and
+  no ordinary export can trip it: glTF carries four influences per joint set by
+  convention and no exporter emits a second set unaided, so four is the default
+  rather than a ceiling content approaches.
 - [ ] M5 import breadth: client-side FBX/OBJ/DAE import, documented Daz
   Studio export path, optional web import service on the management site.
 - [ ] Rig retargeting, so a creator does not need Blender with Avastar or

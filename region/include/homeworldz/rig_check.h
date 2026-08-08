@@ -74,10 +74,22 @@ struct JointFinding {
 // from a body checked thoroughly. Unproven is not a weaker kind of pass; it is
 // the third outcome one level up (client core, 2026-08-08).
 //
-// Whether Unproven may be accepted is deliberately not answered here. It is a
-// policy question, it gates nothing while rigged_accepted is false, and encoding
-// a minimum-coverage rule as a side effect of naming the states would be the
-// same overreach in the other direction.
+// **Unproven is accepted, decided 2026-08-08, "for now, pending more testing and
+// real-world use."** A body whose joints are all positionally coincident is
+// unproven rather than wrong, and refusing content on the strength of a
+// measurement that could not discriminate would turn a limitation of the check
+// into a rejection of the creator's work.
+//
+// Recorded as provisional because it is the kind of decision that should be
+// revisited against real uploads rather than settled once: if bodies that turn
+// out to be broken keep arriving as Unproven, the coverage rule earns its keep;
+// if none do, it never needed one. Nothing yet distinguishes those futures.
+//
+// Note this gates nothing today either way. check_rig runs in the diagnostic
+// tool and is *not* wired into validate_glb, so the upload path still accepts on
+// names, joint counts and influence sets alone. Wiring it is what makes this
+// decision take effect, and is deliberately a separate change from the one that
+// turned rigged acceptance on.
 enum class RigOutcome {
     Agrees,     // at least one joint was decided, and none disagreed
     Disagrees,  // at least one joint disagreed, or could not be read at all
