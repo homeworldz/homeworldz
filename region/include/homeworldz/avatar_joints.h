@@ -1,30 +1,36 @@
-// Every joint name a rigged mesh may bind to, as Firestorm resolves them.
+// Every joint name a rigged mesh may bind to, and where the skeleton puts them.
 //
-// Generated from the viewer's own data on 2026-08-08 — `avatar_skeleton.xml`
-// (133 bones, 26 collision volumes) and the attachment points in
-// `avatar_lad.xml` — rather than transcribed, because a transcribed list is a
-// second copy of a fact that can drift from the first.
+// Generated on 2026-08-08 from the viewer's own data — `avatar_skeleton.xml`
+// (159 named joints: 133 bones and 26 collision volumes) and the attachment
+// points in `avatar_lad.xml` — rather than transcribed, because a transcribed
+// list is a second copy of a fact and drifts from the first.
 //
-// **The accept-set is not the joint count.** The skeleton has
-// 133+26=159 joints, which is what `rigged_skeleton_joints` publishes, but a
-// viewer resolves 407 distinct names onto them:
+// **The accept-set is not the joint count.** The skeleton has 159 joints, which
+// `rigged_skeleton_joints` publishes, but a viewer resolves 407 names onto them:
+// bones, their declared aliases, collision volumes (absent from the alias map,
+// since makeJointAliases skips non-joints, but resolved by findJoint walking the
+// tree), and attachment points with the spaceless variants getJointAliases adds
+// "to give a mechanism for referencing such joints in daes, which don't allow
+// spaces". Validating against the canonical names alone would refuse rigs the
+// viewer accepts — the aliases include `hip`, `abdomen` and `avatar_mPelvis`,
+// which is what Blender and Avastar emit.
 //
-//   - 133 bone names, and 153 aliases declared on those bones.
-//     LLAvatarAppearance::makeJointAliases maps each bone's name to itself and
-//     every space-separated token of its `aliases` attribute.
-//   - 26 collision volumes. Not in the alias map — makeJointAliases skips
-//     anything that is not a joint — but LLVOAvatar::getJoint falls through to
-//     findJoint, which walks the whole tree, so they resolve anyway.
-//   - 55 attachment points, plus 40 spaceless variants. getJointAliases adds
-//     the underscore forms itself, "to give a mechanism for referencing such
-//     joints in daes, which don't allow spaces".
+// Rest positions are world-space, accumulated down the hierarchy from each
+// bone's `pos` relative to its parent. They exist for one job: checking that a
+// joint a name resolved to is the joint the source meant. Nothing else can
+// check that — a mesh mapped to the wrong joint and given that joint's inverse
+// bind matrix has a *correct* bind pose, so no rendering, screenshot or
+// geometric comparison of the artefact can disagree. The mapping has to be
+// checked against the skeleton, before the matrices absorb the error.
 //
-// Validating against the 159 canonical names alone would refuse rigs the
-// viewer accepts, and not rare ones: the aliases include `hip`, `abdomen` and
-// `avatar_mPelvis`, which is what Blender and Avastar pipelines emit.
+// Note mWristLeft at y=+0.617 and mWristRight at y=-0.617: the same distance
+// from the pelvis, opposite signs. A magnitude comparison calls a perfect
+// mirror a perfect match, so the check must compare to the specific target's
+// position with sign, not to a distance.
 #ifndef HOMEWORLDZ_AVATAR_JOINTS_H
 #define HOMEWORLDZ_AVATAR_JOINTS_H
 
+#include <array>
 #include <string_view>
 
 namespace homeworldz::mesh {
@@ -169,8 +175,197 @@ inline constexpr std::string_view riggable_joint_names[] = {
     "rShldr", "rThigh",
 };
 
+// A canonical joint and where the skeleton rests it, in metres.
+struct JointRest {
+    std::string_view name;
+    float x;
+    float y;
+    float z;
+};
+
+inline constexpr JointRest joint_rest_positions[] = {
+    {"BELLY",0.028000f,0.000000f,1.191000f}, {"BUTT",-0.060000f,0.000000f,0.967000f},
+    {"CHEST",0.013000f,0.000000f,1.426000f}, {"HEAD",-0.005000f,0.000000f,1.753000f},
+    {"LEFT_HANDLE",0.000000f,0.100000f,1.209000f}, {"LEFT_PEC",0.104000f,0.082000f,1.398000f},
+    {"LOWER_BACK",0.000000f,0.000000f,1.174000f}, {"L_CLAVICLE",-0.016000f,0.085000f,1.541000f},
+    {"L_FOOT",0.081000f,0.082000f,0.026000f}, {"L_HAND",-0.026000f,0.667000f,1.521000f},
+    {"L_LOWER_ARM",-0.036000f,0.512000f,1.521000f}, {"L_LOWER_LEG",0.013000f,0.081000f,0.335000f},
+    {"L_UPPER_ARM",-0.036000f,0.284000f,1.531000f}, {"L_UPPER_LEG",0.014000f,0.077000f,0.806000f},
+    {"NECK",-0.025000f,0.000000f,1.627000f}, {"PELVIS",-0.010000f,0.000000f,1.047000f},
+    {"RIGHT_HANDLE",0.000000f,-0.100000f,1.209000f}, {"RIGHT_PEC",0.104000f,-0.082000f,1.398000f},
+    {"R_CLAVICLE",-0.016000f,-0.085000f,1.541000f}, {"R_FOOT",0.081000f,-0.080000f,0.026000f},
+    {"R_HAND",-0.026000f,-0.667000f,1.521000f}, {"R_LOWER_ARM",-0.036000f,-0.512000f,1.521000f},
+    {"R_LOWER_LEG",0.013000f,-0.080000f,0.335000f}, {"R_UPPER_ARM",-0.036000f,-0.284000f,1.531000f},
+    {"R_UPPER_LEG",0.014000f,-0.079000f,0.806000f}, {"UPPER_BACK",-0.015000f,0.000000f,1.373000f},
+    {"mAnkleLeft",0.004000f,0.082000f,0.067000f}, {"mAnkleRight",0.004000f,-0.080000f,0.067000f},
+    {"mChest",-0.015000f,0.000000f,1.356000f}, {"mCollarLeft",-0.036000f,0.085000f,1.521000f},
+    {"mCollarRight",-0.036000f,-0.085000f,1.521000f}, {"mElbowLeft",-0.036000f,0.412000f,1.521000f},
+    {"mElbowRight",-0.036000f,-0.412000f,1.521000f}, {"mEyeLeft",0.073000f,0.036000f,1.762000f},
+    {"mEyeRight",0.073000f,-0.036000f,1.762000f}, {"mFaceCheekLowerLeft",0.050000f,0.034000f,1.697000f},
+    {"mFaceCheekLowerRight",0.050000f,-0.034000f,1.697000f}, {"mFaceCheekUpperLeft",0.070000f,0.034000f,1.723000f},
+    {"mFaceCheekUpperRight",0.070000f,-0.034000f,1.723000f}, {"mFaceChin",0.073000f,0.000000f,1.659000f},
+    {"mFaceEar1Left",0.000000f,0.080000f,1.730000f}, {"mFaceEar1Right",0.000000f,-0.080000f,1.730000f},
+    {"mFaceEar2Left",-0.019000f,0.098000f,1.755000f}, {"mFaceEar2Right",-0.019000f,-0.098000f,1.755000f},
+    {"mFaceEyeAltLeft",0.073000f,0.036000f,1.762000f}, {"mFaceEyeAltRight",0.073000f,-0.036000f,1.762000f},
+    {"mFaceEyeLidLowerLeft",0.073000f,0.036000f,1.762000f}, {"mFaceEyeLidLowerRight",0.073000f,-0.036000f,1.762000f},
+    {"mFaceEyeLidUpperLeft",0.073000f,0.036000f,1.762000f}, {"mFaceEyeLidUpperRight",0.073000f,-0.036000f,1.762000f},
+    {"mFaceEyebrowCenterLeft",0.070000f,0.043000f,1.784000f}, {"mFaceEyebrowCenterRight",0.070000f,-0.043000f,1.784000f},
+    {"mFaceEyebrowInnerLeft",0.075000f,0.022000f,1.779000f}, {"mFaceEyebrowInnerRight",0.075000f,-0.022000f,1.779000f},
+    {"mFaceEyebrowOuterLeft",0.064000f,0.051000f,1.776000f}, {"mFaceEyebrowOuterRight",0.064000f,-0.051000f,1.776000f},
+    {"mFaceEyecornerInnerLeft",0.075000f,0.017000f,1.760000f}, {"mFaceEyecornerInnerRight",0.075000f,-0.017000f,1.760000f},
+    {"mFaceForeheadCenter",0.069000f,0.000000f,1.793000f}, {"mFaceForeheadLeft",0.061000f,0.035000f,1.811000f},
+    {"mFaceForeheadRight",0.061000f,-0.035000f,1.811000f}, {"mFaceJaw",-0.001000f,0.000000f,1.713000f},
+    {"mFaceJawShaper",0.000000f,0.000000f,1.728000f}, {"mFaceLipCornerLeft",0.048000f,-0.019000f,1.688000f},
+    {"mFaceLipCornerRight",0.048000f,0.019000f,1.688000f}, {"mFaceLipLowerCenter",0.065000f,0.000000f,1.674000f},
+    {"mFaceLipLowerLeft",0.065000f,0.000000f,1.674000f}, {"mFaceLipLowerRight",0.065000f,0.000000f,1.674000f},
+    {"mFaceLipUpperCenter",0.065000f,0.000000f,1.695000f}, {"mFaceLipUpperLeft",0.065000f,0.000000f,1.695000f},
+    {"mFaceLipUpperRight",0.065000f,0.000000f,1.695000f}, {"mFaceNoseBase",0.094000f,0.000000f,1.712000f},
+    {"mFaceNoseBridge",0.091000f,0.000000f,1.748000f}, {"mFaceNoseCenter",0.102000f,0.000000f,1.728000f},
+    {"mFaceNoseLeft",0.086000f,0.015000f,1.724000f}, {"mFaceNoseRight",0.086000f,-0.015000f,1.724000f},
+    {"mFaceRoot",0.000000f,0.000000f,1.728000f}, {"mFaceTeethLower",0.020000f,0.000000f,1.674000f},
+    {"mFaceTeethUpper",0.020000f,0.000000f,1.698000f}, {"mFaceTongueBase",0.059000f,0.000000f,1.679000f},
+    {"mFaceTongueTip",0.081000f,0.000000f,1.686000f}, {"mFootLeft",0.116000f,0.082000f,0.006000f},
+    {"mFootRight",0.116000f,-0.080000f,0.006000f}, {"mGroin",0.064000f,0.000000f,0.970000f},
+    {"mHandIndex1Left",0.002000f,0.714000f,1.536000f}, {"mHandIndex1Right",0.002000f,-0.714000f,1.536000f},
+    {"mHandIndex2Left",0.019000f,0.750000f,1.530000f}, {"mHandIndex2Right",0.019000f,-0.750000f,1.530000f},
+    {"mHandIndex3Left",0.033000f,0.782000f,1.524000f}, {"mHandIndex3Right",0.033000f,-0.782000f,1.524000f},
+    {"mHandMiddle1Left",-0.023000f,0.718000f,1.536000f}, {"mHandMiddle1Right",-0.023000f,-0.718000f,1.536000f},
+    {"mHandMiddle2Left",-0.024000f,0.758000f,1.530000f}, {"mHandMiddle2Right",-0.024000f,-0.758000f,1.530000f},
+    {"mHandMiddle3Left",-0.025000f,0.807000f,1.522000f}, {"mHandMiddle3Right",-0.025000f,-0.807000f,1.522000f},
+    {"mHandPinky1Left",-0.067000f,0.712000f,1.524000f}, {"mHandPinky1Right",-0.067000f,-0.712000f,1.524000f},
+    {"mHandPinky2Left",-0.091000f,0.737000f,1.518000f}, {"mHandPinky2Right",-0.091000f,-0.737000f,1.518000f},
+    {"mHandPinky3Left",-0.106000f,0.755000f,1.514000f}, {"mHandPinky3Right",-0.106000f,-0.755000f,1.514000f},
+    {"mHandRing1Left",-0.046000f,0.716000f,1.530000f}, {"mHandRing1Right",-0.046000f,-0.716000f,1.530000f},
+    {"mHandRing2Left",-0.059000f,0.754000f,1.522000f}, {"mHandRing2Right",-0.059000f,-0.754000f,1.522000f},
+    {"mHandRing3Left",-0.072000f,0.794000f,1.513000f}, {"mHandRing3Right",-0.072000f,-0.794000f,1.513000f},
+    {"mHandThumb1Left",-0.005000f,0.643000f,1.525000f}, {"mHandThumb1Right",-0.005000f,-0.643000f,1.525000f},
+    {"mHandThumb2Left",0.023000f,0.675000f,1.524000f}, {"mHandThumb2Right",0.023000f,-0.675000f,1.524000f},
+    {"mHandThumb3Left",0.046000f,0.706000f,1.523000f}, {"mHandThumb3Right",0.046000f,-0.706000f,1.523000f},
+    {"mHead",-0.025000f,0.000000f,1.683000f}, {"mHindLimb1Left",-0.404000f,0.129000f,1.026000f},
+    {"mHindLimb1Right",-0.404000f,-0.129000f,1.026000f}, {"mHindLimb2Left",-0.402000f,0.083000f,0.535000f},
+    {"mHindLimb2Right",-0.402000f,-0.083000f,0.535000f}, {"mHindLimb3Left",-0.432000f,0.080000f,0.067000f},
+    {"mHindLimb3Right",-0.432000f,-0.080000f,0.067000f}, {"mHindLimb4Left",-0.320000f,0.080000f,0.006000f},
+    {"mHindLimb4Right",-0.320000f,-0.080000f,0.006000f}, {"mHindLimbsRoot",-0.200000f,0.000000f,1.151000f},
+    {"mHipLeft",0.034000f,0.127000f,1.026000f}, {"mHipRight",0.034000f,-0.129000f,1.026000f},
+    {"mKneeLeft",0.033000f,0.081000f,0.535000f}, {"mKneeRight",0.033000f,-0.080000f,0.535000f},
+    {"mNeck",-0.025000f,0.000000f,1.607000f}, {"mPelvis",0.000000f,0.000000f,1.067000f},
+    {"mShoulderLeft",-0.036000f,0.164000f,1.521000f}, {"mShoulderRight",-0.036000f,-0.164000f,1.521000f},
+    {"mSkull",-0.025000f,0.000000f,1.762000f}, {"mSpine1",0.000000f,0.000000f,1.151000f},
+    {"mSpine2",0.000000f,0.000000f,1.067000f}, {"mSpine3",-0.015000f,0.000000f,1.356000f},
+    {"mSpine4",0.000000f,0.000000f,1.151000f}, {"mTail1",-0.116000f,0.000000f,1.114000f},
+    {"mTail2",-0.313000f,0.000000f,1.114000f}, {"mTail3",-0.481000f,0.000000f,1.114000f},
+    {"mTail4",-0.623000f,0.000000f,1.114000f}, {"mTail5",-0.735000f,0.000000f,1.114000f},
+    {"mTail6",-0.829000f,0.000000f,1.114000f}, {"mToeLeft",0.225000f,0.082000f,0.006000f},
+    {"mToeRight",0.225000f,-0.080000f,0.006000f}, {"mTorso",0.000000f,0.000000f,1.151000f},
+    {"mWing1Left",-0.128000f,0.105000f,1.537000f}, {"mWing1Right",-0.128000f,-0.105000f,1.537000f},
+    {"mWing2Left",-0.296000f,0.274000f,1.604000f}, {"mWing2Right",-0.296000f,-0.274000f,1.604000f},
+    {"mWing3Left",-0.477000f,0.457000f,1.604000f}, {"mWing3Right",-0.477000f,-0.457000f,1.604000f},
+    {"mWing4FanLeft",-0.648000f,0.630000f,1.604000f}, {"mWing4FanRight",-0.648000f,-0.630000f,1.604000f},
+    {"mWing4Left",-0.648000f,0.630000f,1.604000f}, {"mWing4Right",-0.648000f,-0.630000f,1.604000f},
+    {"mWingsRoot",-0.029000f,0.000000f,1.356000f}, {"mWristLeft",-0.036000f,0.617000f,1.521000f},
+    {"mWristRight",-0.036000f,-0.617000f,1.521000f},
+};
+
+// An alias and the canonical joint it names. Declared by the skeleton file, not
+// decided here: each is an `aliases=` attribute on exactly one bone, and the
+// viewer warns when two bones claim the same alias — nothing in this file does.
+struct JointAlias {
+    std::string_view alias;
+    std::string_view canonical;
+};
+
+inline constexpr JointAlias joint_aliases[] = {
+    {"abdomen","mTorso"}, {"avatar_mAnkleLeft","mAnkleLeft"},
+    {"avatar_mAnkleRight","mAnkleRight"}, {"avatar_mChest","mChest"},
+    {"avatar_mCollarLeft","mCollarLeft"}, {"avatar_mCollarRight","mCollarRight"},
+    {"avatar_mElbowLeft","mElbowLeft"}, {"avatar_mElbowRight","mElbowRight"},
+    {"avatar_mEyeLeft","mEyeLeft"}, {"avatar_mEyeRight","mEyeRight"},
+    {"avatar_mFaceCheekLowerLeft","mFaceCheekLowerLeft"}, {"avatar_mFaceCheekLowerRight","mFaceCheekLowerRight"},
+    {"avatar_mFaceCheekUpperLeft","mFaceCheekUpperLeft"}, {"avatar_mFaceCheekUpperRight","mFaceCheekUpperRight"},
+    {"avatar_mFaceChin","mFaceChin"}, {"avatar_mFaceEar1Left","mFaceEar1Left"},
+    {"avatar_mFaceEar1Right","mFaceEar1Right"}, {"avatar_mFaceEar2Left","mFaceEar2Left"},
+    {"avatar_mFaceEar2Right","mFaceEar2Right"}, {"avatar_mFaceEyeAltLeft","mFaceEyeAltLeft"},
+    {"avatar_mFaceEyeAltRight","mFaceEyeAltRight"}, {"avatar_mFaceEyeLidLowerLeft","mFaceEyeLidLowerLeft"},
+    {"avatar_mFaceEyeLidLowerRight","mFaceEyeLidLowerRight"}, {"avatar_mFaceEyeLidUpperLeft","mFaceEyeLidUpperLeft"},
+    {"avatar_mFaceEyeLidUpperRight","mFaceEyeLidUpperRight"}, {"avatar_mFaceEyebrowCenterLeft","mFaceEyebrowCenterLeft"},
+    {"avatar_mFaceEyebrowCenterRight","mFaceEyebrowCenterRight"}, {"avatar_mFaceEyebrowInnerLeft","mFaceEyebrowInnerLeft"},
+    {"avatar_mFaceEyebrowInnerRight","mFaceEyebrowInnerRight"}, {"avatar_mFaceEyebrowOuterLeft","mFaceEyebrowOuterLeft"},
+    {"avatar_mFaceEyebrowOuterRight","mFaceEyebrowOuterRight"}, {"avatar_mFaceEyecornerInnerLeft","mFaceEyecornerInnerLeft"},
+    {"avatar_mFaceEyecornerInnerRight","mFaceEyecornerInnerRight"}, {"avatar_mFaceForeheadCenter","mFaceForeheadCenter"},
+    {"avatar_mFaceForeheadLeft","mFaceForeheadLeft"}, {"avatar_mFaceForeheadRight","mFaceForeheadRight"},
+    {"avatar_mFaceJaw","mFaceJaw"}, {"avatar_mFaceJawShaper","mFaceJawShaper"},
+    {"avatar_mFaceLipCornerLeft","mFaceLipCornerLeft"}, {"avatar_mFaceLipCornerRight","mFaceLipCornerRight"},
+    {"avatar_mFaceLipLowerCenter","mFaceLipLowerCenter"}, {"avatar_mFaceLipLowerLeft","mFaceLipLowerLeft"},
+    {"avatar_mFaceLipLowerRight","mFaceLipLowerRight"}, {"avatar_mFaceLipUpperCenter","mFaceLipUpperCenter"},
+    {"avatar_mFaceLipUpperLeft","mFaceLipUpperLeft"}, {"avatar_mFaceLipUpperRight","mFaceLipUpperRight"},
+    {"avatar_mFaceNoseBase","mFaceNoseBase"}, {"avatar_mFaceNoseBridge","mFaceNoseBridge"},
+    {"avatar_mFaceNoseCenter","mFaceNoseCenter"}, {"avatar_mFaceNoseLeft","mFaceNoseLeft"},
+    {"avatar_mFaceNoseRight","mFaceNoseRight"}, {"avatar_mFaceRoot","mFaceRoot"},
+    {"avatar_mFaceTeethLower","mFaceTeethLower"}, {"avatar_mFaceTeethUpper","mFaceTeethUpper"},
+    {"avatar_mFaceTongueBase","mFaceTongueBase"}, {"avatar_mFaceTongueTip","mFaceTongueTip"},
+    {"avatar_mFootLeft","mFootLeft"}, {"avatar_mFootRight","mFootRight"},
+    {"avatar_mGroin","mGroin"}, {"avatar_mHandIndex1Left","mHandIndex1Left"},
+    {"avatar_mHandIndex1Right","mHandIndex1Right"}, {"avatar_mHandIndex2Left","mHandIndex2Left"},
+    {"avatar_mHandIndex2Right","mHandIndex2Right"}, {"avatar_mHandIndex3Left","mHandIndex3Left"},
+    {"avatar_mHandIndex3Right","mHandIndex3Right"}, {"avatar_mHandMiddle1Left","mHandMiddle1Left"},
+    {"avatar_mHandMiddle1Right","mHandMiddle1Right"}, {"avatar_mHandMiddle2Left","mHandMiddle2Left"},
+    {"avatar_mHandMiddle2Right","mHandMiddle2Right"}, {"avatar_mHandMiddle3Left","mHandMiddle3Left"},
+    {"avatar_mHandMiddle3Right","mHandMiddle3Right"}, {"avatar_mHandPinky1Left","mHandPinky1Left"},
+    {"avatar_mHandPinky1Right","mHandPinky1Right"}, {"avatar_mHandPinky2Left","mHandPinky2Left"},
+    {"avatar_mHandPinky2Right","mHandPinky2Right"}, {"avatar_mHandPinky3Left","mHandPinky3Left"},
+    {"avatar_mHandPinky3Right","mHandPinky3Right"}, {"avatar_mHandRing1Left","mHandRing1Left"},
+    {"avatar_mHandRing1Right","mHandRing1Right"}, {"avatar_mHandRing2Left","mHandRing2Left"},
+    {"avatar_mHandRing2Right","mHandRing2Right"}, {"avatar_mHandRing3Left","mHandRing3Left"},
+    {"avatar_mHandRing3Right","mHandRing3Right"}, {"avatar_mHandThumb1Left","mHandThumb1Left"},
+    {"avatar_mHandThumb1Right","mHandThumb1Right"}, {"avatar_mHandThumb2Left","mHandThumb2Left"},
+    {"avatar_mHandThumb2Right","mHandThumb2Right"}, {"avatar_mHandThumb3Left","mHandThumb3Left"},
+    {"avatar_mHandThumb3Right","mHandThumb3Right"}, {"avatar_mHead","mHead"},
+    {"avatar_mHindLimb1Left","mHindLimb1Left"}, {"avatar_mHindLimb1Right","mHindLimb1Right"},
+    {"avatar_mHindLimb2Left","mHindLimb2Left"}, {"avatar_mHindLimb2Right","mHindLimb2Right"},
+    {"avatar_mHindLimb3Left","mHindLimb3Left"}, {"avatar_mHindLimb3Right","mHindLimb3Right"},
+    {"avatar_mHindLimb4Left","mHindLimb4Left"}, {"avatar_mHindLimb4Right","mHindLimb4Right"},
+    {"avatar_mHindLimbsRoot","mHindLimbsRoot"}, {"avatar_mHipLeft","mHipLeft"},
+    {"avatar_mHipRight","mHipRight"}, {"avatar_mKneeLeft","mKneeLeft"},
+    {"avatar_mKneeRight","mKneeRight"}, {"avatar_mNeck","mNeck"},
+    {"avatar_mPelvis","mPelvis"}, {"avatar_mShoulderLeft","mShoulderLeft"},
+    {"avatar_mShoulderRight","mShoulderRight"}, {"avatar_mSkull","mSkull"},
+    {"avatar_mSpine1","mSpine1"}, {"avatar_mSpine2","mSpine2"},
+    {"avatar_mSpine3","mSpine3"}, {"avatar_mSpine4","mSpine4"},
+    {"avatar_mTail1","mTail1"}, {"avatar_mTail2","mTail2"},
+    {"avatar_mTail3","mTail3"}, {"avatar_mTail4","mTail4"},
+    {"avatar_mTail5","mTail5"}, {"avatar_mTail6","mTail6"},
+    {"avatar_mToeLeft","mToeLeft"}, {"avatar_mToeRight","mToeRight"},
+    {"avatar_mTorso","mTorso"}, {"avatar_mWing1Left","mWing1Left"},
+    {"avatar_mWing1Right","mWing1Right"}, {"avatar_mWing2Left","mWing2Left"},
+    {"avatar_mWing2Right","mWing2Right"}, {"avatar_mWing3Left","mWing3Left"},
+    {"avatar_mWing3Right","mWing3Right"}, {"avatar_mWing4FanLeft","mWing4FanLeft"},
+    {"avatar_mWing4FanRight","mWing4FanRight"}, {"avatar_mWing4Left","mWing4Left"},
+    {"avatar_mWing4Right","mWing4Right"}, {"avatar_mWingsRoot","mWingsRoot"},
+    {"avatar_mWristLeft","mWristLeft"}, {"avatar_mWristRight","mWristRight"},
+    {"chest","mChest"}, {"figureHair","mSkull"},
+    {"head","mHead"}, {"hip","mPelvis"},
+    {"lCollar","mCollarLeft"}, {"lFoot","mAnkleLeft"},
+    {"lForeArm","mElbowLeft"}, {"lHand","mWristLeft"},
+    {"lShin","mKneeLeft"}, {"lShldr","mShoulderLeft"},
+    {"lThigh","mHipLeft"}, {"neck","mNeck"},
+    {"rCollar","mCollarRight"}, {"rFoot","mAnkleRight"},
+    {"rForeArm","mElbowRight"}, {"rHand","mWristRight"},
+    {"rShin","mKneeRight"}, {"rShldr","mShoulderRight"},
+    {"rThigh","mHipRight"},
+};
+
 // True when a skin may bind to this name.
 bool is_riggable_joint(std::string_view name);
+
+// The canonical joint a name refers to: itself when canonical, the declared
+// target when an alias, empty when neither. Never guesses — an unresolvable
+// name is a refusal, not a nearest match.
+std::string_view canonical_joint(std::string_view name);
+
+// Where the skeleton rests a canonical joint. False when unknown, which
+// includes attachment points: they are legal rig targets but are not bones and
+// have no rest position in the skeleton file.
+bool joint_rest(std::string_view canonical, float& x, float& y, float& z);
 
 } // namespace homeworldz::mesh
 
