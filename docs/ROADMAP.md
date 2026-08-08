@@ -12,7 +12,7 @@ acceptance tests pass.
 
 ## Progress snapshot
 
-**Updated 2026-08-07**: These bars are effort-weighted engineering estimates, not
+**Updated 2026-08-08**: These bars are effort-weighted engineering estimates, not
 simple checkbox ratios. Later scripting, crossings, social systems, security,
 recovery, and scale items are substantially larger than many completed viewer
 protocol tasks. Percentages are deliberately approximate and should be revised
@@ -27,28 +27,28 @@ its own repository with its own roadmap and progress.
 <p>
 <label class="roadmap-overall-progress">
   <span>Legacy (Firestorm-compatible) services:</span>
-  <progress data-color="primary" max="100" value="33">33%</progress>
-  <strong>33%</strong>
+  <progress data-color="primary" max="100" value="34">34%</progress>
+  <strong>34%</strong>
 </label>
 </p>
 
 <p>
 <label class="roadmap-overall-progress">
   <span>Modern Homeworldz client + back-end:</span>
-  <progress data-color="primary" max="100" value="35">35%</progress>
-  <strong>35%</strong>
+  <progress data-color="primary" max="100" value="36">36%</progress>
+  <strong>36%</strong>
 </label>
 </p>
 
 | Phase | Progress | Estimate |
 | --- | --- | ---: |
 | 1. Functional Single-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="100" aria-label="Phase 1 progress: 100%">100%</progress> | 100% |
-| 2. Connected Multi-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="84" aria-label="Phase 2 progress: 84%">84%</progress> | 84% |
+| 2. Connected Multi-region World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="85" aria-label="Phase 2 progress: 85%">85%</progress> | 85% |
 | 3. Interactive Physical World | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="48" aria-label="Phase 3 progress: 48%">48%</progress> | 48% |
 | 4. Mesh and Creator Platform | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="20" aria-label="Phase 4 progress: 20%">20%</progress> | 20% |
 | 5. LSL Scripting | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="15" aria-label="Phase 5 progress: 15%">15%</progress> | 15% |
-| 6. Social Communications | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="5" aria-label="Phase 6 progress: 5%">5%</progress> | 5% |
-| 7. Reliable Operations and Distribution | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="20" aria-label="Phase 7 progress: 20%">20%</progress> | 20% |
+| 6. Social Communications | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="6" aria-label="Phase 6 progress: 6%">6%</progress> | 6% |
+| 7. Reliable Operations and Distribution | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="23" aria-label="Phase 7 progress: 23%">23%</progress> | 23% |
 | 8. Scale, Compatibility, and Ecosystem | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="3" aria-label="Phase 8 progress: 3%">3%</progress> | 3% |
 | 9. Modernized Communications Transport | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="66" aria-label="Phase 9 progress: 66%">66%</progress> | 66% |
 | 10. Modern Client Support | <progress class="roadmap-phase-progress" data-color="primary" max="100" value="8" aria-label="Phase 10 progress: 8%">8%</progress> | 8% |
