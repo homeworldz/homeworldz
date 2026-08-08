@@ -381,7 +381,19 @@ client family is served a derived rendition by a grid-side conversion worker.
   older one produced, so deploying an upgraded converter reconverts existing
   content.
 - [ ] M4 rigged mesh: glTF skins mapped onto the Bento skeleton (refusing
-  rigs that do not map), attachments and body wearables.
+  rigs that do not map), attachments and body wearables. State at 2026-08-08:
+  a real Bento body converts, and the refusal half is built — names resolve
+  through the alias table, unused joints compact away, and the geometry is
+  checked against the skeleton's rest pose with a tolerance bracketed by the
+  skeleton itself. Two faults block acceptance, both found by measuring that
+  body rather than by reading code. The region's axis map fixes *up* and never
+  chose a yaw ([ADR 0033](adr/0033-mesh-assets.md) argues only that an asset
+  "stands upright", which two different right-handed maps both satisfy), and a
+  skeleton is the first asset with a canonical facing that can tell them apart.
+  Separately, the map is applied to positions, normals and bounds but not to
+  inverse bind matrices, which would draw a body correctly at rest and deform
+  it wrongly the moment a joint moved. Neither is a percentage of progress
+  lost: the work is the same size and better understood.
 - [ ] M5 import breadth: client-side FBX/OBJ/DAE import, documented Daz
   Studio export path, optional web import service on the management site.
 - [ ] Possible with M5: retarget a Character Creator rig onto the Bento
