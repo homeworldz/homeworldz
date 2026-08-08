@@ -32,10 +32,25 @@ func (s *PostgresStore) ListActive(ctx context.Context, userID string) ([]Gestur
 	// every login with nothing left to delete to stop it. Filtering here fixes
 	// the rows already orphaned as well as the ones deletion will orphan next,
 	// which a cascade added now would not.
+	//
+	// Trash is excluded, not merely absence. Deleting from a viewer moves an
+	// item to Trash; the row survives, so testing that the item exists passes
+	// for something the user has thrown away and the gesture is offered again.
+	// That is what the first attempt at this got wrong. Recursive because Trash
+	// holds folders as well as items, and an emptied outfit folder dragged into
+	// it takes its gestures along.
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT g.item_id, g.asset_id FROM active_gestures AS g
+		`WITH RECURSIVE trashed AS (
+		     SELECT id FROM inventory_folders
+		      WHERE owner_user_id = $1 AND type_default = 14
+		     UNION ALL
+		     SELECT f.id FROM inventory_folders AS f
+		       JOIN trashed AS t ON f.parent_id = t.id
+		 )
+		 SELECT g.item_id, g.asset_id FROM active_gestures AS g
 		   JOIN inventory_items AS i ON i.id = g.item_id AND i.owner_user_id = g.user_id
-		  WHERE g.user_id = $1 ORDER BY g.activated_at`, userID)
+		  WHERE g.user_id = $1 AND i.folder_id NOT IN (SELECT id FROM trashed)
+		  ORDER BY g.activated_at`, userID)
 	if err != nil {
 		return nil, fmt.Errorf("list active gestures: %w", err)
 	}
