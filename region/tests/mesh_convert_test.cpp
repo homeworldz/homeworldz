@@ -2,6 +2,8 @@
 #include "homeworldz/mesh_convert.h"
 #include "homeworldz/slmesh.h"
 
+#include <array>
+#include <string_view>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -185,5 +187,96 @@ int main() {
         const auto decoded = homeworldz::image::decode_png_or_jpeg(png);
         if (!decoded || decoded->width != 1 || decoded->height != 1) return 28;
     }
+
+    // A rigged mesh, built here rather than loaded, because a fixture in the
+    // repository is a binary nobody can review and this one has to be exactly
+    // right: three vertices bound to two real Bento joints, weights summing to
+    // one, and an identity inverse bind matrix each.
+    //
+    // It is a fixture I authored, which tests this converter against my own
+    // reading of the format and no one else's. That is worth stating rather
+    // than discovering: it is the first fixture and deliberately not the last.
+    {
+        std::vector<std::uint8_t> bin;
+        const auto put_float = [&](float value) {
+            std::uint8_t raw[4];
+            std::memcpy(raw, &value, 4);
+            bin.insert(bin.end(), raw, raw + 4);
+        };
+        const auto put_ushort = [&](std::uint16_t value) {
+            bin.push_back(static_cast<std::uint8_t>(value));
+            bin.push_back(static_cast<std::uint8_t>(value >> 8));
+        };
+        // positions: 36 bytes
+        for (const auto& corner : {std::array<float, 3>{0, 0, 0},
+                                   std::array<float, 3>{1, 0, 0},
+                                   std::array<float, 3>{0, 1, 0}})
+            for (const auto value : corner) put_float(value);
+        // joints: 24 bytes, every vertex bound to slots 0 and 1
+        for (int vertex = 0; vertex < 3; ++vertex) {
+            put_ushort(0); put_ushort(1); put_ushort(0); put_ushort(0);
+        }
+        // weights: 48 bytes. The trailing pair is zero, which is padding
+        // rather than a binding — the converter must drop it rather than spend
+        // two of the format's four slots on nothing.
+        for (int vertex = 0; vertex < 3; ++vertex) {
+            put_float(0.75f); put_float(0.25f); put_float(0.0f); put_float(0.0f);
+        }
+        // inverse bind matrices: two identities, 128 bytes
+        for (int joint = 0; joint < 2; ++joint)
+            for (int cell = 0; cell < 16; ++cell) put_float(cell % 5 == 0 ? 1.0f : 0.0f);
+
+        const std::string rigged_json =
+            R"({"asset":{"version":"2.0"},"buffers":[{"byteLength":236}],)"
+            R"("bufferViews":[{"buffer":0,"byteOffset":0,"byteLength":36},)"
+            R"({"buffer":0,"byteOffset":36,"byteLength":24},)"
+            R"({"buffer":0,"byteOffset":60,"byteLength":48},)"
+            R"({"buffer":0,"byteOffset":108,"byteLength":128}],)"
+            R"("accessors":[{"bufferView":0,"componentType":5126,"count":3,"type":"VEC3",)"
+            R"("min":[0,0,0],"max":[1,1,0]},)"
+            R"({"bufferView":1,"componentType":5123,"count":3,"type":"VEC4"},)"
+            R"({"bufferView":2,"componentType":5126,"count":3,"type":"VEC4"},)"
+            R"({"bufferView":3,"componentType":5126,"count":2,"type":"MAT4"}],)"
+            R"("meshes":[{"primitives":[{"attributes":{"POSITION":0,"JOINTS_0":1,"WEIGHTS_0":2}}]}],)"
+            R"("nodes":[{"mesh":0,"skin":0},{"name":"mPelvis"},{"name":"mTorso"}],)"
+            R"("skins":[{"joints":[1,2],"inverseBindMatrices":3}],)"
+            R"("scenes":[{"nodes":[0]}],"scene":0})";
+        const auto rigged = homeworldz::mesh::convert_glb(glb(rigged_json, bin));
+        if (!rigged.ok) return 30;
+        const std::string_view blob(reinterpret_cast<const char*>(rigged.sl_mesh.data()),
+                                    rigged.sl_mesh.size());
+        // The joint table reached the asset under its canonical names, and the
+        // weights reached the level data.
+        if (blob.find("skin") == std::string_view::npos ||
+            blob.find("mPelvis") == std::string_view::npos ||
+            blob.find("mTorso") == std::string_view::npos ||
+            blob.find("Weights") == std::string_view::npos)
+            return 31;
+
+        // An alias resolves to its canonical joint rather than being carried
+        // through: what a viewer resolves and what the asset says should not
+        // differ, or two readers of the same file disagree about the skeleton.
+        std::string aliased_json = rigged_json;
+        const auto at = aliased_json.find(R"({"name":"mPelvis"})");
+        aliased_json.replace(at, std::string(R"({"name":"mPelvis"})").size(),
+                             R"({"name":"hip"})");
+        const auto aliased = homeworldz::mesh::convert_glb(glb(aliased_json, bin));
+        if (!aliased.ok) return 32;
+        const std::string_view aliased_blob(
+            reinterpret_cast<const char*>(aliased.sl_mesh.data()), aliased.sl_mesh.size());
+        if (aliased_blob.find("mPelvis") == std::string_view::npos ||
+            aliased_blob.find("\"hip\"") != std::string_view::npos)
+            return 33;
+
+        // A joint from another skeleton is refused by name, not silently
+        // dropped or mapped to something nearby.
+        std::string foreign_json = rigged_json;
+        const auto foreign_at = foreign_json.find(R"({"name":"mTorso"})");
+        foreign_json.replace(foreign_at, std::string(R"({"name":"mTorso"})").size(),
+                             R"({"name":"CC_Base_Spine"})");
+        const auto foreign = homeworldz::mesh::convert_glb(glb(foreign_json, bin));
+        if (foreign.ok || foreign.error.find("CC_Base_Spine") == std::string::npos) return 34;
+    }
+
     return 0;
 }

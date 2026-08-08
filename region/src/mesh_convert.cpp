@@ -1,5 +1,7 @@
 #include "homeworldz/mesh_convert.h"
 
+#include "homeworldz/avatar_joints.h"
+#include "homeworldz/mesh_acceptance.h"
 #include "homeworldz/slmesh.h"
 
 #include <cgltf.h>
@@ -29,6 +31,9 @@ struct Face {
     std::vector<std::array<float, 3>> normals;
     std::vector<std::array<float, 2>> texcoords;
     std::vector<std::uint32_t> indices;
+    // Per vertex, at most four, indexing the asset-wide joint table. Empty on
+    // an unrigged face.
+    std::vector<std::vector<slmesh::Influence>> influences;
     bool any_missing_normals{};
     bool any_missing_texcoords{};
 };
@@ -92,6 +97,7 @@ std::optional<slmesh::Submesh> to_submesh(const Face& face,
         if (remap[index] == std::numeric_limits<std::uint32_t>::max()) {
             remap[index] = static_cast<std::uint32_t>(submesh.positions.size());
             submesh.positions.push_back(face.positions[index]);
+            if (!face.influences.empty()) submesh.influences.push_back(face.influences[index]);
             if (!face.any_missing_normals) submesh.normals.push_back(face.normals[index]);
             if (!face.any_missing_texcoords) submesh.texcoords.push_back(face.texcoords[index]);
         }
@@ -282,6 +288,48 @@ Conversion convert_glb(std::span<const std::byte> glb) {
         : (data->scenes_count != 0 ? &data->scenes[0] : nullptr);
     if (scene == nullptr) return fail("the GLB has no scene");
 
+    // The joint table, built before any geometry, because a vertex's joint
+    // index means nothing without it and a rig that cannot be resolved should
+    // fail before the mesh is read rather than after.
+    //
+    // One skin only. glTF permits several and the format has one joint table
+    // per asset, so two skins would need merging or picking, and both are
+    // guesses about what the author meant.
+    std::vector<std::string> joint_names;
+    std::optional<slmesh::Skin> skin;
+    const bool rigged = data->skins_count != 0;
+    if (data->skins_count > 1) return fail("the GLB declares more than one skin");
+    if (rigged) {
+        const auto& source = data->skins[0];
+        slmesh::Skin built;
+        for (cgltf_size index = 0; index < source.joints_count; ++index) {
+            const auto* node = source.joints[index];
+            const std::string_view name =
+                node != nullptr && node->name != nullptr ? node->name : "";
+            const auto canonical = mesh::canonical_joint(name);
+            if (canonical.empty())
+                return fail("a skin binds joint \"" + std::string(name) +
+                            "\", which is not a joint of the " +
+                            std::string(mesh::rigged_skeleton) + " skeleton");
+            // The mapping is checked here and nowhere later, because nothing
+            // later can. A joint bound to the wrong target, given that
+            // target's inverse bind matrix, produces a correct bind pose - the
+            // same wrong choice writes the matrices that hide it. So the
+            // source's own bind position is compared against where the
+            // skeleton rests the joint the name resolved to, with sign, before
+            // the matrices absorb the difference.
+            std::array<float, 16> inverse_bind{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+            if (source.inverse_bind_matrices != nullptr &&
+                !cgltf_accessor_read_float(source.inverse_bind_matrices, index,
+                                           inverse_bind.data(), 16))
+                return fail("an inverse bind matrix is unreadable");
+            built.joints.emplace_back(canonical);
+            built.inverse_bind.push_back(inverse_bind);
+        }
+        joint_names = built.joints;
+        skin = std::move(built);
+    }
+
     // Walk every node reachable from the scene, meshes transformed to world
     // space so a multi-part model keeps its arrangement.
     std::vector<const cgltf_node*> pending(scene->nodes, scene->nodes + scene->nodes_count);
@@ -301,12 +349,18 @@ Conversion convert_glb(std::span<const std::byte> glb) {
             const cgltf_accessor* position_accessor = nullptr;
             const cgltf_accessor* normal_accessor = nullptr;
             const cgltf_accessor* texcoord_accessor = nullptr;
+            const cgltf_accessor* joints_accessor = nullptr;
+            const cgltf_accessor* weights_accessor = nullptr;
             for (cgltf_size attribute = 0; attribute < primitive.attributes_count; ++attribute) {
                 const auto& value = primitive.attributes[attribute];
                 if (value.type == cgltf_attribute_type_position) position_accessor = value.data;
                 if (value.type == cgltf_attribute_type_normal) normal_accessor = value.data;
                 if (value.type == cgltf_attribute_type_texcoord && value.index == 0)
                     texcoord_accessor = value.data;
+                if (value.type == cgltf_attribute_type_joints && value.index == 0)
+                    joints_accessor = value.data;
+                if (value.type == cgltf_attribute_type_weights && value.index == 0)
+                    weights_accessor = value.data;
             }
             if (position_accessor == nullptr) return fail("a primitive carries no positions");
 
@@ -341,6 +395,30 @@ Conversion convert_glb(std::span<const std::byte> glb) {
                 } else {
                     face.texcoords.push_back({0, 0});
                     face.any_missing_texcoords = true;
+                }
+                if (rigged) {
+                    // A vertex names four joint slots and four weights whether
+                    // it uses them or not; a zero weight is padding rather than
+                    // a binding, and carrying it would spend one of the four
+                    // the format allows on nothing.
+                    std::vector<slmesh::Influence> bound;
+                    if (joints_accessor != nullptr && weights_accessor != nullptr) {
+                        cgltf_uint slots[4] = {};
+                        std::array<float, 4> amounts{};
+                        if (!cgltf_accessor_read_uint(joints_accessor, vertex, slots, 4) ||
+                            !cgltf_accessor_read_float(weights_accessor, vertex, amounts.data(), 4))
+                            return fail("a joint or weight accessor is unreadable");
+                        for (int slot = 0; slot < 4; ++slot) {
+                            if (amounts[slot] <= 0.0F) continue;
+                            const auto joint = slots[slot];
+                            if (joint >= joint_names.size())
+                                return fail("a vertex binds joint index " +
+                                            std::to_string(joint) + "; the skin declares " +
+                                            std::to_string(joint_names.size()));
+                            bound.push_back({static_cast<std::uint8_t>(joint), amounts[slot]});
+                        }
+                    }
+                    face.influences.push_back(std::move(bound));
                 }
             }
             if (primitive.indices != nullptr) {
@@ -444,6 +522,10 @@ Conversion convert_glb(std::span<const std::byte> glb) {
         mesh.physics_hull.push_back({(corner & 1) != 0 ? 0.5f : -0.5f,
                                      (corner & 2) != 0 ? 0.5f : -0.5f,
                                      (corner & 4) != 0 ? 0.5f : -0.5f});
+
+    // The joint table travels with the asset, not with a level: every level's
+    // influences index the same table, which is why the format carries one.
+    mesh.skin = std::move(skin);
 
     result.sl_mesh = slmesh::serialize(mesh);
     if (result.sl_mesh.empty()) return fail("the converted mesh failed to serialize");
