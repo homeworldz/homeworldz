@@ -373,7 +373,28 @@ public:
         auto position = vec(found->second.character->GetPosition());
         position.z += found->second.height * 0.5;
         auto velocity = vec(found->second.character->GetLinearVelocity());
-        const auto grounded = found->second.character->IsSupported();
+        // Walkable ground, not merely contact. Jolt's IsSupported() is true for
+        // OnSteepGround as well as OnGround, and OnSteepGround means the slope
+        // is past mMaxSlopeAngle — its own documentation says "the caller should
+        // start applying downward velocity if sliding from the slope is
+        // desired". Reporting that as grounded, and then zeroing the downward
+        // velocity below, did the exact opposite: it pinned an avatar motionless
+        // on ground far steeper than it could ever walk, which is what an
+        // operator measured repeatably at 70 degrees.
+        //
+        // Treating only OnGround as grounded costs no new published constant and
+        // no new state. An avatar on too-steep ground is simply not supported,
+        // so gravity applies and the existing fall path carries it — which is
+        // what the first-party client asked for, having already implemented and
+        // tested falls while a slide would have been a new term for it to
+        // predict.
+        //
+        // The stick-to-floor logic in update() deliberately keeps using
+        // IsSupported(): it exists to stop a character going airborne while
+        // walking downhill, and OnGround to OnSteepGround leaves it true, so a
+        // slope that becomes too steep is not stuck to.
+        const auto grounded =
+            found->second.character->GetGroundState() == JPH::CharacterBase::EGroundState::OnGround;
         if (grounded && velocity.z < 0.0) velocity.z = 0.0;
         return BodyState{id, found->second.entity, position,
                          velocity, {}, false, grounded};

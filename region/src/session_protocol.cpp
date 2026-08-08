@@ -484,12 +484,20 @@ SessionCore::Result SessionCore::handle_text(std::string_view text) {
             // was true.
             ",\"walkableSlopeDegrees\":" +
             json_number_text(walkable_slope_degrees_) +
-            // So a client is told outright what the number does not cover,
-            // rather than inferring a resting rule from a traversal one. There
-            // is no published bound on resting because the region implements
-            // none: an avatar rests on any ground it touches.
-            ",\"slopeLimitGoverns\":\"traversal\""
-            ",\"restingBoundedBySlope\":false" + "}" +
+            // **Now both, changed 2026-08-08.** The region treats only Jolt's
+            // OnGround as grounded; OnSteepGround, which is ground past this
+            // angle, is not supported, so gravity applies and the avatar
+            // descends under the existing fall path. One angle governs walking
+            // up and standing still because Jolt derives both from the same
+            // mMaxSlopeAngle, so a second published number would describe
+            // nothing the engine distinguishes.
+            //
+            // Worth stating plainly, because it is a behaviour change rather
+            // than a simplification: the resting bound was not absent before,
+            // it was infinite. This moves it from infinity to this angle. The
+            // first-party client made that point and it is the honest framing.
+            ",\"slopeLimitGoverns\":\"traversal-and-resting\""
+            ",\"restingBoundedBySlope\":true" + "}" +
             // The ground itself: a heightmap fetched over HTTP with the same
             // region ticket this socket authenticated with. Heights are
             // float32 little-endian meters, row-major from y=0, one vertex

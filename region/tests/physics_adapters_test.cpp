@@ -145,8 +145,18 @@ bool jolt_walkable_slope_test() {
     // than what the limit governs, and would keep passing if the limit stopped
     // being consulted at all.
     const auto steep_permitted = on_face(70.0, 4.0, 89.0);
-    // Supported on both: grounding is a contact test, not a slope test.
-    if (!gentle.first || !steep.first) return false;
+    // Grounded on the gentle face and *not* on the steep one. Changed
+    // 2026-08-08: grounding now means Jolt's OnGround rather than
+    // IsSupported(), which was also true for OnSteepGround and so reported an
+    // avatar as standing on ground it could never walk. The 70 degree face is
+    // past the limit, so it no longer supports; gravity applies and the avatar
+    // descends under the existing fall path.
+    //
+    // This assertion previously read "supported on both: grounding is a contact
+    // test, not a slope test", which is what the region did and what this test
+    // was written to pin down after two withdrawn attempts. It was an honest
+    // record of real behaviour; the behaviour is what changed.
+    if (!gentle.first || steep.first) return false;
     // Traversable only below the limit, which is the limit's actual job. The
     // gentle climb is generous and the steep one close to nothing; the gap is
     // wide enough that a small change in Jolt's solver will not flip it.

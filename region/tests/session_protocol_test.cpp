@@ -125,8 +125,8 @@ int main() {
                                "\"supportOffsetFactor\":0.5,"
                                "\"groundedTolerance\":0.05,"
                                "\"walkableSlopeDegrees\":65"
-                    ",\"slopeLimitGoverns\":\"traversal\""
-                    ",\"restingBoundedBySlope\":false}") == std::string::npos)
+                    ",\"slopeLimitGoverns\":\"traversal-and-resting\""
+                    ",\"restingBoundedBySlope\":true}") == std::string::npos)
         return 33;
     if (greeting->payload.find("\"terrain\":{\"path\":\"/session/terrain\","
                                "\"format\":\"heightmap-f32le\",\"width\":256,"

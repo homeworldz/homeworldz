@@ -74,18 +74,27 @@ seam above encoding.
    MAX_WALKABLE_SLOPE, adopted 2026-07-29; per-region override
    `region.walkable_slope_degrees`), published in the hello avatar block as
    `walkableSlopeDegrees` — is strictly the
-   **Corrected 2026-08-05: `walkableSlopeDegrees` is a *traversal* limit and
-   bounds nothing about resting.** It is Jolt's `CharacterVirtual` max slope
-   angle, so it decides what an avatar can walk up or along. `grounded` is a
-   contact test (`IsSupported()`), true on any slope, and no slide is
-   implemented — an avatar rests motionless on ground far steeper than the limit
-   and simply cannot traverse it. This section previously called it the
-   "grounded-versus-sliding boundary", which described behaviour the region does
-   not have; the client core built a resting prediction on that wording and
-   three fixture faces exposed it — resting repeatably on 70°, unable to walk up
-   65°. **There is no published bound on resting because the region implements
-   none**, and the hello now says so outright with `slopeLimitGoverns:
-   "traversal"` and `restingBoundedBySlope: false` beside the number.
+   **Changed 2026-08-08: `walkableSlopeDegrees` now bounds resting as well as
+   traversal.** It is Jolt's `CharacterVirtual` max slope angle. Ground past it
+   is Jolt's `OnSteepGround`, which the region no longer counts as grounded, so
+   gravity applies and the avatar descends under the existing fall path. The
+   hello says so with `slopeLimitGoverns: "traversal-and-resting"` and
+   `restingBoundedBySlope: true`.
+
+   The framing matters and is the client core's: the resting bound was never
+   absent, it was **infinite**. This moves it to the same angle rather than
+   adding a limit where there was none, and one angle covers both because Jolt
+   derives both from `mMaxSlopeAngle` — a second published number would describe
+   a distinction the engine does not make.
+
+   *Previously, and corrected 2026-08-05:* the limit bounded traversal only.
+   `grounded` was `IsSupported()`, true for `OnSteepGround` as well as
+   `OnGround`, so an avatar rested motionless on ground far steeper than it
+   could walk. This section had called the number the "grounded-versus-sliding
+   boundary", describing behaviour the region did not have; the client core
+   built a resting prediction on that wording and three fixture faces exposed
+   it — resting repeatably on 70°, unable to walk up 65°. The wording is now
+   true again, by changing the behaviour rather than the description.
    It is also still NOT an exactness threshold; the two
    differ by an order of magnitude and conflating them was a bug in both
    ends' first drafts.
