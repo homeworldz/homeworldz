@@ -289,10 +289,13 @@ func (a *API) regionTerrainLayers(ctx context.Context, region regions.Region) *t
 		}
 		layers.palette[index] = resolved
 	}
-	// Long: layer settings change when an operator edits them, which is rare,
-	// and the textures behind them are content-addressed and cannot change at
-	// all. The heightmap beside this keeps its own 60 second freshness.
-	a.cacheTerrainLayers(endpoint, layers, now.Add(10*time.Minute))
+	// Same freshness as the heightmap beside it. Layer settings change rarely,
+	// but they change by an operator editing the Terrain tab and then looking
+	// at the map — and a ten minute cache, which is what this held first, makes
+	// that edit look like it did nothing. The costly half is the texture
+	// averaging, and that is cached per asset id below and survives this
+	// expiring, so re-reading the settings every minute is a JSON fetch.
+	a.cacheTerrainLayers(endpoint, layers, now.Add(60*time.Second))
 	return layers
 }
 
