@@ -8,6 +8,7 @@
 // which would be a second copy able to disagree with the first.
 #include "homeworldz/mesh_acceptance.h"
 #include "homeworldz/mesh_convert.h"
+#include "homeworldz/rig_check.h"
 #include "homeworldz/slmesh.h"
 
 #include <cstddef>
@@ -80,6 +81,12 @@ int main(int argc, char** argv) {
             std::cout << ' ' << parsed->skin->joints[at];
         }
         std::cout << '\n';
+        // The joint *names* survived the round trip; whether the skeleton those
+        // names describe stands where Bento rests it is a separate question, and
+        // the matrices cannot answer it themselves.
+        std::cout << "  "
+                  << homeworldz::mesh::describe(homeworldz::mesh::check_rig(
+                         parsed->skin->joints, parsed->skin->inverse_bind));
     }
     return refused;
 }
