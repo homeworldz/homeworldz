@@ -109,7 +109,12 @@ func DefaultWearables(userID string) []Item {
 		// id to a different checksum. Avatars already wearing the old skin keep
 		// it and look identical — every added parameter defaults to 0, which is
 		// what the viewer was filling in anyway.
-		{"Default Skin", 1, "00000000-0000-1111-9999-000000000201", 13, 18, bodyPartsID},
+		//
+		// Named "Default Skin" rather than the "Sexy - Female Skin" it carried
+		// from wherever it was imported. One skin asset serves every avatar:
+		// sex is shape parameter 80, not a property of the skin, so a gendered
+		// name described nothing true about the file.
+		{"Default Skin", 1, "00000000-0000-1111-9999-000000000202", 13, 18, bodyPartsID},
 		{"Default Hair", 2, "d342e6c0-b9d2-11dc-95ff-0800200c9a66", 13, 18, bodyPartsID},
 		{"Default Eyes", 3, "4bb6fa4d-1cd2-498a-a84c-95c1a0e745a7", 13, 18, bodyPartsID},
 		{"Default Shirt", 4, "00000000-38f9-1111-024e-222222111110", 5, 18, clothingID},

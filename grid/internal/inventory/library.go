@@ -83,7 +83,7 @@ func LibraryItems() []Item {
 			EveryonePermissions: fullPermissions, NextPermissions: fullPermissions},
 		{ID: "5c86b030-b9cc-11dc-95ff-0800200c9a66", OwnerUserID: LibraryOwnerID,
 			CreatorUserID: LibraryOwnerID,
-			FolderID:      LibraryDefaultAvatarID, AssetID: "00000000-0000-1111-9999-000000000201",
+			FolderID:      LibraryDefaultAvatarID, AssetID: "00000000-0000-1111-9999-000000000202",
 			AssetType: 13, InventoryType: 18, Name: "Default Skin", Flags: 1,
 			BasePermissions: fullPermissions, CurrentPermissions: fullPermissions,
 			EveryonePermissions: fullPermissions, NextPermissions: fullPermissions},

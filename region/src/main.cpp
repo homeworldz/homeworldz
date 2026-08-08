@@ -721,7 +721,7 @@ std::string simulator_endpoint(std::string_view public_endpoint, int viewer_port
 std::string_view shipped_default_wearable_asset(std::uint32_t wearable_type) {
     switch (wearable_type) {
         case 0: return "66c41e39-38f9-f75a-024e-585989bfab73";  // Shape
-        case 1: return "00000000-0000-1111-9999-000000000201";  // Skin
+        case 1: return "00000000-0000-1111-9999-000000000202";  // Skin
         case 2: return "d342e6c0-b9d2-11dc-95ff-0800200c9a66";  // Hair
         case 3: return "4bb6fa4d-1cd2-498a-a84c-95c1a0e745a7";  // Eyes
         case 4: return "00000000-38f9-1111-024e-222222111110";  // Shirt
@@ -1893,7 +1893,7 @@ int main(int argc, char* argv[]) {
         default_outfit_bake_attempted = true;
         static const char* const default_wearable_asset_ids[] = {
             "66c41e39-38f9-f75a-024e-585989bfab73",  // Default Shape
-            "00000000-0000-1111-9999-000000000201",  // Default Skin
+            "00000000-0000-1111-9999-000000000202",  // Default Skin
             "d342e6c0-b9d2-11dc-95ff-0800200c9a66",  // Default Hair
             "4bb6fa4d-1cd2-498a-a84c-95c1a0e745a7",  // Default Eyes
             "00000000-38f9-1111-024e-222222111110",  // Default Shirt
