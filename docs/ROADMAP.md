@@ -738,7 +738,11 @@ sequence this summarizes.
 - [x] Carry scene traffic: avatar embodiment, object and avatar updates,
   movement, and client-to-region chat over the session
   ([CLIENT2-EMBODIMENT.md](CLIENT2-EMBODIMENT.md) milestone E1; crossings
-  and appearance are its later milestones).
+  and appearance are its later milestones). Object updates were only half
+  carried until 2026-08-08: physics-driven motion streamed correctly, while
+  every change made from a *viewer* — rez, move, link, texture, and eight
+  others — reached other viewers and no session client. Found by the client
+  team asking what the channel was supposed to carry, not by a test here.
 - [x] Carry a session avatar across a region border
   ([CLIENT2-EMBODIMENT.md](CLIENT2-EMBODIMENT.md) milestone E2), landing on the
   arrival point the grid resolved — deliberately not atomic the way a viewer's
@@ -769,7 +773,11 @@ it builds against.
 
 - [ ] A canonical avatar body — blocked on content licensing rather than code:
   the legacy body and skeleton are viewer-licensed, and a wearable body must be
-  re-rigged to the viewer's own 71 named joints.
+  re-rigged to the viewer's own named joints: 133 bones plus 26 collision
+  volumes, all 159 of which may legally appear in a skin. **Corrected from 71
+  on 2026-08-08**, which counted the pre-Bento skeleton no current viewer runs.
+  A re-rig cannot recover from being aimed at a skeleton half the size of the
+  real one, and this line is where a re-rigger would have read it.
 - [x] Dress a session avatar for viewers: spawn seeds the server-side
   default-outfit bake and derives body geometry from it, so a viewer rezzes
   a properly shaped, clothed avatar rather than a default one
