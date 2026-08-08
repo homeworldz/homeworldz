@@ -384,6 +384,15 @@ client family is served a derived rendition by a grid-side conversion worker.
   rigs that do not map), attachments and body wearables.
 - [ ] M5 import breadth: client-side FBX/OBJ/DAE import, documented Daz
   Studio export path, optional web import service on the management site.
+- [ ] Possible with M5: retarget a Character Creator rig onto the Bento
+  skeleton. CC bodies name their joints `CC_Base_*` and are refused today, and
+  a rename is not enough — the skeletons differ in bind pose, so weights must
+  be retargeted and CC's twist bones merged into their nearest mapped ancestor.
+  The format can carry it: a skin's joint position overrides
+  (`mAlternateBindMatrix`) let a body ship its own proportions. Licensing is
+  the gate rather than the code — Reallusion's grant is non-transferable, so
+  this is a path for a licensee to upload their own creation, never for the
+  project to ship a body.
 
 ### Content creation and inventory breadth
 
@@ -412,6 +421,16 @@ lives with the operator's other settings in Phase 7.
   sales, parcel payments, gifts, and refunds.
 - [ ] Treat external payment processing and marketplace integration as separate,
   explicitly approved security projects.
+- [ ] Record whether an asset may be sold, distinctly from whether it may be
+  transferred. Legacy permissions have no "give it away but do not sell it",
+  which is exactly the shape a licence like Character Creator's needs: its
+  holder may publish a creation to an interactive service but not sell it in a
+  third-party marketplace. Lands with its enforcement — a listing check and the
+  in-world set-for-sale path — rather than ahead of it. The `exportable` column
+  beside it has been declared and read by nothing since it was added, which is
+  the failure this must avoid: a flag that reads as policy and enforces
+  nothing. Whether it propagates to derivatives is the open question, and is
+  the same closure problem asset durability already answers for bytes.
 
 ## Phase 5: LSL Scripting
 
