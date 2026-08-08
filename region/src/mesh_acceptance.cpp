@@ -114,9 +114,15 @@ Acceptance validate_glb(std::span<const std::byte> content) {
     // whoever authored it.
     for (cgltf_size skin_index = 0; skin_index < data->skins_count; ++skin_index) {
         const auto& skin = data->skins[skin_index];
-        if (skin.joints_count > max_joints_per_mesh)
-            return refuse("a skin binds " + std::to_string(skin.joints_count) +
-                          " joints; the limit is " + std::to_string(max_joints_per_mesh));
+        // Names before the count, deliberately. The viewer's own limit counts
+        // *recognized* joints (fslocalmeshimportbase.cpp, enforceRigJointLimit),
+        // not the declared list, and a body rigged to another skeleton fails
+        // both at once: a MakeHuman export declares 163 joints, none of which
+        // are ours. Reporting "163 joints; the limit is 110" would send its
+        // author to trim joints when the actual problem is the whole skeleton.
+        // Refusing unknown names first makes the two counts identical by the
+        // time the limit is applied, so this is also correct by construction
+        // rather than by coincidence.
         for (cgltf_size joint_index = 0; joint_index < skin.joints_count; ++joint_index) {
             const auto* node = skin.joints[joint_index];
             const std::string_view name = node != nullptr && node->name != nullptr ? node->name : "";
@@ -135,6 +141,9 @@ Acceptance validate_glb(std::span<const std::byte> content) {
                               "\", which is not a joint of the " +
                               std::string(rigged_skeleton) + " skeleton");
         }
+        if (skin.joints_count > max_joints_per_mesh)
+            return refuse("a skin binds " + std::to_string(skin.joints_count) +
+                          " joints; the limit is " + std::to_string(max_joints_per_mesh));
     }
     // More than four influences per vertex arrives as a second joint/weight
     // set. glTF numbers them JOINTS_0, JOINTS_1 and so on, four to a set, so
