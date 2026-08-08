@@ -101,11 +101,19 @@ inline constexpr bool nonzero_morph_weights_accepted = false;
 // ignored. Accepting before those would have taken uploads into a conversion
 // known to be wrong in two specific ways, which is not a test.
 //
-// What is still unwitnessed is recorded rather than assumed. No file has yet
-// exercised max_rig_influences - the reference body binds at most four per
-// vertex, so the fifth-influence path has never run - and whether a rig whose
-// joints are all positionally coincident (RigOutcome::Unproven) should be
-// accepted is a policy question this flag does not answer.
+// Whether a rig whose joints are all positionally coincident
+// (RigOutcome::Unproven) should be accepted is a policy question this flag does
+// not answer.
+//
+// max_rig_influences is enforced and unit-tested, and no natural file will ever
+// trip it - which is a property of the number rather than a gap in coverage.
+// glTF carries four influences per JOINTS_n set by convention, and no exporter
+// emits a JOINTS_1 without deliberate authoring, so four *is* the default an
+// ordinary export produces (client core, 2026-08-08, measured across three
+// rigged bodies including the reference). A conforming file therefore cannot
+// exceed the limit by accident, and "no upload has exercised it" is evidence of
+// nothing. The synthetic fixture asserting the refusal proves the branch runs
+// and cannot tell us real content will ever reach it.
 inline constexpr bool rigged_accepted = true;
 
 // The glTF extensions this gate accepts. Anything else — used or required —
