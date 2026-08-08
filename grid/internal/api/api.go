@@ -247,8 +247,21 @@ func New(options Options) (http.Handler, error) {
 		a.withCORS(mux), a.logger)), a.logger), nil
 }
 
+// notFound answers a request for a route this build does not serve.
+//
+// The code is deliberately *not* `not_found`, which resource misses use. The two
+// are the same status and mean entirely different things: `not_found` says the
+// thing you named is not yours or is not there, and `route_not_found` says this
+// deployment has no such endpoint — usually that it predates one.
+//
+// Sharing a code made them indistinguishable without matching message strings,
+// and a client hitting the inventory routes before they were deployed read the
+// router's 404 as a permission decision. That sends somebody to examine auth and
+// ownership when the answer is a tier that has not shipped yet (client core,
+// 2026-08-08). A caller upgrading past a deployment should be able to tell "not
+// deployed" from "not allowed" without parsing prose.
 func (a *API) notFound(w http.ResponseWriter, _ *http.Request) {
-	writeError(w, http.StatusNotFound, Error{Code: "not_found", Message: "route not found"})
+	writeError(w, http.StatusNotFound, Error{Code: "route_not_found", Message: "route not found"})
 }
 
 // methodNotAllowed writes a 405 with an Allow header listing supported methods.

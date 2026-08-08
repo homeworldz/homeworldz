@@ -173,6 +173,35 @@ func TestClientInventoryItemReturnsOwnItem(t *testing.T) {
 	}
 }
 
+// A route this build does not serve and a resource the caller may not see are
+// both 404 and must not look alike. Sharing a code sent the client team to
+// examine auth and ownership when the real answer was a tier that had not been
+// deployed yet.
+func TestUnservedRouteIsDistinguishableFromResourceMiss(t *testing.T) {
+	harness := newInventoryHarness(t)
+	unserved := inventoryGet(t, harness, "/v1/client/inventory-that-does-not-exist", harness.token)
+	notYours := inventoryGet(t, harness,
+		"/v1/client/inventory/folder/f0000000-0000-4000-8000-000000000099", harness.token)
+	if unserved.Code != http.StatusNotFound || notYours.Code != http.StatusNotFound {
+		t.Fatalf("statuses = %d and %d, want both 404", unserved.Code, notYours.Code)
+	}
+	var missRoute, missResource struct {
+		Code string `json:"code"`
+	}
+	if err := json.Unmarshal(unserved.Body.Bytes(), &missRoute); err != nil {
+		t.Fatalf("decode unserved: %v", err)
+	}
+	if err := json.Unmarshal(notYours.Body.Bytes(), &missResource); err != nil {
+		t.Fatalf("decode resource miss: %v", err)
+	}
+	if missRoute.Code != "route_not_found" {
+		t.Fatalf("unserved route code = %q, want route_not_found", missRoute.Code)
+	}
+	if missResource.Code != "not_found" {
+		t.Fatalf("resource miss code = %q, want not_found", missResource.Code)
+	}
+}
+
 func TestClientInventoryRequiresAuthentication(t *testing.T) {
 	harness := newInventoryHarness(t)
 	for _, path := range []string{
