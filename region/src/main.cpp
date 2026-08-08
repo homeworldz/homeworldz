@@ -3292,6 +3292,46 @@ int main(int argc, char* argv[]) {
                                 encode_heightmap(*terrain_heightmap));
                         }
                     }
+                    if (response.path == "/map/terrain-layers.json") {
+                        // The companion to terrain.raw. A heightmap alone cannot
+                        // be coloured: which of the four ground textures applies
+                        // at a height is decided by this region's own start and
+                        // range, which an operator may have changed through the
+                        // Terrain tab, and the water line decides what is sea at
+                        // all. Without them the grid's map tiles fall back to a
+                        // fixed height palette and a region reads as one flat
+                        // colour that matches nothing a viewer draws.
+                        //
+                        // Corners are south-west, north-west, south-east,
+                        // north-east — the order the handshake writes them, and
+                        // the order a bilinear read expects.
+                        const auto authorization =
+                            homeworldz::http::request_header_value(request, "Authorization");
+                        if (response.method != "GET") {
+                            response = homeworldz::http::response_for_content(
+                                request, 405, "application/json",
+                                homeworldz::api::to_json(homeworldz::api::Error{
+                                    "method_not_allowed", "terrain layer endpoint requires GET"}));
+                        } else if (service_token.empty() || authorization != "Bearer " + service_token) {
+                            response = homeworldz::http::response_for_content(
+                                request, 401, "application/json",
+                                homeworldz::api::to_json(homeworldz::api::Error{
+                                    "unauthorized", "a valid grid service token is required"}));
+                        } else {
+                            std::string assets, starts, ranges;
+                            for (std::size_t index = 0; index < 4; ++index) {
+                                if (index != 0) { assets += ','; starts += ','; ranges += ','; }
+                                assets += homeworldz::api::json_string(terrain_layers.assets[index]);
+                                starts += std::to_string(terrain_layers.start[index]);
+                                ranges += std::to_string(terrain_layers.range[index]);
+                            }
+                            response = homeworldz::http::response_for_content(
+                                request, 200, "application/json",
+                                "{\"assets\":[" + assets + "],\"startHeight\":[" + starts +
+                                    "],\"heightRange\":[" + ranges + "],\"waterHeight\":" +
+                                    std::to_string(region_settings.water_height) + "}");
+                        }
+                    }
                     if (response.path == "/session/terrain") {
                         // The ground itself, for session clients (client core
                         // request, 2026-07-29): the same heightmap the region
